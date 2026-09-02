@@ -1,0 +1,2 @@
+description = "Run a frozen Direct versus Graph comparison"
+prompt = "Invoke $graph-benchmark for this repository task: {{args}}"

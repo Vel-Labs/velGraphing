@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workspace.local/schemas/graph-record-v1.json",
+  "title": "Workspace Graph Exchange Record v1",
+  "oneOf": [
+    {"$ref": "#/$defs/node"},
+    {"$ref": "#/$defs/edge"}
+  ],
+  "$defs": {
+    "common": {
+      "type": "object",
+      "required": ["record_type", "id", "owner", "source_ref", "evidence_state", "sensitivity", "exportable", "observed_at"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*:.+$"},
+        "owner": {"type": "string", "minLength": 1},
+        "source_ref": {"type": "string", "minLength": 1},
+        "evidence_state": {"enum": ["observed", "asserted", "inferred", "verified", "accepted"]},
+        "sensitivity": {"enum": ["public", "internal", "restricted"]},
+        "exportable": {"type": "boolean"},
+        "observed_at": {"type": "string", "format": "date-time"},
+        "authority_ref": {"type": "string", "minLength": 1}
+      }
+    },
+    "node": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": ["node_type"],
+          "properties": {
+            "record_type": {"const": "node"},
+            "node_type": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "edge": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {
+          "type": "object",
+          "required": ["edge_type", "from", "to"],
+          "properties": {
+            "record_type": {"const": "edge"},
+            "edge_type": {"type": "string", "minLength": 1},
+            "from": {"type": "string", "minLength": 1},
+            "to": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    }
+  }
+}

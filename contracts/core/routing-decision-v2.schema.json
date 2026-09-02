@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.local/graph-engineering/routing-decision-v2.schema.json",
+  "title": "RouteDecisionV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "route",
+    "full_route",
+    "authenticated_route",
+    "used_evidence_ids",
+    "divergent_evidence_ids",
+    "fail_closed",
+    "reason"
+  ],
+  "properties": {
+    "route": {
+      "enum": ["graph_engineering", "graph_steward", "no_skill", "defer"]
+    },
+    "full_route": {
+      "enum": ["graph_engineering", "graph_steward", "no_skill", "defer"]
+    },
+    "authenticated_route": {
+      "enum": ["graph_engineering", "graph_steward", "no_skill", "defer"]
+    },
+    "used_evidence_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "divergent_evidence_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "fail_closed": {"type": "boolean"},
+    "reason": {
+      "enum": [
+        "project_structural_route",
+        "project_assessment_route",
+        "federation_structural_route",
+        "direct_baseline_route",
+        "unknown_scope",
+        "incomplete_evidence",
+        "conflicting_evidence",
+        "operation_scope_mismatch",
+        "authenticated_route_divergence"
+      ]
+    }
+  }
+}

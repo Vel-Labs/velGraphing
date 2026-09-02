@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.local/graph-engineering/selection-result-v1.schema.json",
+  "title": "SelectionResultV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "record_ids",
+    "edge_ids",
+    "full_graph_record_ids",
+    "authenticated_record_ids",
+    "divergent_record_ids",
+    "fail_closed",
+    "reason",
+    "depth_reached",
+    "scores"
+  ],
+  "properties": {
+    "task_id": {"type": "string", "minLength": 1},
+    "record_ids": {"type": "array", "items": {"type": "string"}},
+    "edge_ids": {"type": "array", "items": {"type": "string"}},
+    "full_graph_record_ids": {"type": "array", "items": {"type": "string"}},
+    "authenticated_record_ids": {"type": "array", "items": {"type": "string"}},
+    "divergent_record_ids": {"type": "array", "items": {"type": "string"}},
+    "fail_closed": {"type": "boolean"},
+    "reason": {"type": "string"},
+    "depth_reached": {"type": "integer", "minimum": 0},
+    "scores": {"type": "object", "additionalProperties": {"type": "number"}}
+  }
+}

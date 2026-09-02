@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.local/graph-engineering/graph-edge-v1.schema.json",
+  "title": "GraphEdgeV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "edge_id",
+    "source_id",
+    "target_id",
+    "relation",
+    "relevance",
+    "provenance",
+    "trust",
+    "sensitivity",
+    "freshness",
+    "admission",
+    "eligible",
+    "agent_generated",
+    "export_allowed"
+  ],
+  "properties": {
+    "edge_id": {"type": "string", "minLength": 1},
+    "source_id": {"type": "string", "minLength": 1},
+    "target_id": {"type": "string", "minLength": 1},
+    "relation": {"type": "string", "minLength": 1},
+    "relevance": {"type": "number", "minimum": 0, "maximum": 1},
+    "provenance": {"$ref": "provenance-v1.schema.json"},
+    "trust": {
+      "enum": ["verified_source", "policy_admitted", "agent_generated", "quarantined", "unverifiable"]
+    },
+    "sensitivity": {"enum": ["public", "internal", "restricted"]},
+    "freshness": {"enum": ["current", "stale", "unknown"]},
+    "admission": {"enum": ["none", "policy", "verifier"]},
+    "eligible": {"type": "boolean"},
+    "agent_generated": {"type": "boolean"},
+    "export_allowed": {"type": "boolean"}
+  }
+}

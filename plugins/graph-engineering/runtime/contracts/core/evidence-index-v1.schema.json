@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.local/graph-engineering/evidence-index-v1.schema.json",
+  "title": "SourceBoundEvidenceIndexV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_snapshot_sha256", "cards", "obligations", "evidence"],
+  "properties": {
+    "schema_version": {"const": "source-bound-evidence-index-v1"},
+    "source_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "cards": {"type": "array", "items": {"$ref": "#/$defs/card"}},
+    "obligations": {"type": "array", "items": {"$ref": "#/$defs/obligation"}},
+    "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}
+  },
+  "$defs": {
+    "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)[^\\\\]+$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authority": {"enum": ["runtime", "configuration", "documentation", "contract", "test", "policy"]},
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_id", "source_path", "source_sha256", "anchor_tags"],
+      "properties": {
+        "record_id": {"type": "string", "minLength": 1},
+        "source_path": {"$ref": "#/$defs/path"},
+        "source_sha256": {"$ref": "#/$defs/digest"},
+        "anchor_tags": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "obligation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["obligation_id", "authority_class", "source_hints", "anchor_hints", "required_tag_values"],
+      "properties": {
+        "obligation_id": {"type": "string", "minLength": 1},
+        "authority_class": {"$ref": "#/$defs/authority"},
+        "source_hints": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/path"}},
+        "anchor_hints": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "required_tag_values": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      },
+      "anyOf": [
+        {"properties": {"source_hints": {"minItems": 1}}},
+        {"properties": {"anchor_hints": {"minItems": 1}}},
+        {"properties": {"required_tag_values": {"minItems": 1}}}
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_id", "source_path", "source_sha256", "byte_start", "byte_end", "excerpt_sha256", "authority_class", "obligation_ids", "hop"],
+      "properties": {
+        "record_id": {"type": "string", "minLength": 1},
+        "source_path": {"$ref": "#/$defs/path"},
+        "source_sha256": {"$ref": "#/$defs/digest"},
+        "byte_start": {"type": "integer", "minimum": 0},
+        "byte_end": {"type": "integer", "minimum": 1},
+        "excerpt_sha256": {"$ref": "#/$defs/digest"},
+        "authority_class": {"$ref": "#/$defs/authority"},
+        "obligation_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "hop": {"enum": [0, 1]}
+      }
+    }
+  }
+}

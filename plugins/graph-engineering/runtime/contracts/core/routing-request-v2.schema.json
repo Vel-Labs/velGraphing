@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.local/graph-engineering/routing-request-v2.schema.json",
+  "title": "RoutingRequestV2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "scope",
+    "operation",
+    "evidence",
+    "allowed_sensitivities"
+  ],
+  "properties": {
+    "request_id": {"type": "string", "minLength": 1},
+    "scope": {"enum": ["project", "federation", "unknown"]},
+    "operation": {
+      "enum": [
+        "assess",
+        "design",
+        "initialize",
+        "validate",
+        "evaluate",
+        "repair",
+        "evolve",
+        "inspect",
+        "plan",
+        "verify",
+        "admit",
+        "reconcile",
+        "impact",
+        "retire"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/routingEvidence"}
+    },
+    "allowed_sensitivities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["public", "internal", "restricted"]}
+    }
+  },
+  "$defs": {
+    "routingEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "fact",
+        "provenance",
+        "trust",
+        "freshness",
+        "sensitivity",
+        "admission",
+        "eligible",
+        "agent_generated",
+        "verifier_promoted"
+      ],
+      "properties": {
+        "evidence_id": {"type": "string", "minLength": 1},
+        "fact": {
+          "enum": [
+            "project_scope",
+            "federation_scope",
+            "structural_need",
+            "graph_worthy",
+            "registry_reference",
+            "cross_project_action",
+            "direct_baseline_sufficient"
+          ]
+        },
+        "provenance": {"$ref": "#/$defs/provenance"},
+        "trust": {
+          "enum": [
+            "verified_source",
+            "policy_admitted",
+            "agent_generated",
+            "quarantined",
+            "unverifiable"
+          ]
+        },
+        "freshness": {"enum": ["current", "stale", "unknown"]},
+        "sensitivity": {"enum": ["public", "internal", "restricted"]},
+        "admission": {"enum": ["none", "policy", "verifier"]},
+        "eligible": {"type": "boolean"},
+        "agent_generated": {"type": "boolean"},
+        "verifier_promoted": {"type": "boolean"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "locator", "verified"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "locator": {"type": "string", "minLength": 1},
+        "verified": {"type": "boolean"}
+      }
+    }
+  }
+}

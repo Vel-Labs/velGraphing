@@ -1,0 +1,25 @@
+{
+  "schema_version": "graph-engineering-projection-map-v1",
+  "managed_root": "plugins/graph-engineering/runtime",
+  "state_file": ".projection-state.json",
+  "exclusions": [
+    "contracts/core/routing-authority-v3.schema.json",
+    "contracts/core/routing-context-v3.schema.json",
+    "contracts/core/routing-decision-v3.schema.json",
+    "contracts/core/routing-evidence-v3.schema.json"
+  ],
+  "mappings": [
+    {
+      "source": "packages/core",
+      "target": "plugins/graph-engineering/runtime/core"
+    },
+    {
+      "source": "contracts/core",
+      "target": "plugins/graph-engineering/runtime/contracts/core"
+    },
+    {
+      "source": "adapters/knowledge-compiler",
+      "target": "plugins/graph-engineering/runtime/adapters/knowledge-compiler"
+    }
+  ]
+}

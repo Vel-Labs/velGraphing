@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.local/graph-engineering/assist-observation-v1.schema.json",
+  "title": "AssistObservationV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "source_snapshot_sha256",
+    "route",
+    "reason",
+    "failure_class",
+    "required_source_paths",
+    "fallback_source_paths",
+    "selected_source_paths",
+    "context_bytes",
+    "fail_closed"
+  ],
+  "properties": {
+    "schema_version": {"const": "assist-observation-v1"},
+    "task_id": {"type": "string", "minLength": 1},
+    "source_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "route": {"enum": ["graph", "direct", "defer"]},
+    "reason": {
+      "enum": [
+        "fallback_context_exceeds_byte_budget",
+        "fallback_sources_incomplete",
+        "fallback_sources_unavailable",
+        "fallback_sources_unreadable",
+        "graph_projection_unavailable",
+        "invalid_fallback_source_paths",
+        "invalid_required_escalation",
+        "invalid_required_source_paths",
+        "required_escalation",
+        "required_escalation_unavailable",
+        "required_sources_direct",
+        "required_sources_missing",
+        "required_sources_selected"
+      ]
+    },
+    "failure_class": {
+      "enum": [
+        "missing_knowledge",
+        "selection_failure",
+        "relationship_failure",
+        "granularity_failure",
+        "freshness_failure",
+        "required_escalation",
+        "none"
+      ]
+    },
+    "required_source_paths": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "fallback_source_paths": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "selected_source_paths": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "context_bytes": {"type": "integer", "minimum": 0},
+    "fail_closed": {"type": "boolean"}
+  }
+}

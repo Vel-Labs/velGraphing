@@ -1,0 +1,2 @@
+description = "Refresh a source-bound graph after repository changes"
+prompt = "Invoke $graph-update for this repository task: {{args}}"

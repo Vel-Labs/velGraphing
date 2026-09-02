@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.local/graph-engineering/graph-record-v1.schema.json",
+  "title": "GraphRecordV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "record_id",
+    "kind",
+    "title",
+    "content",
+    "provenance",
+    "trust",
+    "sensitivity",
+    "freshness",
+    "admission",
+    "eligible",
+    "agent_generated",
+    "export_allowed",
+    "tags",
+    "sequence"
+  ],
+  "properties": {
+    "record_id": {"type": "string", "minLength": 1},
+    "kind": {"type": "string", "minLength": 1},
+    "title": {"type": "string"},
+    "content": {"type": "string"},
+    "provenance": {"$ref": "provenance-v1.schema.json"},
+    "trust": {
+      "enum": ["verified_source", "policy_admitted", "agent_generated", "quarantined", "unverifiable"]
+    },
+    "sensitivity": {"enum": ["public", "internal", "restricted"]},
+    "freshness": {"enum": ["current", "stale", "unknown"]},
+    "admission": {"enum": ["none", "policy", "verifier"]},
+    "eligible": {"type": "boolean"},
+    "agent_generated": {"type": "boolean"},
+    "export_allowed": {"type": "boolean"},
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "sequence": {"type": ["integer", "null"]}
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "graph_id": "workspace-collective",
+  "namespace": "workspace",
+  "owner": "workspace-graph-owner",
+  "workspace_root": ".",
+  "children": [
+    {
+      "graph_id": "project-example",
+      "namespace": "example",
+      "owner": "project-owner",
+      "definition_version": "1",
+      "profile_path": "path/to/graph-profile.json",
+      "export_path": "path/to/graph-export.jsonl",
+      "lifecycle": "proposed",
+      "ingest_mode": "disabled",
+      "sensitivity_ceiling": "internal",
+      "allowed_node_types": [],
+      "allowed_edge_types": []
+    }
+  ]
+}

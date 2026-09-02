@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workspace.local/schemas/federation-registry-v1.json",
+  "title": "Workspace Graph Federation Registry v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["version", "graph_id", "namespace", "owner", "workspace_root", "children"],
+  "properties": {
+    "version": {"const": 1},
+    "graph_id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$"},
+    "namespace": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+    "owner": {"type": "string", "minLength": 1},
+    "workspace_root": {"type": "string", "minLength": 1},
+    "children": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["graph_id", "namespace", "owner", "profile_path", "export_path", "lifecycle", "ingest_mode", "sensitivity_ceiling", "allowed_node_types", "allowed_edge_types"],
+        "properties": {
+          "graph_id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$"},
+          "namespace": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+          "owner": {"type": "string", "minLength": 1},
+          "definition_version": {"type": "string", "minLength": 1},
+          "profile_path": {"type": "string", "minLength": 1},
+          "export_path": {"type": "string", "minLength": 1},
+          "lifecycle": {"enum": ["proposed", "validated", "admitted", "stale", "quarantined", "retired"]},
+          "ingest_mode": {"enum": ["disabled", "manual", "approved"]},
+          "expected_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "profile_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "sensitivity_ceiling": {"enum": ["public", "internal", "restricted"]},
+          "allowed_node_types": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "allowed_edge_types": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "authority_ref": {"type": "string", "minLength": 1},
+          "validation_ref": {"type": "string", "minLength": 1},
+          "validator_id": {"const": "graphctl-v1"}
+        },
+        "allOf": [
+          {
+            "if": {
+              "anyOf": [
+                {"properties": {"lifecycle": {"const": "admitted"}}, "required": ["lifecycle"]},
+                {"properties": {"ingest_mode": {"const": "approved"}}, "required": ["ingest_mode"]}
+              ]
+            },
+            "then": {"required": ["definition_version", "expected_sha256", "profile_sha256", "authority_ref", "validation_ref", "validator_id"]}
+          }
+        ]
+      }
+    }
+  }
+}

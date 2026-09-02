@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.dev/contracts/core/source-coordinate-v1.schema.json",
+  "title": "Source Coordinate V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_sha256", "source_path", "source_sha256", "byte_start", "byte_end", "line_start", "line_end", "entity_kind", "occurrence_role", "symbol", "enclosing_entity"],
+  "properties": {
+    "schema_version": {"const": "source-coordinate-v1"},
+    "snapshot_sha256": {"$ref": "#/$defs/digest"},
+    "source_path": {"$ref": "#/$defs/path"},
+    "source_sha256": {"$ref": "#/$defs/digest"},
+    "byte_start": {"type": "integer", "minimum": 0},
+    "byte_end": {"type": "integer", "minimum": 1},
+    "line_start": {"type": "integer", "minimum": 1},
+    "line_end": {"type": "integer", "minimum": 1},
+    "entity_kind": {"type": "string", "minLength": 1},
+    "occurrence_role": {"type": "string", "enum": ["definition", "declaration", "reference", "call", "import", "read", "write", "unknown"]},
+    "symbol": {"type": "string", "minLength": 1},
+    "enclosing_entity": {"type": ["string", "null"]}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*//)[^\\\\]+$"}
+  }
+}

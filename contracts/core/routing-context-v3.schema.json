@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "routing-context-v3.schema.json",
+  "title": "Verified Routing Context V3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["authority_anchor_sha256", "policy_sha256", "source_snapshot_sha256", "binding_sha256", "scope", "operation", "facts", "accepted_assertion_ids", "rejected_assertion_ids", "context_sha256"],
+  "properties": {
+    "authority_anchor_sha256": {"$ref": "#/$defs/sha256"},
+    "policy_sha256": {"$ref": "#/$defs/sha256"},
+    "source_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "binding_sha256": {"$ref": "#/$defs/sha256"},
+    "scope": {"enum": ["project", "federation", "unknown"]},
+    "operation": {"enum": ["assess", "design", "initialize", "validate", "evaluate", "repair", "evolve", "inspect", "plan", "verify", "admit", "reconcile", "impact", "retire"]},
+    "facts": {"type": "array", "uniqueItems": true, "items": {"enum": ["project_scope", "federation_scope", "structural_need", "graph_worthy", "registry_reference", "cross_project_action", "direct_baseline_sufficient"]}},
+    "accepted_assertion_ids": {"$ref": "#/$defs/ids"},
+    "rejected_assertion_ids": {"$ref": "#/$defs/ids"},
+    "context_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  }
+}

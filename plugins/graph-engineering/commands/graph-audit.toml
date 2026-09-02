@@ -1,0 +1,2 @@
+description = "Measure graph readiness and effectiveness"
+prompt = "Invoke $graph-audit for this repository task: {{args}}"

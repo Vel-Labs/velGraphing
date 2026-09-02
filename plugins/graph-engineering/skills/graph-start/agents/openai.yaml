@@ -1,0 +1,4 @@
+interface:
+  display_name: "Graph Start"
+  short_description: "Prepare a source-bound repository graph"
+  default_prompt: "Use $graph-start to prepare this repository."

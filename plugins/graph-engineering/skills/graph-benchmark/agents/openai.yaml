@@ -1,0 +1,4 @@
+interface:
+  display_name: "Graph Benchmark"
+  short_description: "Compare Direct and Graph-assisted repository work"
+  default_prompt: "Use $graph-benchmark to benchmark graph navigation in this repository."

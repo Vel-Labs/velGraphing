@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "definition_version": "1",
+  "graph_id": "project-example",
+  "namespace": "example",
+  "scope": {
+    "kind": "project",
+    "root": ".",
+    "owner": "project-owner"
+  },
+  "graph_modes": ["provenance"],
+  "canonical_sources": [
+    {
+      "id": "project-source",
+      "path": "contracts/",
+      "role": "canonical project contract"
+    }
+  ],
+  "node_types": [
+    {
+      "id": "artifact",
+      "description": "A versioned project artifact"
+    }
+  ],
+  "edge_types": [
+    {
+      "id": "derived_from",
+      "description": "A source-backed derivation relation",
+      "source_types": ["artifact"],
+      "target_types": ["artifact"],
+      "acyclic": true,
+      "requires_authority": false
+    }
+  ],
+  "projection": {
+    "kind": "derived"
+  },
+  "export_policy": {
+    "default": "deny",
+    "allowed_node_types": ["artifact"],
+    "allowed_edge_types": ["derived_from"],
+    "sensitivity_ceiling": "internal"
+  }
+}

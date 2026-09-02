@@ -1,0 +1,16 @@
+[project]
+name = "graph-engineering"
+version = "0.1.0"
+description = "Source-verified graph navigation for coding agents."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Velcrafting" }]
+dependencies = [
+  "tree-sitter==0.26.0",
+  "tree-sitter-javascript==0.25.0",
+]
+
+[tool.graph-engineering]
+projection-contract = "contracts/package/projection-map.json"
+release-manifest = "plugins/graph-engineering/.codex-plugin/release-manifest.json"
+parity-command = "python3 scripts/package/verify_source_package_parity.py"

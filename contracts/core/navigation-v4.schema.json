@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.dev/contracts/core/navigation-v4.schema.json",
+  "title": "Navigation V4 result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operation", "supported", "items", "reason"],
+  "properties": {
+    "schema_version": {"const": "navigation-v4"},
+    "operation": {"type": "string", "enum": ["find_symbols", "inspect_symbol", "find_references", "related_symbols", "read_span", "read_symbol", "read_enclosing_unit"]},
+    "supported": {"type": "boolean"},
+    "items": {"type": "array", "items": {"type": "object"}},
+    "reason": {"type": ["string", "null"]}
+  }
+}

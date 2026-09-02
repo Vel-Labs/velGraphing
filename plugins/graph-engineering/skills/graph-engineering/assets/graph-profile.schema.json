@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workspace.local/schemas/graph-profile-v1.json",
+  "title": "Workspace Project Graph Profile v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["version", "definition_version", "graph_id", "namespace", "scope", "graph_modes", "canonical_sources", "node_types", "edge_types", "projection", "export_policy"],
+  "properties": {
+    "version": {"const": 1},
+    "definition_version": {"type": "string", "minLength": 1},
+    "graph_id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$"},
+    "namespace": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+    "scope": {
+      "type": "object",
+      "required": ["kind", "root", "owner"],
+      "properties": {
+        "kind": {"enum": ["project", "folder", "workspace"]},
+        "root": {"type": "string", "minLength": 1},
+        "owner": {"type": "string", "minLength": 1}
+      }
+    },
+    "graph_modes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["execution", "communication", "knowledge", "reasoning", "provenance"]}
+    },
+    "canonical_sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "role"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "role": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "node_types": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "description"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "description": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "edge_types": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "source_types", "target_types"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "description": {"type": "string", "minLength": 1},
+          "source_types": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "target_types": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "acyclic": {"type": "boolean"},
+          "requires_authority": {"type": "boolean"}
+        }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {"kind": {"enum": ["declared", "derived", "mixed"]}}
+    },
+    "export_policy": {
+      "type": "object",
+      "required": ["default", "allowed_node_types", "allowed_edge_types", "sensitivity_ceiling"],
+      "properties": {
+        "default": {"const": "deny"},
+        "allowed_node_types": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "allowed_edge_types": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "sensitivity_ceiling": {"enum": ["public", "internal", "restricted"]}
+      }
+    }
+  }
+}

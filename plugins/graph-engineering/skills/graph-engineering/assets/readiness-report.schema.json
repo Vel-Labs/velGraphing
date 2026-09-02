@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "readiness-report.schema.json",
+  "title": "Graph Engineering repository-readiness report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "command",
+    "status",
+    "scan_policy",
+    "summary",
+    "files",
+    "links",
+    "findings",
+    "recommendations"
+  ],
+  "properties": {
+    "schema_version": {"const": "readiness-report-v1"},
+    "command": {"const": "readiness"},
+    "status": {"enum": ["ready", "needs_attention", "unknown"]},
+    "scan_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "includes",
+        "policy_status",
+        "max_file_bytes",
+        "hidden_paths",
+        "symlink_policy",
+        "alias_policy",
+        "non_regular_policy",
+        "source_revision",
+        "source_observed_at"
+      ],
+      "properties": {
+        "root": {"const": "."},
+        "includes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "policy_status": {"enum": ["complete", "incomplete"]},
+        "max_file_bytes": {"type": "integer", "minimum": 1},
+        "hidden_paths": {"const": "exclude"},
+        "symlink_policy": {"const": "reject"},
+        "alias_policy": {"const": "reject"},
+        "non_regular_policy": {"const": "reject"},
+        "source_revision": {"type": ["string", "null"]},
+        "source_observed_at": {"type": ["string", "null"]}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files", "links", "findings", "recommendations"],
+      "properties": {
+        "files": {"type": "integer", "minimum": 0},
+        "links": {"type": "integer", "minimum": 0},
+        "findings": {"type": "integer", "minimum": 0},
+        "recommendations": {"type": "integer", "minimum": 0}
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "role", "bytes", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "role": {
+            "enum": [
+              "instructions",
+              "overview",
+              "manifest",
+              "workflow",
+              "plan",
+              "task_truth",
+              "contract",
+              "validation_test",
+              "validation_script",
+              "source"
+            ]
+          },
+          "bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_ref", "target_ref", "status"],
+        "properties": {
+          "source_ref": {"type": "string", "minLength": 1},
+          "target_ref": {"type": "string", "minLength": 1},
+          "status": {"enum": ["resolved", "broken", "unscanned", "outside_root"]}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/finding"}
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/recommendation"}
+    }
+  },
+  "$defs": {
+    "failure_class": {
+      "enum": [
+        "missing_knowledge",
+        "selection_failure",
+        "relationship_failure",
+        "granularity_failure",
+        "freshness_failure",
+        "required_escalation"
+      ]
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "failure_class", "message", "target_refs"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "failure_class": {"$ref": "#/$defs/failure_class"},
+        "message": {"type": "string", "minLength": 1},
+        "target_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "recommendation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "finding_codes",
+        "failure_class",
+        "action",
+        "target_refs",
+        "expected_proof",
+        "requires_human_authority",
+        "auto_apply"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^recommendation-[a-z_]+$"},
+        "finding_codes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "failure_class": {"$ref": "#/$defs/failure_class"},
+        "action": {"type": "string", "minLength": 1},
+        "target_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "expected_proof": {"type": "string", "minLength": 1},
+        "requires_human_authority": {"const": true},
+        "auto_apply": {"const": false}
+      }
+    }
+  }
+}

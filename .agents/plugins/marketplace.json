@@ -1,0 +1,20 @@
+{
+  "name": "graph-engineering-local",
+  "interface": {
+    "displayName": "Graph Engineering Local"
+  },
+  "plugins": [
+    {
+      "name": "graph-engineering",
+      "source": {
+        "source": "local",
+        "path": "./plugins/graph-engineering"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

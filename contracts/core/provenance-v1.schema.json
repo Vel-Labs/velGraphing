@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.local/graph-engineering/provenance-v1.schema.json",
+  "title": "ProvenanceV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["path", "sha256", "locator", "verified"],
+  "properties": {
+    "path": {"type": "string", "minLength": 1},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "locator": {"type": "string", "minLength": 1},
+    "verified": {"type": "boolean"}
+  }
+}

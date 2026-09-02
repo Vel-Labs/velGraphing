@@ -1,0 +1,23 @@
+{
+  "schema_version": "CompilerCandidateRecordV1",
+  "record_id": "compiler-candidate-001",
+  "source": {
+    "path": "docs/example.md",
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "locator": "heading:Example"
+  },
+  "draft_status": "reviewed",
+  "confidence": 0.91,
+  "agent_generated": true,
+  "human_reviewed": true,
+  "provenance": {
+    "producer": "fixture",
+    "method": "serialized-adapter-test"
+  },
+  "candidate_type": "semantic_edge",
+  "candidate_payload": {
+    "source_id": "node-a",
+    "target_id": "node-b",
+    "relation": "supports"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "graph-engineering",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Source-verified graph navigation for coding agents.",
+  "scripts": {
+    "test": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests/scaffold && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests/core && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests/adapters && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests/skills && PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests/parity",
+    "test:scaffold": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests/scaffold",
+    "test:parity": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s tests/parity",
+    "project:plugin": "python3 scripts/package/project_portable_plugin.py",
+    "manifest:plugin": "python3 scripts/package/verify_source_package_parity.py --write-manifest",
+    "verify:parity": "python3 scripts/package/verify_source_package_parity.py"
+  }
+}

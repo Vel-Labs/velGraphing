@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.dev/contracts/core/routing-recommendation-v4.schema.json",
+  "$comment": "Runtime PortableTextV4 and PortablePathV4 validation is mandatory before deserialization or recommendation. This schema does not claim lexical admission.",
+  "title": "Advisory routing recommendation V4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["recommendation", "scope", "operation", "used_assertion_ids", "rejected_assertion_ids", "policy_sha256", "snapshot_sha256", "reason", "contract_kind", "grants_authority", "may_activate_skill", "write_authority", "requires_separate_host_task_authority"],
+  "properties": {
+    "recommendation": {"enum": ["graph_engineering", "graph_steward", "no_skill", "defer"]},
+    "scope": {"enum": ["project", "federation", "unknown", null]},
+    "operation": {"enum": ["assess", "design", "initialize", "validate", "evaluate", "repair", "evolve", "inspect", "plan", "verify", "admit", "reconcile", "impact", "retire", null]},
+    "used_assertion_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "rejected_assertion_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "reason": {"enum": ["project_structural_route", "project_assessment_route", "federation_route", "direct_baseline_route", "non_current_assertion", "conflicting_evidence", "incomplete_evidence"]},
+    "contract_kind": {"const": "advisory"},
+    "grants_authority": {"const": false},
+    "may_activate_skill": {"const": false},
+    "write_authority": {"const": "none"},
+    "requires_separate_host_task_authority": {"const": true}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"recommendation": {"const": "graph_engineering"}}},
+      "then": {"properties": {
+        "scope": {"const": "project"},
+        "operation": {"enum": ["assess", "design", "initialize", "validate", "evaluate", "repair", "evolve"]},
+        "reason": {"enum": ["project_structural_route", "project_assessment_route"]},
+        "rejected_assertion_ids": {"maxItems": 0}
+      }}
+    },
+    {
+      "if": {"properties": {"recommendation": {"const": "graph_steward"}}},
+      "then": {"properties": {
+        "scope": {"const": "federation"},
+        "operation": {"enum": ["inspect", "plan", "verify", "admit", "reconcile", "impact", "retire"]},
+        "reason": {"const": "federation_route"},
+        "rejected_assertion_ids": {"maxItems": 0}
+      }}
+    },
+    {
+      "if": {"properties": {"recommendation": {"const": "no_skill"}}},
+      "then": {"properties": {
+        "scope": {"const": "project"},
+        "operation": {"enum": ["assess", "design", "initialize", "validate", "evaluate", "repair", "evolve", "inspect", "plan", "verify", "admit", "reconcile", "impact", "retire"]},
+        "reason": {"const": "direct_baseline_route"},
+        "rejected_assertion_ids": {"maxItems": 0}
+      }}
+    },
+    {
+      "if": {"properties": {"recommendation": {"const": "defer"}}},
+      "then": {"properties": {
+        "reason": {"enum": ["non_current_assertion", "conflicting_evidence", "incomplete_evidence"]}
+      }}
+    },
+    {
+      "if": {"properties": {"reason": {"const": "project_assessment_route"}}},
+      "then": {"properties": {"operation": {"const": "assess"}}}
+    },
+    {
+      "if": {"properties": {"reason": {"const": "non_current_assertion"}}},
+      "then": {"properties": {"rejected_assertion_ids": {"minItems": 1}}},
+      "else": {"properties": {"rejected_assertion_ids": {"maxItems": 0}}}
+    }
+  ]
+}

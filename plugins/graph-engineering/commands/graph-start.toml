@@ -1,0 +1,2 @@
+description = "Prepare a source-bound graph for this repository"
+prompt = "Invoke $graph-start for this repository task: {{args}}"

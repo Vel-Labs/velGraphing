@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "routing-decision-v3.schema.json",
+  "title": "Route Decision V3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision_sha256", "route", "scope", "operation", "used_assertion_ids", "rejected_assertion_ids", "authority_anchor_sha256", "policy_sha256", "source_snapshot_sha256", "binding_sha256", "context_sha256", "fail_closed", "reason"],
+  "properties": {
+    "decision_sha256": {"$ref": "#/$defs/sha256"},
+    "route": {"enum": ["graph_engineering", "graph_steward", "no_skill", "defer"]},
+    "scope": {"enum": ["project", "federation", "unknown"]},
+    "operation": {"enum": ["assess", "design", "initialize", "validate", "evaluate", "repair", "evolve", "inspect", "plan", "verify", "admit", "reconcile", "impact", "retire"]},
+    "used_assertion_ids": {"$ref": "#/$defs/ids"},
+    "rejected_assertion_ids": {"$ref": "#/$defs/ids"},
+    "authority_anchor_sha256": {"$ref": "#/$defs/sha256"},
+    "policy_sha256": {"$ref": "#/$defs/sha256"},
+    "source_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "binding_sha256": {"$ref": "#/$defs/sha256"},
+    "context_sha256": {"$ref": "#/$defs/sha256"},
+    "fail_closed": {"type": "boolean"},
+    "reason": {"enum": ["project_structural_route", "project_assessment_route", "federation_structural_route", "direct_baseline_route", "unknown_scope", "incomplete_evidence", "conflicting_evidence", "operation_scope_mismatch"]}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.local/graph-engineering/retrieval-v1.schema.json",
+  "title": "SourceGroundedRetrievalV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "source_snapshot_sha256", "tags", "facets", "result"],
+  "properties": {
+    "schema_version": {"const": "source-grounded-retrieval-v1"},
+    "task_id": {"type": "string", "minLength": 1},
+    "source_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "tags": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/tag"}
+    },
+    "facets": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 20,
+      "items": {"$ref": "#/$defs/facet"}
+    },
+    "result": {"$ref": "#/$defs/result"}
+  },
+  "$defs": {
+    "tag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "record_id", "source_path", "byte_start", "byte_end"],
+      "properties": {
+        "kind": {"enum": ["path", "symbol", "import", "config", "test", "heading", "documentation", "keyword"]},
+        "value": {"type": "string", "minLength": 1},
+        "record_id": {"type": "string", "minLength": 1},
+        "source_path": {"type": "string", "minLength": 1},
+        "byte_start": {"type": ["integer", "null"], "minimum": 0},
+        "byte_end": {"type": ["integer", "null"], "minimum": 1}
+      }
+    },
+    "facet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "weight", "required"],
+      "properties": {
+        "kind": {"enum": ["identifier", "entity", "phrase", "intent", "operation", "relation", "artifact", "constraint", "risk", "semantic"]},
+        "value": {"type": "string", "minLength": 1},
+        "weight": {"type": "integer", "minimum": 1, "maximum": 10},
+        "required": {"type": "boolean"}
+      }
+    },
+    "hit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_id", "source_path", "match_score", "channels", "matched_facets", "hop", "expanded_from"],
+      "properties": {
+        "record_id": {"type": "string", "minLength": 1},
+        "source_path": {"type": "string", "minLength": 1},
+        "match_score": {"type": "integer", "minimum": 0},
+        "channels": {"type": "array", "uniqueItems": true, "items": {"enum": ["exact", "sparse", "wiki", "graph"]}},
+        "matched_facets": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "hop": {"enum": [0, 1]},
+        "expanded_from": {"type": ["string", "null"]}
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "reason", "hits", "context_bytes", "facet_coverage_percent", "recommended_fallback_paths", "fail_closed", "score_meaning"],
+      "properties": {
+        "route": {"enum": ["graph", "defer"]},
+        "reason": {"enum": ["verified_tag_context_selected", "tag_context_insufficient", "prompt_facets_insufficient", "no_repository_tag_match", "tag_match_crosses_authentication_boundary"]},
+        "hits": {"type": "array", "items": {"$ref": "#/$defs/hit"}},
+        "context_bytes": {"type": "integer", "minimum": 0},
+        "facet_coverage_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "recommended_fallback_paths": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "fail_closed": {"type": "boolean"},
+        "score_meaning": {"const": "deterministic_ranking_diagnostic_not_probability_authority_or_answer_confidence"}
+      }
+    }
+  }
+}

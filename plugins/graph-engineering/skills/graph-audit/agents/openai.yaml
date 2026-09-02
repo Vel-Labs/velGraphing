@@ -1,0 +1,4 @@
+interface:
+  display_name: "Graph Audit"
+  short_description: "Measure graph value against direct repository use"
+  default_prompt: "Use $graph-audit to measure Graph Engineering in this repository."
