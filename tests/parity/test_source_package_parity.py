@@ -235,7 +235,7 @@ class SourcePackageParityTests(unittest.TestCase):
 
         plugin = self.root / "plugins/graph-engineering/.codex-plugin/plugin.json"
         value = json.loads(plugin.read_text(encoding="utf-8"))
-        value["version"] = "0.1.1"
+        value["version"] = "0.1.2"
         plugin.write_text(json.dumps(value), encoding="utf-8")
         self.assert_code("plugin_identity_mismatch", lambda: PARITY.verify(self.root))
 

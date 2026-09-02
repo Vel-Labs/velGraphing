@@ -1,2 +1,2 @@
 description = "Run a frozen Direct versus Graph comparison"
-prompt = "Invoke $graph-benchmark for this repository task: {{args}}"
+prompt = "Invoke $graph-benchmark for this repository task: {{args}}. Use host-native fresh worker lanes; never launch a nested Codex CLI process."

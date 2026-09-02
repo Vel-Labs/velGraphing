@@ -63,9 +63,10 @@ not a general performance claim.
 The graph export validated before the run. Its cold in-memory build took
 120.0 ms, warm load took 1.4 ms, and the bounded lookup took 0.03 ms. Direct
 operation count and source-byte totals were not recoverable from the truncated
-host trace, so this canary makes no tool-operation or source-byte claim. The
-installed `/graph-benchmark` workflow also required top-level lane execution
-because a nested read-only Codex process could not open its state database.
+host trace, so this canary makes no tool-operation or source-byte claim. This
+canary exposed a command defect: the workflow tried to start a nested Codex
+process. Version 0.1.1 repairs the command to use fresh host-native worker
+lanes. The historical measurements above remain unchanged.
 
 See
 [`benchmarks/project-scaffold-live-canary-v1/result.json`](benchmarks/project-scaffold-live-canary-v1/result.json)

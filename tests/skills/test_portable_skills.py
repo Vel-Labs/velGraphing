@@ -30,6 +30,19 @@ class PortableSkillTests(unittest.TestCase):
             self.assertTrue(skill.is_file(), name)
             self.assertIn(f"name: {name}", skill.read_text(encoding="utf-8"))
 
+    def test_graph_benchmark_uses_native_fresh_lanes(self) -> None:
+        skill = (SKILLS_ROOT / "graph-benchmark" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        command = tomllib.loads(
+            (COMMANDS_ROOT / "graph-benchmark.toml").read_text(encoding="utf-8")
+        )
+        self.assertIn("host-native worker lanes", skill)
+        self.assertIn("no inherited conversation history", skill)
+        self.assertIn("Do not invoke `codex`, `codex exec`", skill)
+        self.assertIn("fresh_lane_execution_unavailable", skill)
+        self.assertIn("never launch a nested Codex CLI process", command["prompt"])
+
     def test_expected_skill_roots_and_resources_exist(self) -> None:
         expected = {
             "graph-engineering": {
