@@ -18,10 +18,10 @@ remain authoritative. The graph is a derived navigation layer.
 The public product name is **VelGraphing**. The compatibility plugin and Python
 package ID remains `graph-engineering` for the `0.1.x` line.
 
-## Install From A Clone
+## Install
 
 ```sh
-codex plugin marketplace add /path/to/velgraphing
+codex plugin marketplace add Vel-Labs/velGraphing --ref main
 codex plugin add graph-engineering@graph-engineering-local
 ```
 
@@ -45,6 +45,31 @@ processed 15,278,122 bytes, so this run does not prove amortized savings.
 
 See [benchmarks/README.md](benchmarks/README.md) and the retained compact result,
 freeze, and seal files for the exact historical evidence boundary.
+
+### Live installed-command canary
+
+A September 2, 2026 Project Scaffold canary used the published plugin, one
+frozen question, a six-fact rubric, and fresh Luna High lanes. It is one task,
+not a general performance claim.
+
+| Metric | Direct | Graph-assisted | Difference | Meaning |
+| --- | ---: | ---: | ---: | --- |
+| Required-fact coverage | 3/6 (50.0%) | 5/6 (83.3%) | +66.7% | The graph route found two more required facts. |
+| Total model input tokens | 541,842 | 222,907 | -58.9% | The graph route exposed much less total input. This is not source-byte accounting. |
+| Final output tokens | 10,206 | 12,224 | +19.8% | The graph answer was longer. |
+| Wall-clock time | 180.0 s | 208.2 s | +15.7% | The graph route was slower in this run. |
+| Proof or authority errors | 0 | 0 | 0% | Neither answer crossed the source or authority boundary. |
+
+The graph export validated before the run. Its cold in-memory build took
+120.0 ms, warm load took 1.4 ms, and the bounded lookup took 0.03 ms. Direct
+operation count and source-byte totals were not recoverable from the truncated
+host trace, so this canary makes no tool-operation or source-byte claim. The
+installed `/graph-benchmark` workflow also required top-level lane execution
+because a nested read-only Codex process could not open its state database.
+
+See
+[`benchmarks/project-scaffold-live-canary-v1/result.json`](benchmarks/project-scaffold-live-canary-v1/result.json)
+for the frozen question, rubric, route controls, and limits.
 
 ## Source Layout
 

@@ -1,0 +1,94 @@
+{
+  "schema_version": "velgraphing-live-canary-v1",
+  "benchmark_id": "project-scaffold-live-canary-v1",
+  "observed_at": "2026-09-02",
+  "repository": {
+    "path_label": "40_Code/packages/project-scaffold",
+    "head": "97345b38523b1e21a568971db58a4ddc7a70f353",
+    "current_non_ignored_files": 259,
+    "snapshot_sha256": "5abd7f6dfebc01b100eb0c83209a9813f38e1d4a2cd432e65892bf37d4bf572d",
+    "included_working_changes": true
+  },
+  "question": "How does this repository define and validate its project-owned graph, and what boundaries prevent it from being treated as runtime or authority?",
+  "rubric": [
+    "The graph is project-governance-scaffold in the project-scaffold namespace and is project-owned.",
+    "Its modes are knowledge and provenance, and its canonical sources include contracts, core, tests, and the System Atlas.",
+    "The export is derived and does not replace source truth.",
+    "Actionability and context are opt-in locators, not truth, execution proof, or authority.",
+    "Validation uses npm run validate:project-graph with the canonical Graph Engineering skill root.",
+    "Export is default-deny, and federation admission is parent-owned and remains unadmitted."
+  ],
+  "controls": {
+    "model": "gpt-5.6-luna",
+    "reasoning_effort": "high",
+    "fresh": true,
+    "no_history": true,
+    "repository_writes": false,
+    "network": false,
+    "direct_route": "ordinary read-only repository inspection",
+    "graph_route": "start from contracts/project-graph/export.jsonl, then use targeted source fallback"
+  },
+  "graph_preflight": {
+    "export_sha256": "e4d99953ef5a86853b618769125694dfb62e4a1e2af238ca9c3634b37f14ea72",
+    "records": 22,
+    "nodes": 11,
+    "edges": 11,
+    "profile_valid": true,
+    "export_valid": true,
+    "cold_build_ms": 120.042875,
+    "cold_process_wall_seconds": 0.34,
+    "warm_load_ms": 1.410417,
+    "warm_retrieval_ms": 0.026833
+  },
+  "routes": {
+    "direct": {
+      "rubric_bits": "001101",
+      "fact_hits": 3,
+      "required_facts": 6,
+      "fact_recall_percent": 50.0,
+      "input_tokens": 541842,
+      "cached_input_tokens": 458240,
+      "uncached_input_tokens": 83602,
+      "output_tokens": 10206,
+      "reasoning_output_tokens": 5454,
+      "wall_seconds": 180.00833,
+      "unsupported_claims": 0,
+      "proof_errors": 0,
+      "authority_errors": 0
+    },
+    "graph_assisted": {
+      "rubric_bits": "111011",
+      "fact_hits": 5,
+      "required_facts": 6,
+      "fact_recall_percent": 83.333333,
+      "input_tokens": 222907,
+      "cached_input_tokens": 179456,
+      "uncached_input_tokens": 43451,
+      "output_tokens": 12224,
+      "reasoning_output_tokens": 8508,
+      "wall_seconds": 208.216845,
+      "unsupported_claims": 0,
+      "proof_errors": 0,
+      "authority_errors": 0
+    }
+  },
+  "graph_assisted_change_percent": {
+    "fact_recall": 66.666667,
+    "input_tokens": -58.860077,
+    "uncached_input_tokens": -48.026363,
+    "output_tokens": 19.772683,
+    "wall_seconds": 15.670672
+  },
+  "gates": {
+    "required_fact_coverage_did_not_decline": true,
+    "safety_errors_did_not_increase": true
+  },
+  "verdict": "promising_single_task",
+  "limitations": [
+    "One question on one repository cannot support a general effectiveness claim.",
+    "Total model input tokens include system, prompt, and tool context; they are not source bytes.",
+    "Direct repository-operation count and model-visible source bytes were unavailable after host trace truncation.",
+    "The nested read-only benchmark lane could not open the Codex state database, so the same frozen lanes were executed as fresh top-level processes.",
+    "The repository snapshot included existing working changes and untracked files."
+  ]
+}
