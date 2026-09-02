@@ -27,6 +27,26 @@ or published results. Keep every standard metric row and write `unknown` when
 the host did not expose a value. Add task-type-specific checks under quality;
 do not force writing, design, or implementation tasks into one synthetic score.
 
+## Upstream Feedback
+
+Classify each reproducible finding as a target-repository problem, benchmark
+harness problem, documentation gap, measurement gap, or VelGraphing product
+problem. Offer an upstream issue only for a VelGraphing product problem. First
+show the exact sanitized issue draft from the report template. Exclude private
+repository names, absolute paths, proprietary source, secrets, and unrelated
+benchmark data. Then ask:
+
+> I found a reproducible VelGraphing improvement: `<one-sentence summary>`.
+> Would you like me to open the sanitized issue shown above in
+> `Vel-Labs/velGraphing`? This can help improve agentic repository navigation
+> for other users.
+
+Installation and benchmark authority do not authorize publication. Open no
+issue until the operator explicitly approves this exact draft. After approval,
+check for an existing issue before writing. If one exists, return its link and
+do not comment or create a duplicate without separate approval. If GitHub write
+access is unavailable, return the draft without claiming publication.
+
 Use `scripts/graphctl.py readiness` only for structural readiness. It does not
 measure answer quality. Do not modify the repository, install components,
 publish results, or claim installation, federation, adoption, or acceptance.

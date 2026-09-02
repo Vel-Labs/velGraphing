@@ -4,7 +4,7 @@ VelGraphing provides source-verified graph navigation for coding agents. This
 directory is the portable plugin package boundary. The compatibility package
 ID remains `graph-engineering`.
 
-The current `0.1.2` source package contains four public commands:
+The current `0.1.3` source package contains four public commands:
 
 - `/graph-start` prepares the smallest source-bound setup.
 - `/graph-update` refreshes an existing graph after source changes.
@@ -13,6 +13,8 @@ The current `0.1.2` source package contains four public commands:
 
 Graph Benchmark includes a reusable report template for multi-track quality,
 efficiency, safety, cold-build, warm-session, and task-level evidence.
+It can also prepare a sanitized VelGraphing issue draft and request explicit
+operator approval before opening one upstream issue.
 
 Advanced Graph Engineering and Graph Steward skills remain available. The
 package also contains a generated host-neutral runtime projection.

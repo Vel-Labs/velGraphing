@@ -61,6 +61,7 @@ class PortableSkillTests(unittest.TestCase):
             "## Cold And Warm Interpretation",
             "## Product Interpretation",
             "## Evidence Inventory",
+            "## Upstream Feedback Candidates",
             "## Limitations And Next Proof",
         ):
             self.assertIn(section, template)
@@ -70,6 +71,13 @@ class PortableSkillTests(unittest.TestCase):
         self.assertIn("Product and visual design", template)
         self.assertIn("Creative writing", template)
         self.assertIn("Do not calculate a weighted cross-track quality score", template)
+        self.assertIn("Do not open the issue until the operator approves this exact draft", template)
+
+        skill = (SKILLS_ROOT / "graph-benchmark" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Vel-Labs/velGraphing", skill)
+        self.assertIn("Installation and benchmark authority do not authorize publication", skill)
 
     def test_expected_skill_roots_and_resources_exist(self) -> None:
         expected = {

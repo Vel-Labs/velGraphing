@@ -124,6 +124,39 @@ unsupported claims, prohibited writes, and authority violations.
 - Lane responses and traces: `<paths and identities>`
 - Scores and result seal: `<paths and identities>`
 
+## Upstream Feedback Candidates
+
+| Finding | Class | Reproducible | Sanitized | Proposed action |
+| --- | --- | --- | --- | --- |
+| `<one-sentence finding>` | `<target repository | harness | documentation | measurement | VelGraphing product>` | `<yes or no>` | `<yes or no>` | `<local recommendation or upstream issue draft>` |
+
+For each reproducible VelGraphing product finding, show this draft before
+requesting publication authority:
+
+```text
+Title: <concise observed defect or improvement>
+
+Observed behavior:
+<What happened without private repository details.>
+
+Expected behavior:
+<What VelGraphing should do instead.>
+
+Evidence:
+<Sanitized route comparison and stable identities.>
+
+Reproduction:
+<Minimal public or synthetic reproduction.>
+
+Acceptance check:
+<Observable condition that closes the issue.>
+
+Privacy review:
+<Confirm excluded names, paths, source, secrets, and business data.>
+```
+
+Do not open the issue until the operator approves this exact draft.
+
 ## Limitations And Next Proof
 
 - `<Known measurement or coverage limitation>`
