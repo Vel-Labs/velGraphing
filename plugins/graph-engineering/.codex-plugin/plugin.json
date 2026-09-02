@@ -1,6 +1,6 @@
 {
   "name": "graph-engineering",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Source-verified graph navigation for coding agents.",
   "author": {
     "name": "Velcrafting"

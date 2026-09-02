@@ -43,6 +43,34 @@ class PortableSkillTests(unittest.TestCase):
         self.assertIn("fresh_lane_execution_unavailable", skill)
         self.assertIn("never launch a nested Codex CLI process", command["prompt"])
 
+    def test_graph_benchmark_has_complete_report_template(self) -> None:
+        template = " ".join(
+            (
+                SKILLS_ROOT / "graph-benchmark" / "templates" / "benchmark-report.md"
+            )
+            .read_text(encoding="utf-8")
+            .split()
+        )
+        for section in (
+            "## Benchmark Identity",
+            "## Overall Results",
+            "## Results By Track",
+            "## Task Results",
+            "## Quality And Safety",
+            "## Efficiency Detail",
+            "## Cold And Warm Interpretation",
+            "## Product Interpretation",
+            "## Evidence Inventory",
+            "## Limitations And Next Proof",
+        ):
+            self.assertIn(section, template)
+        self.assertIn("unknown", template)
+        self.assertIn("Repetitions and seeds", template)
+        self.assertIn("Tool use and validation", template)
+        self.assertIn("Product and visual design", template)
+        self.assertIn("Creative writing", template)
+        self.assertIn("Do not calculate a weighted cross-track quality score", template)
+
     def test_expected_skill_roots_and_resources_exist(self) -> None:
         expected = {
             "graph-engineering": {

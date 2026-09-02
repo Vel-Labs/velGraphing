@@ -22,6 +22,11 @@ metric `unknown` when the host does not expose it. If host-native workers are
 unavailable, stop with `fresh_lane_execution_unavailable`; never substitute a
 nested CLI run or reuse the Parent answer as a lane.
 
+Use [the benchmark report template](templates/benchmark-report.md) for retained
+or published results. Keep every standard metric row and write `unknown` when
+the host did not expose a value. Add task-type-specific checks under quality;
+do not force writing, design, or implementation tasks into one synthetic score.
+
 Use `scripts/graphctl.py readiness` only for structural readiness. It does not
 measure answer quality. Do not modify the repository, install components,
 publish results, or claim installation, federation, adoption, or acceptance.
