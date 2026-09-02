@@ -151,8 +151,16 @@ Reproduction:
 Acceptance check:
 <Observable condition that closes the issue.>
 
+What this could improve:
+- <One specific VelGraphing capability.>
+- <Optional related capability.>
+
 Privacy review:
-<Confirm excluded names, paths, source, secrets, and business data.>
+- No operator name, contact detail, or account identifier.
+- No private repository, organization, or project name.
+- No local path, private source, prompt, secret, or business data.
+- Public content is limited to general behavior, sanitized measurements, and a
+  public or synthetic reproduction.
 ```
 
 Do not open the issue until the operator approves this exact draft.

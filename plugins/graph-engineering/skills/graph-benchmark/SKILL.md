@@ -33,13 +33,27 @@ Classify each reproducible finding as a target-repository problem, benchmark
 harness problem, documentation gap, measurement gap, or VelGraphing product
 problem. Offer an upstream issue only for a VelGraphing product problem. First
 show the exact sanitized issue draft from the report template. Exclude private
-repository names, absolute paths, proprietary source, secrets, and unrelated
-benchmark data. Then ask:
+operator details, repository identities, absolute paths, proprietary source,
+prompts, secrets, business data, and unrelated benchmark data. Explain that
+the public issue contains only the general behavior, sanitized measurements,
+and a public or synthetic reproduction. Select one to three relevant benefits
+from retrieval accuracy, graph coverage, source verification, fallback routing,
+context or tool efficiency, setup or update reliability, benchmark accuracy,
+documentation, and usability. Then ask:
 
 > I found a reproducible VelGraphing improvement: `<one-sentence summary>`.
-> Would you like me to open the sanitized issue shown above in
-> `Vel-Labs/velGraphing`? This can help improve agentic repository navigation
-> for other users.
+>
+> Your name, repository identity, local paths, private source, prompts, and
+> business data will not be shared. The public issue will contain only the
+> general behavior, sanitized measurements, and a public or synthetic
+> reproduction.
+>
+> This issue could help improve:
+> - `<specific VelGraphing capability>`
+> - `<optional related capability>`
+>
+> Would you like me to open this exact sanitized issue in
+> `Vel-Labs/velGraphing`?
 
 Installation and benchmark authority do not authorize publication. Open no
 issue until the operator explicitly approves this exact draft. After approval,

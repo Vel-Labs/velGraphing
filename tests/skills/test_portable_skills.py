@@ -78,6 +78,9 @@ class PortableSkillTests(unittest.TestCase):
         )
         self.assertIn("Vel-Labs/velGraphing", skill)
         self.assertIn("Installation and benchmark authority do not authorize publication", skill)
+        self.assertIn("Your name, repository identity, local paths", skill)
+        self.assertIn("This issue could help improve", skill)
+        self.assertIn("public or synthetic reproduction", skill)
 
     def test_expected_skill_roots_and_resources_exist(self) -> None:
         expected = {
