@@ -4,13 +4,14 @@ VelGraphing provides source-verified graph navigation for coding agents. This
 directory is the portable plugin package boundary. The compatibility package
 ID remains `graph-engineering`.
 
-The current `0.1.5` source package contains five public commands:
+The current `0.1.6` source package contains six public commands:
 
 - `/graph-find` returns bounded, source-verified pointers for a repository prompt.
 - `/graph-start` prepares the smallest source-bound setup.
 - `/graph-update` refreshes an existing graph after source changes.
 - `/graph-audit` measures readiness or effectiveness.
 - `/graph-benchmark` runs a frozen Direct versus Graph comparison.
+- `/graph-jev` previews and tests optional Jev evidence reranking.
 
 Graph Benchmark includes a reusable report template for multi-track quality,
 efficiency, safety, cold-build, warm-session, and task-level evidence.
@@ -59,3 +60,19 @@ repository or prove semantic quality.
 Use `/graph-audit` for a read-only readiness check or paired Direct versus
 Graph-assisted effectiveness audit. Use `/graph-start` for a setup preview;
 repository writes require separate approval after that preview.
+
+## Optional Jev module
+
+[Jev for VelGraphing](skills/graph-jev/SKILL.md) is a separately invoked,
+experimental source-bound reranker powered by TypeSafe. It is off by default;
+no key, external skill, SDK, or network is required for ordinary graph use.
+Users provide their own `TYPESAFE_API_KEY` and explicitly approve outbound source
+scope. Shadow preserves the baseline; rerank only permutes optional candidates.
+Every candidate remains present and required positions stay locked.
+
+Read the [operator guide](skills/graph-jev/references/usage.md),
+[advanced JSON guidance](skills/graph-jev/references/advanced.md), and
+[four-arm evaluation protocol](skills/graph-jev/references/benchmark.md).
+The included offline replay is synthetic, not a live Jev benchmark. No automatic
+LLM-turn interception, graph mutation, permission decision, or quality claim is
+introduced by this module. Existing direct-source behavior is unchanged.

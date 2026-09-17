@@ -15,6 +15,7 @@ remain authoritative. The graph is a derived navigation layer.
 | `/graph-update` | Refresh an existing graph after source changes. |
 | `/graph-audit` | Measure graph readiness and effectiveness. |
 | `/graph-benchmark` | Compare Direct and Graph-assisted repository work. |
+| `/graph-jev` | Configure, preview, and test optional Jev evidence reranking. |
 
 The public product name is **VelGraphing**. The compatibility plugin and Python
 package ID remains `graph-engineering` for the `0.1.x` line.
@@ -59,6 +60,19 @@ You can also implement the same contract for another orchestration system. See
 the [orchestration catalog integration guide](docs/integrations/ORCASTRATA_UMBRELLA_CATALOG.md)
 for the JSONL contract, validation rules, minimum graph mapping, and failure
 behavior.
+
+## Optional Jev integration
+
+Use `/graph-jev` to preview and test an optional Jev-powered evidence reranker.
+Default graph behavior remains unchanged; no API key is required unless you
+explicitly enable live Jev calls. You supply your own TypeSafe API key, approve
+bounded source excerpts, and choose shadow or rerank. This is an experimental
+integration, not a demonstrated efficiency improvement.
+
+Start with the [operator guide](plugins/graph-engineering/skills/graph-jev/references/usage.md).
+It includes the official TypeSafe skill setup, an offline demo, and advanced
+JSON question-design guidance. For implementation and local testing, use the
+[Codex handoff](docs/jev/CODEX_HANDOFF.md). Preserve the historical evidence below.
 
 ## Current Evidence
 

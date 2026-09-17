@@ -1,0 +1,94 @@
+{
+  "schema_version": "velgraphing-jev-replay-v1",
+  "request_sha256": "747673913325bd4d5992f6c05c38cfaf123e76adc8f55bfa0e5f5bc66a42d829",
+  "response": {
+    "model": "jev-1.13.0",
+    "answers": {
+      "candidate_0": {
+        "type": "score",
+        "score": 0,
+        "probabilities": {
+          "0": 1.0,
+          "1": 0.0,
+          "2": 0.0
+        },
+        "legend": {
+          "0": {
+            "level": "irrelevant",
+            "includes": "No concrete evidence for the requested behavior.",
+            "excludes": "Keyword overlap alone does not establish usefulness."
+          },
+          "1": {
+            "level": "context",
+            "includes": "Related definitions or background that help interpret the behavior.",
+            "excludes": "Does not directly exhibit the requested implementation, test, or limitation."
+          },
+          "2": {
+            "level": "direct_evidence",
+            "includes": "Directly exhibits a requested implementation, test, dependency, contradiction, or limitation.",
+            "excludes": "This rating does not prove the full question has been answered."
+          }
+        },
+        "confidence": 1.0
+      },
+      "candidate_1": {
+        "type": "score",
+        "score": 2,
+        "probabilities": {
+          "0": 0.0,
+          "1": 0.0,
+          "2": 1.0
+        },
+        "legend": {
+          "0": {
+            "level": "irrelevant",
+            "includes": "No concrete evidence for the requested behavior.",
+            "excludes": "Keyword overlap alone does not establish usefulness."
+          },
+          "1": {
+            "level": "context",
+            "includes": "Related definitions or background that help interpret the behavior.",
+            "excludes": "Does not directly exhibit the requested implementation, test, or limitation."
+          },
+          "2": {
+            "level": "direct_evidence",
+            "includes": "Directly exhibits a requested implementation, test, dependency, contradiction, or limitation.",
+            "excludes": "This rating does not prove the full question has been answered."
+          }
+        },
+        "confidence": 1.0
+      },
+      "candidate_2": {
+        "type": "score",
+        "score": 2,
+        "probabilities": {
+          "0": 0.0,
+          "1": 0.0,
+          "2": 1.0
+        },
+        "legend": {
+          "0": {
+            "level": "irrelevant",
+            "includes": "No concrete evidence for the requested behavior.",
+            "excludes": "Keyword overlap alone does not establish usefulness."
+          },
+          "1": {
+            "level": "context",
+            "includes": "Related definitions or background that help interpret the behavior.",
+            "excludes": "Does not directly exhibit the requested implementation, test, or limitation."
+          },
+          "2": {
+            "level": "direct_evidence",
+            "includes": "Directly exhibits a requested implementation, test, dependency, contradiction, or limitation.",
+            "excludes": "This rating does not prove the full question has been answered."
+          }
+        },
+        "confidence": 1.0
+      }
+    },
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  }
+}

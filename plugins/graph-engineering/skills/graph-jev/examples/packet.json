@@ -1,0 +1,30 @@
+{
+  "candidates": [
+    {
+      "byte_end": 66,
+      "byte_start": 0,
+      "id": "c0",
+      "path": "background.py",
+      "required": false,
+      "source_sha256": "4afe3770595dc90541fca06723ef24dab203ac91d684849fecf387b5b5cc31d5"
+    },
+    {
+      "byte_end": 37,
+      "byte_start": 0,
+      "id": "c1",
+      "path": "cancel.py",
+      "required": false,
+      "source_sha256": "5668f00f1ac76e85046e22e5695379e61614e1a2a37a2853108100eaf385e4f9"
+    },
+    {
+      "byte_end": 81,
+      "byte_start": 0,
+      "id": "c2",
+      "path": "test_cancel.py",
+      "required": true,
+      "source_sha256": "8db3d62895ad728dad665a3f3d0e0421076b0e902d6489c885638e950ad46a6a"
+    }
+  ],
+  "query": "Find the cancellation implementation and its test.",
+  "schema_version": "velgraphing-jev-candidates-v1"
+}

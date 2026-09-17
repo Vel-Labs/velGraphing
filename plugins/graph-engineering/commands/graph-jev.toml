@@ -1,0 +1,2 @@
+description = "Preview, configure, and test optional Jev evidence reranking"
+prompt = "Invoke $graph-jev for this task: {{args}}. Default to offline preview. API access requires explicit operator approval; a key alone is not permission."

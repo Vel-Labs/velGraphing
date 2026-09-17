@@ -1,20 +1,40 @@
-name: CI
+name: Validate VelGraphing
 
 on:
-  push:
   pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  offline:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: Install project
+          python-version: ${{ matrix.python }}
+      - name: Install project in editable mode
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install -e .
-      - name: Run tests
+      - name: Full offline suite
         run: npm test
+      - name: Verify package parity and projection idempotence
+        run: |
+          python scripts/package/verify_source_package_parity.py
+          python scripts/package/project_portable_plugin.py
+          python scripts/package/verify_source_package_parity.py --write-manifest
+          git diff --exit-code
