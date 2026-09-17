@@ -231,6 +231,29 @@ class JevTests(unittest.TestCase):
         response["answers"]["candidate_0"]["score"] = 1
         self.assertEqual(self.evaluate(replay=self.replay(response))["reason"], "inconsistent_score")
 
+    def test_rounded_score_accepts_and_material_mismatch_falls_back(self):
+        self.packet["candidates"][2]["required"] = True
+        self.prepared = jev.prepare(self.packet, self.root)
+        response = self.response()
+        response["answers"]["candidate_0"].update(
+            {"score": 1.00, "probabilities": {"0": 0.330, "1": 0.337, "2": 0.333}}
+        )
+        result = self.evaluate(mode="shadow", replay=self.replay(response))
+        self.assertEqual(result["execution"], "replay")
+        self.assertEqual(result["attempted_calls"], 0)
+        self.assertEqual(result["status"], "shadow")
+        self.assertTrue(result["source_revalidated"])
+        self.assertEqual(result["order"], result["baseline_order"])
+        self.assertEqual(set(result["order"]), {"c0", "c1", "c2"})
+        self.assertEqual(result["required_ids"], ["c2"])
+        self.assertEqual(result["order"][2], "c2")
+
+        response["answers"]["candidate_0"]["score"] = 1.02
+        result = self.evaluate(mode="shadow", replay=self.replay(response))
+        self.assertEqual(result["status"], "fallback")
+        self.assertEqual(result["reason"], "inconsistent_score")
+        self.assertEqual(result["order"], result["baseline_order"])
+
     def test_invalid_confidence_rejected(self):
         response = self.response()
         response["answers"]["candidate_0"]["confidence"] = 2

@@ -137,6 +137,24 @@ Check returned Score probabilities/legend/confidence, weighted score, resolved
 model, usage and source revalidation. Separate an API schema issue from a model
 quality issue. Preserve sanitized errors and the one-request limit.
 
+### First live smoke result
+
+On 2026-09-17, one operator-approved synthetic shadow call ran at the final
+pre-repair head. The source-free observation was `mode=shadow`,
+`execution=live`, `attempted_calls=1`, `status=fallback`,
+`reason=inconsistent_score`, and `elapsed_ms=341.271`. It preserved the
+baseline order `[c0,c1,c2]`, retained all candidates and the required `c2`
+slot, and reported `source_revalidated=false`, `resolved_model=null`, and
+`usage=null`. This was an adapter compatibility failure, not a model-quality
+result. The response body and source-bearing request were not retained.
+
+The bounded repair adds `SCORE_CONSISTENCY_TOLERANCE=0.007` for bounded score
+and probability rounding compatibility while retaining exact legend validation,
+probability and score bounds, candidate membership, required slots, source
+custody, fallback, and the one-call limit. No second live call was made or
+authorized; fresh provider compatibility proof remains open until a new
+operator-approved smoke call is available.
+
 ## Stage 3: bounded plugin integration
 
 The present skill already lets a host score an explicitly prepared source
