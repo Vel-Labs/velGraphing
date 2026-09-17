@@ -29,7 +29,7 @@ EVIDENCE_USEFULNESS_RUBRIC = (
     ("context", "Related definitions or background that help interpret the behavior.", "Does not directly exhibit the requested implementation, test, or limitation."),
     ("direct_evidence", "Directly exhibits a requested implementation, test, dependency, contradiction, or limitation.", "This rating does not prove the full question has been answered."),
 )
-SCORE_CONSISTENCY_TOLERANCE = 0.007
+SCORE_CONSISTENCY_TOLERANCE = 0.021
 MAX_CANDIDATES = 64
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_SOURCE_BYTES = 16 * 1024 * 1024
@@ -305,7 +305,7 @@ def parse_response(response: Any, packet: dict[str, Any], requested_model: str) 
         if abs(sum(probabilities.values()) - 1) > 0.001:
             raise JevError("invalid_probability_sum")
         score = _number(answer.get("score"), 0, 2)
-        # Maximum 0.005 from a two-decimal score plus 0.0015 from three-decimal probabilities across levels 0..2; round up to 0.007.
+        # Maximum 0.005 score rounding plus (0.005*1 + 0.005*2) weighted probability rounding and 0.001 headroom.
         weighted_score = sum(int(k) * p for k, p in probabilities.items())
         difference = abs(score - weighted_score)
         if difference > SCORE_CONSISTENCY_TOLERANCE:

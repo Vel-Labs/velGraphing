@@ -234,7 +234,7 @@ class JevTests(unittest.TestCase):
     def test_score_mismatch_reports_sanitized_numeric_diagnostic(self):
         response = self.response()
         response["answers"]["candidate_0"].update(
-            {"score": 1.02, "probabilities": {"0": 0.330, "1": 0.337, "2": 0.333}}
+            {"score": 1.05, "probabilities": {"0": 0.330, "1": 0.337, "2": 0.333}}
         )
         result = self.evaluate(mode="shadow", replay=self.replay(response))
         self.assertEqual(result["status"], "fallback")
@@ -247,9 +247,9 @@ class JevTests(unittest.TestCase):
             {
                 "type": "score_consistency",
                 "candidate_index": 0,
-                "reported_score": 1.02,
+                "reported_score": 1.05,
                 "weighted_score": 1.003,
-                "absolute_difference": 0.017,
+                "absolute_difference": 0.047,
                 "probability_sum": 1.0,
                 "probabilities": {"0": 0.33, "1": 0.337, "2": 0.333},
             },
@@ -265,7 +265,7 @@ class JevTests(unittest.TestCase):
         self.prepared = jev.prepare(self.packet, self.root)
         response = self.response()
         response["answers"]["candidate_0"].update(
-            {"score": 1.00, "probabilities": {"0": 0.330, "1": 0.337, "2": 0.333}}
+            {"score": 0.01, "probabilities": {"0": 1.0, "1": 0.0, "2": 0.0}}
         )
         result = self.evaluate(mode="shadow", replay=self.replay(response))
         self.assertEqual(result["execution"], "replay")

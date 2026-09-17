@@ -148,7 +148,7 @@ slot, and reported `source_revalidated=false`, `resolved_model=null`, and
 `usage=null`. This was an adapter compatibility failure, not a model-quality
 result. The response body and source-bearing request were not retained.
 
-The bounded repair adds `SCORE_CONSISTENCY_TOLERANCE=0.007` for bounded score
+The bounded repair added `SCORE_CONSISTENCY_TOLERANCE=0.007` for bounded score
 and probability rounding compatibility while retaining exact legend validation,
 probability and score bounds, candidate membership, required slots, source
 custody, fallback, and the one-call limit. A second operator-approved
@@ -157,11 +157,18 @@ post-repair synthetic shadow call at head `f88b294` still returned
 `reason=inconsistent_score`, and `elapsed_ms=309.061`; it preserved the
 baseline order, all candidates and required `c2`, with `source_revalidated=false`,
 `resolved_model=null`, `usage=null`, and no scores. The tolerance was not
-widened. The current bounded diagnostic reports only the failing candidate index,
-rounded score/probability values, weighted score, sum, and absolute difference.
-No third live call has been made; the next operator-approved smoke call can use
-this diagnostic to distinguish scale, mapping, and rounding causes without
-retaining source or provider response data.
+widened. A third operator-approved synthetic shadow call at diagnostic head
+`d97a145` returned `attempted_calls=1`, `elapsed_ms=335.879`,
+`status=fallback`, `reason=inconsistent_score`, `candidate_index=0`,
+`reported_score=0.01`, `weighted_score=0.0`, `absolute_difference=0.01`,
+`probability_sum=1.0`, and probabilities `{0:1.0,1:0.0,2:0.0}`. This
+normalized two-decimal shape demonstrates displayed rounding. The corrected
+ceiling is `0.021`: up to `0.005` at level 1 plus `0.010` at level 2 from
+probability rounding, `0.005` score rounding, and `0.001` numeric headroom. The current bounded
+diagnostic reports only the failing candidate index, rounded score/probability
+values, weighted score, sum, and absolute difference. No fourth live call has
+been made; the next operator-approved smoke call can validate this corrected
+boundary without retaining source or provider response data.
 
 ## Stage 3: bounded plugin integration
 
