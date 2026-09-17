@@ -1,0 +1,40 @@
+name: Validate VelGraphing
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.13']
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install existing parser dependencies only
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install tree-sitter==0.26.0 tree-sitter-javascript==0.25.0
+      - name: Full offline suite
+        run: npm test
+      - name: Verify package parity and projection idempotence
+        run: |
+          python scripts/package/verify_source_package_parity.py
+          python scripts/package/project_portable_plugin.py
+          python scripts/package/verify_source_package_parity.py --write-manifest
+          git diff --exit-code

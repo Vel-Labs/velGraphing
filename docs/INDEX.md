@@ -20,6 +20,13 @@ repository.
 | Compact benchmark evidence | `../benchmarks/README.md` |
 | Pre-publication red-team | `reviews/velgraphing-prepublication-red-team-2026-09-02/report-source.md` |
 
+## Jev pilot
+
+- [Local Codex handoff](jev/CODEX_HANDOFF.md): implementation status and staged validation.
+- [Operator guide](../plugins/graph-engineering/skills/graph-jev/references/usage.md): optional API setup and offline demo.
+- [Advanced questions](../plugins/graph-engineering/skills/graph-jev/references/advanced.md): structured state, instructions, and criteria.
+- [Benchmark protocol](../plugins/graph-engineering/skills/graph-jev/references/benchmark.md): Direct/Graph x Jev comparisons.
+
 ## Validation
 
 ```sh

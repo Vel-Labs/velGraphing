@@ -1,0 +1,6 @@
+interface:
+  display_name: "Jev for VelGraphing"
+  short_description: "Optional source-bound evidence reranking"
+  default_prompt: "Use $graph-jev to preview and test Jev evidence reranking."
+policy:
+  allow_implicit_invocation: false
