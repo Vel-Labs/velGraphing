@@ -40,6 +40,9 @@ class ProjectionContractTests(unittest.TestCase):
         for exclusion in EXCLUSIONS:
             (self.root / exclusion).write_text("{}\n", encoding="utf-8")
         (self.root / "adapters/knowledge-compiler/adapter.py").write_text("VALUE = 1\n", encoding="utf-8")
+        (self.root / "adapters/orcastrata-umbrella-catalog/adapter.py").write_text(
+            "VALUE = 2\n", encoding="utf-8"
+        )
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
@@ -59,6 +62,10 @@ class ProjectionContractTests(unittest.TestCase):
                 {
                     "source": "adapters/knowledge-compiler",
                     "target": "plugins/graph-engineering/runtime/adapters/knowledge-compiler",
+                },
+                {
+                    "source": "adapters/orcastrata-umbrella-catalog",
+                    "target": "plugins/graph-engineering/runtime/adapters/orcastrata-umbrella-catalog",
                 },
             ],
         )

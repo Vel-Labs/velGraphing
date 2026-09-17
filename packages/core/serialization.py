@@ -50,7 +50,7 @@ def serialize_projection(
             "task_id": task.task_id,
             "topology": task.topology.value,
             "fail_closed": False,
-            "records": [record.to_dict() for record in included],
+            "records": [record.to_pointer_dict() for record in included],
             "edges": [
                 edge_map[edge_id].to_dict()
                 for edge_id in selection.edge_ids

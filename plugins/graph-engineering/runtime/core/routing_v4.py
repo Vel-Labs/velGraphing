@@ -157,13 +157,10 @@ class SourceSnapshotV4:
         if any(type(item) is not SourceIdentityV4 for item in self.sources):
             raise TypeError("snapshot sources must contain SourceIdentityV4 values")
         paths = tuple(item.path for item in self.sources)
-        identities = tuple(item.sha256 for item in self.sources)
         if paths != tuple(sorted(paths)):
             raise ValueError("snapshot sources must use canonical path order")
         if len(paths) != len(set(paths)):
             raise ValueError("snapshot source paths must be unique")
-        if len(identities) != len(set(identities)):
-            raise ValueError("snapshot source identities must be unique")
 
     @property
     def snapshot_sha256(self) -> str:

@@ -1,0 +1,67 @@
+{
+  "task_id": "VG-01",
+  "route": "GRAPH_ASSISTED_TARGETED_FALLBACK",
+  "answer": "/graph-find dispatches from graph-find.toml to the graph-find skill, which runs graph_find.py with the repository root and prompt. The adapter verifies the canonical Git root, lists cached Git-tracked paths, rejects unsafe or sensitive paths, reads regular strict-UTF-8 files within caps, and builds in-memory GraphRecord and SourceSnapshotV4 objects with byte lengths and SHA-256 identities. The core builds typed tags from those exact bytes, compiles prompt facets, retrieves through exact/sparse/wiki/graph channels, verifies source custody, ranks bounded hits, and emits source-bound spans. The returned JSON contains route, reason, ranked hits, evidence pointers and hashes, source snapshot SHA-256, context bytes, facet coverage, fallback paths, fail_closed, obligation status, remaining budget, score meaning, and scan metadata. This run returned route=graph, reason=verified_tag_context_selected, facet coverage 81.51%, context_bytes=3174, 6 hits, 21 evidence pointers, scan_complete=true, and fail_closed=false. Graph sufficiency requires verified spans plus all required facets and at least 60% weighted coverage; when proof obligations exist, every obligation must be covered. It defers for insufficient prompt facets, custody mismatch, unauthenticated matches, no tag match, missing required coverage, missing spans, sensitive-path exclusion, or capped/incomplete scans. Sensitive-path and incomplete-scan overrides occur in the adapter after core retrieval. Empty usable source or invalid input exits with an error instead of returning a routing result.",
+  "citations": [
+    {"path": "plugins/graph-engineering/commands/graph-find.toml", "lines": "1-2", "claim": "Public command dispatches to the graph-find skill."},
+    {"path": "plugins/graph-engineering/skills/graph-find/SKILL.md", "lines": "8-30", "claim": "Skill invokes the portable script and defines graph/defer semantics."},
+    {"path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "lines": "206-281", "claim": "Git-tracked ingestion, filtering, source identities, graph records, and scan metadata."},
+    {"path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "lines": "294-339", "claim": "CLI task construction, graph_find call, scan overrides, and JSON serialization."},
+    {"path": "packages/core/routing_v4.py", "lines": "399-417", "claim": "Reader verifies exact bytes against the source snapshot."},
+    {"path": "packages/core/retrieval.py", "lines": "378-415", "claim": "GraphFindResult returns body-free pointers and routing metadata."},
+    {"path": "packages/core/retrieval.py", "lines": "553-562", "claim": "Repository tag index is derived from verified snapshot bytes."},
+    {"path": "packages/core/retrieval.py", "lines": "825-893", "claim": "Prompt facets are compiled and semantic candidates are vocabulary-constrained."},
+    {"path": "packages/core/retrieval.py", "lines": "894-965", "claim": "graph_find builds the index, retrieves, retries with proof obligations when needed, and projects the result."},
+    {"path": "packages/core/retrieval.py", "lines": "971-1010", "claim": "Retrieval validates custody and defers on invalid or insufficient facets."},
+    {"path": "packages/core/retrieval.py", "lines": "1071-1106", "claim": "Authentication-boundary and no-tag-match defer paths."},
+    {"path": "packages/core/retrieval.py", "lines": "1178-1217", "claim": "Graph sufficiency predicate, route, reason, coverage, spans, and fallback paths."},
+    {"path": "plugins/graph-engineering/README.md", "lines": "28-40", "claim": "Package-level route and fallback contract."}
+  ],
+  "graph_route": {
+    "route": "graph",
+    "reason": "verified_tag_context_selected",
+    "hits": 6,
+    "evidence": 21,
+    "facet_coverage_percent": 81.51,
+    "context_bytes": 3174,
+    "fail_closed": false,
+    "scan_complete": true,
+    "files_scanned": 180,
+    "files_skipped": 0,
+    "sensitive_paths_excluded": 0
+  },
+  "graph_reason": "verified_tag_context_selected",
+  "graph_source_snapshot_sha256": "5b70301f45ebfada3c038c2971cb273a1304f724dbb62f8fb266ce5b7de32ab2",
+  "graph_context_bytes": 3174,
+  "graph_source_bytes": 1176198,
+  "commands_run": [
+    "python3 -B /Users/steven/.codex/plugins/cache/graph-engineering-local/graph-engineering/0.1.5/skills/graph-find/scripts/graph_find.py --root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering --prompt \"Trace the complete /graph-find request path from the public command through repository ingestion to its returned routing decision. Explain what it returns and when it refuses graph sufficiency.\"",
+    "git grep -n -I -E 'graph-find|graph_find|repository_scan_incomplete|scan_complete|route.*defer|fail_closed' -- ':!benchmarks/**' ':!docs/reviews/**' ':!tests/skills/test_portable_skills.py'",
+    "git grep -n -I -E 'ingest|SourceSnapshot|routing|sufficien|threshold|obligation|fallback' -- packages scripts plugins/graph-engineering/commands plugins/graph-engineering/skills/graph-find",
+    "git grep -n -I -E 'Invoke \\$graph-find|def _scan|def main|ls-files|GraphRecord' -- plugins/graph-engineering/commands/graph-find.toml plugins/graph-engineering/skills/graph-find/SKILL.md plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+    "git grep -n -I -E 'build_repository_tag_index|_expected_repository_tags|_read_verified_source_bytes|SourceSnapshotV4' -- packages/core/retrieval.py packages/core/routing_v4.py",
+    "git grep -n -I -E 'route=\"graph\"|prompt_facets_insufficient|repository_index_custody_mismatch|tag_match_crosses_authentication_boundary|no_repository_tag_match|tag_context_insufficient|repository_scan_incomplete|sensitive_paths_excluded' -- packages/core/retrieval.py plugins/graph-engineering/skills/graph-find/scripts/graph_find.py plugins/graph-engineering/README.md",
+    "Targeted exact line reads for the cited command, skill, adapter, routing, retrieval, and package README ranges."
+  ],
+  "directory_listings": 2,
+  "search_calls": 5,
+  "source_reads": 6,
+  "source_paths_read": [
+    "plugins/graph-engineering/commands/graph-find.toml",
+    "plugins/graph-engineering/skills/graph-find/SKILL.md",
+    "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+    "packages/core/routing_v4.py",
+    "packages/core/retrieval.py",
+    "plugins/graph-engineering/README.md"
+  ],
+  "source_bytes_read": 19203,
+  "fallback_reasons": [
+    "Graph evidence returned route=graph but selected only narrow excerpts, with no complete proof of public dispatch, repository ingestion, exact source-reader verification, or sufficiency predicate."
+  ],
+  "fallback_search_calls": 5,
+  "fallback_source_reads": 6,
+  "wall_clock_seconds": 1.5,
+  "prohibited_writes": 0,
+  "proof_errors": 0,
+  "authority_errors": 0
+}

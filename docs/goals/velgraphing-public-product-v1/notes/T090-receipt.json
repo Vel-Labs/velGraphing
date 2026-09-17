@@ -1,0 +1,44 @@
+{
+  "task_id": "T090",
+  "status": "rejected",
+  "decision": "REVISE",
+  "public_performance_claim": "hold",
+  "product_change_recommended": false,
+  "consensus": "The 17/19 versus 18/19 gap is answer-composition and harness evidence, not proof of a retrieval defect. Preserve V1 and use a clean successor harness before any performance claim.",
+  "reviews": {
+    "gpt-5.6-luna": {
+      "role": "independent scorer",
+      "result": "acceptance failed",
+      "artifact_sha256": "66fdd8667666c238d4f18b043d38293561011025d41d54cfff146601e9a25b5f"
+    },
+    "xai/grok-4.5": {
+      "provider": "Command Code",
+      "result": "REVISE",
+      "artifact_sha256": "19a957309c2abfbe55766756dfa78c6813763b354b689f8a3ecd093624c082f7",
+      "next_action": "Use a new unfrozen answer-lane contract. Do not change the product or frozen evidence."
+    },
+    "minimaxai/minimax-m3": {
+      "provider": "Command Code",
+      "result": "REVISE",
+      "artifact_sha256": "b83dade1e44367f34a335f4d2a9382639e171907005a26efefcdc30edf1d39b2",
+      "next_action": "Clarify that the failed gates are answer-lane events and rubric-form misses. Preserve fact matrices and route aggregates."
+    },
+    "deepseek/deepseek-v4-flash": {
+      "provider": "Command Code",
+      "result": "validation_failure",
+      "raw_output_sha256": "cd9ff3ebd88ead03d0d402e3825727a4aa9ee233d050330bb1d4e6a2ac682471",
+      "manifest_sha256": "c685f804900b55cabc286aaf8e8ca3e0f8d74b76721adf2df909890c4b59b667",
+      "reason": "response_not_one_json_object",
+      "advisory_only": true
+    }
+  },
+  "orcastrata": {
+    "fanout_task": "T090-velgraphing-shipped-interface-review-r3",
+    "called_lanes": 3,
+    "completed_lanes": 2,
+    "substitution": false,
+    "retry_within_lane": false,
+    "usage": "unknown"
+  },
+  "remaining_risk": "The project has installed-interface and source-custody proof, but it does not have an accepted public performance benchmark."
+}

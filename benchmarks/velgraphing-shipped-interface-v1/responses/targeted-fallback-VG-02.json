@@ -1,0 +1,109 @@
+{
+  "task_id": "VG-02",
+  "route": "GRAPH_ASSISTED_TARGETED_FALLBACK",
+  "answer": {
+    "trace": [
+      "GraphRecord stores full content plus identity, Provenance(path, sha256, locator, verified), trust, sensitivity, freshness, admission, eligibility, agent origin, export_allowed, tags, and sequence.",
+      "Public export uses export_graph. It is default-deny, requires explicit policy, requested identities, export_allowed, authenticated eligibility, allowed sensitivity, and complete edge endpoints. It emits graph-export-v1 with metadata-only record pointers; content is omitted.",
+      "serialize_projection emits graph-projection-v1. It orders selected records by topology, emits metadata-only pointers and retained edges, and prunes records from the end until byte_budget fits. A fail-closed selection emits no records or edges.",
+      "Source-backed context is a separate path. select_documents and select_context may include exact source content only after provenance, source snapshot, UTF-8, and excerpt/full-record equality checks. Default TaskSpec sensitivity is public."
+    ],
+    "privacy_boundary": "GraphRecord.to_dict retains content, but public export and serialized projection call to_pointer_dict, which excludes content. Restricted or otherwise unauthenticated records cannot enter those outputs. The Orcastrata adapter maps records as trust=unverifiable, freshness=unknown, eligible=false, export_allowed=false, and always requires direct fallback.",
+    "preserved_evidence": "Exports preserve record identity, title, provenance path/hash/locator/verification, trust, sensitivity, freshness, admission, eligibility, agent_generated, export_allowed, tags, sequence, and edge provenance. Source-backed projections preserve source_path, source_sha256, byte ranges or full content, and excerpt hashes. Catalog intake preserves producer evidence_state, provenance, sensitivity, exportability, tag owner/source, projection/graph/board/raw-receipt digests, and canonical owner references.",
+    "budget_behavior": "TaskSpec enforces positive node and byte budgets. Selection limits nodes and depth. Serialized projections prune optional records to byte_budget; fail-closed envelopes must also fit or raise. Source-backed document/context projections fail closed when required content exceeds byte_budget. Explicit fallback uses only caller-declared paths and remaining budget.",
+    "canonical_ownership": "Repository source remains canonical and the graph is a derived navigation view. GoalBuddy owns lifecycle and acceptance truth; WorkGraph owns dependency, readiness, scope, validation, and evidence truth; VelGraphing owns consumer admission and graph mapping; GitHub is only a synchronized collaboration surface. Generated plugin runtime files are projections of canonical package sources.",
+    "package_drift_checks": "The parity verifier validates projection-map shape, safe boundaries, unique mappings, approved exclusions, source/runtime byte equality, exact runtime file sets, projection-state contract identity and file digests, release-manifest inventory, package identity, and candidate digest. Current read-only parity passed with candidate_sha256 a7e6cdfed136c208a3009eb945c255139bacaf0e011b4f0093f67ff461f77e0b and 74 files.",
+    "limits": "The adapter's graph mapping is navigation-only and does not authenticate underlying WorkGraph or GoalBuddy state. Parity proves source/package consistency only; it does not prove installation, publication, federation, provider execution, or adoption."
+  },
+  "citations": [
+    "packages/core/models.py:59-101",
+    "packages/core/models.py:174-192",
+    "packages/core/export.py:25-55",
+    "packages/core/serialization.py:20-72",
+    "packages/core/selection.py:493-577",
+    "packages/core/selection.py:580-696",
+    "adapters/orcastrata-umbrella-catalog/adapter.py:100-161",
+    "adapters/orcastrata-umbrella-catalog/adapter.py:239-296",
+    "adapters/orcastrata-umbrella-catalog/adapter.py:310-360",
+    "docs/integrations/ORCASTRATA_UMBRELLA_CATALOG.md:22-48",
+    "docs/integrations/ORCASTRATA_UMBRELLA_CATALOG.md:78-109",
+    "docs/architecture/SOURCE_OWNERSHIP_AND_PORTABILITY.md:5-35",
+    "docs/architecture/PACKAGING_AND_PARITY.md:32-46",
+    "scripts/package/verify_source_package_parity.py:356-424",
+    "scripts/package/verify_source_package_parity.py:485-524",
+    "contracts/package/projection-map.json:11-27",
+    "README.md:136-141",
+    "SECURITY.md:19-26",
+    "tests/core/test_graph_core.py:1375-1416",
+    "tests/core/test_graph_core.py:1482-1507"
+  ],
+  "graph_route": "defer",
+  "graph_reason": "tag_context_insufficient",
+  "graph_source_snapshot_sha256": "5b70301f45ebfada3c038c2971cb273a1304f724dbb62f8fb266ce5b7de32ab2",
+  "graph_context_bytes": 3119,
+  "graph_source_bytes": 1176198,
+  "commands_run": [
+    "python3 -B /Users/steven/.codex/plugins/cache/graph-engineering-local/graph-engineering/0.1.5/skills/graph-find/scripts/graph_find.py --root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering --prompt \"Trace how a GraphRecord becomes a public graph export or serialized projection. Identify privacy boundary, preserved evidence, budget behavior, canonical ownership, and package-drift checks.\"",
+    "git rev-parse HEAD",
+    "git ls-files",
+    "git grep -n with bounded explicit tracked paths",
+    "rg -n with bounded explicit tracked paths",
+    "exact graph byte-range reads for 24 graph evidence spans",
+    "PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py",
+    "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.core.test_graph_core.SerializationTests tests.core.test_graph_core.ExportTests tests.core.test_graph_core.DocumentSelectionTests",
+    "git status --short"
+  ],
+  "directory_listings": 2,
+  "search_calls": 6,
+  "source_reads": 24,
+  "source_paths_read": [
+    "packages/core/models.py",
+    "packages/core/export.py",
+    "packages/core/serialization.py",
+    "packages/core/selection.py",
+    "packages/core/retrieval.py",
+    "packages/core/__init__.py",
+    "plugins/graph-engineering/runtime/core/__init__.py",
+    "plugins/graph-engineering/skills/graph-engineering/references/architecture.md",
+    "plugins/graph-engineering/skills/graph-engineering/SKILL.md",
+    "adapters/orcastrata-umbrella-catalog/adapter.py",
+    "plugins/graph-engineering/runtime/adapters/orcastrata-umbrella-catalog/adapter.py",
+    "README.md",
+    "SECURITY.md",
+    "docs/INDEX.md",
+    "docs/architecture/SOURCE_OWNERSHIP_AND_PORTABILITY.md",
+    "docs/architecture/PACKAGING_AND_PARITY.md",
+    "docs/integrations/ORCASTRATA_UMBRELLA_CATALOG.md",
+    "contracts/core/README.md",
+    "contracts/core/graph-record.schema.json",
+    "contracts/core/provenance-v1.schema.json",
+    "contracts/core/graph-edge.schema.json",
+    "scripts/package/verify_source_package_parity.py",
+    "contracts/package/projection-map.json",
+    "plugins/graph-engineering/runtime/.projection-state.json"
+  ],
+  "source_bytes_read": 218428,
+  "fallback_reasons": [
+    {
+      "reason": "graph_find returned route=defer",
+      "detail": "tag_context_insufficient",
+      "count": 1
+    },
+    {
+      "reason": "insufficient graph context",
+      "detail": "facet coverage 74.42%; covered_obligation_ids empty",
+      "count": 1
+    },
+    {
+      "reason": "bounded direct fallback",
+      "detail": "required by task instructions for defer route",
+      "count": 1
+    }
+  ],
+  "fallback_search_calls": 5,
+  "fallback_source_reads": 24,
+  "wall_clock_seconds": 2.4,
+  "prohibited_writes": 0,
+  "proof_errors": 0,
+  "authority_errors": 0
+}

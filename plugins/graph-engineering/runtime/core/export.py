@@ -49,7 +49,7 @@ def export_graph(graph: Graph, policy: ExportPolicy | None = None) -> ExportResu
         "explicit_export_allowed",
         {
             "schema_version": "graph-export-v1",
-            "records": [record.to_dict() for record in selected_records],
+            "records": [record.to_pointer_dict() for record in selected_records],
             "edges": [edge.to_dict() for edge in selected_edges],
         },
     )

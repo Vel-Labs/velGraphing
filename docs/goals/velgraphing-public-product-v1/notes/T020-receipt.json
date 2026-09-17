@@ -1,0 +1,33 @@
+{
+  "task_id": "T020",
+  "status": "implemented_pending_independent_audit",
+  "candidate_sha256": "f0274fb6f21454652bdea70a77cdbe062c12a9c36a06fb4c4812955694189309",
+  "summary": "Added a body-free graph_find core seam and a portable /graph-find command that scans bounded Git-tracked UTF-8 source in memory.",
+  "observable_result": {
+    "route": "graph",
+    "hits": 6,
+    "evidence_pointers": 23,
+    "source_bodies_returned": 0,
+    "files_scanned": 152,
+    "files_skipped": 0
+  },
+  "validation": [
+    "118 focused routing, retrieval, and skill tests passed",
+    "21 projection and source-package parity tests passed",
+    "real repository /graph-find invocation returned expected command, README, and test paths",
+    "source-package parity passed with 74 files",
+    "git diff --check passed"
+  ],
+  "repairs": [
+    "Allowed different source paths to contain identical bytes while preserving unique paths.",
+    "Used ordinary prompt facets first and proof obligations only for short prompts whose facets are insufficient.",
+    "Prevented bytecode writes during normal invocation.",
+    "Forced capped or sensitive-path-excluded scans to defer and excluded sensitive paths before reading bytes."
+  ],
+  "boundaries": [
+    "No repository write, network call, provider call, persistent index, daemon, or hook occurs during graph-find.",
+    "Direct fallback is not executed by graph-find. The result returns graph or defer with source pointers.",
+    "Clean installed discovery and invocation remain T050 proof."
+  ],
+  "next_task": "T030"
+}

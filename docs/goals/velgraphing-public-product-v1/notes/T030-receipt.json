@@ -1,0 +1,23 @@
+{
+  "task_id": "T030",
+  "status": "accepted",
+  "candidate_sha256": "f0274fb6f21454652bdea70a77cdbe062c12a9c36a06fb4c4812955694189309",
+  "independent_audit": {
+    "model": "gpt-5.6-luna",
+    "reasoning_effort": "high",
+    "verdict": "ACCEPT",
+    "validation": [
+      "Plain python3 invocation created no bytecode or repository status change.",
+      "Capped scan returned defer with repository_scan_incomplete.",
+      "Five sensitive paths were excluded before reads, names were absent, and route was defer.",
+      "233 tests passed; source-package parity and staged diff check passed."
+    ]
+  },
+  "external_advisory": {
+    "deepseek_flash": "Provider ran and returned an ACCEPT review, but Orcastrata rejected the response because it was not one closed-schema JSON object. The content is advisory only.",
+    "grok": "No provider call. Exact model identity was unverifiable.",
+    "minimax": "No provider call. The configured OpenCode binding was disabled.",
+    "substitution": "none"
+  },
+  "next_task": "T040"
+}

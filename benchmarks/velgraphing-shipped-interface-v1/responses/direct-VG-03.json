@@ -1,0 +1,104 @@
+{
+  "task_id": "VG-03",
+  "route": "DIRECT",
+  "answer": "The adapter enumerates Git-index tracked paths with `git ls-files --cached`, then reads current working-tree bytes. An oversized regular source file is skipped before graph admission with reason `max_file_bytes`; its path and skip reason may appear in `scan.files_skipped`, but its body is not read into graph evidence. This makes `scan_complete=false` and, unless a sensitive path was also excluded, the CLI forces `route=defer` with reason `repository_scan_incomplete`. A tracked `.env` is classified as sensitive before any byte read. Its name and contents are not emitted; only `sensitive_paths_excluded` and the corresponding count are exposed. Any sensitive exclusion has highest CLI override precedence and forces `route=defer`, reason `sensitive_paths_excluded`. An invalid-UTF-8 regular file is read for validation, then skipped with reason `invalid_utf8`; its path and reason may appear in `files_skipped`. Invalid UTF-8 alone does not make `scan_complete=false`, so other valid evidence can still produce `route=graph`; otherwise the core result remains `defer`. Route precedence is: core retrieval decides graph versus defer; then sensitive-path exclusion overrides everything; otherwise file/total-byte cap skips override with repository-scan-incomplete; invalid-UTF8 skips do not override. Each invocation rebuilds the in-memory graph and snapshot from current bytes. A later edit to an existing tracked path is visible on the next invocation while the path remains tracked and passes sensitivity, size, regular-file, and UTF-8 checks. The snapshot and source hashes change because they are computed from the newly read bytes. The implementation reads working-tree bytes, not staged blob contents.",
+  "citations": [
+    {
+      "path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+      "lines": "206-281",
+      "claim": "Tracked-path enumeration, sensitivity filtering, regular-file/size/UTF-8 handling, scan metadata, and in-memory snapshot construction."
+    },
+    {
+      "path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+      "lines": "328-331",
+      "claim": "Sensitive-path and incomplete-scan route override precedence."
+    },
+    {
+      "path": "packages/core/retrieval.py",
+      "lines": "1179-1217",
+      "claim": "Core graph-versus-defer sufficiency decision and fallback behavior."
+    },
+    {
+      "path": "packages/core/routing_v4.py",
+      "lines": "151-167",
+      "claim": "Snapshot hash derives from canonical source identities and source hashes."
+    },
+    {
+      "path": "plugins/graph-engineering/skills/graph-find/SKILL.md",
+      "lines": "8-28",
+      "claim": "Graph-find reads tracked regular UTF-8 files, excludes secret-like paths before reads, counts invalid UTF-8, and defers on cap-induced incomplete scans."
+    },
+    {
+      "path": "tests/skills/test_portable_skills.py",
+      "lines": "397-448",
+      "claim": "Size-cap skips produce repository_scan_incomplete and defer."
+    },
+    {
+      "path": "tests/skills/test_portable_skills.py",
+      "lines": "452-525",
+      "claim": "Invalid UTF-8 is counted with its path; sensitive names are not emitted and sensitive exclusion forces defer."
+    },
+    {
+      "path": "tests/skills/test_portable_skills.py",
+      "lines": "350-395",
+      "claim": "A later tracked source edit changes source and snapshot hashes and is found by a fresh invocation."
+    }
+  ],
+  "commands_run": [
+    "pwd && sed -n '1,240p' _dashboard/agent-start-here.md && find 40_Code/infrastructure/graph-engineering -name AGENTS.md -print",
+    "sed -n '1,260p' AGENTS.md && sed -n '1,320p' AGENTS.md",
+    "sed -n '1,260p' README.md && sed -n '1,260p' docs/INDEX.md && find plugins/graph-engineering/skills -maxdepth 2 -type f -name SKILL.md -print",
+    "sed -n '1,360p' plugins/graph-engineering/skills/graph-benchmark/SKILL.md && sed -n '1,420p' plugins/graph-engineering/skills/graph-find/SKILL.md && rg -n ...",
+    "rg --files -g 'graph_find.py' -g '*retriev*' -g '*snapshot*' -g '*source*' packages plugins/graph-engineering/skills/graph-find plugins/graph-engineering/runtime | sort",
+    "rg -n -C ... packages/core/retrieval.py plugins/graph-engineering/skills/graph-find/scripts/graph_find.py tests/skills/test_portable_skills.py",
+    "nl -ba plugins/graph-engineering/skills/graph-find/scripts/graph_find.py | sed -n '1,300p'",
+    "nl -ba plugins/graph-engineering/skills/graph-find/scripts/graph_find.py | sed -n '294,430p'",
+    "rg -n -C 14 ... packages/core/retrieval.py packages/core/*.py",
+    "nl -ba packages/core/retrieval.py | sed -n '894,1045p'; nl -ba packages/core/routing_v4.py | sed -n '151,190p'",
+    "nl -ba packages/core/retrieval.py | sed -n '1160,1225p'",
+    "nl -ba tests/skills/test_portable_skills.py | sed -n '350,395p'; nl -ba tests/skills/test_portable_skills.py | sed -n '452,535p'",
+    "nl -ba tests/skills/test_portable_skills.py | sed -n '397,451p'",
+    "nl -ba README.md | sed -n '57,82p'; nl -ba plugins/graph-engineering/skills/graph-find/SKILL.md | sed -n '7,28p'; nl -ba packages/core/routing_v4.py | sed -n '151,170p'",
+    "git ls-files --cached -z -- ':!benchmarks/**' | tr '\\0' '\\n' | wc -l; git ls-files --cached -z -- ':!benchmarks/**' | tr '\\0' '\\n' | rg '(^|/)(\\.env|.*\\.env|.*\\.bin|.*\\.dat)$' || true; git status --short --untracked-files=no"
+  ],
+  "directory_listings": [
+    {
+      "command": "git ls-files --cached -z -- ':!benchmarks/**'",
+      "result": "169 Git-tracked paths outside benchmarks; no matching .env, .bin, or .dat path found."
+    }
+  ],
+  "search_calls": [
+    "rg --files for graph-find, retrieval, snapshot, and source implementation paths",
+    "rg -n for tracked-file, UTF-8, sensitivity, cap, scan-complete, route, fallback, refresh, and snapshot terms",
+    "rg -n over the tracked-path inventory for .env and binary-like names"
+  ],
+  "source_reads": [
+    "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py:206-281",
+    "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py:294-342",
+    "packages/core/retrieval.py:894-968",
+    "packages/core/retrieval.py:971-1218",
+    "packages/core/routing_v4.py:151-170",
+    "plugins/graph-engineering/skills/graph-find/SKILL.md:8-28",
+    "tests/skills/test_portable_skills.py:350-395",
+    "tests/skills/test_portable_skills.py:397-525"
+  ],
+  "source_paths_read": [
+    "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+    "packages/core/retrieval.py",
+    "packages/core/routing_v4.py",
+    "plugins/graph-engineering/skills/graph-find/SKILL.md",
+    "tests/skills/test_portable_skills.py",
+    "README.md",
+    "docs/INDEX.md",
+    "AGENTS.md",
+    "_dashboard/agent-start-here.md"
+  ],
+  "source_bytes_read": null,
+  "wall_clock_seconds": null,
+  "prohibited_writes": [
+    "No repository files were intentionally modified; pre-existing staged changes were observed.",
+    "An intermediate inventory command accidentally created /tmp/vg03-tracked.txt outside the repository; it was not used as evidence."
+  ],
+  "proof_errors": [],
+  "authority_errors": []
+}

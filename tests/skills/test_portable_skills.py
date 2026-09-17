@@ -15,7 +15,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SKILLS_ROOT = PROJECT_ROOT / "plugins" / "graph-engineering" / "skills"
 COMMANDS_ROOT = PROJECT_ROOT / "plugins" / "graph-engineering" / "commands"
-PUBLIC_COMMANDS = ("graph-start", "graph-update", "graph-audit", "graph-benchmark")
+PUBLIC_COMMANDS = ("graph-find", "graph-start", "graph-update", "graph-audit", "graph-benchmark")
 
 
 class PortableSkillTests(unittest.TestCase):
@@ -103,6 +103,11 @@ class PortableSkillTests(unittest.TestCase):
                 "references/federation-and-lifecycle.md",
                 "scripts/stewardctl.py",
                 "templates/federation-registry.json",
+            },
+            "graph-find": {
+                "SKILL.md",
+                "agents/openai.yaml",
+                "scripts/graph_find.py",
             },
         }
         for skill_name, resources in expected.items():
@@ -291,6 +296,233 @@ class PortableSkillTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertEqual("pass", json.loads(result.stdout)["status"])
+
+    def test_graph_find_is_discoverable_and_documents_defer_boundary(self) -> None:
+        command = tomllib.loads((COMMANDS_ROOT / "graph-find.toml").read_text(encoding="utf-8"))
+        skill = (SKILLS_ROOT / "graph-find" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("$graph-find", command["prompt"])
+        self.assertIn("route: graph", skill)
+        self.assertIn("route: defer", skill)
+        self.assertIn("Repository source", skill)
+        self.assertIn("remains", skill)
+        self.assertIn("authoritative", skill)
+        self.assertIn("does not write", skill)
+
+    def test_graph_find_subprocess_returns_pointers_without_bodies(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        cache_before = sorted(str(path) for path in PROJECT_ROOT.rglob("__pycache__"))
+        with tempfile.TemporaryDirectory(prefix="graph-find-") as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "src" / "auth.py").write_text(
+                "def refresh_token(token):\n    return token\n", encoding="utf-8"
+            )
+            (root / "untracked.txt").write_text("must not be scanned\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "add", "src/auth.py"], check=True
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find refresh_token",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={key: value for key, value in os.environ.items() if key != "PYTHONDONTWRITEBYTECODE"},
+            )
+
+        self.assertEqual(cache_before, sorted(str(path) for path in PROJECT_ROOT.rglob("__pycache__")))
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("graph", payload["route"])
+        self.assertTrue(payload["evidence"])
+        self.assertNotIn("context", payload)
+        self.assertNotIn("content", result.stdout)
+        self.assertNotIn("untracked.txt", result.stdout)
+        self.assertTrue(all("source_path" in item for item in payload["evidence"]))
+
+    def test_graph_find_rebuilds_from_current_tracked_bytes(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-fresh-") as raw:
+            root = Path(raw)
+            source = root / "src" / "target.py"
+            source.parent.mkdir()
+            source.write_text(
+                "def current_target():\n    return 'first'\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "src/target.py"], check=True)
+
+            def run_find() -> dict[str, object]:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(script),
+                        "--root",
+                        str(root),
+                        "--prompt",
+                        "find current_target",
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                return json.loads(result.stdout)
+
+            first = run_find()
+            source.write_text(
+                "def current_target():\n    return 'second'\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "-C", str(root), "add", "src/target.py"], check=True)
+            second = run_find()
+
+        self.assertNotEqual(
+            first["source_snapshot_sha256"], second["source_snapshot_sha256"]
+        )
+        first_source_sha = first["evidence"][0]["source_sha256"]
+        second_source_sha = second["evidence"][0]["source_sha256"]
+        self.assertNotEqual(first_source_sha, second_source_sha)
+        self.assertIn(
+            "src/target.py",
+            {item["source_path"] for item in second["hits"]},
+        )
+
+    def test_graph_find_subprocess_rejects_alias_and_byte_caps(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-unsafe-") as raw:
+            root = Path(raw)
+            (root / "large.txt").write_text("x" * 32, encoding="utf-8")
+            (root / "ok.txt").write_text("ok\n", encoding="utf-8")
+            (root / "small.txt").write_text("s\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "add", "large.txt", "ok.txt", "small.txt"], check=True
+            )
+            cap = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find x",
+                    "--max-file-bytes",
+                    "8",
+                    "--max-total-bytes",
+                    "3",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            root_alias = root.parent / f"{root.name}-alias"
+            root_alias.symlink_to(root, target_is_directory=True)
+            alias = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root_alias),
+                    "--prompt",
+                    "find x",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, cap.returncode, cap.stdout + cap.stderr)
+        self.assertEqual("defer", json.loads(cap.stdout)["route"])
+        self.assertEqual("repository_scan_incomplete", json.loads(cap.stdout)["reason"])
+        self.assertFalse(json.loads(cap.stdout)["scan"]["scan_complete"])
+        self.assertEqual(
+            {"max_file_bytes": 1, "max_total_bytes": 1},
+            json.loads(cap.stdout)["scan"]["skip_counts"],
+        )
+        self.assertEqual(2, alias.returncode)
+        self.assertIn("alias", alias.stderr)
+
+    def test_graph_find_subprocess_skips_unsupported_tracked_files(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-skip-") as raw:
+            root = Path(raw)
+            (root / "usable.py").write_text(
+                "def refresh_token():\n    return 'ok'\n", encoding="utf-8"
+            )
+            (root / "binary.bin").write_bytes(b"\xff\xfe\x00")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "add", "usable.py", "binary.bin"], check=True
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find refresh_token",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual({"invalid_utf8": 1}, payload["scan"]["skip_counts"])
+        self.assertEqual("binary.bin", payload["scan"]["files_skipped"][0]["path"])
+
+    def test_graph_find_subprocess_excludes_sensitive_paths_without_names(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        sensitive_names = (".env", "private", "credentials", "id_rsa", "cert.pem", "bundle.p12")
+        with tempfile.TemporaryDirectory(prefix="graph-find-sensitive-") as raw:
+            root = Path(raw)
+            (root / "usable.py").write_text(
+                "def refresh_token():\n    return 'ok'\n", encoding="utf-8"
+            )
+            (root / ".env").write_text("refresh_token=secret\n", encoding="utf-8")
+            (root / "private").mkdir()
+            (root / "private" / "id_rsa").write_text("PRIVATE KEY\n", encoding="utf-8")
+            (root / "credentials").mkdir()
+            (root / "credentials" / "record.txt").write_text("secret\n", encoding="utf-8")
+            (root / "cert.pem").write_text("PRIVATE KEY\n", encoding="utf-8")
+            (root / "bundle.p12").write_text("PRIVATE KEY\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "add", "."], check=True
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find refresh_token",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={key: value for key, value in os.environ.items() if key != "PYTHONDONTWRITEBYTECODE"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("defer", payload["route"])
+        self.assertEqual("sensitive_paths_excluded", payload["reason"])
+        self.assertEqual(5, payload["scan"]["sensitive_paths_excluded"])
+        self.assertEqual(5, payload["scan"]["skip_counts"]["sensitive_paths_excluded"])
+        self.assertTrue(payload["scan"]["scan_complete"] is False)
+        for name in sensitive_names:
+            self.assertNotIn(name, result.stdout)
 
     @property
     def graphctl(self) -> Path:

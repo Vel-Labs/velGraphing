@@ -1,0 +1,14 @@
+{
+  "task_id": "T070",
+  "status": "complete",
+  "benchmark_id": "velgraphing-shipped-interface-v1",
+  "freeze_sha256": "2a2132d6fc8e3a86f0a76015fe6c61e5c4bd0da4c6f2d6c8c9408190354aec14",
+  "source_snapshot_sha256": "5b70301f45ebfada3c038c2971cb273a1304f724dbb62f8fb266ce5b7de32ab2",
+  "candidate_sha256": "a7e6cdfed136c208a3009eb945c255139bacaf0e011b4f0093f67ff461f77e0b",
+  "tasks": 3,
+  "required_facts": 19,
+  "routes": 4,
+  "answer_model": "gpt-5.6-luna",
+  "reasoning": "high",
+  "boundary": "The freeze was created before answer execution and was not edited after results were observed."
+}

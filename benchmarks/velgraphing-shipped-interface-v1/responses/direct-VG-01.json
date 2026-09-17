@@ -1,0 +1,155 @@
+{
+  "task_id": "VG-01",
+  "route": "DIRECT",
+  "answer": "The public command TOML forwards arguments to the $graph-find skill, which invokes the portable graph_find.py adapter. The adapter prefers canonical packages/core, with packaged runtime fallback. It validates an absolute canonical Git root, confirms the Git top level, enumerates Git-tracked index paths with git ls-files --cached, sorts and validates paths, excludes secret-like paths before reads, rejects symlink components, reads regular UTF-8 working-tree bytes under file and total-byte caps, and stores accepted bytes in an in-memory SnapshotReader. It hashes each accepted file into SourceIdentityV4 and creates one verified, current, internal, verifier-admitted, eligible GraphRecord per path. The constructed Graph has records but no edges, so the graph channel and one-hop expansion have no edge data in this command path. The core graph_find seam builds a source-verified typed tag index from paths, symbols, keywords, headings, config keys, test names, and imports. It compiles prompt facets, accepting semantic candidates only when already present in repository vocabulary, then calls retrieve with exact, sparse, wiki, and graph channels, a six-result default, one-hop expansion, and a 60 percent minimum coverage threshold. If the first retrieval returns prompt_facets_insufficient, graph_find compiles up to six lexical proof obligations from vocabulary-backed prompt clauses and retries. retrieve re-reads and hash-verifies the snapshot bytes, validates index custody by regenerating tags and vocabulary, scores channels, rejects authentication-boundary matches, ranks eligible hits, and selects exact source spans within the byte budget. It returns route=graph only when spans exist and either all required facets are matched with coverage at least 60 percent, or every proof obligation is covered by evidence. Otherwise it returns route=defer. Core defer reasons include repository_index_custody_mismatch (fail_closed=true), prompt_facets_insufficient, tag_match_crosses_authentication_boundary (fail_closed=true), no_repository_tag_match, and tag_context_insufficient. After the core result, the adapter forcibly changes any result to route=defer when sensitive paths were excluded or file/total caps made scan_complete false, using sensitive_paths_excluded or repository_scan_incomplete. Invalid root, unsafe path, unreadable path, invalid arguments, or no usable tracked UTF-8 files fail the command with stderr and exit code 2 instead of returning JSON. The JSON result is body-free: route, reason, ranked hits, exact evidence pointers and hashes, snapshot hash, context byte count, facet coverage, fallback paths, fail-closed state, obligation status, remaining budget, score meaning, and scan metadata. Repository source remains authoritative.",
+  "citations": [
+    {
+      "path": "plugins/graph-engineering/commands/graph-find.toml",
+      "lines": "1-2",
+      "claim": "Public command forwards the repository task to the graph-find skill."
+    },
+    {
+      "path": "plugins/graph-engineering/skills/graph-find/SKILL.md",
+      "lines": "8-30",
+      "claim": "Skill invokes graph_find.py, defines Git-tracked UTF-8 ingestion, graph/defer semantics, and scan refusal behavior."
+    },
+    {
+      "path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+      "lines": "21-70",
+      "claim": "Canonical packages/core import is preferred; packaged runtime is the fallback."
+    },
+    {
+      "path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+      "lines": "89-183",
+      "claim": "Root, path, symlink, regular-file, size, and UTF-8 validation."
+    },
+    {
+      "path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+      "lines": "186-281",
+      "claim": "In-memory reader, Git-tracked scan, source snapshot, verified graph records, and scan metadata."
+    },
+    {
+      "path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+      "lines": "294-339",
+      "claim": "Task construction, core seam call, scan-result overrides, JSON serialization, and exit-code-2 errors."
+    },
+    {
+      "path": "packages/core/retrieval.py",
+      "lines": "553-562",
+      "claim": "Tag index is regenerated from exact verified snapshot bytes."
+    },
+    {
+      "path": "packages/core/retrieval.py",
+      "lines": "565-669",
+      "claim": "Fallback proof obligations are lexical, vocabulary-bound, complete-unit obligations."
+    },
+    {
+      "path": "packages/core/retrieval.py",
+      "lines": "793-822",
+      "claim": "Index custody is checked against snapshot identity, provenance, regenerated tags, and vocabulary."
+    },
+    {
+      "path": "packages/core/retrieval.py",
+      "lines": "825-891",
+      "claim": "Prompt facets are compiled with an 8-to-20 sufficiency range and vocabulary-gated semantic candidates."
+    },
+    {
+      "path": "packages/core/retrieval.py",
+      "lines": "894-968",
+      "claim": "graph_find orchestration, retry on insufficient facets, and body-free result projection."
+    },
+    {
+      "path": "packages/core/retrieval.py",
+      "lines": "971-1218",
+      "claim": "Retrieval custody checks, authentication refusal, matching, span selection, coverage, and graph/defer decision."
+    },
+    {
+      "path": "packages/core/retrieval.py",
+      "lines": "1502-1593",
+      "claim": "Typed tag extraction and channel scoring; graph channel uses only graph edges."
+    },
+    {
+      "path": "packages/core/retrieval.py",
+      "lines": "1805-1820",
+      "claim": "All empty or failed retrieval results are defer results."
+    },
+    {
+      "path": "packages/core/retrieval.py",
+      "lines": "378-415",
+      "claim": "Returned GraphFindResult fields and body-free serialization."
+    },
+    {
+      "path": "packages/core/routing_v4.py",
+      "lines": "399-417",
+      "claim": "SnapshotReader bytes are checked against exact lengths and SHA-256 identities."
+    },
+    {
+      "path": "packages/core/models.py",
+      "lines": "174-192",
+      "claim": "Eligible records must pass provenance, trust, freshness, sensitivity, admission, and eligibility gates."
+    }
+  ],
+  "commands_run": [
+    "git ls-files",
+    "rg -n --glob '!benchmarks/**' --glob '!*.jsonl' --glob '!docs/goals/**' \"graph_find|SourceSnapshotV4|repository_scan_incomplete|route.*defer|defer|sufficien|Graph\" plugins/graph-engineering/commands plugins/graph-engineering/skills/graph-find packages/core contracts/core README.md docs/INDEX.md",
+    "rg -n '^def |^class ' packages/core/retrieval.py",
+    "rg -n 'def is_authenticated_eligible|class Sensitivity|class TrustClass|class Admission|class Freshness' packages/core/models.py",
+    "sed and nl source reads for the cited tracked files",
+    "git status --short"
+  ],
+  "directory_listings": [
+    "Git-tracked listing via git ls-files; benchmark paths were listed but their artifacts were not read.",
+    "Startup AGENTS lookup via find . -path '*/AGENTS.md' -print."
+  ],
+  "search_calls": [
+    "Repository rg search for graph_find, SourceSnapshotV4, defer, sufficiency, and Graph.",
+    "Repository rg search for retrieval function/class definitions.",
+    "Repository rg search for eligibility and model enum definitions."
+  ],
+  "source_reads": [
+    "plugins/graph-engineering/commands/graph-find.toml:1-2",
+    "plugins/graph-engineering/skills/graph-find/SKILL.md:1-31",
+    "plugins/graph-engineering/skills/graph-find/agents/openai.yaml:1-4",
+    "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py:1-343",
+    "packages/core/retrieval.py:1-330",
+    "packages/core/retrieval.py:378-415",
+    "packages/core/retrieval.py:540-895",
+    "packages/core/retrieval.py:971-1218",
+    "packages/core/retrieval.py:1502-1593",
+    "packages/core/retrieval.py:1800-1925",
+    "packages/core/routing_v4.py:120-230",
+    "packages/core/routing_v4.py:395-470",
+    "packages/core/models.py:1-45",
+    "packages/core/models.py:40-165",
+    "packages/core/models.py:160-194",
+    "packages/core/__init__.py:1-165",
+    "plugins/graph-engineering/README.md:1-58",
+    "contracts/core/retrieval-v1.schema.json:1-90",
+    "plugins/graph-engineering/.codex-plugin/plugin.json:1-25",
+    "AGENTS.md:1-9"
+  ],
+  "source_paths_read": [
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/plugins/graph-engineering/commands/graph-find.toml",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/plugins/graph-engineering/skills/graph-find/SKILL.md",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/plugins/graph-engineering/skills/graph-find/agents/openai.yaml",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/packages/core/retrieval.py",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/packages/core/routing_v4.py",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/packages/core/models.py",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/packages/core/__init__.py",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/plugins/graph-engineering/README.md",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/contracts/core/retrieval-v1.schema.json",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/plugins/graph-engineering/.codex-plugin/plugin.json",
+    "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/AGENTS.md"
+  ],
+  "source_bytes_read": null,
+  "wall_clock_seconds": null,
+  "prohibited_writes": {
+    "files_changed_by_this_lane": [],
+    "graph_find_executed": false,
+    "benchmark_artifacts_read": false,
+    "network_or_provider_calls": false
+  },
+  "proof_errors": [],
+  "authority_errors": []
+}

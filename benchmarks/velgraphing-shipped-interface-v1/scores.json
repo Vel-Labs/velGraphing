@@ -1,0 +1,796 @@
+{
+  "schema_version": "velgraphing-shipped-interface-scores-v1",
+  "benchmark_id": "velgraphing-shipped-interface-v1",
+  "scorer": {
+    "model": "gpt-5.6-luna",
+    "reasoning": "high"
+  },
+  "method": {
+    "fact_recall": "supported required facts divided by required facts; a fact is supported only when the answer states the complete fact and the frozen target source supports it",
+    "source_location_recall": "required facts with at least one correct cited frozen anchor divided by required facts",
+    "unsupported_claims": "count of material answer claims that are false or unsupported by the frozen target anchors; observed payload metrics and explicit limitations are not counted",
+    "answer_pass": "all required facts supported, no unsupported material claim, no actual proof or authority error, and no prohibited write",
+    "graph_only_treatment": "diagnostic ablation; not an expected product route",
+    "prohibited_write_interpretation": "a reported write is actual when the lane caused a side effect despite read_only=true; pre-existing worktree state is a caveat"
+  },
+  "task_routes": [
+    {
+      "task_id": "VG-01",
+      "route": "DIRECT",
+      "fact_matrix": {
+        "VG-01-F1": true,
+        "VG-01-F2": true,
+        "VG-01-F3": true,
+        "VG-01-F4": true,
+        "VG-01-F5": true,
+        "VG-01-F6": true,
+        "VG-01-F7": false
+      },
+      "source_location_matrix": {
+        "VG-01-F1": true,
+        "VG-01-F2": true,
+        "VG-01-F3": true,
+        "VG-01-F4": true,
+        "VG-01-F5": true,
+        "VG-01-F6": true,
+        "VG-01-F7": true
+      },
+      "fact_notes": {
+        "VG-01-F7": "The answer lists fallback paths and states source authority, but does not state that graph-find recommends rather than executes direct fallback."
+      },
+      "metrics": {
+        "supported_facts": 6,
+        "required_facts": 7,
+        "fact_recall": 0.8571,
+        "source_locations_supported": 7,
+        "source_location_recall": 1.0,
+        "unsupported_claims": 0,
+        "answer_pass": false,
+        "source_bytes_read": null,
+        "graph_source_bytes": null,
+        "graph_context_bytes": null,
+        "fallback_search_calls": null,
+        "fallback_source_reads": null,
+        "wall_clock_seconds": null
+      },
+      "graph_route": null,
+      "graph_reason": null,
+      "payload": {
+        "proof_errors": [],
+        "authority_errors": [],
+        "prohibited_writes": {
+          "files_changed_by_this_lane": [],
+          "graph_find_executed": false,
+          "benchmark_artifacts_read": false,
+          "network_or_provider_calls": false
+        }
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false
+      }
+    },
+    {
+      "task_id": "VG-02",
+      "route": "DIRECT",
+      "fact_matrix": {
+        "VG-02-F1": true,
+        "VG-02-F2": true,
+        "VG-02-F3": true,
+        "VG-02-F4": true,
+        "VG-02-F5": true,
+        "VG-02-F6": true
+      },
+      "source_location_matrix": {
+        "VG-02-F1": true,
+        "VG-02-F2": true,
+        "VG-02-F3": true,
+        "VG-02-F4": true,
+        "VG-02-F5": true,
+        "VG-02-F6": true
+      },
+      "fact_notes": {},
+      "metrics": {
+        "supported_facts": 6,
+        "required_facts": 6,
+        "fact_recall": 1.0,
+        "source_locations_supported": 6,
+        "source_location_recall": 1.0,
+        "unsupported_claims": 0,
+        "answer_pass": true,
+        "source_bytes_read": 426448,
+        "graph_source_bytes": null,
+        "graph_context_bytes": null,
+        "fallback_search_calls": null,
+        "fallback_source_reads": null,
+        "wall_clock_seconds": null
+      },
+      "graph_route": null,
+      "graph_reason": null,
+      "payload": {
+        "proof_errors": [
+          "Parity and runtime behavior were inspected but not executed under the source-only read-only constraint."
+        ],
+        "authority_errors": [],
+        "prohibited_writes": []
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false,
+        "caveat": "The reported proof error is a skipped-validation caveat, not an evidence or authority violation."
+      }
+    },
+    {
+      "task_id": "VG-03",
+      "route": "DIRECT",
+      "fact_matrix": {
+        "VG-03-F1": true,
+        "VG-03-F2": true,
+        "VG-03-F3": true,
+        "VG-03-F4": true,
+        "VG-03-F5": true,
+        "VG-03-F6": true
+      },
+      "source_location_matrix": {
+        "VG-03-F1": true,
+        "VG-03-F2": true,
+        "VG-03-F3": true,
+        "VG-03-F4": true,
+        "VG-03-F5": true,
+        "VG-03-F6": true
+      },
+      "fact_notes": {},
+      "metrics": {
+        "supported_facts": 6,
+        "required_facts": 6,
+        "fact_recall": 1.0,
+        "source_locations_supported": 6,
+        "source_location_recall": 1.0,
+        "unsupported_claims": 0,
+        "answer_pass": false,
+        "source_bytes_read": null,
+        "graph_source_bytes": null,
+        "graph_context_bytes": null,
+        "fallback_search_calls": null,
+        "fallback_source_reads": null,
+        "wall_clock_seconds": null
+      },
+      "graph_route": null,
+      "graph_reason": null,
+      "payload": {
+        "proof_errors": [],
+        "authority_errors": [],
+        "prohibited_writes": [
+          "No repository files were intentionally modified; pre-existing staged changes were observed.",
+          "An intermediate inventory command accidentally created /tmp/vg03-tracked.txt outside the repository; it was not used as evidence."
+        ]
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": true,
+        "caveat": "Pre-existing staged changes are not a lane write. The /tmp file creation is an actual read-only side effect, although it did not alter repository evidence."
+      }
+    },
+    {
+      "task_id": "VG-01",
+      "route": "GRAPH_ASSISTED_POINTER_READS",
+      "fact_matrix": {
+        "VG-01-F1": false,
+        "VG-01-F2": false,
+        "VG-01-F3": false,
+        "VG-01-F4": false,
+        "VG-01-F5": false,
+        "VG-01-F6": true,
+        "VG-01-F7": false
+      },
+      "source_location_matrix": {
+        "VG-01-F1": false,
+        "VG-01-F2": false,
+        "VG-01-F3": false,
+        "VG-01-F4": false,
+        "VG-01-F5": false,
+        "VG-01-F6": false,
+        "VG-01-F7": true
+      },
+      "fact_notes": {
+        "VG-01-F1": "No public-command delegation is stated.",
+        "VG-01-F2": "The answer does not state the canonical-root, tracked-regular-UTF-8, and byte-cap contract as required.",
+        "VG-01-F3": "The adapter-to-core seam and verified Graph/SourceSnapshot construction are not stated.",
+        "VG-01-F4": "The tag-index, prompt-facet, and post-insufficiency proof-obligation sequence is not stated.",
+        "VG-01-F5": "The answer omits the complete required result field set, including fallback paths.",
+        "VG-01-F7": "The answer does not state that graph-find recommends but does not execute direct fallback."
+      },
+      "metrics": {
+        "supported_facts": 1,
+        "required_facts": 7,
+        "fact_recall": 0.1429,
+        "source_locations_supported": 1,
+        "source_location_recall": 0.1429,
+        "unsupported_claims": 1,
+        "unsupported_claim_details": [
+          "The answer claims that explicit include paths are indexed and structural gaps are reported; that is not the frozen graph-find adapter contract."
+        ],
+        "answer_pass": false,
+        "source_bytes_read": 2110,
+        "graph_source_bytes": 1176198,
+        "graph_context_bytes": 3174,
+        "fallback_search_calls": null,
+        "fallback_source_reads": null,
+        "wall_clock_seconds": 1.6
+      },
+      "graph_route": "graph",
+      "graph_reason": "verified_tag_context_selected",
+      "payload": {
+        "proof_errors": [],
+        "authority_errors": [],
+        "prohibited_writes": []
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false
+      }
+    },
+    {
+      "task_id": "VG-02",
+      "route": "GRAPH_ASSISTED_POINTER_READS",
+      "fact_matrix": {
+        "VG-02-F1": false,
+        "VG-02-F2": false,
+        "VG-02-F3": false,
+        "VG-02-F4": false,
+        "VG-02-F5": false,
+        "VG-02-F6": false
+      },
+      "source_location_matrix": {
+        "VG-02-F1": false,
+        "VG-02-F2": false,
+        "VG-02-F3": false,
+        "VG-02-F4": false,
+        "VG-02-F5": false,
+        "VG-02-F6": false
+      },
+      "fact_notes": {
+        "VG-02-F1": "The answer expressly says GraphRecord serialization is not proven.",
+        "VG-02-F2": "The answer expressly says export_graph behavior is not proven.",
+        "VG-02-F3": "The answer expressly says export budget behavior is not visible.",
+        "VG-02-F4": "The required pointer-field preservation fact is not stated.",
+        "VG-02-F5": "The canonical owner and write path are expressly not proven.",
+        "VG-02-F6": "The required manifest and parity rejection behavior is not stated."
+      },
+      "metrics": {
+        "supported_facts": 0,
+        "required_facts": 6,
+        "fact_recall": 0.0,
+        "source_locations_supported": 0,
+        "source_location_recall": 0.0,
+        "unsupported_claims": 0,
+        "answer_pass": false,
+        "source_bytes_read": 1423,
+        "graph_source_bytes": 1176198,
+        "graph_context_bytes": 3119,
+        "fallback_search_calls": null,
+        "fallback_source_reads": null,
+        "wall_clock_seconds": 1.7
+      },
+      "graph_route": "defer",
+      "graph_reason": "tag_context_insufficient",
+      "payload": {
+        "proof_errors": [
+          "The permitted evidence does not include GraphRecord or export_graph implementation, privacy redaction logic, export-budget enforcement, canonical-owner write path, or an automated package-drift checker.",
+          "An initial display command used Path.read_bytes() before slicing; the range reads were then repeated with os.pread for exact byte-range access, but strict process-level read isolation is therefore not clean."
+        ],
+        "authority_errors": [],
+        "prohibited_writes": []
+      },
+      "classification": {
+        "actual_proof_error": true,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false,
+        "caveat": "The first reported item is an evidence-coverage caveat. The initial whole-file read breached the exact-range isolation rule, so it is classified as an actual proof error."
+      }
+    },
+    {
+      "task_id": "VG-03",
+      "route": "GRAPH_ASSISTED_POINTER_READS",
+      "fact_matrix": {
+        "VG-03-F1": true,
+        "VG-03-F2": false,
+        "VG-03-F3": false,
+        "VG-03-F4": false,
+        "VG-03-F5": false,
+        "VG-03-F6": false
+      },
+      "source_location_matrix": {
+        "VG-03-F1": false,
+        "VG-03-F2": false,
+        "VG-03-F3": false,
+        "VG-03-F4": false,
+        "VG-03-F5": true,
+        "VG-03-F6": false
+      },
+      "fact_notes": {
+        "VG-03-F2": "The answer omits repository_scan_incomplete and the required cap-defer precedence.",
+        "VG-03-F3": "The answer does not state that invalid UTF-8 alone does not make supported coverage incomplete.",
+        "VG-03-F4": "The answer does not state sensitive-path precedence over cap skips.",
+        "VG-03-F5": "The answer does not state that no persistent index exists and each call rebuilds from current tracked bytes.",
+        "VG-03-F6": "The answer does not state that both snapshot and edited evidence hashes change."
+      },
+      "metrics": {
+        "supported_facts": 1,
+        "required_facts": 6,
+        "fact_recall": 0.1667,
+        "source_locations_supported": 1,
+        "source_location_recall": 0.1667,
+        "unsupported_claims": 2,
+        "unsupported_claim_details": [
+          "The phrase 'fail-closed at ingestion' incorrectly groups invalid-UTF-8 skips with authentication or custody fail-closed results.",
+          "The catalog digest-change behavior is outside the frozen VG-03 target evidence and is not established by the cited anchors."
+        ],
+        "answer_pass": false,
+        "source_bytes_read": 2350,
+        "graph_source_bytes": 1176198,
+        "graph_context_bytes": 3667,
+        "fallback_search_calls": null,
+        "fallback_source_reads": null,
+        "wall_clock_seconds": 2.0
+      },
+      "graph_route": "graph",
+      "graph_reason": "verified_tag_context_selected",
+      "payload": {
+        "proof_errors": [],
+        "authority_errors": [],
+        "prohibited_writes": []
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false
+      }
+    },
+    {
+      "task_id": "VG-01",
+      "route": "GRAPH_ONLY",
+      "fact_matrix": {
+        "VG-01-F1": false,
+        "VG-01-F2": false,
+        "VG-01-F3": false,
+        "VG-01-F4": false,
+        "VG-01-F5": false,
+        "VG-01-F6": false,
+        "VG-01-F7": false
+      },
+      "source_location_matrix": {
+        "VG-01-F1": false,
+        "VG-01-F2": false,
+        "VG-01-F3": false,
+        "VG-01-F4": false,
+        "VG-01-F5": false,
+        "VG-01-F6": false,
+        "VG-01-F7": true
+      },
+      "fact_notes": {
+        "VG-01-F1": "No delegation fact.",
+        "VG-01-F2": "No ingestion contract.",
+        "VG-01-F3": "No adapter/core seam fact.",
+        "VG-01-F4": "No retrieval sequence or proof-obligation fact.",
+        "VG-01-F5": "Only a partial body-free pointer description is stated.",
+        "VG-01-F6": "No refusal behavior is stated.",
+        "VG-01-F7": "No fallback execution boundary is stated."
+      },
+      "metrics": {
+        "supported_facts": 0,
+        "required_facts": 7,
+        "fact_recall": 0.0,
+        "source_locations_supported": 1,
+        "source_location_recall": 0.1429,
+        "unsupported_claims": 0,
+        "answer_pass": false,
+        "source_bytes_read": 0,
+        "graph_source_bytes": 1176198,
+        "graph_context_bytes": 3174,
+        "fallback_search_calls": null,
+        "fallback_source_reads": null,
+        "wall_clock_seconds": 1.5
+      },
+      "graph_route": "graph",
+      "graph_reason": "verified_tag_context_selected",
+      "payload": {
+        "proof_errors": [],
+        "authority_errors": [],
+        "prohibited_writes": []
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false
+      }
+    },
+    {
+      "task_id": "VG-02",
+      "route": "GRAPH_ONLY",
+      "fact_matrix": {
+        "VG-02-F1": false,
+        "VG-02-F2": false,
+        "VG-02-F3": false,
+        "VG-02-F4": false,
+        "VG-02-F5": false,
+        "VG-02-F6": false
+      },
+      "source_location_matrix": {
+        "VG-02-F1": false,
+        "VG-02-F2": false,
+        "VG-02-F3": false,
+        "VG-02-F4": false,
+        "VG-02-F5": false,
+        "VG-02-F6": false
+      },
+      "fact_notes": {
+        "VG-02-F1": "The answer explicitly reports insufficiency.",
+        "VG-02-F2": "The answer explicitly reports insufficiency.",
+        "VG-02-F3": "The answer explicitly reports insufficiency.",
+        "VG-02-F4": "No preservation fact is stated.",
+        "VG-02-F5": "No canonical ownership fact is stated.",
+        "VG-02-F6": "No parity behavior is stated."
+      },
+      "metrics": {
+        "supported_facts": 0,
+        "required_facts": 6,
+        "fact_recall": 0.0,
+        "source_locations_supported": 0,
+        "source_location_recall": 0.0,
+        "unsupported_claims": 0,
+        "answer_pass": false,
+        "source_bytes_read": 0,
+        "graph_source_bytes": 1176198,
+        "graph_context_bytes": 3119,
+        "fallback_search_calls": null,
+        "fallback_source_reads": null,
+        "wall_clock_seconds": 1.6
+      },
+      "graph_route": "defer",
+      "graph_reason": "tag_context_insufficient",
+      "payload": {
+        "proof_errors": [],
+        "authority_errors": [],
+        "prohibited_writes": []
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false
+      }
+    },
+    {
+      "task_id": "VG-03",
+      "route": "GRAPH_ONLY",
+      "fact_matrix": {
+        "VG-03-F1": false,
+        "VG-03-F2": false,
+        "VG-03-F3": false,
+        "VG-03-F4": false,
+        "VG-03-F5": false,
+        "VG-03-F6": false
+      },
+      "source_location_matrix": {
+        "VG-03-F1": false,
+        "VG-03-F2": false,
+        "VG-03-F3": false,
+        "VG-03-F4": false,
+        "VG-03-F5": false,
+        "VG-03-F6": false
+      },
+      "fact_notes": {
+        "VG-03-F1": "The answer explicitly says the behavior is not established.",
+        "VG-03-F2": "The answer explicitly says the behavior is not established.",
+        "VG-03-F3": "The answer explicitly says the behavior is not established.",
+        "VG-03-F4": "The answer explicitly says the behavior is not established.",
+        "VG-03-F5": "The answer explicitly says the behavior is not established.",
+        "VG-03-F6": "The answer explicitly says the behavior is not established."
+      },
+      "metrics": {
+        "supported_facts": 0,
+        "required_facts": 6,
+        "fact_recall": 0.0,
+        "source_locations_supported": 0,
+        "source_location_recall": 0.0,
+        "unsupported_claims": 0,
+        "answer_pass": false,
+        "source_bytes_read": 0,
+        "graph_source_bytes": 1176198,
+        "graph_context_bytes": 3667,
+        "fallback_search_calls": null,
+        "fallback_source_reads": null,
+        "wall_clock_seconds": 1.6
+      },
+      "graph_route": "graph",
+      "graph_reason": "verified_tag_context_selected",
+      "payload": {
+        "proof_errors": [
+          "Direct invocation returned permission denied; interpreter invocation succeeded."
+        ],
+        "authority_errors": [],
+        "prohibited_writes": []
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false,
+        "caveat": "The permission error is treated as an environment or invocation caveat because the installed interpreter path completed and no source was read."
+      }
+    },
+    {
+      "task_id": "VG-01",
+      "route": "GRAPH_ASSISTED_TARGETED_FALLBACK",
+      "fact_matrix": {
+        "VG-01-F1": true,
+        "VG-01-F2": true,
+        "VG-01-F3": true,
+        "VG-01-F4": false,
+        "VG-01-F5": true,
+        "VG-01-F6": true,
+        "VG-01-F7": false
+      },
+      "source_location_matrix": {
+        "VG-01-F1": true,
+        "VG-01-F2": true,
+        "VG-01-F3": true,
+        "VG-01-F4": true,
+        "VG-01-F5": true,
+        "VG-01-F6": true,
+        "VG-01-F7": true
+      },
+      "fact_notes": {
+        "VG-01-F4": "The answer requires every proof obligation to be covered but does not state that deterministic proof obligations are attempted only after prompt_facets_insufficient.",
+        "VG-01-F7": "The answer lists fallback paths and source authority but does not state that graph-find recommends rather than executes direct fallback."
+      },
+      "metrics": {
+        "supported_facts": 5,
+        "required_facts": 7,
+        "fact_recall": 0.7143,
+        "source_locations_supported": 7,
+        "source_location_recall": 1.0,
+        "unsupported_claims": 0,
+        "answer_pass": false,
+        "source_bytes_read": 19203,
+        "graph_source_bytes": 1176198,
+        "graph_context_bytes": 3174,
+        "fallback_search_calls": 5,
+        "fallback_source_reads": 6,
+        "wall_clock_seconds": 1.5
+      },
+      "graph_route": "graph",
+      "graph_reason": "verified_tag_context_selected",
+      "payload": {
+        "proof_errors": 0,
+        "authority_errors": 0,
+        "prohibited_writes": 0
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false
+      }
+    },
+    {
+      "task_id": "VG-02",
+      "route": "GRAPH_ASSISTED_TARGETED_FALLBACK",
+      "fact_matrix": {
+        "VG-02-F1": true,
+        "VG-02-F2": true,
+        "VG-02-F3": true,
+        "VG-02-F4": true,
+        "VG-02-F5": true,
+        "VG-02-F6": true
+      },
+      "source_location_matrix": {
+        "VG-02-F1": true,
+        "VG-02-F2": true,
+        "VG-02-F3": true,
+        "VG-02-F4": true,
+        "VG-02-F5": true,
+        "VG-02-F6": true
+      },
+      "fact_notes": {},
+      "metrics": {
+        "supported_facts": 6,
+        "required_facts": 6,
+        "fact_recall": 1.0,
+        "source_locations_supported": 6,
+        "source_location_recall": 1.0,
+        "unsupported_claims": 0,
+        "answer_pass": true,
+        "source_bytes_read": 218428,
+        "graph_source_bytes": 1176198,
+        "graph_context_bytes": 3119,
+        "fallback_search_calls": 5,
+        "fallback_source_reads": 24,
+        "wall_clock_seconds": 2.4
+      },
+      "graph_route": "defer",
+      "graph_reason": "tag_context_insufficient",
+      "payload": {
+        "proof_errors": 0,
+        "authority_errors": 0,
+        "prohibited_writes": 0
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false
+      }
+    },
+    {
+      "task_id": "VG-03",
+      "route": "GRAPH_ASSISTED_TARGETED_FALLBACK",
+      "fact_matrix": {
+        "VG-03-F1": true,
+        "VG-03-F2": true,
+        "VG-03-F3": true,
+        "VG-03-F4": true,
+        "VG-03-F5": true,
+        "VG-03-F6": true
+      },
+      "source_location_matrix": {
+        "VG-03-F1": true,
+        "VG-03-F2": true,
+        "VG-03-F3": true,
+        "VG-03-F4": true,
+        "VG-03-F5": true,
+        "VG-03-F6": true
+      },
+      "fact_notes": {},
+      "metrics": {
+        "supported_facts": 6,
+        "required_facts": 6,
+        "fact_recall": 1.0,
+        "source_locations_supported": 6,
+        "source_location_recall": 1.0,
+        "unsupported_claims": 0,
+        "answer_pass": true,
+        "source_bytes_read": 28680,
+        "graph_source_bytes": 1176198,
+        "graph_context_bytes": 3667,
+        "fallback_search_calls": 4,
+        "fallback_source_reads": 6,
+        "wall_clock_seconds": 2.5
+      },
+      "graph_route": "graph",
+      "graph_reason": "verified_tag_context_selected",
+      "payload": {
+        "proof_errors": 0,
+        "authority_errors": 0,
+        "prohibited_writes": 0
+      },
+      "classification": {
+        "actual_proof_error": false,
+        "actual_authority_error": false,
+        "actual_prohibited_write": false
+      }
+    }
+  ],
+  "route_aggregates": {
+    "DIRECT": {
+      "supported_facts": 18,
+      "required_facts": 19,
+      "fact_recall": 0.9474,
+      "source_locations_supported": 19,
+      "source_location_recall": 1.0,
+      "unsupported_claims": 0,
+      "answer_pass_count": 1,
+      "answer_pass_total": 3,
+      "answer_pass_rate": 0.3333,
+      "source_bytes_read_total": null,
+      "known_source_bytes_read": 426448,
+      "unknown_source_bytes_tasks": ["VG-01", "VG-03"],
+      "graph_source_bytes_total": null,
+      "graph_context_bytes_total": null,
+      "fallback_search_calls_total": null,
+      "fallback_source_reads_total": null,
+      "wall_clock_seconds_total": null,
+      "actual_proof_errors": 0,
+      "actual_authority_errors": 0,
+      "actual_prohibited_writes": 1
+    },
+    "GRAPH_ASSISTED_POINTER_READS": {
+      "supported_facts": 2,
+      "required_facts": 19,
+      "fact_recall": 0.1053,
+      "source_locations_supported": 2,
+      "source_location_recall": 0.1053,
+      "unsupported_claims": 3,
+      "answer_pass_count": 0,
+      "answer_pass_total": 3,
+      "answer_pass_rate": 0.0,
+      "source_bytes_read_total": 5883,
+      "graph_source_bytes_total": 3528594,
+      "graph_context_bytes_total": 9960,
+      "fallback_search_calls_total": null,
+      "fallback_source_reads_total": null,
+      "wall_clock_seconds_total": 5.3,
+      "actual_proof_errors": 1,
+      "actual_authority_errors": 0,
+      "actual_prohibited_writes": 0
+    },
+    "GRAPH_ONLY": {
+      "supported_facts": 0,
+      "required_facts": 19,
+      "fact_recall": 0.0,
+      "source_locations_supported": 1,
+      "source_location_recall": 0.0526,
+      "unsupported_claims": 0,
+      "answer_pass_count": 0,
+      "answer_pass_total": 3,
+      "answer_pass_rate": 0.0,
+      "source_bytes_read_total": 0,
+      "graph_source_bytes_total": 3528594,
+      "graph_context_bytes_total": 9960,
+      "fallback_search_calls_total": null,
+      "fallback_source_reads_total": null,
+      "wall_clock_seconds_total": 4.7,
+      "actual_proof_errors": 0,
+      "actual_authority_errors": 0,
+      "actual_prohibited_writes": 0
+    },
+    "GRAPH_ASSISTED_TARGETED_FALLBACK": {
+      "supported_facts": 17,
+      "required_facts": 19,
+      "fact_recall": 0.8947,
+      "source_locations_supported": 19,
+      "source_location_recall": 1.0,
+      "unsupported_claims": 0,
+      "answer_pass_count": 2,
+      "answer_pass_total": 3,
+      "answer_pass_rate": 0.6667,
+      "source_bytes_read_total": 266311,
+      "graph_source_bytes_total": 3528594,
+      "graph_context_bytes_total": 9960,
+      "fallback_search_calls_total": 14,
+      "fallback_source_reads_total": 36,
+      "wall_clock_seconds_total": 6.4,
+      "actual_proof_errors": 0,
+      "actual_authority_errors": 0,
+      "actual_prohibited_writes": 0
+    }
+  },
+  "acceptance": {
+    "graph_assisted_with_targeted_fallback_fact_recall_not_below_direct": {
+      "verdict": "fail",
+      "observed": {
+        "targeted_fallback_fact_recall": 0.8947,
+        "direct_fact_recall": 0.9474
+      },
+      "reason": "Targeted fallback is 17/19 versus Direct 18/19."
+    },
+    "graph_assisted_fact_recall_reported_without_hidden_fallback": {
+      "verdict": "pass",
+      "observed": {
+        "graph_assisted_pointer_reads_fact_recall": 0.1053,
+        "targeted_fallback_fact_recall": 0.8947
+      },
+      "reason": "The pointer-read route and targeted-fallback route are scored as separate route aggregates."
+    },
+    "all_routes_zero_proof_authority_errors_and_prohibited_writes": {
+      "verdict": "fail",
+      "reason": "Direct VG-03 created /tmp/vg03-tracked.txt, and Graph-assisted VG-02 breached exact-range isolation on its initial display read."
+    },
+    "T050_stale_freshness_control_zero_consequential_stale_answers": {
+      "verdict": "pass",
+      "reason": "VG-03 answers either state the current-byte rebuild and hash-change control or explicitly defer to rerun; no lane claims stale evidence is current."
+    },
+    "no_public_performance_claim_before_independent_T090_audit": {
+      "verdict": "pass",
+      "reason": "The frozen answers make no public performance claim. The scorer records diagnostic route metrics only."
+    }
+  },
+  "limitations": [
+    "This is one repeat on one self-conformance repository. It does not measure stochastic variance or multi-repository behavior.",
+    "Direct source-byte and wall-clock values are null where the payload did not expose exact numbers; the aggregate preserves known values separately and does not estimate unknown totals.",
+    "Source-location scoring is strict: a graph pointer is credited only when its source path and exact range correspond to a frozen required anchor. Body-free graph metadata cannot prove source semantics.",
+    "Graph-only remains diagnostic. Its low fact recall is not a product-route acceptance result.",
+    "The scorer did not execute parity or product tests. It used only frozen responses and exact anchor reads, so runtime behavior outside those receipts remains unverified."
+  ]
+}

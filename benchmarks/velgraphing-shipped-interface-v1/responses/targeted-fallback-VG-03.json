@@ -1,0 +1,88 @@
+{
+  "task_id": "VG-03",
+  "route": "GRAPH_ASSISTED_TARGETED_FALLBACK",
+  "answer": {
+    "scan_observed": {
+      "route": "graph",
+      "reason": "verified_tag_context_selected",
+      "fail_closed": false,
+      "files_scanned": 180,
+      "files_skipped": [],
+      "scan_complete": true,
+      "sensitive_paths_excluded": 0,
+      "source_bytes": 1176198
+    },
+    "secret_like_files": {
+      "behavior": "Case-insensitive matching covers .env, private/secrets/credentials path components, .key/.pem/.p12/.pfx suffixes, and private-key basenames. The scanner excludes these paths before reading bytes and records only an exclusion count.",
+      "fail_closed": "Any exclusion forces route=defer with reason=sensitive_paths_excluded and scan_complete=false. This is a defer route; the graph result's fail_closed flag is reserved for authentication or custody failures.",
+      "evidence_custody": "Secret-like names and contents are absent from graph evidence and output. Only the count is retained."
+    },
+    "oversized_source_reads": {
+      "behavior": "The scanner checks stat size before reading. It reads at most max_file_bytes+1 and skips files exceeding the per-file cap. It also skips files that would exceed max_total_bytes.",
+      "fail_closed": "Any max_file_bytes or max_total_bytes skip sets scan_complete=false and forces route=defer with reason=repository_scan_incomplete. If no usable source remains, the command exits with an input error.",
+      "evidence_custody": "Skipped metadata records contain path and skip reason. Skipped source bodies do not enter the graph snapshot or graph records."
+    },
+    "invalid_utf8": {
+      "behavior": "Each bounded read is decoded with strict UTF-8. Decode failure skips the file with reason=invalid_utf8 and increments skip_counts.",
+      "fail_closed": "Invalid UTF-8 alone does not force defer when usable UTF-8 files remain; the file is unsupported and omitted. If no usable UTF-8 source remains, the command fails.",
+      "evidence_custody": "Invalid bytes do not enter graph records or the source snapshot. The skipped path and reason remain in scan metadata."
+    },
+    "freshness_after_tracked_source_change": {
+      "behavior": "Each invocation enumerates Git-tracked paths, reads current bytes, and rebuilds the graph and source snapshot in memory. It does not use a persistent index.",
+      "fail_closed": "The focused regression reruns after a tracked source change and verifies that both source_sha256 and source_snapshot_sha256 change. Stale or mismatched source custody is deferred by the broader retrieval contracts.",
+      "evidence_custody": "Records bind exact tracked bytes to source SHA-256, git-tracked-bytes provenance, VERIFIED_SOURCE trust, and CURRENT freshness. Results expose pointers and digests, not complete source bodies."
+    }
+  },
+  "citations": [
+    {"path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "lines": "73-83,113-121", "supports": "limits and secret-like path matching"},
+    {"path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "lines": "156-183", "supports": "bounded reads, size checks, and strict UTF-8 handling"},
+    {"path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "lines": "206-281", "supports": "tracked scan, skip accounting, snapshot construction, and freshness metadata"},
+    {"path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "lines": "294-338", "supports": "defer routing for sensitive paths and incomplete scans"},
+    {"path": "plugins/graph-engineering/skills/graph-find/SKILL.md", "lines": "18-31", "supports": "source authority and documented fail-closed/defer boundary"},
+    {"path": "plugins/graph-engineering/README.md", "lines": "26-36", "supports": "tracked-only, body-free, read-only behavior"},
+    {"path": "tests/skills/test_portable_skills.py", "lines": "350-395", "supports": "fresh rebuild after tracked source change"},
+    {"path": "tests/skills/test_portable_skills.py", "lines": "397-525", "supports": "oversize, invalid UTF-8, and secret-like test behavior"},
+    {"path": "docs/goals/velgraphing-public-product-v1/notes/T050-receipt.json", "lines": "22-40", "supports": "accepted freshness receipt and no persistent index"}
+  ],
+  "graph_route": "graph",
+  "graph_reason": "verified_tag_context_selected",
+  "graph_source_snapshot_sha256": "5b70301f45ebfada3c038c2971cb273a1304f724dbb62f8fb266ce5b7de32ab2",
+  "graph_context_bytes": 3667,
+  "graph_source_bytes": 1176198,
+  "commands_run": [
+    "python3 -B /Users/steven/.codex/plugins/cache/graph-engineering-local/graph-engineering/0.1.5/skills/graph-find/scripts/graph_find.py --root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering --prompt \"Explain how the repository handles secret-like files, oversized source reads, invalid UTF-8, and freshness after a tracked source change. State the fail-closed behavior and evidence custody for each.\"",
+    "git grep -n -I -E 'SENSITIVE_COMPONENTS|_is_sensitive_path|sensitive_paths_excluded|reported by count|secret-like' -- plugins/graph-engineering/skills/graph-find packages tests docs README.md",
+    "git grep -n -I -E 'max_file_bytes|max_total_bytes|over-limit|oversized|scan_complete|fail.?closed|defer' -- plugins/graph-engineering/skills/graph-find packages/core tests/skills README.md",
+    "git grep -n -I -E 'invalid.?utf|UTF-8|utf-8|unsupported' -- plugins/graph-engineering/skills/graph-find packages/core tests/skills",
+    "git grep -n -I -E 'snapshot_sha256|source_snapshot|freshness|tracked source|source change|rebuild|current tracked|digest change' -- plugins/graph-engineering/skills/graph-find packages/core tests/skills docs/goals/velgraphing-public-product-v1/notes/T050-receipt.json",
+    "bounded exact-byte reads for 23 graph-selected ranges",
+    "bounded line reads for six fallback source files"
+  ],
+  "directory_listings": 1,
+  "search_calls": 4,
+  "source_reads": 29,
+  "source_paths_read": [
+    "plugins/graph-engineering/skills/graph-find/SKILL.md",
+    "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py",
+    "README.md",
+    "plugins/graph-engineering/README.md",
+    "docs/reviews/velgraphing-prepublication-red-team-2026-09-02/report-source.md",
+    "tests/adapters/test_orcastrata_umbrella_catalog_adapter.py",
+    "docs/integrations/ORCASTRATA_UMBRELLA_CATALOG.md",
+    "tests/skills/test_portable_skills.py",
+    "docs/goals/velgraphing-public-product-v1/notes/T050-receipt.json"
+  ],
+  "source_bytes_read": 28680,
+  "fallback_reasons": [
+    {
+      "reason": "Graph pointers were exact but too short to establish all four behavioral branches and custody rules.",
+      "count": 1
+    }
+  ],
+  "fallback_search_calls": 4,
+  "fallback_source_reads": 6,
+  "wall_clock_seconds": 2.5,
+  "prohibited_writes": 0,
+  "proof_errors": 0,
+  "authority_errors": 0
+}

@@ -4,8 +4,9 @@ VelGraphing provides source-verified graph navigation for coding agents. This
 directory is the portable plugin package boundary. The compatibility package
 ID remains `graph-engineering`.
 
-The current `0.1.4` source package contains four public commands:
+The current `0.1.5` source package contains five public commands:
 
+- `/graph-find` returns bounded, source-verified pointers for a repository prompt.
 - `/graph-start` prepares the smallest source-bound setup.
 - `/graph-update` refreshes an existing graph after source changes.
 - `/graph-audit` measures readiness or effectiveness.
@@ -21,6 +22,18 @@ package also contains a generated host-neutral runtime projection.
 The context assist operation supports a verified graph route, a bounded direct
 route from a caller allowlist in the same verified source snapshot, and a
 fail-closed defer route.
+
+`/graph-find` scans only Git-tracked regular UTF-8 files under an explicit
+canonical repository root. It builds the verified graph and source snapshot in
+memory, returns JSON pointers without source bodies, and performs no writes,
+network calls, provider calls, or persistence. Unsupported files are skipped
+within the explicit file and total-byte caps and reported in scan metadata.
+Secret-like paths are excluded before reads and reported by count only.
+`route: graph` means the verified evidence met the retrieval threshold with a
+complete supported scan. `route: defer` means source is still authoritative;
+use the returned fallback paths for direct reads. Capped supported files force
+`repository_scan_incomplete` with `scan_complete: false`. Sensitive-path
+exclusion forces `sensitive_paths_excluded`.
 
 Canonical source stays outside this directory. Generated runtime content under
 `runtime/` is a package projection. It is not project truth.

@@ -1,0 +1,109 @@
+{
+  "schema_version": "velgraphing-shipped-interface-benchmark-v1",
+  "benchmark_id": "velgraphing-shipped-interface-v1",
+  "status": "frozen_unexecuted",
+  "target": {
+    "name": "VelGraphing self-conformance repository",
+    "root_policy": "canonical repository root",
+    "head_commit": "da0677c4dfc4a8905a9053821f7c0ee18b4eb982",
+    "staged_tree": "8c2f339257c0dfc96f081bd1e71fbba30c1727b9",
+    "staged_diff_sha256": "1531defccfffde558560590d37b6965a4b8339e80f5ddfab542980fc5b2a9c43",
+    "source_snapshot_sha256": "5b70301f45ebfada3c038c2971cb273a1304f724dbb62f8fb266ce5b7de32ab2",
+    "tracked_files_scanned": 180,
+    "tracked_source_bytes": 1176198,
+    "benchmark_files_in_snapshot": false
+  },
+  "candidate": {
+    "product": "VelGraphing",
+    "plugin_id": "graph-engineering",
+    "version": "0.1.5",
+    "source_package_sha256": "a7e6cdfed136c208a3009eb945c255139bacaf0e011b4f0093f67ff461f77e0b",
+    "installed": true,
+    "interface": "/graph-find"
+  },
+  "execution": {
+    "answer_model": "gpt-5.6-luna",
+    "answer_reasoning": "high",
+    "scorer_model": "gpt-5.6-luna",
+    "scorer_reasoning": "high",
+    "fresh": true,
+    "no_history": true,
+    "repeats": 1,
+    "read_only": true,
+    "network": false,
+    "question_order": ["VG-01", "VG-02", "VG-03"],
+    "rubric_hidden_from_answer_lanes": true
+  },
+  "routes": {
+    "direct": "Use Git-tracked file listing, repository search, and exact source reads. Do not use graph-find or benchmark artifacts.",
+    "graph_only": "Run the installed graph-find command. Answer only from its body-free JSON pointers and routing metadata. Do not read repository source after the call.",
+    "graph_assisted": "Run installed graph-find first. Read only source paths and exact byte ranges returned in its evidence. Do not search or list the repository after graph-find.",
+    "graph_assisted_targeted_fallback": "Run installed graph-find first. Read its returned evidence. If required evidence is missing or route is defer, use bounded Git-tracked search and exact source reads only for the missing point. State each fallback reason."
+  },
+  "tasks": [
+    {
+      "id": "VG-01",
+      "track": "repository_understanding",
+      "prompt": "Trace the complete /graph-find request path from the public command through repository ingestion to its returned routing decision. Explain what it returns and when it refuses to claim graph sufficiency.",
+      "required_facts": [
+        {"id": "VG-01-F1", "fact": "The public graph-find command delegates to the graph-find skill.", "anchors": ["plugins/graph-engineering/commands/graph-find.toml"]},
+        {"id": "VG-01-F2", "fact": "The adapter requires a canonical absolute Git root and reads Git-tracked regular UTF-8 files within explicit byte caps.", "anchors": ["plugins/graph-engineering/skills/graph-find/scripts/graph_find.py"]},
+        {"id": "VG-01-F3", "fact": "The adapter builds a verified Graph and SourceSnapshotV4 from exact source bytes and calls the core graph_find seam.", "anchors": ["plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "packages/core/retrieval.py"]},
+        {"id": "VG-01-F4", "fact": "The core seam builds the repository tag index, compiles prompt facets, retrieves, and only tries deterministic proof obligations after prompt_facets_insufficient.", "anchors": ["packages/core/retrieval.py"]},
+        {"id": "VG-01-F5", "fact": "The result is body-free and keeps ranked paths, exact byte coordinates, source hashes, snapshot identity, route, reason, and fallback paths.", "anchors": ["packages/core/retrieval.py"]},
+        {"id": "VG-01-F6", "fact": "Sensitive-path exclusion and incomplete supported-source scans force defer instead of graph sufficiency.", "anchors": ["plugins/graph-engineering/skills/graph-find/scripts/graph_find.py"]},
+        {"id": "VG-01-F7", "fact": "Graph-find recommends fallback paths but does not execute direct fallback; repository source remains authoritative.", "anchors": ["plugins/graph-engineering/skills/graph-find/SKILL.md", "docs/goals/velgraphing-public-product-v1/notes/T020-receipt.json"]}
+      ]
+    },
+    {
+      "id": "VG-02",
+      "track": "architecture_and_change_impact",
+      "prompt": "Trace how a GraphRecord becomes a public graph export or serialized projection. Identify the privacy boundary, preserved evidence, budget behavior, canonical ownership, and the checks that detect package drift.",
+      "required_facts": [
+        {"id": "VG-02-F1", "fact": "GraphRecord keeps content in memory but to_pointer_dict uses an explicit body-free field allowlist.", "anchors": ["packages/core/models.py"]},
+        {"id": "VG-02-F2", "fact": "export_graph is default-deny and emits pointer records only after export policy and endpoint checks pass.", "anchors": ["packages/core/export.py"]},
+        {"id": "VG-02-F3", "fact": "serialize_projection emits pointer records, preserves selected edge order, and prunes records to the byte budget.", "anchors": ["packages/core/serialization.py"]},
+        {"id": "VG-02-F4", "fact": "Pointer records preserve record identity, title, provenance path/hash/locator/verification, trust, sensitivity, freshness, admission, eligibility, export permission, tags, and sequence but omit content.", "anchors": ["packages/core/models.py"]},
+        {"id": "VG-02-F5", "fact": "Canonical packages/core source is projected into the plugin runtime through contracts/package/projection-map.json; runtime files are derived, not hand-edited truth.", "anchors": ["contracts/package/projection-map.json", "scripts/package/project_portable_plugin.py", "CONTRIBUTING.md"]},
+        {"id": "VG-02-F6", "fact": "The release manifest binds a candidate hash to package files, and parity checks reject missing, extra, changed, aliased, nonregular, or identity-mismatched package content.", "anchors": ["scripts/package/verify_source_package_parity.py", "tests/parity/test_source_package_parity.py"]}
+      ]
+    },
+    {
+      "id": "VG-03",
+      "track": "failure_and_freshness",
+      "prompt": "A repository contains a tracked oversized source file, a tracked .env file, and an invalid-UTF-8 file. Explain how /graph-find handles each, what it may reveal, the final route precedence, and how a later tracked source edit becomes visible.",
+      "required_facts": [
+        {"id": "VG-03-F1", "fact": "Secret-like tracked paths such as .env are excluded before byte reads and reported only by count, without path names.", "anchors": ["plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "tests/skills/test_portable_skills.py"]},
+        {"id": "VG-03-F2", "fact": "A supported text file above the file or total-byte cap is skipped, makes scan_complete false, and forces repository_scan_incomplete defer unless the sensitive-path reason takes precedence.", "anchors": ["plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "tests/skills/test_portable_skills.py"]},
+        {"id": "VG-03-F3", "fact": "Invalid UTF-8 is counted and skipped as unsupported input; it does not by itself assert that supported text coverage was incomplete.", "anchors": ["plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "tests/skills/test_portable_skills.py"]},
+        {"id": "VG-03-F4", "fact": "When both sensitive exclusion and a supported-source cap occur, sensitive_paths_excluded is the final reason because it is applied first in the result replacement branch.", "anchors": ["plugins/graph-engineering/skills/graph-find/scripts/graph_find.py"]},
+        {"id": "VG-03-F5", "fact": "Graph-find persists no index; each call rebuilds from current Git-tracked bytes.", "anchors": ["plugins/graph-engineering/skills/graph-find/SKILL.md", "README.md"]},
+        {"id": "VG-03-F6", "fact": "After a tracked source edit, a rerun changes both source_snapshot_sha256 and the edited evidence source_sha256.", "anchors": ["tests/skills/test_portable_skills.py", "docs/goals/velgraphing-public-product-v1/notes/T050-receipt.json"]}
+      ]
+    }
+  ],
+  "scoring": {
+    "fact_recall": "supported required facts divided by required facts",
+    "source_location_recall": "required facts with at least one correct cited anchor divided by required facts",
+    "unsupported_claims": "material claims not supported by cited target source",
+    "answer_pass": "all required facts supported, no unsupported claim, no proof or authority error",
+    "graph_only_role": "diagnostic ablation; not an expected product route",
+    "acceptance": [
+      "Graph-assisted-with-targeted-fallback fact recall is not below Direct.",
+      "Graph-assisted fact recall is reported without being hidden by fallback.",
+      "All routes have zero proof errors, authority errors, and prohibited writes.",
+      "The frozen T050 stale/freshness control has zero consequential stale answers.",
+      "No public performance claim is made before independent T090 audit."
+    ]
+  },
+  "metrics": {
+    "exact_when_observable": ["fact recall", "source-location recall", "unsupported claims", "answer pass", "graph route", "graph reason", "graph source bytes", "graph context bytes", "fallback count", "proof errors", "authority errors", "prohibited writes", "wall-clock time"],
+    "unknown_unless_host_reports": ["model input tokens", "model cost", "exact repository operation count", "exact model-visible source bytes"],
+    "not_applicable": ["warm index load", "persistent-index amortization"]
+  },
+  "limitations": [
+    "This is a self-conformance benchmark on one repository, not generalized multi-repository evidence.",
+    "One repeat measures this candidate run but not stochastic variance.",
+    "The product rebuilds its in-memory graph for every invocation, so there is no warm persistent-index claim."
+  ]
+}

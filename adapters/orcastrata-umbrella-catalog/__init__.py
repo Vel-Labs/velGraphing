@@ -1,0 +1,1 @@
+"""Orcastrata umbrella catalog adapter."""

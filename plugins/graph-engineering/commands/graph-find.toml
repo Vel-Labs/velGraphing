@@ -1,0 +1,2 @@
+description = "Find source-verified repository pointers for a prompt"
+prompt = "Invoke $graph-find for this repository task: {{args}}"
