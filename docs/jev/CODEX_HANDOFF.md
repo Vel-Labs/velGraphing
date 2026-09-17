@@ -112,14 +112,16 @@ Validation on the combined candidate:
   local marketplace. Fresh discovery showed six commands, including
   `graph-find` and `graph-jev`, and both skills were present. No real consumer
   or file outside `/Users/steven/Workspace` was changed.
+- GitHub Actions run [35268104430](https://github.com/Vel-Labs/velGraphing/actions/runs/35268104430)
+  passed both `offline (3.11)` and `offline (3.13)` on head `7c2543a`.
 
 No live TypeSafe call was made. No API key was read, requested, or printed.
 No provider compatibility, quality, context-saving, latency, cost, or scaling
 claim is made. The shipped-interface benchmark remains rejected evidence.
 P3 malformed in-process `required_ids` handling remains out of scope.
 Open risks are live API behavior, host integration, aggregate budget and
-cancellation design, fresh CI completion on the combined head, and any future
-held-out benchmark. Neither PR was auto-merged.
+cancellation design, and any future held-out benchmark. Neither PR was
+auto-merged.
 
 ## Stage 2: one approved live shadow call
 
