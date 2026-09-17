@@ -3,8 +3,12 @@
 ## Mission and current boundary
 
 Continue from the opt-in Jev integration, not from a blank implementation.
-Baseline inspected: `da0677c4dfc4a8905a9053821f7c0ee18b4eb982` on 2026-09-17.
-Branch: `codex/jev-opt-in-evidence-reranking`.
+Baseline: `da0677c4dfc4a8905a9053821f7c0ee18b4eb982`.
+Local product branch: `codex/velgraphing-local-0.1.5`, commit
+`d4af112c95fb731a0749fcb076bfbbfc3a7a2c82`, [PR #2](https://github.com/Vel-Labs/velGraphing/pull/2).
+Combined branch: `codex/jev-opt-in-evidence-reranking`, commit
+`4b9049dd989d45015f7cf2ec9052420d455c394d`, [PR #1](https://github.com/Vel-Labs/velGraphing/pull/1),
+based on the local 0.1.5 branch.
 
 This change ships a real dependency-free TypeSafe REST adapter, a portable
 `/graph-jev` command/skill, a source-bound shortlist capture and preview flow,
@@ -71,8 +75,51 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.p
 
 On an unchanged candidate these operations should produce no tracked diff.
 After intentional canonical edits, inspect and commit their generated projections.
-The package identity remains 0.1.4; a release/version bump must coordinate all
-identity files and parity constants, not just one manifest.
+The combined package identity is 0.1.6 in `package.json`, `pyproject.toml`,
+`plugins/graph-engineering/.codex-plugin/plugin.json`, and
+`scripts/package/verify_source_package_parity.py`.
+
+## Integration receipt for the 0.1.6 candidate
+
+The local 0.1.5 product candidate contains 93 tracked paths. It preserves the
+rejected shipped-interface benchmark and its no-performance-claim wording.
+The Jev fold-in adds the canonical module, portable runtime projection,
+`graph-jev` command and skill, three references, replay fixtures, tests, and
+this handoff. The final integration changes:
+
+- `.github/workflows/ci.yml` and removes duplicate `validate.yml`.
+- `.gitignore` with `*.egg-info/`, `.velgraphing-local/`, `.env`, and `.env.*`.
+- Package metadata and parity identity to 0.1.6.
+- `packages/core/jev.py` and generated `runtime/core/jev.py` for the single
+  canonical evidence-usefulness-v1 rubric and exact provider-legend check.
+- Jev and parity regression tests for swapped/mutated legends and 0.1.6.
+- Generated `.projection-state.json` and `release-manifest.json`, regenerated
+  by the projector and parity writer.
+
+Validation on the combined candidate:
+
+- Jev core: 55 passed. Jev skill: 5 passed.
+- Changed consumers: graph core 59, retrieval 65, adapters 18, parity 10,
+  scaffold 11, portable skills 29 passed.
+- `PYTHONDONTWRITEBYTECODE=1 npm test`: 295 passed.
+- Projector ran twice with identical output. Manifest write and read-only parity
+  verification passed. Candidate SHA-256:
+  `b4a4e11d9c0d403c7a3c344502677487c582f5d3613888b6c99eeef69f44a101`.
+- Canonical and packaged runtime `status`, `preview`, and `replay` passed.
+  Replay returned `execution=replay`, `status=reranked`, order `c1,c0,c2`,
+  and zero attempted calls. `git diff --check` passed.
+- An isolated repository-local `CODEX_HOME` installed version 0.1.6 from the
+  local marketplace. Fresh discovery showed six commands, including
+  `graph-find` and `graph-jev`, and both skills were present. No real consumer
+  or file outside `/Users/steven/Workspace` was changed.
+
+No live TypeSafe call was made. No API key was read, requested, or printed.
+No provider compatibility, quality, context-saving, latency, cost, or scaling
+claim is made. The shipped-interface benchmark remains rejected evidence.
+P3 malformed in-process `required_ids` handling remains out of scope.
+Open risks are live API behavior, host integration, aggregate budget and
+cancellation design, fresh CI completion on the combined head, and any future
+held-out benchmark. Neither PR was auto-merged.
 
 ## Stage 2: one approved live shadow call
 
