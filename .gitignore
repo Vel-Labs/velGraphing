@@ -6,3 +6,4 @@ __pycache__/
 .velgraphing-local/
 .env
 .env.*
+/reports/
