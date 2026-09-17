@@ -1,7 +1,8 @@
 # VelGraphing Repository Index
 
-Use this page to locate current product source. Historical experiment boards,
-versioned harnesses, traces, and model responses are not part of the public
+Use this page to locate current product source. Retained goal and benchmark
+evidence is historical evidence, not current product truth or performance proof.
+Raw local provider reports under `/reports/` remain excluded from the public
 repository.
 
 ## Product Map
