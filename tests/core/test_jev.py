@@ -231,6 +231,35 @@ class JevTests(unittest.TestCase):
         response["answers"]["candidate_0"]["score"] = 1
         self.assertEqual(self.evaluate(replay=self.replay(response))["reason"], "inconsistent_score")
 
+    def test_score_mismatch_reports_sanitized_numeric_diagnostic(self):
+        response = self.response()
+        response["answers"]["candidate_0"].update(
+            {"score": 1.02, "probabilities": {"0": 0.330, "1": 0.337, "2": 0.333}}
+        )
+        result = self.evaluate(mode="shadow", replay=self.replay(response))
+        self.assertEqual(result["status"], "fallback")
+        self.assertEqual(result["reason"], "inconsistent_score")
+        self.assertEqual(result["attempted_calls"], 0)
+        self.assertFalse(result["source_revalidated"])
+        self.assertEqual(result["order"], result["baseline_order"])
+        self.assertEqual(
+            result["diagnostic"],
+            {
+                "type": "score_consistency",
+                "candidate_index": 0,
+                "reported_score": 1.02,
+                "weighted_score": 1.003,
+                "absolute_difference": 0.017,
+                "probability_sum": 1.0,
+                "probabilities": {"0": 0.33, "1": 0.337, "2": 0.333},
+            },
+        )
+        encoded = json.dumps(result)
+        self.assertNotIn(self.packet["query"], encoded)
+        self.assertNotIn("return 'cancelled'", encoded)
+        self.assertNotIn("a.py", encoded)
+        self.assertNotIn("TYPESAFE_API_KEY", encoded)
+
     def test_rounded_score_accepts_and_material_mismatch_falls_back(self):
         self.packet["candidates"][2]["required"] = True
         self.prepared = jev.prepare(self.packet, self.root)

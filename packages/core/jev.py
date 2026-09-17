@@ -47,6 +47,10 @@ _ALLOWED_SUFFIXES = {".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".md",
 class JevError(ValueError):
     """Stable reason code only. Never put source, credentials or HTTP bodies here."""
 
+    def __init__(self, reason: str, diagnostic: Mapping[str, Any] | None = None) -> None:
+        super().__init__(reason)
+        self.diagnostic = diagnostic
+
 
 def _rubric_criteria() -> list[dict[str, str]]:
     return [{"level": level, "includes": includes, "excludes": excludes}
@@ -302,8 +306,18 @@ def parse_response(response: Any, packet: dict[str, Any], requested_model: str) 
             raise JevError("invalid_probability_sum")
         score = _number(answer.get("score"), 0, 2)
         # Maximum 0.005 from a two-decimal score plus 0.0015 from three-decimal probabilities across levels 0..2; round up to 0.007.
-        if abs(score - sum(int(k) * p for k, p in probabilities.items())) > SCORE_CONSISTENCY_TOLERANCE:
-            raise JevError("inconsistent_score")
+        weighted_score = sum(int(k) * p for k, p in probabilities.items())
+        difference = abs(score - weighted_score)
+        if difference > SCORE_CONSISTENCY_TOLERANCE:
+            raise JevError("inconsistent_score", {
+                "type": "score_consistency",
+                "candidate_index": index,
+                "reported_score": round(score, 6),
+                "weighted_score": round(weighted_score, 6),
+                "absolute_difference": round(difference, 6),
+                "probability_sum": round(sum(probabilities.values()), 6),
+                "probabilities": {key: round(value, 6) for key, value in probabilities.items()},
+            })
         scores.append({"id": candidate["id"], "score": score,
                        "probabilities": probabilities,
                        "distribution_confidence": _number(answer.get("confidence"), 0, 1)})
@@ -377,6 +391,8 @@ def evaluate(packet: Any, root: Path, *, mode: str = "off", allow_network: bool 
         result["reason"] = "advisory_only"
     except JevError as exc:
         result.update({"status": "fallback", "reason": str(exc)})
+        if exc.diagnostic is not None:
+            result["diagnostic"] = exc.diagnostic
     except Exception:
         # Preserve navigation and avoid leaking provider exceptions into agent logs.
         result.update({"status": "fallback", "reason": "provider_or_adapter_error"})

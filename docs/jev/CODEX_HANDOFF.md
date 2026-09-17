@@ -151,9 +151,17 @@ result. The response body and source-bearing request were not retained.
 The bounded repair adds `SCORE_CONSISTENCY_TOLERANCE=0.007` for bounded score
 and probability rounding compatibility while retaining exact legend validation,
 probability and score bounds, candidate membership, required slots, source
-custody, fallback, and the one-call limit. No second live call was made or
-authorized; fresh provider compatibility proof remains open until a new
-operator-approved smoke call is available.
+custody, fallback, and the one-call limit. A second operator-approved
+post-repair synthetic shadow call at head `f88b294` still returned
+`execution=live`, `attempted_calls=1`, `status=fallback`,
+`reason=inconsistent_score`, and `elapsed_ms=309.061`; it preserved the
+baseline order, all candidates and required `c2`, with `source_revalidated=false`,
+`resolved_model=null`, `usage=null`, and no scores. The tolerance was not
+widened. The current bounded diagnostic reports only the failing candidate index,
+rounded score/probability values, weighted score, sum, and absolute difference.
+No third live call has been made; the next operator-approved smoke call can use
+this diagnostic to distinguish scale, mapping, and rounding causes without
+retaining source or provider response data.
 
 ## Stage 3: bounded plugin integration
 
