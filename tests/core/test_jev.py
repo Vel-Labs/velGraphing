@@ -31,10 +31,11 @@ class JevTests(unittest.TestCase):
         self.prepared = jev.prepare(self.packet, self.root)
 
     def response(self, levels=(0, 2, 1)):
+        legend = {str(i): criterion for i, criterion in enumerate(jev._rubric_criteria())}
         return {"model": jev.DEFAULT_MODEL, "answers": {
             f"candidate_{i}": {"type": "score", "score": level,
                 "probabilities": {str(j): float(j == level) for j in range(3)},
-                "legend": {"0": "irrelevant", "1": "context", "2": "direct"}, "confidence": 1.0}
+                "legend": legend, "confidence": 1.0}
             for i, level in enumerate(levels)},
             "usage": {"input_tokens": 1200, "output_tokens": 0}}
 
@@ -116,7 +117,21 @@ class JevTests(unittest.TestCase):
             self.assertEqual(question["type"], "score")
             self.assertIsInstance(question["instructions"], dict)
             self.assertEqual(question["instructions"]["candidate_ref"], f"candidates[{i}]")
-            self.assertTrue(all(isinstance(level, dict) for level in question["criteria"]))
+            self.assertEqual(question["criteria"], jev._rubric_criteria())
+
+    def test_swapped_or_mutated_legend_falls_back(self):
+        canonical = {str(i): criterion for i, criterion in enumerate(jev._rubric_criteria())}
+        legends = (
+            {"0": canonical["1"], "1": canonical["0"], "2": canonical["2"]},
+            {**canonical, "2": {**canonical["2"], "includes": "mutated"}},
+        )
+        for legend in legends:
+            response = self.response()
+            response["answers"]["candidate_0"]["legend"] = legend
+            result = self.evaluate(replay=self.replay(response))
+            self.assertEqual(result["status"], "fallback")
+            self.assertEqual(result["reason"], "invalid_score_legend")
+            self.assertEqual(result["order"], result["baseline_order"])
 
     def test_same_payload_has_same_hash(self):
         self.assertEqual(self.prepared["request_sha256"], jev.prepare(self.packet, self.root)["request_sha256"])

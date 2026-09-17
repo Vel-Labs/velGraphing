@@ -24,6 +24,11 @@ ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 DEFAULT_MODEL = "jev-1.13.0"
 RUBRIC_VERSION = "evidence-usefulness-v1"
 PACKET_VERSION = "velgraphing-jev-candidates-v1"
+EVIDENCE_USEFULNESS_RUBRIC = (
+    ("irrelevant", "No concrete evidence for the requested behavior.", "Keyword overlap alone does not establish usefulness."),
+    ("context", "Related definitions or background that help interpret the behavior.", "Does not directly exhibit the requested implementation, test, or limitation."),
+    ("direct_evidence", "Directly exhibits a requested implementation, test, dependency, contradiction, or limitation.", "This rating does not prove the full question has been answered."),
+)
 MAX_CANDIDATES = 64
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_SOURCE_BYTES = 16 * 1024 * 1024
@@ -40,6 +45,15 @@ _ALLOWED_SUFFIXES = {".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".md",
 
 class JevError(ValueError):
     """Stable reason code only. Never put source, credentials or HTTP bodies here."""
+
+
+def _rubric_criteria() -> list[dict[str, str]]:
+    return [{"level": level, "includes": includes, "excludes": excludes}
+            for level, includes, excludes in EVIDENCE_USEFULNESS_RUBRIC]
+
+
+def _rubric_legend() -> dict[str, dict[str, str]]:
+    return {str(index): criterion for index, criterion in enumerate(_rubric_criteria())}
 
 
 def canonical(value: Any) -> bytes:
@@ -207,11 +221,7 @@ def prepare(packet: Any, root: Path, model: str = DEFAULT_MODEL) -> dict[str, An
                     "Relevant contradictions and limitations are useful evidence, not reasons to hide a source."
                 ]
             },
-            "criteria": [
-                {"level": "irrelevant", "includes": "No concrete evidence for the requested behavior.", "excludes": "Keyword overlap alone does not establish usefulness."},
-                {"level": "context", "includes": "Related definitions or background that help interpret the behavior.", "excludes": "Does not directly exhibit the requested implementation, test, or limitation."},
-                {"level": "direct_evidence", "includes": "Directly exhibits a requested implementation, test, dependency, contradiction, or limitation.", "excludes": "This rating does not prove the full question has been answered."}
-            ]
+            "criteria": _rubric_criteria()
         }
     payload = {"model": model, "state": {"task": {"query": packet["query"]}, "candidates": state_candidates}, "questions": questions}
     encoded = canonical(payload)
@@ -284,6 +294,8 @@ def parse_response(response: Any, packet: dict[str, Any], requested_model: str) 
         keys = {"0", "1", "2"}
         if type(probabilities) is not dict or set(probabilities) != keys or type(legend) is not dict or set(legend) != keys:
             raise JevError("invalid_score_levels")
+        if legend != _rubric_legend():
+            raise JevError("invalid_score_legend")
         probabilities = {key: _number(probabilities[key], 0, 1) for key in sorted(keys)}
         if abs(sum(probabilities.values()) - 1) > 0.001:
             raise JevError("invalid_probability_sum")

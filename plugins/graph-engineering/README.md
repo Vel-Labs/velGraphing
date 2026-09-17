@@ -4,7 +4,7 @@ VelGraphing provides source-verified graph navigation for coding agents. This
 directory is the portable plugin package boundary. The compatibility package
 ID remains `graph-engineering`.
 
-The current `0.1.5` source package contains five public commands:
+The current `0.1.6` source package contains six public commands:
 
 - `/graph-find` returns bounded, source-verified pointers for a repository prompt.
 - `/graph-start` prepares the smallest source-bound setup.
