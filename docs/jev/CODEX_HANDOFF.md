@@ -166,9 +166,18 @@ normalized two-decimal shape demonstrates displayed rounding. The corrected
 ceiling is `0.021`: up to `0.005` at level 1 plus `0.010` at level 2 from
 probability rounding, `0.005` score rounding, and `0.001` numeric headroom. The current bounded
 diagnostic reports only the failing candidate index, rounded score/probability
-values, weighted score, sum, and absolute difference. No fourth live call has
-been made; the next operator-approved smoke call can validate this corrected
-boundary without retaining source or provider response data.
+values, weighted score, sum, and absolute difference.
+
+A fourth operator-approved synthetic shadow call at head `4bb91e2` passed with
+`execution=live`, `attempted_calls=1`, `elapsed_ms=297.837`,
+`status=shadow`, `reason=advisory_only`, `resolved_model=jev-1.13.0`,
+`source_revalidated=true`, `source_bytes_verified=368`, and usage
+`{input_tokens:1300,output_tokens:49}`. It preserved baseline order
+`[c0,c1,c2]`, suggested `[c1,c0,c2]`, retained all candidates and required
+`c2`, and remained `authority_bearing=false`, `sufficient=false`. The live
+provider compatibility proof is limited to this bounded synthetic shadow path.
+No live rerank, host integration, performance benchmark, or fifth live call was
+run.
 
 ## Stage 3: bounded plugin integration
 
