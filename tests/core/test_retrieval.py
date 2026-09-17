@@ -9,6 +9,7 @@ from packages.core import (
     AuthorityClass,
     FacetKind,
     Freshness,
+    GraphFindResult,
     Graph,
     GraphEdge,
     GraphRecord,
@@ -26,6 +27,7 @@ from packages.core import (
     build_repository_file_cards,
     compile_prompt,
     compile_proof_obligations,
+    graph_find,
     navigate,
     retrieve,
     retrieve_hybrid,
@@ -1153,6 +1155,136 @@ class ProgressiveNavigationTests(unittest.TestCase):
                 self.graph, task(), self.index, self.facets, self.snapshot, self.reader,
                 preview_bytes=513,
             )
+
+
+class GraphFindTests(unittest.TestCase):
+    def test_graph_find_compiles_obligations_for_short_prompts(self) -> None:
+        graph, snapshot, reader = fixture()
+        result = graph_find(graph, task(), "find refresh_token", snapshot, reader)
+        self.assertEqual(result.route, "graph")
+        self.assertEqual(result.unresolved_obligation_ids, ())
+        self.assertTrue(result.evidence)
+
+    def test_graph_find_does_not_overconstrain_multi_facet_prompts(self) -> None:
+        graph, snapshot, reader = fixture()
+        prompt = "Trace how refresh_token reads token expiry configuration and which tests validate changes"
+        automatic = graph_find(
+            graph,
+            task(),
+            prompt,
+            snapshot,
+            reader,
+            semantic_candidates=("authentication", "token", "expiry", "refresh"),
+        )
+        ordinary = graph_find(
+            graph,
+            task(),
+            prompt,
+            snapshot,
+            Reader(reader.sources),
+            semantic_candidates=("authentication", "token", "expiry", "refresh"),
+            proof_obligations=(),
+        )
+        self.assertEqual(automatic.hits, ordinary.hits)
+        self.assertEqual(automatic.facet_coverage_percent, ordinary.facet_coverage_percent)
+        self.assertTrue(automatic.hits)
+
+    def test_graph_find_is_deterministic_and_body_free(self) -> None:
+        graph, snapshot, reader = fixture()
+        prompt = "Trace how refresh_token reads token expiry configuration and which tests validate changes"
+        first = graph_find(
+            graph,
+            task(),
+            prompt,
+            snapshot,
+            reader,
+            semantic_candidates=("authentication", "token", "expiry", "refresh"),
+        )
+        second = graph_find(
+            graph,
+            task(),
+            prompt,
+            snapshot,
+            Reader(reader.sources),
+            semantic_candidates=("authentication", "token", "expiry", "refresh"),
+        )
+        self.assertIsInstance(first, GraphFindResult)
+        self.assertEqual(first, second)
+        payload = first.to_dict()
+        self.assertNotIn("context", payload)
+        self.assertNotIn("spans", payload)
+        self.assertNotIn("content", payload)
+        self.assertNotIn("text", payload)
+        self.assertEqual(payload["source_snapshot_sha256"], snapshot.snapshot_sha256)
+
+    def test_graph_find_returns_exact_evidence_pointers(self) -> None:
+        graph, snapshot, reader = fixture()
+        result = graph_find(
+            graph,
+            task(),
+            "Trace how refresh_token reads token expiry configuration and which tests validate changes",
+            snapshot,
+            reader,
+            semantic_candidates=("authentication", "token", "expiry", "refresh"),
+            proof_obligations=(),
+            expand_one_hop=False,
+            minimum_coverage_percent=0,
+        )
+        self.assertEqual(result.route, "graph")
+        self.assertTrue(result.evidence)
+        self.assertEqual(result.source_snapshot_sha256, snapshot.snapshot_sha256)
+        source_map = {source.path: source for source in snapshot.sources}
+        for pointer in result.evidence:
+            raw = reader.sources[pointer.source_path][pointer.byte_start:pointer.byte_end]
+            self.assertEqual(pointer.source_sha256, source_map[pointer.source_path].sha256)
+            self.assertEqual(pointer.excerpt_sha256, hashlib.sha256(raw).hexdigest())
+            self.assertEqual(pointer.record_id, graph.record_map()[pointer.record_id].record_id)
+
+    def test_graph_find_defers_with_explicit_fallback_recommendation(self) -> None:
+        graph, snapshot, reader = fixture()
+        obligation = ProofObligation(
+            "missing-config",
+            AuthorityClass.CONFIGURATION,
+            source_hints=("src/config.py",),
+            required_tag_values=("missing-setting",),
+            critical=True,
+        )
+        result = graph_find(
+            graph,
+            task(),
+            "Trace token expiry configuration and tests",
+            snapshot,
+            reader,
+            proof_obligations=(obligation,),
+            expand_one_hop=False,
+        )
+        self.assertEqual(result.route, "defer")
+        self.assertEqual(result.recommended_fallback_paths, ("src/config.py",))
+        self.assertFalse(result.fail_closed)
+        self.assertFalse(hasattr(result, "fallback"))
+
+    def test_graph_find_fails_closed_at_authentication_boundary(self) -> None:
+        graph, snapshot, reader = fixture()
+        poisoned = replace(
+            graph.records[0],
+            trust=TrustClass.AGENT_GENERATED,
+            admission=Admission.NONE,
+            agent_generated=True,
+        )
+        poisoned_graph = Graph((poisoned, *graph.records[1:]), graph.edges)
+        result = graph_find(
+            poisoned_graph,
+            task(),
+            "Trace how refresh_token reads token expiry configuration and which tests validate changes",
+            snapshot,
+            reader,
+            semantic_candidates=("authentication", "token", "expiry", "refresh"),
+        )
+        self.assertEqual(result.route, "defer")
+        self.assertTrue(result.fail_closed)
+        self.assertEqual(result.reason, "tag_match_crosses_authentication_boundary")
+        self.assertEqual(result.hits, ())
+        self.assertEqual(result.evidence, ())
 
 
 if __name__ == "__main__":

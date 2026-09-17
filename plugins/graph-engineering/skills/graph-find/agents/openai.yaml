@@ -1,0 +1,4 @@
+interface:
+  display_name: "Graph Find"
+  short_description: "Find source-verified repository pointers"
+  default_prompt: "Use $graph-find to find source pointers for this repository task."

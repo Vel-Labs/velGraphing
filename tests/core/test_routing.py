@@ -424,6 +424,13 @@ class AdvisoryRoutingV4Tests(unittest.TestCase):
         second = SourceIdentityV4("z", 1, "2" * 64)
         with self.assertRaises(ValueError):
             SourceSnapshotV4((second, snapshot.sources[0]))
+        duplicate_bytes = SourceIdentityV4(
+            "z", snapshot.sources[0].byte_length, snapshot.sources[0].sha256
+        )
+        self.assertEqual(
+            2,
+            len(SourceSnapshotV4((snapshot.sources[0], duplicate_bytes)).sources),
+        )
         with self.assertRaises(ValueError):
             SourceSnapshotV4((snapshot.sources[0], snapshot.sources[0]))
         with self.assertRaises(ValueError):

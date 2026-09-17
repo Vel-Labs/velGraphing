@@ -1,0 +1,26 @@
+{
+  "task_id": "velgraphing-public-product-v1-T020-luna-core",
+  "semantic_role": "implementation_worker",
+  "runtime_surface": "codex_collaboration",
+  "route_authority": "user-authorized-orcastrata-workers-2026-09-02",
+  "route_id": "codex-luna-high-write",
+  "requested_agent_type": "worker",
+  "effective_agent_type": "worker",
+  "model": "gpt-5.6-luna",
+  "reasoning_effort": "high",
+  "history_mode": "none",
+  "selection_mode": "explicit",
+  "fallback": "forbidden",
+  "special_route": true,
+  "provider_dispatch": false,
+  "projection_status": "ready",
+  "approval_reference": "user message authorizing Orcastrata and named model families",
+  "runtime_child_id": "/root/t020_core_find",
+  "runtime_child_id_status": "recorded",
+  "dispatch_status": "spawned",
+  "allowed_files": [
+    "packages/core/retrieval.py",
+    "packages/core/__init__.py",
+    "tests/core/test_retrieval.py"
+  ]
+}

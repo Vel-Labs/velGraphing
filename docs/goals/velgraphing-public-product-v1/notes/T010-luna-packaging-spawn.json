@@ -1,0 +1,22 @@
+{
+  "task_id": "velgraphing-public-product-v1-T010-luna-packaging",
+  "semantic_role": "tester",
+  "runtime_surface": "codex_collaboration",
+  "route_authority": "user-authorized-orcastrata-workers-2026-09-02",
+  "route_id": "codex-luna-high-read-only",
+  "requested_agent_type": "default",
+  "effective_agent_type": "default",
+  "model": "gpt-5.6-luna",
+  "reasoning_effort": "high",
+  "history_mode": "none",
+  "selection_mode": "explicit",
+  "fallback": "forbidden",
+  "route_rotation_policy": "automatic_within_authority",
+  "special_route": true,
+  "provider_dispatch": false,
+  "projection_status": "ready",
+  "approval_reference": "user message authorizing Orcastrata and named model families",
+  "runtime_child_id": "/root/gate1_packaging",
+  "runtime_child_id_status": "recorded",
+  "dispatch_status": "spawned"
+}

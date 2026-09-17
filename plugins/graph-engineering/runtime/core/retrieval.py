@@ -375,6 +375,47 @@ class RetrievalResult:
 
 
 @dataclass(frozen=True)
+class GraphFindResult:
+    """Body-free, source-pointer result for the ``/graph-find`` seam."""
+
+    route: str
+    reason: str
+    hits: tuple[RetrievalHit, ...]
+    evidence: tuple[EvidenceItem, ...]
+    source_snapshot_sha256: str
+    context_bytes: int
+    facet_coverage_percent: float
+    recommended_fallback_paths: tuple[str, ...]
+    fail_closed: bool
+    covered_obligation_ids: tuple[str, ...] = ()
+    unresolved_obligation_ids: tuple[str, ...] = ()
+    unresolved_critical_obligation_ids: tuple[str, ...] = ()
+    remaining_byte_budget: int = 0
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize only ranked hits, exact pointers, and routing metadata."""
+
+        return {
+            "route": self.route,
+            "reason": self.reason,
+            "hits": [item.__dict__.copy() for item in self.hits],
+            "evidence": [item.to_dict() for item in self.evidence],
+            "source_snapshot_sha256": self.source_snapshot_sha256,
+            "context_bytes": self.context_bytes,
+            "facet_coverage_percent": self.facet_coverage_percent,
+            "recommended_fallback_paths": list(self.recommended_fallback_paths),
+            "fail_closed": self.fail_closed,
+            "covered_obligation_ids": list(self.covered_obligation_ids),
+            "unresolved_obligation_ids": list(self.unresolved_obligation_ids),
+            "unresolved_critical_obligation_ids": list(self.unresolved_critical_obligation_ids),
+            "remaining_byte_budget": self.remaining_byte_budget,
+            "score_meaning": (
+                "deterministic_ranking_diagnostic_not_probability_authority_or_answer_confidence"
+            ),
+        }
+
+
+@dataclass(frozen=True)
 class HybridRetrievalResult:
     retrieval: RetrievalResult
     fallback: AssistResult | None
@@ -847,6 +888,83 @@ def compile_prompt(
         tuple(facets),
         tuple(sorted(set(rejected))),
         tuple(proof_obligations),
+    )
+
+
+def graph_find(
+    graph: Graph,
+    task: TaskSpec,
+    prompt: str,
+    snapshot: SourceSnapshotV4,
+    reader: SourceReaderV4,
+    *,
+    semantic_candidates: Sequence[str] = (),
+    proof_obligations: Sequence[ProofObligation] | None = None,
+    channels: Sequence[str] = _CHANNEL_ORDER,
+    expand_one_hop: bool = True,
+    maximum_results: int = 6,
+    minimum_coverage_percent: float = 60.0,
+    parallel: bool = True,
+) -> GraphFindResult:
+    """Run the body-free ``/graph-find`` core seam."""
+
+    index = build_repository_tag_index(graph, snapshot, reader)
+    facets = compile_prompt(
+        prompt,
+        index,
+        semantic_candidates=semantic_candidates,
+        proof_obligations=()
+        if proof_obligations is None
+        else tuple(proof_obligations),
+    )
+    result = retrieve(
+        graph,
+        task,
+        index,
+        facets,
+        snapshot,
+        reader,
+        channels=channels,
+        expand_one_hop=expand_one_hop,
+        maximum_results=maximum_results,
+        minimum_coverage_percent=minimum_coverage_percent,
+        parallel=parallel,
+    )
+    if proof_obligations is None and result.reason == "prompt_facets_insufficient":
+        obligations = compile_proof_obligations(prompt, graph, index, snapshot, reader)
+        facets = compile_prompt(
+            prompt,
+            index,
+            semantic_candidates=semantic_candidates,
+            proof_obligations=obligations,
+        )
+        result = retrieve(
+            graph,
+            task,
+            index,
+            facets,
+            snapshot,
+            reader,
+            channels=channels,
+            expand_one_hop=expand_one_hop,
+            maximum_results=maximum_results,
+            minimum_coverage_percent=minimum_coverage_percent,
+            parallel=parallel,
+        )
+    return GraphFindResult(
+        route=result.route,
+        reason=result.reason,
+        hits=result.hits,
+        evidence=result.evidence,
+        source_snapshot_sha256=snapshot.snapshot_sha256,
+        context_bytes=result.context_bytes,
+        facet_coverage_percent=result.facet_coverage_percent,
+        recommended_fallback_paths=result.recommended_fallback_paths,
+        fail_closed=result.fail_closed,
+        covered_obligation_ids=result.covered_obligation_ids,
+        unresolved_obligation_ids=result.unresolved_obligation_ids,
+        unresolved_critical_obligation_ids=result.unresolved_critical_obligation_ids,
+        remaining_byte_budget=result.remaining_byte_budget,
     )
 
 
@@ -1966,11 +2084,11 @@ def _line_window(raw: bytes, start: int, end: int, maximum: int) -> tuple[int, i
 
 
 __all__ = [
-    "AuthorityClass", "EvidenceItem", "FacetKind", "HybridRetrievalResult",
+    "AuthorityClass", "EvidenceItem", "FacetKind", "GraphFindResult", "HybridRetrievalResult",
     "NavigationContext", "NavigationResult", "SourcePreview",
     "PromptFacet", "PromptFacetSet", "ProofObligation", "RepositoryFileCard",
     "RepositoryTag", "RepositoryTagIndex", "RetrievalHit", "RetrievalResult",
     "TagKind", "build_repository_file_cards", "build_repository_tag_index",
     "compile_prompt", "compile_proof_obligations", "match_proof_obligation", "match_proof_obligations",
-    "retrieve", "retrieve_hybrid", "navigate", "compose_navigation_context",
+    "graph_find", "retrieve", "retrieve_hybrid", "navigate", "compose_navigation_context",
 ]

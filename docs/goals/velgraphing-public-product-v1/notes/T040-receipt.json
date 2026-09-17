@@ -1,0 +1,31 @@
+{
+  "task_id": "T040",
+  "status": "accepted",
+  "summary": "Graph exports and serialized projections now emit source pointers and metadata without complete source bodies.",
+  "candidate_sha256": "a7e6cdfed136c208a3009eb945c255139bacaf0e011b4f0093f67ff461f77e0b",
+  "files_changed": [
+    "packages/core/models.py",
+    "packages/core/export.py",
+    "packages/core/serialization.py",
+    "plugins/graph-engineering/runtime/core/models.py",
+    "plugins/graph-engineering/runtime/core/export.py",
+    "plugins/graph-engineering/runtime/core/serialization.py",
+    "plugins/graph-engineering/runtime/.projection-state.json",
+    "plugins/graph-engineering/.codex-plugin/release-manifest.json",
+    "tests/core/test_graph_core.py"
+  ],
+  "validation": [
+    "154 core routing, retrieval, and graph tests passed.",
+    "44 package parity, projection, and portable skill tests passed.",
+    "Source-package parity passed for 74 files.",
+    "git diff --check passed."
+  ],
+  "independent_audit": {
+    "model": "gpt-5.6-luna",
+    "reasoning_effort": "medium",
+    "verdict": "ACCEPT",
+    "finding": "No critical body leak, provenance loss, semantic regression, or package parity defect was found."
+  },
+  "residual_risk": "The internal graph-record schema still requires content. No current export or projection caller uses that schema; add a separate pointer schema only if a real external consumer needs schema validation.",
+  "next_task": "T050"
+}

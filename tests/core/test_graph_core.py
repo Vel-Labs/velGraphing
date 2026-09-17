@@ -158,6 +158,14 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(item.to_dict(), item.to_dict())
         self.assertEqual(json.loads(json.dumps(item.to_dict()))["trust"], "verified_source")
 
+    def test_record_pointer_projection_preserves_provenance_without_body(self) -> None:
+        body = "private source body"
+        pointer = record("R1", body, export_allowed=True).to_pointer_dict()
+        self.assertNotIn("content", pointer)
+        self.assertNotIn(body, json.dumps(pointer))
+        self.assertEqual(pointer["provenance"]["path"], "contracts/example.md")
+        self.assertEqual(pointer["provenance"]["sha256"], DIGEST)
+
     def test_graph_rejects_unknown_endpoint_and_duplicate_ids(self) -> None:
         with self.assertRaises(ValueError):
             Graph((record("R1"),), (edge("E1", "R1", "missing"),))
@@ -1368,8 +1376,8 @@ class SerializationTests(unittest.TestCase):
     def test_procedure_serialization_uses_sequence_and_is_deterministic(self) -> None:
         graph = Graph(
             (
-                record("second", sequence=2),
-                record("first", sequence=1),
+                record("second", "graph second private source body", sequence=2),
+                record("first", "graph first private source body", sequence=1),
             )
         )
         spec = task(topology=Topology.PROCEDURE)
@@ -1377,11 +1385,20 @@ class SerializationTests(unittest.TestCase):
         serialized = serialize_projection(graph, spec, result)
         payload = json.loads(serialized.content)
         self.assertEqual([item["record_id"] for item in payload["records"]], ["first", "second"])
+        self.assertTrue(all("content" not in item for item in payload["records"]))
+        self.assertTrue(all("private source body" not in item for item in payload["records"]))
+        self.assertEqual(payload["records"][0]["provenance"]["path"], "contracts/example.md")
+        self.assertEqual(payload["records"][0]["provenance"]["sha256"], DIGEST)
         self.assertEqual(serialized.byte_count, len(serialized.content.encode("utf-8")))
         self.assertEqual(serialized.content, serialize_projection(graph, spec, result).content)
 
     def test_serialization_prunes_to_byte_budget(self) -> None:
-        graph = Graph((record("A", "graph " + "x" * 500), record("B", "graph " + "y" * 500)))
+        graph = Graph(
+            (
+                record("A", "graph x", tags=("x" * 500,)),
+                record("B", "graph y", tags=("y" * 500,)),
+            )
+        )
         large = task(byte_budget=10000)
         result = select(graph, large)
         envelope_size = serialize_projection(graph, replace(large, byte_budget=10000), result).byte_count
@@ -1476,6 +1493,9 @@ class ExportTests(unittest.TestCase):
         result = export_graph(allowed_graph, policy)
         self.assertTrue(result.allowed)
         self.assertEqual(result.payload["records"][0]["record_id"], "R1")
+        self.assertNotIn("content", result.payload["records"][0])
+        self.assertEqual(result.payload["records"][0]["provenance"]["path"], "contracts/example.md")
+        self.assertEqual(result.payload["records"][0]["provenance"]["sha256"], DIGEST)
 
     def test_export_fails_closed_for_edge_without_exported_endpoints(self) -> None:
         graph = Graph(

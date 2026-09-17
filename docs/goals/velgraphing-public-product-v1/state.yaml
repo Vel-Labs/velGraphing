@@ -1,0 +1,17 @@
+goal: velgraphing-public-product-v1
+status: stopped
+active_task: null
+proof_boundary: local
+tasks:
+  T010: done
+  T020: done
+  T030: done
+  T040: done
+  T050: done
+  T060: done
+  T070: done
+  T080: done
+  T090: rejected
+  T999: done
+accepted_by: null
+updated_at: 2026-09-02

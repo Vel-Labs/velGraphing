@@ -1,0 +1,25 @@
+{
+  "task_id": "T010",
+  "status": "accepted",
+  "summary": "Mapped the smallest public query seam and clean-package boundary.",
+  "decision": {
+    "command": "/graph-find",
+    "core": "Reuse build_repository_tag_index, compile_prompt, and retrieve.",
+    "output": "Return ranked source pointers, route, reason, snapshot identity, and fallback recommendation. Omit source bodies and answer context.",
+    "adapter": "Add one package-local read-only repository adapter. Do not add a database, daemon, provider route, or new retrieval engine.",
+    "fallback": "Direct source fallback requires an explicit same-snapshot allowlist. Otherwise return defer."
+  },
+  "files_changed": [],
+  "validation": {
+    "portable_skills": "18 passed",
+    "retrieval": "59 passed",
+    "navigation_v5": "7 passed",
+    "parity": "10 passed; frozen verifier passed with 70 files"
+  },
+  "remaining_risks": [
+    "Package parity does not prove installation or native command discovery.",
+    "The current graph record keeps full source content in memory and exported records still contain it.",
+    "The installed package has no repository loader or source reader adapter."
+  ],
+  "next_task": "T020"
+}

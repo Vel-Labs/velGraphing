@@ -1,0 +1,35 @@
+{
+  "task_id": "T060",
+  "status": "accepted",
+  "summary": "Closed the minimum public bootstrap, CI, privacy, security, contribution, change-history, and rollback surface.",
+  "files_changed": [
+    ".gitignore",
+    ".github/workflows/ci.yml",
+    "README.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "pyproject.toml"
+  ],
+  "bootstrap_repair": {
+    "initial_failure": "setuptools rejected multiple automatically discovered top-level packages",
+    "repair": "Explicitly package only packages.core.",
+    "result": "Editable installation completed for graph-engineering 0.1.5."
+  },
+  "validation": [
+    "pip install -e . --no-deps passed in the repository-local virtual environment.",
+    "11 scaffold tests passed.",
+    "172 core tests passed.",
+    "18 adapter tests passed.",
+    "24 portable skill tests passed.",
+    "10 package parity tests passed.",
+    "Source-package parity passed for candidate a7e6cdfed136c208a3009eb945c255139bacaf0e011b4f0093f67ff461f77e0b.",
+    "CI YAML parsed and staged diff checks passed."
+  ],
+  "boundaries": [
+    "CI has one Python 3.11 job and no cache, matrix, release, or publish step.",
+    "The security policy uses GitHub private advisories and does not invent a contact address.",
+    "Graph-find remains read-only, body-free, Git-tracked, bounded, and in-memory."
+  ],
+  "next_task": "T070"
+}

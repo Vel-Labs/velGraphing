@@ -20,6 +20,10 @@
     {
       "source": "adapters/knowledge-compiler",
       "target": "plugins/graph-engineering/runtime/adapters/knowledge-compiler"
+    },
+    {
+      "source": "adapters/orcastrata-umbrella-catalog",
+      "target": "plugins/graph-engineering/runtime/adapters/orcastrata-umbrella-catalog"
     }
   ]
 }

@@ -1,0 +1,111 @@
+{
+  "task_id": "VG-02",
+  "route": "DIRECT",
+  "answer": {
+    "trace": [
+      "GraphRecord is canonical in packages/core/models.py. It stores body content plus provenance, trust, sensitivity, freshness, admission, eligibility, agent origin, export grant, tags, and sequence.",
+      "Public export calls export_graph. It requires an enabled ExportPolicy, known requested IDs, item-level export_allowed, authenticated eligibility, and complete exported edge endpoints. Records serialize through to_pointer_dict, so content is omitted.",
+      "Serialized graph projection calls select first, then serialize_projection. select compares full and authenticated projections. Any record-ID divergence returns fail_closed with empty records and edges. The serializer emits graph-projection-v1 with pointer records and eligible endpoint-contained edges.",
+      "serialize_projection itself trusts SelectionResult and does not re-check export_allowed. The normal select path enforces sensitivity and authentication, but a fabricated SelectionResult could bypass that assumption."
+    ],
+    "privacy_boundary": {
+      "public_export": "Default deny. ExportPolicy defaults to disabled and public sensitivity. A caller can explicitly broaden allowed_sensitivities.",
+      "authenticated_selection": "Requires eligible, verified provenance, allowed trust, current freshness, permitted sensitivity, and policy/verifier admission. Agent-generated records also require policy-admitted trust plus verifier admission.",
+      "content_boundary": "Graph exports and graph projections preserve pointers and evidence metadata, not GraphRecord.content. select_documents is a separate graph-source-context-v2 path that can include exact verified source content."
+    },
+    "preserved_evidence": [
+      "Record ID, kind, title, provenance path, SHA-256, locator, verification flag, trust, sensitivity, freshness, admission, eligibility, agent-generated flag, export grant, tags, and sequence.",
+      "Edges preserve IDs, endpoints, relation, relevance, provenance, trust, sensitivity, freshness, admission, eligibility, agent origin, and export grant.",
+      "Projection envelopes preserve task ID, topology, fail-closed state, reason, and divergent IDs."
+    ],
+    "budget_behavior": [
+      "TaskSpec defaults to max_depth=4, node_budget=200, and byte_budget=32768.",
+      "Selection caps seeds and graph expansion at node_budget and stops at max_depth.",
+      "Serialization uses deterministic topology ordering, then removes the last record until canonical JSON fits byte_budget. Edges whose endpoints are removed are also removed.",
+      "Fail-closed envelopes must fit the byte budget; otherwise serialization raises. Public export has no node or byte budget."
+    ],
+    "canonical_ownership": "packages/core and contracts/core are canonical. plugins/graph-engineering/runtime is generated. contracts/package/projection-map.json maps canonical sources to runtime targets and excludes four historical V3 routing schemas. The graph remains a derived view and does not replace cited source truth.",
+    "package_drift_checks": [
+      "The projector validates normalized relative paths, non-overlapping mappings, approved exclusions, symlink and regular-file safety, and exact prior projection state before replacing runtime content.",
+      "The parity verifier compares canonical mapped bytes with runtime bytes, checks runtime file-set equality, validates projection-state schema and contract digest, and checks recorded file sizes and SHA-256 values.",
+      "Release verification rebuilds the package inventory, validates plugin name/version, and rejects missing, extra, changed, duplicate, escaping, private or machine-specific, symlink, hard-link, oversized, and non-regular entries. A mismatch returns source_package_drift."
+    ],
+    "proof_boundary": "This is source-trace evidence only. No benchmark artifact, graph-find command, parity checker, runtime export, installation, or publication proof was used."
+  },
+  "citations": [
+    {"path": "packages/core/models.py", "lines": "59-101", "claim": "GraphRecord fields and pointer projection omit content while preserving provenance and control metadata."},
+    {"path": "packages/core/models.py", "lines": "104-121", "claim": "GraphEdge serialized fields."},
+    {"path": "packages/core/models.py", "lines": "150-192", "claim": "Task budgets and authenticated eligibility gates."},
+    {"path": "packages/core/export.py", "lines": "10-55", "claim": "Default-deny explicit public export and endpoint checks."},
+    {"path": "packages/core/selection.py", "lines": "846-888", "claim": "Full-versus-authenticated divergence fails closed."},
+    {"path": "packages/core/selection.py", "lines": "891-977", "claim": "Sensitivity/authentication filtering and node/depth budget behavior."},
+    {"path": "packages/core/selection.py", "lines": "580-696", "claim": "Separate exact-source document context path."},
+    {"path": "packages/core/serialization.py", "lines": "20-73", "claim": "Pointer-only graph projection, fail-closed envelope, and byte pruning."},
+    {"path": "packages/core/serialization.py", "lines": "75-97", "claim": "Deterministic ordering and canonical JSON."},
+    {"path": "contracts/core/graph-record.schema.json", "lines": "7-39", "claim": "Portable GraphRecord contract and privacy fields."},
+    {"path": "docs/architecture/SOURCE_OWNERSHIP_AND_PORTABILITY.md", "lines": "5-23", "claim": "Canonical ownership and projector safety boundary."},
+    {"path": "docs/architecture/PACKAGING_AND_PARITY.md", "lines": "26-46", "claim": "Parity and release proof boundaries."},
+    {"path": "contracts/package/projection-map.json", "lines": "2-27", "claim": "Canonical-to-runtime mappings and approved exclusions."},
+    {"path": "scripts/package/project_portable_plugin.py", "lines": "207-336", "claim": "Prior-state validation and staged projection replacement."},
+    {"path": "scripts/package/verify_source_package_parity.py", "lines": "294-448", "claim": "Projection byte/state checks and manifest construction."},
+    {"path": "scripts/package/verify_source_package_parity.py", "lines": "485-524", "claim": "Release manifest verification and source_package_drift."}
+  ],
+  "commands_run": [
+    "sed -n on workspace instructions and repository README/docs",
+    "git ls-files targeted canonical, contract, package, runtime, and test paths",
+    "rg -n repository searches excluding benchmarks/**",
+    "nl -ba exact source reads for core, contracts, ownership, projection, parity, and focused tests",
+    "wc -c ... | awk ... for exact byte total"
+  ],
+  "directory_listings": [
+    "packages/core",
+    "contracts/core",
+    "contracts/package",
+    "scripts/package",
+    "plugins/graph-engineering/skills/graph-engineering",
+    "plugins/graph-engineering/.codex-plugin",
+    "docs/architecture",
+    "tests/core",
+    "tests/parity",
+    "tests/scaffold"
+  ],
+  "search_calls": [
+    "rg -n --glob '!benchmarks/**' ... packages contracts plugins docs README.md",
+    "rg -n --glob '!benchmarks/**' ... packages/core contracts/core scripts/package docs/architecture",
+    "rg -n --glob '!benchmarks/**' ... tests scripts/package",
+    "rg -n --glob '!benchmarks/**' ... packages/core/selection.py packages/core/retrieval.py"
+  ],
+  "source_reads": 23,
+  "source_paths_read": [
+    "README.md",
+    "docs/INDEX.md",
+    "plugins/graph-engineering/skills/graph-engineering/SKILL.md",
+    "plugins/graph-engineering/skills/graph-engineering/references/architecture.md",
+    "plugins/graph-engineering/skills/graph-engineering/references/evidence-base.md",
+    "plugins/graph-engineering/skills/graph-engineering/references/quality-gates.md",
+    "packages/core/models.py",
+    "packages/core/export.py",
+    "packages/core/serialization.py",
+    "packages/core/selection.py",
+    "packages/core/__init__.py",
+    "contracts/core/graph-record.schema.json",
+    "contracts/core/graph-edge.schema.json",
+    "contracts/core/README.md",
+    "docs/architecture/SOURCE_OWNERSHIP_AND_PORTABILITY.md",
+    "docs/architecture/PACKAGING_AND_PARITY.md",
+    "contracts/package/projection-map.json",
+    "scripts/package/project_portable_plugin.py",
+    "scripts/package/verify_source_package_parity.py",
+    "plugins/graph-engineering/.codex-plugin/plugin.json",
+    "tests/core/test_graph_core.py",
+    "tests/parity/test_source_package_parity.py",
+    "tests/scaffold/test_projection_contract.py"
+  ],
+  "source_bytes_read": 426448,
+  "wall_clock_seconds": null,
+  "prohibited_writes": [],
+  "proof_errors": [
+    "Parity and runtime behavior were inspected but not executed under the source-only read-only constraint."
+  ],
+  "authority_errors": []
+}

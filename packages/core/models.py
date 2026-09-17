@@ -76,6 +76,30 @@ class GraphRecord:
     def to_dict(self) -> dict[str, Any]:
         return _enum_values(asdict(self))
 
+    def to_pointer_dict(self) -> dict[str, Any]:
+        return _enum_values(
+            {
+                "record_id": self.record_id,
+                "kind": self.kind,
+                "title": self.title,
+                "provenance": {
+                    "path": self.provenance.path,
+                    "sha256": self.provenance.sha256,
+                    "locator": self.provenance.locator,
+                    "verified": self.provenance.verified,
+                },
+                "trust": self.trust,
+                "sensitivity": self.sensitivity,
+                "freshness": self.freshness,
+                "admission": self.admission,
+                "eligible": self.eligible,
+                "agent_generated": self.agent_generated,
+                "export_allowed": self.export_allowed,
+                "tags": self.tags,
+                "sequence": self.sequence,
+            }
+        )
+
 
 @dataclass(frozen=True)
 class GraphEdge:

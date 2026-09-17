@@ -1,0 +1,21 @@
+{
+  "task_id": "velgraphing-public-product-v1-T030-luna-audit",
+  "semantic_role": "independent_auditor",
+  "runtime_surface": "codex_collaboration",
+  "route_authority": "user-authorized-orcastrata-workers-2026-09-02",
+  "route_id": "codex-luna-high-read-only",
+  "requested_agent_type": "default",
+  "effective_agent_type": "default",
+  "model": "gpt-5.6-luna",
+  "reasoning_effort": "high",
+  "history_mode": "none",
+  "selection_mode": "explicit",
+  "fallback": "forbidden",
+  "special_route": true,
+  "provider_dispatch": false,
+  "projection_status": "ready",
+  "approval_reference": "user message authorizing Orcastrata and adversarial review",
+  "runtime_child_id": "/root/t030_luna_audit",
+  "runtime_child_id_status": "recorded",
+  "dispatch_status": "spawned"
+}

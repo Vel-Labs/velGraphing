@@ -1,0 +1,36 @@
+{
+  "task_id": "T080",
+  "status": "complete_rejected",
+  "benchmark_id": "velgraphing-shipped-interface-v1",
+  "freeze_sha256": "2a2132d6fc8e3a86f0a76015fe6c61e5c4bd0da4c6f2d6c8c9408190354aec14",
+  "scores_sha256": "66fdd8667666c238d4f18b043d38293561011025d41d54cfff146601e9a25b5f",
+  "answer_model": "gpt-5.6-luna",
+  "answer_reasoning": "high",
+  "scorer_model": "gpt-5.6-luna",
+  "scorer_reasoning": "high",
+  "routes": {
+    "DIRECT": {"facts": "18/19", "source_locations": "19/19", "passes": "1/3"},
+    "GRAPH_ONLY": {"facts": "0/19", "source_locations": "1/19", "passes": "0/3"},
+    "GRAPH_ASSISTED_POINTER_READS": {"facts": "2/19", "source_locations": "2/19", "passes": "0/3", "source_bytes": 5883},
+    "GRAPH_ASSISTED_TARGETED_FALLBACK": {"facts": "17/19", "source_locations": "19/19", "passes": "2/3", "source_bytes": 266311}
+  },
+  "acceptance": {
+    "targeted_fallback_not_below_direct": false,
+    "pointer_route_reported_separately": true,
+    "zero_proof_authority_and_write_errors": false,
+    "freshness_control": true,
+    "no_public_claim_before_audit": true
+  },
+  "defects": [
+    "Direct VG-03 created one unused temporary file outside the repository.",
+    "Graph-assisted VG-02 performed one whole-file read before exact-range recovery.",
+    "Direct source-byte totals were unavailable for two tasks, so no context-reduction claim is admissible.",
+    "The first Direct wave was not persisted and was excluded. Three fresh canonical Direct lanes supplied the retained evidence."
+  ],
+  "files": [
+    "benchmarks/velgraphing-shipped-interface-v1/freeze.json",
+    "benchmarks/velgraphing-shipped-interface-v1/responses/",
+    "benchmarks/velgraphing-shipped-interface-v1/scores.json",
+    "benchmarks/velgraphing-shipped-interface-v1/README.md"
+  ]
+}
