@@ -2,8 +2,10 @@
 
 Status: executable measurement tooling and offline qualification, **not a new
 performance result**. The six-task pilot remains unchanged. The approved
-24-trial calibration is frozen in `calibration.json`, but it has not run. The
-included demo and `qualify` command make zero provider calls.
+24-trial calibration is frozen in `calibration.json`. A Parent-operated attempt
+stopped after seven terminal or cancelled trials and is invalid as a host-timing
+qualification. Its Jev provider ledger remained empty. The included demo and
+`qualify` command make zero provider calls. No performance result was produced.
 
 ## Run locally
 

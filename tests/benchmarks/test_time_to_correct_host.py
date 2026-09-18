@@ -25,6 +25,8 @@ import json, sys
 payload = json.load(sys.stdin)
 if "rubric_sha256" in payload["identity"]:
     raise SystemExit(9)
+if "response_contract" in payload:
+    raise SystemExit(8)
 result = {
     "answer_text": "observed subprocess answer",
     "context_deliveries_complete": True,
@@ -60,6 +62,8 @@ sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":"), ensur
 GRADER_CODE = r'''
 import json, sys
 payload = json.load(sys.stdin)
+if "response_contract" in payload:
+    raise SystemExit(8)
 result = {
     "critical_facts_exact": True,
     "grader_id": "independent-grader",

@@ -1,11 +1,17 @@
 # VelGraphing time-to-correct calibration
 
-Status: approved for 24 serial trials and at most 12 live Jev calls. Not run.
+Status: attempted and stopped after seven terminal or cancelled trials. Invalid
+as a host-timing qualification. The Jev provider ledger remained empty. This is
+not a performance result.
 
 `calibration.json` registers each of the six frozen public pilot tasks once in
 arms A, B, C, and D. Its balanced Latin-square order is fixed. Repairs and Jev
 retries are disabled. The old pilot questions, oracle, manifests, packets, result,
 and seal remain unchanged.
+
+The frozen config retains its original `approved_not_executed` status as v1
+definition history. The stopped local attempt does not convert that definition
+into a completed calibration and must not be resumed as v2.
 
 ## Offline qualification
 

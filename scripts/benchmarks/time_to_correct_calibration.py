@@ -20,16 +20,83 @@ from time_to_correct_handoff import (HandoffError, atomic_write, atomic_write_at
                                      open_contained_directory, read_canonical,
                                      read_canonical_at, read_lane,
                                      run_root as validate_run_root, write_response)
-from time_to_correct_host import USAGE_KEYS, _invoke, run_process_trial
+from time_to_correct_host import (ANSWER_RESPONSE_CONTRACT, GRADER_RESPONSE_CONTRACT,
+                                  USAGE_KEYS, _invoke, run_process_trial)
 from time_to_correct_jev import evaluate_live, evaluate_offline, load_jev, prepare_preview
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CALIBRATION_PATH = REPO_ROOT / "benchmarks/velgraphing-time-to-correct-v1/calibration.json"
 HANDOFF_PATH = REPO_ROOT / "scripts/benchmarks/time_to_correct_handoff.py"
 TASKS = ("C-01", "C-02", "S-01", "L-01", "M-01", "M-02")
 ARMS = ("A", "B", "C", "D")
 JEV_ARMS = {"B", "D"}
+DEFAULT_CALIBRATION_ID = "velgraphing-ttc-calibration-v1"
+V2_CALIBRATION_ID = "velgraphing-ttc-calibration-v2"
+CALIBRATION_SPECS = {
+    DEFAULT_CALIBRATION_ID: {
+        "path": "benchmarks/velgraphing-time-to-correct-v1/calibration.json",
+        "base_commit": "8b52fdaac9ce61feb09b06381c2081509df273c7",
+        "repair_budget": {"max_repairs": 0, "wall_limit_ns": 300_000_000_000},
+        "timeouts_seconds": {"preparation": 60, "jev_approval": 60,
+                             "answer": 120, "grader": 60},
+    },
+    V2_CALIBRATION_ID: {
+        "path": "benchmarks/velgraphing-time-to-correct-v2/calibration.json",
+        "base_commit": "ac5ba612da42d4d677250e7bd94c720b521d9f68",
+        "repair_budget": {"max_repairs": 0, "wall_limit_ns": 600_000_000_000},
+        "timeouts_seconds": {"preparation": 180, "jev_approval": 60,
+                             "answer": 180, "grader": 120},
+    },
+}
+TRIAL_ORDER = (
+    ("C-01", "ABDC"), ("C-02", "BCAD"), ("S-01", "CDBA"),
+    ("L-01", "DACB"), ("M-01", "ABDC"), ("M-02", "BCAD"),
+)
+EXPECTED_REGISTRATIONS = [
+    {"trial_id": f"{arm}-{task}", "packet_id": f"{arm}-{task}",
+     "task_id": task, "arm": arm}
+    for task, arms in TRIAL_ORDER for arm in arms
+]
+PREPARATION_RESPONSE_CONTRACT = {
+    "schema_version": "velgraphing-response-contract-v1",
+    "encoding": "canonical-json",
+    "json_schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["schema_version", "candidate_packet", "usage",
+                     "model_calls_complete", "context_deliveries_complete"],
+        "properties": {
+            "schema_version": {"const": "velgraphing-preparation-output-v1"},
+            "candidate_packet": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["schema_version", "query", "candidates"],
+                "properties": {
+                    "schema_version": {"const": "velgraphing-jev-candidates-v1"},
+                    "query": {"type": "string"},
+                    "candidates": {
+                        "type": "array", "maxItems": 6,
+                        "items": {
+                            "type": "object", "additionalProperties": False,
+                            "required": ["id", "path", "source_sha256", "byte_start",
+                                         "byte_end", "required"],
+                            "properties": {
+                                "id": {"type": "string"}, "path": {"type": "string"},
+                                "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                                "byte_start": {"type": "integer", "minimum": 0},
+                                "byte_end": {"type": "integer", "minimum": 0},
+                                "required": {"type": "boolean"},
+                            },
+                        },
+                    },
+                },
+            },
+            "usage": {"type": ["object", "null"]},
+            "model_calls_complete": {"type": "boolean"},
+            "context_deliveries_complete": {"type": "boolean"},
+        },
+    },
+}
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -42,31 +109,27 @@ def read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def load_calibration(repo: Path = REPO_ROOT) -> dict[str, Any]:
-    config = read_json(repo / "benchmarks/velgraphing-time-to-correct-v1/calibration.json")
+def load_calibration(repo: Path = REPO_ROOT,
+                     calibration_id: str = DEFAULT_CALIBRATION_ID) -> dict[str, Any]:
+    spec = CALIBRATION_SPECS.get(calibration_id)
+    if spec is None:
+        raise MeasurementError("calibration_selection_invalid")
+    config = read_json(repo / spec["path"])
     registrations = config.get("registered_trials")
-    if (config.get("schema_version") != "velgraphing-ttc-calibration-v1"
-            or config.get("calibration_id") != "velgraphing-ttc-calibration-v1"
+    if (config.get("schema_version") != calibration_id
+            or config.get("calibration_id") != calibration_id
             or config.get("status") != "approved_not_executed"
-            or config.get("base_commit") != "8b52fdaac9ce61feb09b06381c2081509df273c7"
+            or config.get("base_commit") != spec["base_commit"]
             or config.get("package_version") != "0.1.6"
             or config.get("max_live_jev_calls") != 12
             or config.get("provider_retries") != 0
             or config.get("answer_model") != "gpt-5.6-sol"
             or config.get("reasoning") != "medium"
-            or type(registrations) is not list or len(registrations) != 24):
+            or config.get("repair_budget") != spec["repair_budget"]
+            or config.get("timeouts_seconds") != spec["timeouts_seconds"]
+            or config.get("dispatch_design") != "balanced_latin_square_abdc_bcad_cdba_dacb_repeated_for_six_tasks"
+            or registrations != EXPECTED_REGISTRATIONS):
         raise MeasurementError("calibration_freeze_invalid")
-    expected = {(arm, task) for task in TASKS for arm in ARMS}
-    observed = set()
-    trial_ids = set()
-    for row in registrations:
-        if (type(row) is not dict or set(row) != {"trial_id", "packet_id", "task_id", "arm"}
-                or row["trial_id"] != row["packet_id"] or row["trial_id"] in trial_ids):
-            raise MeasurementError("calibration_registration_invalid")
-        trial_ids.add(row["trial_id"])
-        observed.add((row["arm"], row["task_id"]))
-    if observed != expected or sum(row["arm"] in JEV_ARMS for row in registrations) != 12:
-        raise MeasurementError("calibration_registration_invalid")
     source = config.get("source_pilot", {})
     paths = {
         "freeze": "benchmarks/velgraphing-corpus-pilot-v1/freeze.json",
@@ -289,7 +352,8 @@ def summarize_calibration(config: Mapping[str, Any], completed: list[dict[str, A
     for result in completed:
         identity = result.get("identity", {})
         trial_id, arm = identity.get("trial_id"), identity.get("arm")
-        if trial_id not in expected or trial_id in seen or expected[trial_id] != arm:
+        if (identity.get("run_id") != config["calibration_id"] or trial_id not in expected
+                or trial_id in seen or expected[trial_id] != arm):
             raise MeasurementError("calibration_result_mismatch")
         seen.add(trial_id)
     oracle_set_sha256 = config["source_pilot"]["oracle_sha256"]
@@ -320,7 +384,8 @@ def summarize_calibration(config: Mapping[str, Any], completed: list[dict[str, A
 
 
 def request_candidates(trial: Trial, repo: Path, run_root: Path, payload: dict[str, Any],
-                       wait_seconds: float) -> dict[str, Any]:
+                       wait_seconds: float,
+                       response_contract: Mapping[str, Any] | None = None) -> dict[str, Any]:
     request = {
         "schema_version": "velgraphing-preparation-input-v1",
         "identity": {
@@ -332,6 +397,8 @@ def request_candidates(trial: Trial, repo: Path, run_root: Path, payload: dict[s
         },
         "payload": payload,
     }
+    if response_contract is not None:
+        request["response_contract"] = dict(response_contract)
     trial.context(canonical(request), kind="answer_request")
     with trial.phase("source_capture"):
         output = _invoke(
@@ -501,6 +568,32 @@ def trial_identity(config: Mapping[str, Any], registration: Mapping[str, Any],
     }
 
 
+def validate_completed_receipts(config: Mapping[str, Any], completed: list[dict[str, Any]],
+                                packets: Mapping[str, Any], corpora: Mapping[str, Any],
+                                oracle: Mapping[str, Any]) -> set[str]:
+    registrations = {row["trial_id"]: row for row in config["registered_trials"]}
+    seen: set[str] = set()
+    for result in completed:
+        identity = result.get("identity")
+        trial_id = identity.get("trial_id") if type(identity) is dict else None
+        registration = registrations.get(trial_id)
+        if registration is None or trial_id in seen:
+            raise MeasurementError("calibration_result_mismatch")
+        packet = packets[registration["packet_id"]]
+        corpus = corpora[packet["corpus"]["id"]]
+        dirty = identity.get("dirty_state_sha256")
+        expected = trial_identity(
+            config, registration, packet, corpus, oracle[registration["task_id"]], dirty)
+        if (type(dirty) is not str or len(dirty) != 64
+                or any(character not in "0123456789abcdef" for character in dirty)
+                or identity != expected or result.get("budget") != config["repair_budget"]
+                or result.get("pass_recall_min") != 0.9
+                or result.get("execution") != "observed"):
+            raise MeasurementError("calibration_result_mismatch")
+        seen.add(trial_id)
+    return seen
+
+
 def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
                          config: Mapping[str, Any], registration: Mapping[str, Any],
                          packet: Mapping[str, Any], corpus: Mapping[str, Any],
@@ -515,6 +608,7 @@ def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
         lane_before["restricted_state_sha256"])
     trial = Trial(identity, Budget(**config["repair_budget"]), execution="observed")
     timeouts = config["timeouts_seconds"]
+    v2 = config["calibration_id"] == V2_CALIBRATION_ID
 
     def prepare(current: Trial, attempt: int) -> dict[str, Any]:
         base = {
@@ -535,7 +629,10 @@ def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
         else:
             current.not_applicable("cold_graph_build", "warm_graph_load")
         if registration["arm"] in JEV_ARMS:
-            candidate = request_candidates(current, repo, run_root, base, timeouts["preparation"])
+            candidate = request_candidates(
+                current, repo, run_root, base, timeouts["preparation"],
+                PREPARATION_RESPONSE_CONTRACT if v2 else None,
+            )
             prepared = prepare_preview(current, repo, candidate, corpus_root)
             approval_response(current, repo, run_root, prepared, timeouts["jev_approval"], budget.cap)
             receipt_path, call_number = budget.reserve(registration["trial_id"], prepared["request_sha256"])
@@ -568,6 +665,8 @@ def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
         trial, prepare, answer_argv=answer_command, grader_argv=grader_command,
         cwd=repo, answer_timeout_s=timeouts["answer"] + 1,
         grader_timeout_s=timeouts["grader"] + 1, grader_context=grader_context,
+        answer_response_contract=ANSWER_RESPONSE_CONTRACT if v2 else None,
+        grader_response_contract=GRADER_RESPONSE_CONTRACT if v2 else None,
     )
     revalidate_lane(repo, corpus, corpus_root, lane_before)
     return result
@@ -578,7 +677,7 @@ def run_calibration(args: argparse.Namespace) -> dict[str, Any]:
     if repo != REPO_ROOT.resolve():
         raise MeasurementError("repository_root_mismatch")
     controller = controller_identity(repo)
-    config = load_calibration(repo)
+    config = load_calibration(repo, args.calibration_id)
     validate_live_authority(config, args.allow_live_jev, args.approved_max_live_jev_calls)
     root = calibration_run_root(repo, config, args.run_root)
     controller = bind_controller(root, controller)
@@ -594,7 +693,7 @@ def run_calibration(args: argparse.Namespace) -> dict[str, Any]:
     expected_ids = [row["trial_id"] for row in config["registered_trials"]]
     receipt_root = root / "completed"
     completed = load_completed_trials(receipt_root, expected_ids)
-    completed_ids = {row["identity"]["trial_id"] for row in completed}
+    completed_ids = validate_completed_receipts(config, completed, packets, corpora, oracle)
     budget = LiveJevBudget(root, config["max_live_jev_calls"])
     for registration in config["registered_trials"]:
         trial_id = registration["trial_id"]
@@ -678,7 +777,10 @@ def replay_envelope(repo: Path, packet: dict[str, Any], source: Path) -> dict[st
     }
 
 
-def qualify(repo: Path = REPO_ROOT) -> dict[str, Any]:
+def qualify(repo: Path = REPO_ROOT,
+            calibration_id: str = DEFAULT_CALIBRATION_ID) -> dict[str, Any]:
+    config = load_calibration(repo, calibration_id)
+    v2 = config["calibration_id"] == V2_CALIBRATION_ID
     local_root = repo / ".velgraphing-local"
     local_root.mkdir(mode=0o700, exist_ok=True)
     root = local_root / f"ttc-calibration-qualification-{uuid.uuid4().hex}"
@@ -697,6 +799,8 @@ def qualify(repo: Path = REPO_ROOT) -> dict[str, Any]:
             answer_argv=handoff_argv(handoff_root, "direct-off", "answer", 1),
             grader_argv=handoff_argv(handoff_root, "direct-off", "grader", 1),
             cwd=repo, answer_timeout_s=1.5, grader_timeout_s=1.5,
+            answer_response_contract=ANSWER_RESPONSE_CONTRACT if v2 else None,
+            grader_response_contract=GRADER_RESPONSE_CONTRACT if v2 else None,
         )
         finish_workers(direct_workers)
 
@@ -720,6 +824,7 @@ def qualify(repo: Path = REPO_ROOT) -> dict[str, Any]:
             captured = request_candidates(
                 trial, repo, handoff_root,
                 {"fixture_candidate_packet": packet, "graph_navigation": navigation}, 1,
+                PREPARATION_RESPONSE_CONTRACT if v2 else None,
             )
             envelope = replay_envelope(repo, captured, source)
             result = evaluate_offline(trial, repo, captured, source, envelope=envelope)
@@ -731,6 +836,8 @@ def qualify(repo: Path = REPO_ROOT) -> dict[str, Any]:
             answer_argv=handoff_argv(handoff_root, "graph-on", "answer", 1),
             grader_argv=handoff_argv(handoff_root, "graph-on", "grader", 1),
             cwd=repo, answer_timeout_s=1.5, grader_timeout_s=1.5,
+            answer_response_contract=ANSWER_RESPONSE_CONTRACT if v2 else None,
+            grader_response_contract=GRADER_RESPONSE_CONTRACT if v2 else None,
         )
         finish_workers(graph_workers)
 
@@ -745,10 +852,11 @@ def qualify(repo: Path = REPO_ROOT) -> dict[str, Any]:
             answer_argv=handoff_argv(handoff_root, "missing-response", "answer", 0.05),
             grader_argv=handoff_argv(handoff_root, "missing-response", "grader", 0.05),
             cwd=repo, answer_timeout_s=0.5, grader_timeout_s=0.5,
+            answer_response_contract=ANSWER_RESPONSE_CONTRACT if v2 else None,
+            grader_response_contract=GRADER_RESPONSE_CONTRACT if v2 else None,
         )
         receipt = read_lane(
             handoff_root, "missing-response", 0, "answer", "receipt.json")[1]
-        config = load_calibration(repo)
         try:
             validate_live_authority(config, False, None)
         except MeasurementError as error:
@@ -757,6 +865,7 @@ def qualify(repo: Path = REPO_ROOT) -> dict[str, Any]:
             raise MeasurementError("live_refusal_missing")
         return {
             "schema_version": "velgraphing-ttc-calibration-qualification-v1",
+            "calibration_id": config["calibration_id"],
             "provider_calls_made": 0,
             "direct_off": {"terminal_reason": direct["terminal_reason"],
                            "answer_sha256": direct["attempts"][0]["answer_sha256"]},
@@ -773,7 +882,7 @@ def qualify(repo: Path = REPO_ROOT) -> dict[str, Any]:
 
 def approve(args: argparse.Namespace) -> dict[str, Any]:
     repo = Path(args.repo_root).resolve()
-    config = load_calibration(repo)
+    config = load_calibration(repo, args.calibration_id)
     root = calibration_run_root(repo, config, args.run_root)
     validate_live_authority(config, True, args.approved_max_live_jev_calls)
     trial_id = identifier(args.trial_id)
@@ -798,8 +907,8 @@ def approve(args: argparse.Namespace) -> dict[str, Any]:
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
-    commands.add_parser("plan")
-    commands.add_parser("qualify")
+    plan = commands.add_parser("plan")
+    qualify_command = commands.add_parser("qualify")
     run = commands.add_parser("run")
     run.add_argument("--repo-root", required=True)
     run.add_argument("--lane-root", required=True)
@@ -812,6 +921,9 @@ def parser() -> argparse.ArgumentParser:
     approval.add_argument("--trial-id", required=True)
     approval.add_argument("--request-sha256", required=True)
     approval.add_argument("--approved-max-live-jev-calls", type=int, required=True)
+    for command in (plan, qualify_command, run, approval):
+        command.add_argument("--calibration-id", choices=sorted(CALIBRATION_SPECS),
+                             default=DEFAULT_CALIBRATION_ID)
     return result
 
 
@@ -819,13 +931,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         if args.command == "plan":
-            config = load_calibration(REPO_ROOT)
+            config = load_calibration(REPO_ROOT, args.calibration_id)
             output = {"calibration_id": config["calibration_id"],
                       "registered_trials": [row["trial_id"] for row in config["registered_trials"]],
                       "max_live_jev_calls": config["max_live_jev_calls"],
                       "provider_calls_made": 0}
         elif args.command == "qualify":
-            output = qualify(REPO_ROOT)
+            output = qualify(REPO_ROOT, args.calibration_id)
         elif args.command == "approve-jev":
             output = approve(args)
         else:

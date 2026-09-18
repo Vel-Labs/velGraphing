@@ -25,6 +25,40 @@ USAGE_KEYS = {
 }
 
 
+def _response_contract(properties: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": "velgraphing-response-contract-v1",
+        "encoding": "canonical-json",
+        "json_schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(properties),
+            "properties": dict(properties),
+        },
+    }
+
+
+ANSWER_RESPONSE_CONTRACT = _response_contract({
+    "schema_version": {"const": ANSWER_OUTPUT_VERSION},
+    "answer_text": {"type": "string"},
+    "usage": {"type": ["object", "null"]},
+    "model_calls_complete": {"type": "boolean"},
+    "context_deliveries_complete": {"type": "boolean"},
+})
+
+GRADER_RESPONSE_CONTRACT = _response_contract({
+    "schema_version": {"const": GRADER_OUTPUT_VERSION},
+    "required_fact_score": {"type": "number"},
+    "required_fact_maximum": {"type": "number", "exclusiveMinimum": 0},
+    "critical_facts_exact": {"type": "boolean"},
+    "unsupported_material_claims": {"type": "integer", "minimum": 0},
+    "grader_id": {"type": "string"},
+    "rubric_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "usage": {"type": ["object", "null"]},
+    "model_calls_complete": {"type": "boolean"},
+})
+
+
 def _argv(value: Any) -> tuple[str, ...]:
     if type(value) is not list or not value or not all(type(part) is str and part for part in value):
         raise MeasurementError("invalid_process_argv")
@@ -123,6 +157,8 @@ def run_process_trial(
     answer_timeout_s: float,
     grader_timeout_s: float,
     grader_context: Mapping[str, Any] | None = None,
+    answer_response_contract: Mapping[str, Any] | None = None,
+    grader_response_contract: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run a trial through frozen answer and grader subprocess boundaries."""
     answer_command = list(_argv(answer_argv))
@@ -131,6 +167,9 @@ def run_process_trial(
     grader_timeout = _timeout(grader_timeout_s)
     if grader_context is not None and type(grader_context) is not dict:
         raise MeasurementError("invalid_grader_context")
+    if (answer_response_contract is not None and type(answer_response_contract) is not dict
+            or grader_response_contract is not None and type(grader_response_contract) is not dict):
+        raise MeasurementError("invalid_response_contract")
 
     def answer(t: Trial, prepared: Mapping[str, Any], attempt: int) -> Answer:
         if type(prepared) is not dict:
@@ -147,6 +186,8 @@ def run_process_trial(
             },
             "payload": prepared,
         }
+        if answer_response_contract is not None:
+            payload["response_contract"] = dict(answer_response_contract)
         raw = canonical(payload)
         t.context(raw, kind="answer_request")
         output = _invoke(t, "answer", answer_command, payload, cwd, answer_timeout)
@@ -179,6 +220,8 @@ def run_process_trial(
             },
             "answer_text": produced.content,
         }
+        if grader_response_contract is not None:
+            payload["response_contract"] = dict(grader_response_contract)
         if grader_context is not None:
             payload["grader_context"] = grader_context
             t.context(canonical(payload), kind="tool_message")
