@@ -1,0 +1,33 @@
+{
+  "schema_version": "velgraphing-time-to-correct-proposal-v1",
+  "status": "proposal_not_executed_or_live_authorized",
+  "audited_base_commit": "916c3c993dcb214c2700dbec063794dba418bdd8",
+  "arms": {
+    "A": {"discovery": "direct", "jev": "off"},
+    "B": {"discovery": "direct", "jev": "on"},
+    "C": {"discovery": "shipped_graph_find", "jev": "off"},
+    "D": {"discovery": "shipped_graph_find", "jev": "on"}
+  },
+  "current_authorized_live_provider_calls": 0,
+  "primary_context_policy": "preserve_current_membership_and_required_positions",
+  "repair_budget": {"max_repairs": 2, "wall_limit_ns": 300000000000},
+  "default_pass_gate": {"recall_min": 0.9, "critical_facts_exact": true, "unsupported_material_claims": 0},
+  "deadline_enforcement": "cooperative_callback_boundaries_until_host_adapter_adds_cancellation",
+  "diagnostic_tasks": "six_previous_pilot_tasks_not_fresh_held_out",
+  "proposed_repetitions_per_task": 10,
+  "proposed_initial_trial_count": 240,
+  "dispatch": "serial_randomized_counterbalanced_within_task_and_repetition",
+  "future_provider_budget": "must_be_separately_approved_and_enforced_before_execution",
+  "answer_model": "operator_must_pin_before_execution",
+  "reasoning": "same_frozen_level_in_every_arm",
+  "grading": "independent_frozen_atomic_rubric_not_exposed_to_answer_lanes",
+  "repair_feedback": "preregistered_generic_failure_notice_without_hidden_gold_facts",
+  "primary_endpoints": ["first_pass_correct", "first_answer_ns", "confirmed_time_to_correct_ns", "passed_within_budget"],
+  "include_failed_cancelled_late_and_missing_trials": true,
+  "all_in_usage_when_complete_only": true,
+  "separate_cold_and_warm_experiments": true,
+  "public_graph_cli_warm_load": "not_applicable",
+  "topology_claim_gate": "must_demonstrate_real_nonempty_edges_consumed_before_claiming_graph_traversal_benefit",
+  "rubric_revision_gate": "new_version_and_question_alignment_review_not_editing_old_seals",
+  "pruning_policy_gate": "separate_predeclared_product_experiment_with_required_evidence_safety_checks"
+}

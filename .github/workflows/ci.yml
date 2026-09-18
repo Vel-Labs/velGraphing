@@ -3,7 +3,7 @@ name: Validate VelGraphing
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, codex/velgraphing-time-to-correct-audit-repair]
   workflow_dispatch:
 
 permissions:
@@ -23,6 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
@@ -30,11 +31,29 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install -e .
-      - name: Full offline suite
-        run: npm test
-      - name: Verify package parity and projection idempotence
+      - name: Record clean checkout and run focused checks
         run: |
-          python scripts/package/verify_source_package_parity.py
-          python scripts/package/project_portable_plugin.py
-          python scripts/package/verify_source_package_parity.py --write-manifest
+          source .venv/bin/activate
+          git rev-parse HEAD
+          git status --short
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/benchmarks -v
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/core -p 'test_jev.py' -v
+      - name: Full offline suite
+        run: PYTHONDONTWRITEBYTECODE=1 npm test
+      - name: Verify package parity and two-pass projection idempotence
+        run: |
+          source .venv/bin/activate
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/project_portable_plugin.py > /tmp/velgraphing-projection-1.json
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py
+          git diff --check
           git diff --exit-code
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/project_portable_plugin.py > /tmp/velgraphing-projection-2.json
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py
+          cmp /tmp/velgraphing-projection-1.json /tmp/velgraphing-projection-2.json
+          git diff --exit-code
+          git diff --check HEAD^ HEAD
+      - name: Inspect retained public bookkeeping without provider access
+        run: |
+          source .venv/bin/activate
+          python3 scripts/benchmarks/audit_pilot_receipts.py
+          python3 scripts/benchmarks/time_to_correct_fixture.py > /tmp/velgraphing-timing-fixture.json
