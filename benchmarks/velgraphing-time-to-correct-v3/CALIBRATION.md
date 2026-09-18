@@ -1,5 +1,9 @@
 # Time-to-correct calibration v3
 
+Execution is closed. The retained machine-readable result is
+[`result.json`](result.json). The interpretation and claim boundary are in
+[`RESULT.md`](RESULT.md).
+
 This freeze reuses the sealed v2 corpus, questions, oracle, and 24-trial order.
 It changes the measurement boundary and replaces repository-readable answer
 inputs with a frozen evidence-only payload. It does not change product graph
