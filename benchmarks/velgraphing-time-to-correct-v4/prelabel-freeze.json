@@ -1,0 +1,19 @@
+{
+  "schema_version": "velgraphing-frontier-prelabel-freeze-v1",
+  "status": "development_not_confirmation",
+  "base_commit": "6931f0ffa72bd27f79f5515bd669404dbc4667d0",
+  "oracle_read_during_design": false,
+  "selector_sha256": "31193028c3e5a9ca131b6953767907cbe89aed444e5835cf237dfca1952f9536",
+  "fixture_tests_sha256": "d2656f339931a5221184e19039fd75092b4004922dea2c70f11228a1b9a792eb",
+  "pool_candidates": 24,
+  "pool_bytes": 32768,
+  "span_bytes": 4096,
+  "answer_bytes": 16384,
+  "seed_files": 6,
+  "neighbor_files": 4,
+  "expansion_hops": 1,
+  "provider_calls": 0,
+  "rubric": "evidence-usefulness-v1",
+  "module_roots": ["", "src", "Lib"],
+  "note": "Initial local source hash recorded before opening oracle.json, not before seeing the assignment's task descriptions. Development cases only. Not a final candidate identity; subsequent engineering fixes require separate hashes and reasons."
+}

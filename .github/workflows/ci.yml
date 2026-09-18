@@ -31,12 +31,25 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install -e .
+      - name: Export exact tracked frontier audit source
+        if: matrix.python == '3.13' && github.head_ref == 'gpt-pro/velgraphing-pr9-frontier-audit-repair'
+        run: |
+          git rev-parse HEAD HEAD^{tree}
+          git archive --format=zip --output=/tmp/velgraphing-audit-source.zip HEAD
+      - name: Retain frontier review source for the authorized audit
+        if: matrix.python == '3.13' && github.head_ref == 'gpt-pro/velgraphing-pr9-frontier-audit-repair'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontier-review-source-${{ github.sha }}
+          path: /tmp/velgraphing-audit-source.zip
+          retention-days: 3
+          if-no-files-found: error
       - name: Record clean checkout and run focused checks
         run: |
           source .venv/bin/activate
           git rev-parse HEAD
           git status --short
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/benchmarks -v
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/benchmarks -p 'test_time_to_correct_*.py' -v
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/core -p 'test_jev.py' -v
       - name: Full offline suite
         run: PYTHONDONTWRITEBYTECODE=1 npm test
@@ -44,6 +57,7 @@ jobs:
         run: |
           source .venv/bin/activate
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/project_portable_plugin.py > /tmp/velgraphing-projection-1.json
+          PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py --write-manifest
           PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py
           git diff --check
           git diff --exit-code
