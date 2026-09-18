@@ -1,7 +1,8 @@
 # VelGraphing time-to-correct calibration v2
 
-Status: approved successor configuration, not executed. This is not a
-performance result.
+Status: executed and closed. The retained result is unresolved. See
+[`RESULT.md`](RESULT.md) and [`result.json`](result.json).
+The immutable `calibration.json` remains the pre-execution freeze.
 
 The v1 host-timing qualification stopped after seven terminal or cancelled
 trials. The Jev provider ledger remained empty. The observed native handoffs
@@ -49,9 +50,9 @@ $VELGRAPHING_ROOT/.velgraphing-local/velgraphing-ttc-calibration-v2
 The coordinator requires the explicit v2 calibration ID. The run-root identity
 and completed-trial identity must both match v2. V1 receipts cannot resume v2.
 
-The Parent owns live execution, credentials, native task creation, each Jev
-request-hash approval, and final acceptance. This implementation task must not
-start the live command.
+The Parent owned live execution, credentials, native task creation, each Jev
+request-hash approval, and final acceptance. Do not rerun the sealed result from
+this document.
 
 Define the repository and exact v4 lane roots before approval or execution:
 
