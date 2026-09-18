@@ -5,19 +5,27 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/benchmarks"))
-from time_to_correct import Budget, MeasurementError, Trial, canonical, digest, summarize
+from time_to_correct import (Budget, MeasurementError, Trial, canonical, digest,
+                             save_completed_trial, summarize)
 from time_to_correct_calibration import (HANDOFF_PATH, LiveJevBudget, bind_controller,
-                                         controller_identity, fixture_identity,
-                                         jev_answer_payload, load_calibration, qualify,
-                                         require_resumable, revalidate_lane,
-                                         start_fixture_worker, summarize_calibration,
+                                         calibration_run_root, controller_identity,
+                                         finish_workers, fixture_identity,
+                                         jev_answer_payload, load_calibration, load_pilot,
+                                         qualify,
+                                         PREPARATION_RESPONSE_CONTRACT,
+                                         request_candidates, require_resumable, revalidate_lane,
+                                         run_calibration, start_fixture_worker,
+                                         summarize_calibration, trial_identity,
                                          validate_live_authority, verify_lane)
 from time_to_correct_handoff import read_canonical
+from time_to_correct_host import (ANSWER_RESPONSE_CONTRACT, GRADER_RESPONSE_CONTRACT,
+                                  run_process_trial)
 from time_to_correct_jev import evaluate_live
 
 
@@ -53,6 +61,112 @@ class CalibrationTests(unittest.TestCase):
         with patch("time_to_correct_calibration.read_json", return_value=config):
             with self.assertRaisesRegex(MeasurementError, "sealed_pilot_identity_changed"):
                 load_calibration(ROOT)
+
+    def test_v2_freeze_is_explicit_and_cannot_accept_v1_results(self):
+        v1 = load_calibration(ROOT)
+        v2 = load_calibration(ROOT, "velgraphing-ttc-calibration-v2")
+        self.assertEqual(v2["registered_trials"], v1["registered_trials"])
+        self.assertEqual(v2["source_pilot"], v1["source_pilot"])
+        self.assertEqual((v2["answer_model"], v2["reasoning"], v2["provider_retries"],
+                          v2["max_live_jev_calls"]), ("gpt-5.6-sol", "medium", 0, 12))
+        self.assertEqual(v2["timeouts_seconds"], {
+            "preparation": 180, "jev_approval": 60, "answer": 180, "grader": 120})
+        self.assertEqual(v2["repair_budget"], {
+            "max_repairs": 0, "wall_limit_ns": 600_000_000_000})
+        changed = deepcopy(v2)
+        changed["timeouts_seconds"]["grader"] = 60
+        with patch("time_to_correct_calibration.read_json", return_value=changed):
+            with self.assertRaisesRegex(MeasurementError, "calibration_freeze_invalid"):
+                load_calibration(ROOT, "velgraphing-ttc-calibration-v2")
+        copied_v1 = {"identity": {"run_id": v1["calibration_id"],
+                                  "trial_id": "A-C-01", "arm": "A"}}
+        with self.assertRaisesRegex(MeasurementError, "calibration_result_mismatch"):
+            summarize_calibration(v2, [copied_v1], {})
+
+    def test_v1_and_v2_require_separate_canonical_run_roots(self):
+        v1 = load_calibration(ROOT)
+        v2 = load_calibration(ROOT, "velgraphing-ttc-calibration-v2")
+        v1_root = ROOT / ".velgraphing-local" / v1["calibration_id"]
+        v2_root = ROOT / ".velgraphing-local" / v2["calibration_id"]
+        self.assertEqual(calibration_run_root(ROOT, v1, str(v1_root)), v1_root)
+        self.assertEqual(calibration_run_root(ROOT, v2, str(v2_root)), v2_root)
+        with self.assertRaisesRegex(MeasurementError, "calibration_run_root_mismatch"):
+            calibration_run_root(ROOT, v2, str(v1_root))
+
+    def test_v1_completed_receipt_in_v2_root_refuses_before_dispatch(self):
+        v1 = load_calibration(ROOT)
+        packets, corpora, oracle = load_pilot(ROOT, v1)
+        registration = v1["registered_trials"][0]
+        packet = packets[registration["packet_id"]]
+        corpus = corpora[packet["corpus"]["id"]]
+        identity = trial_identity(
+            v1, registration, packet, corpus, oracle[registration["task_id"]], "a" * 64)
+        receipt = {
+            "schema_version": "velgraphing-time-to-correct-v1",
+            "identity": identity,
+            "budget": v1["repair_budget"],
+            "pass_recall_min": 0.9,
+            "execution": "observed",
+            "terminal_reason": "cancelled",
+        }
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            run_root = Path(raw) / "velgraphing-ttc-calibration-v2"
+            save_completed_trial(run_root / "completed", receipt)
+            args = SimpleNamespace(
+                repo_root=str(ROOT), calibration_id="velgraphing-ttc-calibration-v2",
+                allow_live_jev=True, approved_max_live_jev_calls=12,
+                run_root=str(run_root),
+                lane_root=str(ROOT / "benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/fixture"),
+            )
+            with (patch("time_to_correct_calibration.controller_identity", return_value={}),
+                  patch("time_to_correct_calibration.bind_controller", return_value={}),
+                  patch("time_to_correct_calibration.calibration_run_root", return_value=run_root),
+                  patch("time_to_correct_calibration.run_registered_trial") as dispatch,
+                  patch("time_to_correct_calibration.evaluate_live") as provider):
+                with self.assertRaisesRegex(MeasurementError, "calibration_result_mismatch"):
+                    run_calibration(args)
+        dispatch.assert_not_called()
+        provider.assert_not_called()
+
+    def test_native_requests_embed_exact_response_contracts(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            workers = [start_fixture_worker(root, "contracts", lane)
+                       for lane in ("preparation", "answer", "grader")]
+            trial = Trial(fixture_identity("contracts", "B", "a" * 64),
+                          Budget(0, 3_000_000_000), execution="fixture")
+            packet = {"schema_version": "velgraphing-jev-candidates-v1",
+                      "query": "fixture query", "candidates": []}
+
+            def prepare(current, _):
+                request_candidates(current, ROOT, root,
+                                   {"fixture_candidate_packet": packet}, 1,
+                                   PREPARATION_RESPONSE_CONTRACT)
+                return {"fixture_answer": "contract answer"}
+
+            with patch("time_to_correct_calibration.load_jev", return_value=SimpleNamespace(
+                    validate_packet=lambda value: value)):
+                result = run_process_trial(
+                    trial, prepare,
+                    answer_argv=[sys.executable, str(HANDOFF_PATH), "wait", "--run-root",
+                                 str(root), "--trial-id", "contracts", "--attempt", "0",
+                                 "--lane", "answer", "--wait-seconds", "1"],
+                    grader_argv=[sys.executable, str(HANDOFF_PATH), "wait", "--run-root",
+                                 str(root), "--trial-id", "contracts", "--attempt", "0",
+                                 "--lane", "grader", "--wait-seconds", "1"],
+                    cwd=ROOT, answer_timeout_s=1.5, grader_timeout_s=1.5,
+                    answer_response_contract=ANSWER_RESPONSE_CONTRACT,
+                    grader_response_contract=GRADER_RESPONSE_CONTRACT,
+                )
+            finish_workers(workers)
+            preparation = read_canonical(
+                root / "trials/contracts/attempt-0/preparation/request.json")[1]
+            answer = read_canonical(root / "trials/contracts/attempt-0/answer/request.json")[1]
+            grader = read_canonical(root / "trials/contracts/attempt-0/grader/request.json")[1]
+        self.assertEqual(result["terminal_reason"], "passed")
+        self.assertEqual(preparation["response_contract"]["encoding"], "canonical-json")
+        self.assertEqual(answer["response_contract"], ANSWER_RESPONSE_CONTRACT)
+        self.assertEqual(grader["response_contract"], GRADER_RESPONSE_CONTRACT)
 
     def test_file_handoff_records_exact_request_and_response_hashes(self):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
