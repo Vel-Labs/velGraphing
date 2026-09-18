@@ -1,0 +1,1631 @@
+{
+  "benchmark_id": "velgraphing-corpus-pilot-v1",
+  "schema_version": "velgraphing-corpus-pilot-result-v1",
+  "status": "completed",
+  "verdict": "pilot_rejects_jev_promotion_and_does_not_establish_wall_clock_savings",
+  "freeze": "freeze.json",
+  "results": [
+    {
+      "packet_id": "A-C-01",
+      "arm": "A",
+      "task_id": "C-01",
+      "retrieval": "direct",
+      "jev": "off",
+      "required_fact_score": 4.5,
+      "required_fact_max": 5,
+      "required_fact_recall": 0.9,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "answer_ms": "unknown",
+        "arm": "answer_model=gpt-5.6-sol;reasoning=medium;retrieval=direct;jev=off",
+        "cold_graph_build_ms": "unknown",
+        "fallback_reads_and_bytes": {
+          "reads": 0,
+          "bytes": 0
+        },
+        "jev_calls_tokens_latency": {
+          "calls": 0,
+          "tokens": 0,
+          "latency_ms": 0
+        },
+        "model_visible_context_bytes": 13504,
+        "proof_and_authority_errors": [],
+        "required_fact_coverage": 1,
+        "retrieval_ms": 700,
+        "route": "direct",
+        "source_operations": 7,
+        "source_snapshot_sha256": "c9f10e2dd66e033dbaeb89ad22d8d95c3b8cec7d4eadb4b96fed6cc8ae572908",
+        "source_support": 1,
+        "task_id": "A-C-01",
+        "total_wall_ms": "unknown",
+        "warm_graph_load_ms": "unknown"
+      }
+    },
+    {
+      "packet_id": "A-C-02",
+      "arm": "A",
+      "task_id": "C-02",
+      "retrieval": "direct",
+      "jev": "off",
+      "required_fact_score": 5,
+      "required_fact_max": 5,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "route": "unknown",
+        "source_snapshot_sha256": "unknown",
+        "model_visible_context_bytes": "unknown",
+        "source_operations": "unknown",
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": "unknown",
+        "fallback_reads_and_bytes": "unknown",
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": "unknown",
+        "proof_and_authority_errors": "unknown"
+      }
+    },
+    {
+      "packet_id": "A-S-01",
+      "arm": "A",
+      "task_id": "S-01",
+      "retrieval": "direct",
+      "jev": "off",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "route": "unknown",
+        "source_snapshot_sha256": "unknown",
+        "model_visible_context_bytes": "unknown",
+        "source_operations": "unknown",
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": "unknown",
+        "fallback_reads_and_bytes": "unknown",
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": "unknown",
+        "proof_and_authority_errors": "unknown"
+      }
+    },
+    {
+      "packet_id": "A-L-01",
+      "arm": "A",
+      "task_id": "L-01",
+      "retrieval": "direct",
+      "jev": "off",
+      "required_fact_score": 4.5,
+      "required_fact_max": 5,
+      "required_fact_recall": 0.9,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "task_id": "A-L-01",
+        "arm": "retrieval=direct;jev=off;model=gpt-5.6-sol;reasoning=medium",
+        "route": "direct",
+        "source_snapshot_sha256": "594aa47760172eba049e18c5f3a2f602a7b96b73a315756876955d7be81cd402",
+        "model_visible_context_bytes": "unknown",
+        "source_operations": 3,
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": 300,
+        "fallback_reads_and_bytes": {
+          "reads": 0,
+          "bytes": 0
+        },
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": {
+          "calls": 0,
+          "tokens": 0,
+          "latency_ms": 0
+        },
+        "proof_and_authority_errors": [],
+        "required_fact_coverage": "unknown",
+        "source_support": "unknown"
+      }
+    },
+    {
+      "packet_id": "A-M-01",
+      "arm": "A",
+      "task_id": "M-01",
+      "retrieval": "direct",
+      "jev": "off",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "route": "unknown",
+        "source_snapshot_sha256": "unknown",
+        "model_visible_context_bytes": "unknown",
+        "source_operations": "unknown",
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": "unknown",
+        "fallback_reads_and_bytes": "unknown",
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": "unknown",
+        "proof_and_authority_errors": "unknown"
+      }
+    },
+    {
+      "packet_id": "A-M-02",
+      "arm": "A",
+      "task_id": "M-02",
+      "retrieval": "direct",
+      "jev": "off",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "route": "unknown",
+        "source_snapshot_sha256": "unknown",
+        "model_visible_context_bytes": "unknown",
+        "source_operations": "unknown",
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": "unknown",
+        "fallback_reads_and_bytes": "unknown",
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": "unknown",
+        "proof_and_authority_errors": "unknown"
+      }
+    },
+    {
+      "packet_id": "B-C-01",
+      "arm": "B",
+      "task_id": "C-01",
+      "retrieval": "direct",
+      "jev": "on",
+      "required_fact_score": 5,
+      "required_fact_max": 5,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "phase_1": {
+          "task_id": "B-C-01",
+          "arm": "retrieval=direct;jev=on;answer_model=gpt-5.6-sol@medium",
+          "route": "direct",
+          "model_visible_context_bytes": 15538,
+          "source_operations": 5,
+          "retrieval_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "reads": 0,
+            "bytes": 0
+          },
+          "answer_ms": "unknown",
+          "total_wall_ms": 86000,
+          "jev_calls_tokens_latency": {
+            "calls": 0,
+            "tokens": 0,
+            "latency_ms": 0,
+            "attempt_consumed": false
+          },
+          "proof_and_authority_errors": [],
+          "source_snapshot_sha256": "c9f10e2dd66e033dbaeb89ad22d8d95c3b8cec7d4eadb4b96fed6cc8ae572908",
+          "cold_graph_build_ms": "unknown",
+          "warm_graph_load_ms": "unknown",
+          "required_fact_coverage": "unknown",
+          "source_support": "unknown"
+        },
+        "phase_2": {
+          "retrieval_ms": "unknown",
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "route": "direct",
+          "fallback_reads_and_bytes": {
+            "reads": 0,
+            "bytes": 0
+          },
+          "source_operations": 2,
+          "proof_and_authority_errors": []
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 4206,
+          "output_tokens": 94,
+          "elapsed_ms": 447.355,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": false,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "97bbc713297de9257e12166e8d556e619caebc6f1379f704e794c9ae45d60cb7",
+      "final_candidate_order": [
+        "c0",
+        "c1",
+        "c2",
+        "c3",
+        "c4",
+        "c5"
+      ]
+    },
+    {
+      "packet_id": "B-C-02",
+      "arm": "B",
+      "task_id": "C-02",
+      "retrieval": "direct",
+      "jev": "on",
+      "required_fact_score": 5,
+      "required_fact_max": 5,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "phase_1": {
+          "answer_ms": "unknown",
+          "arm": "direct+jev-rerank",
+          "cold_graph_build_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "reads": 0,
+            "bytes": 0
+          },
+          "jev_calls_tokens_latency": {
+            "calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "latency_ms": 0,
+            "status": "not_called_phase_1"
+          },
+          "model_visible_context_bytes": 17337,
+          "proof_and_authority_errors": [],
+          "required_fact_coverage": "unknown",
+          "retrieval_ms": 85626.077,
+          "route": "direct",
+          "source_operations": 8,
+          "source_snapshot_sha256": "c9f10e2dd66e033dbaeb89ad22d8d95c3b8cec7d4eadb4b96fed6cc8ae572908",
+          "source_support": "unknown",
+          "task_id": "B-C-02",
+          "total_wall_ms": 85626.077,
+          "warm_graph_load_ms": "unknown"
+        },
+        "phase_2": {
+          "retrieval_ms": 0.385,
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown"
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 4654,
+          "output_tokens": 94,
+          "elapsed_ms": 502.533,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": false,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "1b17d1672a29423897390cead4879d1806a0ce1d97f10a2ce98cf926ef76babf",
+      "final_candidate_order": [
+        "c0",
+        "c1",
+        "c2",
+        "c3",
+        "c4",
+        "c5"
+      ]
+    },
+    {
+      "packet_id": "B-S-01",
+      "arm": "B",
+      "task_id": "S-01",
+      "retrieval": "direct",
+      "jev": "on",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "phase_1": {
+          "answer_ms": "unknown",
+          "arm": "jev_on_direct_gpt-5.6-sol_medium",
+          "cold_graph_build_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "reads": 0,
+            "bytes": 0
+          },
+          "jev_calls_tokens_latency": {
+            "calls": 0,
+            "tokens": 0,
+            "latency_ms": 0,
+            "status": "not_run_phase_1"
+          },
+          "model_visible_context_bytes": 1609,
+          "proof_and_authority_errors": [
+            "unknown_required_id",
+            "span_requires_path_first_last",
+            "input_file_unavailable"
+          ],
+          "required_fact_coverage": "unknown",
+          "retrieval_ms": 600,
+          "route": "direct",
+          "source_operations": 4,
+          "source_snapshot_sha256": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09",
+          "source_support": "unknown",
+          "task_id": "S-01",
+          "total_wall_ms": 28000,
+          "warm_graph_load_ms": "unknown"
+        },
+        "phase_2": {
+          "retrieval_ms": "unknown",
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "source_operations": 2,
+          "fallback_reads_and_bytes": {
+            "reads": 0,
+            "bytes": 0
+          },
+          "route": "direct",
+          "source_support": 1,
+          "required_fact_coverage": 1
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 942,
+          "output_tokens": 19,
+          "elapsed_ms": 312.256,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": false,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "0aa7f23a5ca9ec79d05c32a8d038a94246f009dc819ebd3a6c20999cb0678d75",
+      "final_candidate_order": [
+        "c0"
+      ]
+    },
+    {
+      "packet_id": "B-L-01",
+      "arm": "B",
+      "task_id": "L-01",
+      "retrieval": "direct",
+      "jev": "on",
+      "required_fact_score": 4,
+      "required_fact_max": 5,
+      "required_fact_recall": 0.8,
+      "status": "fail",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "phase_1": {
+          "answer_ms": "unknown",
+          "arm": "direct|jev:on|answer_model:gpt-5.6-sol|reasoning:medium",
+          "cold_graph_build_ms": 0,
+          "fallback_reads_and_bytes": {
+            "reads": 0,
+            "bytes": 0
+          },
+          "jev_calls_tokens_latency": {
+            "calls": 0,
+            "tokens": 0,
+            "latency_ms": 0,
+            "status": "not_called_phase_1"
+          },
+          "model_visible_context_bytes": 22824,
+          "proof_and_authority_errors": [],
+          "required_fact_coverage": "unknown",
+          "retrieval_ms": "unknown",
+          "route": "direct",
+          "source_operations": 6,
+          "source_snapshot_sha256": "594aa47760172eba049e18c5f3a2f602a7b96b73a315756876955d7be81cd402",
+          "source_support": "unknown",
+          "task_id": "L-01",
+          "total_wall_ms": "unknown",
+          "warm_graph_load_ms": 0
+        },
+        "phase_2": {
+          "retrieval_ms": 0.238,
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "route": "direct",
+          "arm": "direct|jev:on|answer_model:gpt-5.6-sol|reasoning:medium",
+          "source_operations": 1,
+          "fallback_reads_and_bytes": {
+            "reads": 0,
+            "bytes": 0
+          },
+          "cold_graph_build_ms": 0,
+          "warm_graph_load_ms": 0,
+          "model_visible_context_bytes": 22824,
+          "source_snapshot_sha256": "594aa47760172eba049e18c5f3a2f602a7b96b73a315756876955d7be81cd402",
+          "task_id": "L-01"
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 6444,
+          "output_tokens": 94,
+          "elapsed_ms": 379.659,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": true,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "7080eaa9cfc180fe2acba77364fc838ed399bbd37c2d5b9a6362b2b1b89a2a24",
+      "final_candidate_order": [
+        "c0",
+        "c1",
+        "c3",
+        "c2",
+        "c4",
+        "c5"
+      ]
+    },
+    {
+      "packet_id": "B-M-01",
+      "arm": "B",
+      "task_id": "M-01",
+      "retrieval": "direct",
+      "jev": "on",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "phase_1": {
+          "task_id": "B-M-01",
+          "arm": "retrieval=direct;jev=on;answer_model=gpt-5.6-sol;reasoning=medium",
+          "route": "direct",
+          "source_snapshot_sha256": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
+          "model_visible_context_bytes": 6689,
+          "source_operations": 14,
+          "retrieval_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "reads": 0,
+            "bytes": 0
+          },
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "jev_calls_tokens_latency": {
+            "calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "latency_ms": 0
+          },
+          "proof_and_authority_errors": [],
+          "cold_graph_build_ms": "unknown",
+          "warm_graph_load_ms": "unknown",
+          "required_fact_coverage": "unknown",
+          "source_support": "unknown"
+        },
+        "phase_2": {
+          "retrieval_ms": "unknown",
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "source_operations": 6,
+          "fallback_reads_and_bytes": {
+            "reads": 0,
+            "bytes": 0
+          }
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 4045,
+          "output_tokens": 94,
+          "elapsed_ms": 323.257,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": true,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "a5c637c45c21e4cc52cf7257cde37c0b0e9ef66437fa4e60b9973a08bbbabf03",
+      "final_candidate_order": [
+        "c2",
+        "c1",
+        "c4",
+        "c3",
+        "c0",
+        "c5"
+      ]
+    },
+    {
+      "packet_id": "B-M-02",
+      "arm": "B",
+      "task_id": "M-02",
+      "retrieval": "direct",
+      "jev": "on",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "phase_1": {
+          "answer_ms": "unknown",
+          "arm": "retrieval=direct;jev=on;answer_model=gpt-5.6-sol;reasoning=medium",
+          "cold_graph_build_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "bytes": 0,
+            "reads": 0
+          },
+          "jev_calls_tokens_latency": {
+            "calls": 0,
+            "latency_ms": 0,
+            "model": "jev-1.13.0",
+            "status": "not_run_phase_1",
+            "tokens": 0
+          },
+          "model_visible_context_bytes": 6876,
+          "proof_and_authority_errors": [],
+          "required_fact_coverage": "unknown",
+          "retrieval_ms": 129977.889,
+          "route": "direct",
+          "source_operations": 6,
+          "source_snapshot_sha256": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
+          "source_support": "unknown",
+          "task_id": "M-02",
+          "total_wall_ms": 129977.889,
+          "warm_graph_load_ms": "unknown"
+        },
+        "phase_2": {
+          "answer_ms": 0.339,
+          "retrieval_ms": 129977.889,
+          "total_wall_ms": 129978.228
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 4080,
+          "output_tokens": 94,
+          "elapsed_ms": 350.236,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": true,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "4964d3a2ed2c0fd7140dcf026fede4980301a1c81b60fb928162777bebde894e",
+      "final_candidate_order": [
+        "c0",
+        "c1",
+        "c2",
+        "c4",
+        "c3",
+        "c5"
+      ]
+    },
+    {
+      "packet_id": "C-C-01",
+      "arm": "C",
+      "task_id": "C-01",
+      "retrieval": "graph_assisted",
+      "jev": "off",
+      "required_fact_score": 5,
+      "required_fact_max": 5,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "route": "unknown",
+        "source_snapshot_sha256": "unknown",
+        "model_visible_context_bytes": "unknown",
+        "source_operations": "unknown",
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": "unknown",
+        "fallback_reads_and_bytes": "unknown",
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": "unknown",
+        "proof_and_authority_errors": "unknown"
+      }
+    },
+    {
+      "packet_id": "C-C-02",
+      "arm": "C",
+      "task_id": "C-02",
+      "retrieval": "graph_assisted",
+      "jev": "off",
+      "required_fact_score": 5,
+      "required_fact_max": 5,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [
+        "phase_1_harness_authority_warning"
+      ],
+      "telemetry": {
+        "route": "unknown",
+        "source_snapshot_sha256": "unknown",
+        "model_visible_context_bytes": "unknown",
+        "source_operations": "unknown",
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": "unknown",
+        "fallback_reads_and_bytes": "unknown",
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": "unknown",
+        "proof_and_authority_errors": "unknown"
+      }
+    },
+    {
+      "packet_id": "C-S-01",
+      "arm": "C",
+      "task_id": "S-01",
+      "retrieval": "graph_assisted",
+      "jev": "off",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "route": "unknown",
+        "source_snapshot_sha256": "unknown",
+        "model_visible_context_bytes": "unknown",
+        "source_operations": "unknown",
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": "unknown",
+        "fallback_reads_and_bytes": "unknown",
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": "unknown",
+        "proof_and_authority_errors": "unknown"
+      }
+    },
+    {
+      "packet_id": "C-L-01",
+      "arm": "C",
+      "task_id": "L-01",
+      "retrieval": "graph_assisted",
+      "jev": "off",
+      "required_fact_score": 4.5,
+      "required_fact_max": 5,
+      "required_fact_recall": 0.9,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [
+        "phase_1_empty_prompt_harness_warning"
+      ],
+      "telemetry": {
+        "task_id": "C-L-01",
+        "arm": "graph_assisted|jev=off|gpt-5.6-sol:medium",
+        "route": "graph_assisted_with_predeclared_fallback",
+        "source_snapshot_sha256": "594aa47760172eba049e18c5f3a2f602a7b96b73a315756876955d7be81cd402",
+        "model_visible_context_bytes": 55243,
+        "source_operations": 183,
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": 8494.6735,
+        "fallback_reads_and_bytes": {
+          "reason": "Graph retrieval returned the URL shortener chapter but omitted the explicitly requested scalability chapter; the packet predeclared that exact chapter as an allowed fallback.",
+          "paths": [
+            "content/hld/part-1-core-fundamentals/00-scalability.md"
+          ],
+          "reads": 1,
+          "bytes": 30023
+        },
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": {
+          "calls": 0,
+          "tokens": 0,
+          "latency_ms": 0
+        },
+        "proof_and_authority_errors": [
+          "Initial graph command exited 2 before retrieval: graph_find.py: error: --prompt must be non-empty. Cause: shell expansion occurred before the inline QUESTION assignment. The successful retry passed the resolved question directly."
+        ],
+        "required_fact_coverage": 1,
+        "source_support": 1
+      }
+    },
+    {
+      "packet_id": "C-M-01",
+      "arm": "C",
+      "task_id": "M-01",
+      "retrieval": "graph_assisted",
+      "jev": "off",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "route": "unknown",
+        "source_snapshot_sha256": "unknown",
+        "model_visible_context_bytes": "unknown",
+        "source_operations": "unknown",
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": "unknown",
+        "fallback_reads_and_bytes": "unknown",
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": "unknown",
+        "proof_and_authority_errors": "unknown"
+      }
+    },
+    {
+      "packet_id": "C-M-02",
+      "arm": "C",
+      "task_id": "M-02",
+      "retrieval": "graph_assisted",
+      "jev": "off",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [
+        "phase_1_empty_prompt_harness_warning"
+      ],
+      "telemetry": {
+        "route": "unknown",
+        "source_snapshot_sha256": "unknown",
+        "model_visible_context_bytes": "unknown",
+        "source_operations": "unknown",
+        "cold_graph_build_ms": "unknown",
+        "warm_graph_load_ms": "unknown",
+        "retrieval_ms": "unknown",
+        "fallback_reads_and_bytes": "unknown",
+        "answer_ms": "unknown",
+        "total_wall_ms": "unknown",
+        "jev_calls_tokens_latency": "unknown",
+        "proof_and_authority_errors": "unknown"
+      }
+    },
+    {
+      "packet_id": "D-C-01",
+      "arm": "D",
+      "task_id": "C-01",
+      "retrieval": "graph_assisted",
+      "jev": "on",
+      "required_fact_score": 4.5,
+      "required_fact_max": 5,
+      "required_fact_recall": 0.9,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "phase_1": {
+          "answer_ms": "unknown",
+          "arm": "graph_assisted+jev_on",
+          "cold_graph_build_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "reason": "Graph evidence contained only short navigation fragments and included four off-topic candidates, so exact source spans were re-read from two predeclared fallback paths.",
+            "reads": [
+              {
+                "path": "Doc/library/asyncio-task.rst",
+                "bytes": 53236
+              },
+              {
+                "path": "Lib/asyncio/tasks.py",
+                "bytes": 41570
+              }
+            ],
+            "total_bytes": 94806
+          },
+          "jev_calls_tokens_latency": {
+            "calls": 0,
+            "tokens": 0,
+            "latency_ms": 0,
+            "status": "not_called_phase_1"
+          },
+          "model_visible_context_bytes": 12654,
+          "proof_and_authority_errors": [
+            {
+              "operation": "jev_capture_probe",
+              "reason": "span_requires_path_first_last"
+            },
+            {
+              "operation": "jev_capture_probe",
+              "reason": "invalid_line_range"
+            }
+          ],
+          "required_fact_coverage": "unknown",
+          "retrieval_ms": 442.234,
+          "route": "graph_assisted",
+          "source_operations": 6,
+          "source_snapshot_sha256": "c9f10e2dd66e033dbaeb89ad22d8d95c3b8cec7d4eadb4b96fed6cc8ae572908",
+          "source_support": "unknown",
+          "task_id": "D-C-01",
+          "total_wall_ms": "unknown",
+          "warm_graph_load_ms": "unknown"
+        },
+        "phase_2": {
+          "retrieval_ms": 442.234,
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "route": "graph_assisted",
+          "source_operations": 6,
+          "source_snapshot_sha256": "c9f10e2dd66e033dbaeb89ad22d8d95c3b8cec7d4eadb4b96fed6cc8ae572908",
+          "retrieval_reused_from_phase_1": true,
+          "answer_timing_note": "Answer construction was not independently instrumented."
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 5008,
+          "output_tokens": 94,
+          "elapsed_ms": 356.514,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": false,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "44fce3a6402706e6f7212c356fefc54a5a7828f2c37e018e53b0caf684fbd829",
+      "final_candidate_order": [
+        "c0",
+        "c1",
+        "c2",
+        "c3",
+        "c4",
+        "c5"
+      ]
+    },
+    {
+      "packet_id": "D-C-02",
+      "arm": "D",
+      "task_id": "C-02",
+      "retrieval": "graph_assisted",
+      "jev": "on",
+      "required_fact_score": 5,
+      "required_fact_max": 5,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "phase_1": {
+          "task_id": "D-C-02",
+          "arm": "graph_assisted+jev_on+gpt-5.6-sol-medium",
+          "route": "graph",
+          "source_snapshot_sha256": "c9f10e2dd66e033dbaeb89ad22d8d95c3b8cec7d4eadb4b96fed6cc8ae572908",
+          "model_visible_context_bytes": 2165,
+          "source_operations": 4,
+          "retrieval_ms": 404.216791,
+          "cold_graph_build_ms": "unknown",
+          "warm_graph_load_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "used": false,
+            "paths": [],
+            "bytes": 0
+          },
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "jev_calls_tokens_latency": {
+            "calls": 0,
+            "tokens": 0,
+            "latency_ms": 0
+          },
+          "proof_and_authority_errors": [
+            {
+              "stage": "capture",
+              "reason": "unknown_required_id",
+              "status": "refused",
+              "resolved": true
+            },
+            {
+              "stage": "capture",
+              "reason": "span_requires_path_first_last",
+              "status": "refused",
+              "resolved": true
+            }
+          ],
+          "required_fact_coverage": "unknown",
+          "source_support": "unknown"
+        },
+        "phase_2": {
+          "retrieval_ms": 404.216791,
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "source_operations": 6,
+          "fallback_reads_and_bytes": {
+            "used": false,
+            "paths": [],
+            "bytes": 0
+          },
+          "source_snapshot_sha256": "c9f10e2dd66e033dbaeb89ad22d8d95c3b8cec7d4eadb4b96fed6cc8ae572908"
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 4451,
+          "output_tokens": 94,
+          "elapsed_ms": 385.904,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": false,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "1e2e735d358b2bffc6a39019f19543d215184f1c12a150abdcde5ebd13d3335b",
+      "final_candidate_order": [
+        "c0",
+        "c1",
+        "c2",
+        "c3",
+        "c4",
+        "c5"
+      ]
+    },
+    {
+      "packet_id": "D-S-01",
+      "arm": "D",
+      "task_id": "S-01",
+      "retrieval": "graph_assisted",
+      "jev": "on",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "phase_1": {
+          "answer_ms": "unknown",
+          "arm": "graph_assisted+jev_on+gpt-5.6-sol-medium",
+          "cold_graph_build_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "reason": "Graph evidence identified the target but did not contain the complete implementation span; predeclared fallback paths were read for exact capture and preview.",
+            "paths": [
+              "sorts/benchmark_sorts.py",
+              "sorts/quick_sort_3_partition.py",
+              "sorts/bubble_sort.py",
+              "graphs/edmonds_karp_multiple_source_and_sink.py",
+              "sorts/merge_insertion_sort.py",
+              "sorts/quick_sort.py"
+            ],
+            "unique_source_bytes": 29345
+          },
+          "jev_calls_tokens_latency": {
+            "evaluate_calls": 0,
+            "provider_tokens": 0,
+            "provider_latency_ms": 0,
+            "local_capture_and_preview_only": true
+          },
+          "model_visible_context_bytes": 5901,
+          "proof_and_authority_errors": [
+            "unknown_required_id",
+            "span_requires_path_first_last",
+            "invalid_line_range",
+            "input_file_unavailable"
+          ],
+          "required_fact_coverage": "unknown",
+          "retrieval_ms": 385.1575,
+          "route": "graph_assisted",
+          "source_operations": 13,
+          "source_snapshot_sha256": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09",
+          "source_support": "unknown",
+          "task_id": "D-S-01",
+          "total_wall_ms": "unknown",
+          "warm_graph_load_ms": "unknown"
+        },
+        "phase_2": {
+          "retrieval_ms": 385.1575,
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown"
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 3333,
+          "output_tokens": 94,
+          "elapsed_ms": 300.858,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": true,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "401397d797bb431a54ad1fcb26fc559890721edf5084ed0e5cb2f4f28415504b",
+      "final_candidate_order": [
+        "c0",
+        "c1",
+        "c4",
+        "c2",
+        "c3",
+        "c5"
+      ]
+    },
+    {
+      "packet_id": "D-L-01",
+      "arm": "D",
+      "task_id": "L-01",
+      "retrieval": "graph_assisted",
+      "jev": "on",
+      "required_fact_score": 4,
+      "required_fact_max": 5,
+      "required_fact_recall": 0.8,
+      "status": "fail",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [],
+      "telemetry": {
+        "phase_1": {
+          "task_id": "D-L-01",
+          "arm": "graph_assisted+jev_on",
+          "route": "graph",
+          "source_snapshot_sha256": "594aa47760172eba049e18c5f3a2f602a7b96b73a315756876955d7be81cd402",
+          "model_visible_context_bytes": 17090,
+          "source_operations": 204,
+          "retrieval_ms": 8007.076,
+          "cold_graph_build_ms": "unknown",
+          "warm_graph_load_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "reads": 4,
+            "bytes": 120092,
+            "paths": [
+              "content/hld/part-1-core-fundamentals/00-scalability.md"
+            ]
+          },
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "jev_calls_tokens_latency": {
+            "attempted_calls": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "provider_latency_ms": 0,
+            "provider_output_present": false
+          },
+          "proof_and_authority_errors": [
+            "graph_shortlist_omitted_explicitly_requested_scalability_chapter",
+            "predeclared_fallback_added_scalability_chapter",
+            "lowest_ranked_graph_candidate_omitted_to_keep_six_candidate_limit"
+          ],
+          "required_fact_coverage": "unknown",
+          "source_support": "unknown"
+        },
+        "phase_2": {
+          "retrieval_ms": 8007.076,
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown"
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 4681,
+          "output_tokens": 94,
+          "elapsed_ms": 380.594,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": true,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "8a24eaf204064cac9410d22e8986e7537cc6f1d0e25538e6d3c35a6c5006d69c",
+      "final_candidate_order": [
+        "c4",
+        "c1",
+        "c0",
+        "c3",
+        "c2",
+        "c5"
+      ]
+    },
+    {
+      "packet_id": "D-M-01",
+      "arm": "D",
+      "task_id": "M-01",
+      "retrieval": "graph_assisted",
+      "jev": "on",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [
+        "phase_1_graph_forbidden_readme_metadata_warning"
+      ],
+      "telemetry": {
+        "phase_1": {
+          "task_id": "D-M-01",
+          "arm": "graph_assisted+jev_on",
+          "route": "graph",
+          "source_snapshot_sha256": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
+          "model_visible_context_bytes": 16641,
+          "source_operations": 94,
+          "retrieval_ms": 734.483,
+          "cold_graph_build_ms": "unknown",
+          "warm_graph_load_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "declared_fallback_reads": 1,
+            "declared_fallback_bytes": 5760,
+            "total_pipeline_reads_of_fallback_source": 5,
+            "total_pipeline_bytes_of_fallback_source": 28800
+          },
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "jev_calls_tokens_latency": {
+            "calls": 0,
+            "tokens": 0,
+            "latency_ms": 0,
+            "network_called": false,
+            "provider_output_present": false
+          },
+          "required_fact_coverage": "unknown",
+          "source_support": "unknown",
+          "proof_and_authority_errors": [
+            {
+              "code": "forbidden_path_scanned_by_required_graph_command",
+              "path": "README.md",
+              "detail": "The required graph command scanned the corpus README.md and returned navigation metadata for it. The lane did not capture or preview that source."
+            }
+          ]
+        },
+        "phase_2": {
+          "retrieval_ms": 734.483,
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "route": "graph",
+          "source_operations_phase_1": 94,
+          "answer_source_operations_phase_2": 6
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 4593,
+          "output_tokens": 94,
+          "elapsed_ms": 372.81,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": true,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "d9509fa46f1361a793516f4091cd68ceae85156205e77f62b4875a05b5ace574",
+      "final_candidate_order": [
+        "c0",
+        "c2",
+        "c1",
+        "c3",
+        "c4",
+        "c5"
+      ]
+    },
+    {
+      "packet_id": "D-M-02",
+      "arm": "D",
+      "task_id": "M-02",
+      "retrieval": "graph_assisted",
+      "jev": "on",
+      "required_fact_score": 4,
+      "required_fact_max": 4,
+      "required_fact_recall": 1,
+      "status": "pass",
+      "critical_facts_exact": true,
+      "unsupported_material_claims": 0,
+      "critical_errors": 0,
+      "source_support": 1,
+      "process_warnings": [
+        "phase_1_capture_probe_harness_warning"
+      ],
+      "telemetry": {
+        "phase_1": {
+          "answer_ms": "unknown",
+          "arm": "graph_assisted+jev_on",
+          "cold_graph_build_ms": "unknown",
+          "fallback_reads_and_bytes": {
+            "reason": "Graph returned the required sources, but its excerpt windows did not expose both documented process/training choices and their flexibility language.",
+            "paths": [
+              {
+                "path": "OpenChain-Processes-and-FAQ/faq.md",
+                "bytes": 29624
+              },
+              {
+                "path": "OpenChain-Adoption-Guides/Adoption-PlayBooks-ISO-IEC-5230-(OpenChain 2.1)/en/Small-Company/OpenChain PlayBook - Small Company.md",
+                "bytes": 11229
+              }
+            ],
+            "total_bytes": 40853
+          },
+          "jev_calls_tokens_latency": {
+            "calls": 0,
+            "tokens": 0,
+            "latency_ms": 0,
+            "preview_only": true
+          },
+          "model_visible_context_bytes": "unknown",
+          "proof_and_authority_errors": [
+            "graph_find.py: error: --prompt must be non-empty",
+            "{\"authority_bearing\":false,\"reason\":\"unknown_required_id\",\"status\":\"refused\"}",
+            "{\"authority_bearing\":false,\"reason\":\"span_requires_path_first_last\",\"status\":\"refused\"}",
+            "{\"authority_bearing\":false,\"reason\":\"invalid_line_range\",\"status\":\"refused\"}"
+          ],
+          "required_fact_coverage": "unknown",
+          "retrieval_ms": 894.147583,
+          "route": "graph_assisted",
+          "source_operations": 21,
+          "source_snapshot_sha256": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
+          "source_support": "unknown",
+          "task_id": "M-02",
+          "total_wall_ms": "unknown",
+          "warm_graph_load_ms": "unknown"
+        },
+        "phase_2": {
+          "retrieval_ms": 894.147583,
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown"
+        },
+        "jev": {
+          "attempted_calls": 1,
+          "input_tokens": 3344,
+          "output_tokens": 94,
+          "elapsed_ms": 331.702,
+          "status": "reranked",
+          "model": "jev-1.13.0",
+          "order_changed": false,
+          "source_revalidated": true,
+          "authority_bearing": false,
+          "sufficient": false
+        },
+        "all_in": {
+          "answer_ms": "unknown",
+          "total_wall_ms": "unknown",
+          "answer_tokens": "unknown",
+          "cost": "unknown"
+        }
+      },
+      "provider_request_sha256": "165e2f34953d49f43f145c2497120a466201d67e54ce3f95240aba88fcc25a58",
+      "final_candidate_order": [
+        "c0",
+        "c1",
+        "c2",
+        "c3",
+        "c4",
+        "c5"
+      ]
+    }
+  ],
+  "arm_aggregates": {
+    "A": {
+      "retrieval": "direct",
+      "jev": "off",
+      "required_fact_score": 26,
+      "required_fact_max": 27,
+      "required_fact_recall": 0.962963,
+      "passed_tasks": 6,
+      "total_tasks": 6,
+      "pass_rate": 1
+    },
+    "B": {
+      "retrieval": "direct",
+      "jev": "on",
+      "required_fact_score": 26,
+      "required_fact_max": 27,
+      "required_fact_recall": 0.962963,
+      "passed_tasks": 5,
+      "total_tasks": 6,
+      "pass_rate": 0.833333
+    },
+    "C": {
+      "retrieval": "graph_assisted",
+      "jev": "off",
+      "required_fact_score": 26.5,
+      "required_fact_max": 27,
+      "required_fact_recall": 0.981481,
+      "passed_tasks": 6,
+      "total_tasks": 6,
+      "pass_rate": 1
+    },
+    "D": {
+      "retrieval": "graph_assisted",
+      "jev": "on",
+      "required_fact_score": 25.5,
+      "required_fact_max": 27,
+      "required_fact_recall": 0.944444,
+      "passed_tasks": 5,
+      "total_tasks": 6,
+      "pass_rate": 0.833333
+    }
+  },
+  "comparisons": {
+    "B-A": {
+      "required_fact_recall_delta_percentage_points": 0,
+      "pass_rate_delta_percentage_points": -16.67
+    },
+    "D-C": {
+      "required_fact_recall_delta_percentage_points": -3.7,
+      "pass_rate_delta_percentage_points": -16.67
+    },
+    "C-A": {
+      "required_fact_recall_delta_percentage_points": 1.85,
+      "pass_rate_delta_percentage_points": 0
+    },
+    "D-B": {
+      "required_fact_recall_delta_percentage_points": -1.85,
+      "pass_rate_delta_percentage_points": 0
+    }
+  },
+  "provider_summary": {
+    "live_calls": 12,
+    "status_counts": {
+      "reranked": 12
+    },
+    "model": "jev-1.13.0",
+    "source_revalidated": true,
+    "authority_bearing": false,
+    "sufficient": false,
+    "fallback_calls": 0,
+    "input_tokens": 49781,
+    "output_tokens": 1053,
+    "elapsed_sum_ms": 4443.678,
+    "elapsed_max_ms": 502.533,
+    "applied_order_changed": {
+      "changed": 6,
+      "total": 12
+    },
+    "observations_source_free": true,
+    "request_hashes": [
+      {
+        "packet_id": "B-C-01",
+        "request_sha256": "97bbc713297de9257e12166e8d556e619caebc6f1379f704e794c9ae45d60cb7"
+      },
+      {
+        "packet_id": "B-C-02",
+        "request_sha256": "1b17d1672a29423897390cead4879d1806a0ce1d97f10a2ce98cf926ef76babf"
+      },
+      {
+        "packet_id": "B-S-01",
+        "request_sha256": "0aa7f23a5ca9ec79d05c32a8d038a94246f009dc819ebd3a6c20999cb0678d75"
+      },
+      {
+        "packet_id": "B-L-01",
+        "request_sha256": "7080eaa9cfc180fe2acba77364fc838ed399bbd37c2d5b9a6362b2b1b89a2a24"
+      },
+      {
+        "packet_id": "B-M-01",
+        "request_sha256": "a5c637c45c21e4cc52cf7257cde37c0b0e9ef66437fa4e60b9973a08bbbabf03"
+      },
+      {
+        "packet_id": "B-M-02",
+        "request_sha256": "4964d3a2ed2c0fd7140dcf026fede4980301a1c81b60fb928162777bebde894e"
+      },
+      {
+        "packet_id": "D-C-01",
+        "request_sha256": "44fce3a6402706e6f7212c356fefc54a5a7828f2c37e018e53b0caf684fbd829"
+      },
+      {
+        "packet_id": "D-C-02",
+        "request_sha256": "1e2e735d358b2bffc6a39019f19543d215184f1c12a150abdcde5ebd13d3335b"
+      },
+      {
+        "packet_id": "D-S-01",
+        "request_sha256": "401397d797bb431a54ad1fcb26fc559890721edf5084ed0e5cb2f4f28415504b"
+      },
+      {
+        "packet_id": "D-L-01",
+        "request_sha256": "8a24eaf204064cac9410d22e8986e7537cc6f1d0e25538e6d3c35a6c5006d69c"
+      },
+      {
+        "packet_id": "D-M-01",
+        "request_sha256": "d9509fa46f1361a793516f4091cd68ceae85156205e77f62b4875a05b5ace574"
+      },
+      {
+        "packet_id": "D-M-02",
+        "request_sha256": "165e2f34953d49f43f145c2497120a466201d67e54ce3f95240aba88fcc25a58"
+      }
+    ]
+  },
+  "gates": {
+    "fresh_host_native_lanes": true,
+    "six_task_pilot_completed": true,
+    "live_jev_completed": true,
+    "required_fact_recall": "recorded_per_arm",
+    "graph_regression": "observed_for_graph_plus_jev",
+    "authority_or_license_errors": false,
+    "wall_clock_savings": "not_established",
+    "result_sealed": true
+  },
+  "failures": [
+    {
+      "class": "harness_wrapper_stop_after_first_jev_lane",
+      "detail": "The initial zsh wrapper stopped after B-C-01 because status was treated as a shell special parameter. B-C-01 was not retried; the remaining eleven live calls resumed once."
+    },
+    {
+      "class": "phase_1_command_or_capture_warnings",
+      "detail": "Recorded phase-1 command and capture issues are classified as harness or proof warnings, not answer-support failures."
+    },
+    {
+      "class": "required_fact_gate_miss",
+      "packets": [
+        "B-L-01",
+        "D-L-01"
+      ],
+      "detail": "Both Jev-on long-structured tasks scored 4/5 required facts."
+    }
+  ],
+  "unknowns": [
+    "Unavailable answer_ms and total_wall_ms remain unknown per packet.",
+    "Cold and warm graph build/load timings are unknown where the lane did not report them.",
+    "Answer token counts and cost are unknown.",
+    "This pilot does not establish wall-clock savings or broad promotion."
+  ],
+  "implementation_agent_boundary": "The implementation agent did not run provider calls or answer lanes and did not read the oracle. The parent supplied the independently audited per-packet scores and provider summary. This file records those inputs without local lane IDs, source excerpts, or user identity.",
+  "seal": {
+    "algorithm": "sha256",
+    "scope": [
+      "results",
+      "arm_aggregates",
+      "comparisons",
+      "provider_summary",
+      "gates"
+    ],
+    "sha256": "742fbf13f96804214698fcb93afb35ff3ff409b3254b25035cf89418dcbc8709"
+  }
+}

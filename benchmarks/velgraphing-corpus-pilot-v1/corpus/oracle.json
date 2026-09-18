@@ -1,0 +1,111 @@
+{
+  "schema_version": "velgraphing-corpus-pilot-oracle-v1",
+  "exposed_to_answer_lanes": false,
+  "scoring": {
+    "exact": 1.0,
+    "partial": 0.5,
+    "absent_or_wrong": 0.0,
+    "critical_error": -1.0,
+    "pass": "all critical facts exact, recall >= 0.9, zero unsupported material claims"
+  },
+  "tasks": {
+    "C-01": {
+      "type": "code_cross_file_symbol_and_documentation",
+      "graph_expected": true,
+      "required_facts": [
+        "The documentation says asyncio.create_task schedules coroutines concurrently as asyncio Tasks.",
+        "The documentation presents TaskGroup as a more modern alternative to create_task.",
+        "The documentation says Tasks schedule coroutines concurrently.",
+        "Lib/asyncio/tasks.py defines current_task and all_tasks and defines the Task class.",
+        "Lib/asyncio/tasks.py defines create_task."
+      ],
+      "acceptable_spans": [
+        "Doc/library/asyncio-task.rst:80-83",
+        "Doc/library/asyncio-task.rst:110-119",
+        "Doc/library/asyncio-task.rst:179-183",
+        "Lib/asyncio/tasks.py:37-62",
+        "Lib/asyncio/tasks.py:391-400"
+      ],
+      "critical_facts": ["The documentation says asyncio.create_task schedules coroutines concurrently as asyncio Tasks.", "Lib/asyncio/tasks.py defines current_task and all_tasks and defines the Task class."]
+    },
+    "C-02": {
+      "type": "code_cross_file_concept_and_api",
+      "graph_expected": true,
+      "required_facts": [
+        "importlib.metadata operates on installed third-party distribution packages.",
+        "One distribution package can contain multiple import packages.",
+        "One import package can map to multiple distribution packages.",
+        "The documentation identifies packages_distributions as the mapping API.",
+        "Lib/importlib/metadata/__init__.py defines Distribution, distribution, version, files, and packages_distributions."
+      ],
+      "acceptable_spans": [
+        "Doc/library/importlib.metadata.rst:16-42",
+        "Lib/importlib/metadata/__init__.py:399-405",
+        "Lib/importlib/metadata/__init__.py:1067-1155"
+      ],
+      "critical_facts": ["One distribution package can contain multiple import packages.", "One import package can map to multiple distribution packages."]
+    },
+    "S-01": {
+      "type": "many_small_exact_local_lookup",
+      "graph_expected": false,
+      "required_facts": [
+        "The base case returns the collection when its length is less than two.",
+        "The implementation removes the randomly selected pivot with pop, so the supplied input list is mutated.",
+        "The implementation builds lesser with items <= pivot and greater with items > pivot.",
+        "The recursive result for [3, 1, 2] is [1, 2, 3]."
+      ],
+      "acceptable_spans": ["sorts/quick_sort.py:16-43"],
+      "critical_facts": ["The implementation removes the randomly selected pivot with pop, so the supplied input list is mutated.", "The recursive result for [3, 1, 2] is [1, 2, 3]."]
+    },
+    "L-01": {
+      "type": "long_structured_cross_chapter_synthesis",
+      "graph_expected": true,
+      "required_facts": [
+        "The URL shortener case study states a 100:1 redirect-to-create ratio and says the read path is hotter than the storage path.",
+        "The case study recommends layered caches and says the mapping is immutable once created.",
+        "The case study states that batch-allocated IDs and buffered Kafka decouple write coordination and analytics from the redirect path.",
+        "The scalability chapter distinguishes vertical scaling from horizontal scaling and says horizontal scaling requires tolerance for concurrency, partial failure, and distributed state.",
+        "The scalability chapter defines a stateless service as holding no per-client information between requests and says any replica can handle any request."
+      ],
+      "acceptable_spans": [
+        "content/hld/part-8-case-studies/00-url-shortener.md:31-52",
+        "content/hld/part-8-case-studies/00-url-shortener.md:78-90",
+        "content/hld/part-1-core-fundamentals/00-scalability.md:25-33",
+        "content/hld/part-1-core-fundamentals/00-scalability.md:48-52",
+        "content/hld/part-1-core-fundamentals/00-scalability.md:80-82"
+      ],
+      "critical_facts": ["The URL shortener case study states a 100:1 redirect-to-create ratio and says the read path is hotter than the storage path.", "The scalability chapter defines a stateless service as holding no per-client information between requests and says any replica can handle any request."]
+    },
+    "M-01": {
+      "type": "mixed_authority_and_license_boundary",
+      "graph_expected": true,
+      "required_facts": [
+        "ISO/IEC 5230 conformance applies to a quality open source license compliance program, not to software packages themselves.",
+        "Conformance does not guarantee license compliance, although the FAQ says it increases the probability for software prepared under a conformant program.",
+        "The specification defines key requirements and focuses on what and why, not how or when.",
+        "The specification does not provide legal guidance; an organization must designate a legal expert and have a process for license-obligation analysis and fulfillment."
+      ],
+      "acceptable_spans": [
+        "OpenChain-Processes-and-FAQ/faq.md:85-106",
+        "OpenChain-Processes-and-FAQ/faq.md:112-122"
+      ],
+      "critical_facts": ["ISO/IEC 5230 conformance applies to a quality open source license compliance program, not to software packages themselves.", "Conformance does not guarantee license compliance, although the FAQ says it increases the probability for software prepared under a conformant program."]
+    },
+    "M-02": {
+      "type": "mixed_document_process_flexibility",
+      "graph_expected": true,
+      "required_facts": [
+        "The small-company playbook presents process documentation and training as implementation decisions, including a possible automated CI/CD process record and different training approaches.",
+        "The small-company playbook says its examples are for reference and inspiration rather than prescriptive instructions.",
+        "The FAQ says ISO/IEC 5230 focuses on what and why rather than how or when and treats playbooks as separate implementation reference material.",
+        "The answer must not present the documented implementation choices as mandatory requirements."
+      ],
+      "acceptable_spans": [
+        "OpenChain-Adoption-Guides/Adoption-PlayBooks-ISO-IEC-5230-(OpenChain 2.1)/en/Small-Company/OpenChain PlayBook - Small Company.md:7-38",
+        "OpenChain-Adoption-Guides/Adoption-PlayBooks-ISO-IEC-5230-(OpenChain 2.1)/en/Small-Company/OpenChain PlayBook - Small Company.md:129-145",
+        "OpenChain-Processes-and-FAQ/faq.md:104-108"
+      ],
+      "critical_facts": ["The small-company playbook presents process documentation and training as implementation decisions, including a possible automated CI/CD process record and different training approaches.", "The answer must not present the documented implementation choices as mandatory requirements."]
+    }
+  }
+}

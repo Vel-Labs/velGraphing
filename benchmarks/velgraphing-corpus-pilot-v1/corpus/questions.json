@@ -1,0 +1,35 @@
+{
+  "schema_version": "velgraphing-corpus-pilot-questions-v1",
+  "questions": [
+    {
+      "id": "C-01",
+      "corpus": "cpython",
+      "prompt": "In the frozen CPython sources, explain how asyncio.create_task relates to Task and TaskGroup. Include the documented behavior and the implementation locations for create_task, Task, current_task, and all_tasks. Cite the relevant source paths and spans."
+    },
+    {
+      "id": "C-02",
+      "corpus": "cpython",
+      "prompt": "In the frozen CPython sources, distinguish distribution packages from import packages for importlib.metadata. Explain both mapping directions and name the APIs that expose distribution metadata and package-to-distribution mappings. Cite the relevant documentation and implementation paths."
+    },
+    {
+      "id": "S-01",
+      "corpus": "thealgorithms-python",
+      "prompt": "For the frozen sorts/quick_sort.py implementation, what happens to the input list when quick_sort([3, 1, 2]) runs, what list does it return, and how does one recursive partition work? Include the base-case behavior and cite the exact source path."
+    },
+    {
+      "id": "L-01",
+      "corpus": "engineering-handbook",
+      "prompt": "Using the frozen Engineering Handbook, explain why the URL shortener design treats the read path as the primary scaling problem. Connect the case study's stated traffic and cache assumptions to the scalability chapter's vertical-versus-horizontal and stateless-service guidance. Cite both chapters and separate stated assumptions from general guidance."
+    },
+    {
+      "id": "M-01",
+      "corpus": "openchain-reference-material",
+      "prompt": "Using the frozen OpenChain reference material, explain what ISO/IEC 5230 conformance applies to, whether it guarantees license compliance, what the specification covers, and the role of a legal expert. Cite the FAQ and any supporting checklist material."
+    },
+    {
+      "id": "M-02",
+      "corpus": "openchain-reference-material",
+      "prompt": "Using the frozen OpenChain reference material, explain the difference between defining baseline process requirements and choosing implementation details. Use the small-company playbook to give two documented choices about process documentation or training, and state whether the material presents them as mandatory or flexible. Cite the playbook and FAQ."
+    }
+  ]
+}

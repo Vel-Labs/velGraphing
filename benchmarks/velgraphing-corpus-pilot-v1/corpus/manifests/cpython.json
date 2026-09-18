@@ -1,0 +1,62 @@
+{
+  "commit": "5539c2a5437acc4f4719aabac375368e0d310bd9",
+  "excludes": [],
+  "includes": [
+    "Doc/library/asyncio-task.rst",
+    "Doc/library/importlib.metadata.rst",
+    "Lib/asyncio/tasks.py",
+    "Lib/importlib/metadata/__init__.py",
+    "Python/import.c",
+    "Include/import.h",
+    "README.rst",
+    "LICENSE"
+  ],
+  "repository": "git-object-source",
+  "schema_version": "velgraphing-corpus-source-manifest-v1",
+  "skipped": {},
+  "snapshot_sha256": "c9f10e2dd66e033dbaeb89ad22d8d95c3b8cec7d4eadb4b96fed6cc8ae572908",
+  "source_bytes": 361700,
+  "source_count": 8,
+  "sources": [
+    {
+      "byte_length": 53236,
+      "path": "Doc/library/asyncio-task.rst",
+      "sha256": "e32837edd09efb57ac926456bd8cf54580724206f30c2420502490cb43db2c79"
+    },
+    {
+      "byte_length": 28710,
+      "path": "Doc/library/importlib.metadata.rst",
+      "sha256": "cdc7780453ebd2022424e89497c01a8625e66662a0e0b601607efbd2e41a72ec"
+    },
+    {
+      "byte_length": 3493,
+      "path": "Include/import.h",
+      "sha256": "e2f272799c98e90be25d0b5238b42fed79b96d23e134230b9e8090568cedb322"
+    },
+    {
+      "byte_length": 13804,
+      "path": "LICENSE",
+      "sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231"
+    },
+    {
+      "byte_length": 41570,
+      "path": "Lib/asyncio/tasks.py",
+      "sha256": "6c283245c631e08ff68b9f6fc5b30f5516142e96bd193adf06f3a58bfc74e309"
+    },
+    {
+      "byte_length": 38204,
+      "path": "Lib/importlib/metadata/__init__.py",
+      "sha256": "253487d7bed74182b36b950bb7fb6867e1afe31adc9fd7d49705a181077736e4"
+    },
+    {
+      "byte_length": 173771,
+      "path": "Python/import.c",
+      "sha256": "84099c6586ff083d0cffd4f21d99fca055447106cdb9c39b265384a83d5e7162"
+    },
+    {
+      "byte_length": 8912,
+      "path": "README.rst",
+      "sha256": "10e00b4e0bbd30b7eef0c65f492347e8d976ef8cbdfc85635492a840ff4ccf8f"
+    }
+  ]
+}
