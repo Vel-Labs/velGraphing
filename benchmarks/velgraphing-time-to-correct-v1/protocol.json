@@ -1,6 +1,6 @@
 {
   "schema_version": "velgraphing-time-to-correct-proposal-v1",
-  "status": "proposal_not_executed_or_live_authorized",
+  "status": "calibration_approved_not_executed",
   "audited_base_commit": "916c3c993dcb214c2700dbec063794dba418bdd8",
   "arms": {
     "A": {"discovery": "direct", "jev": "off"},
@@ -8,7 +8,8 @@
     "C": {"discovery": "shipped_graph_find", "jev": "off"},
     "D": {"discovery": "shipped_graph_find", "jev": "on"}
   },
-  "current_authorized_live_provider_calls": 0,
+  "current_authorized_live_provider_calls": 12,
+  "authorized_calibration_freeze": "calibration.json",
   "primary_context_policy": "preserve_current_membership_and_required_positions",
   "repair_budget": {"max_repairs": 2, "wall_limit_ns": 300000000000},
   "default_pass_gate": {"required_fact_recall_min": 0.9, "critical_facts_exact": true, "unsupported_material_claims": 0},
@@ -28,9 +29,9 @@
   "proposed_repetitions_per_task": 10,
   "proposed_initial_trial_count": 240,
   "dispatch": "serial_randomized_counterbalanced_within_task_and_repetition",
-  "future_provider_budget": "must_be_separately_approved_and_enforced_before_execution",
-  "answer_model": "operator_must_pin_before_execution",
-  "reasoning": "same_frozen_level_in_every_arm",
+  "future_provider_budget": "calls_beyond_the_approved_12_require_separate_authority",
+  "answer_model": "gpt-5.6-sol",
+  "reasoning": "medium_in_every_arm",
   "grading": "independent_frozen_atomic_rubric_not_exposed_to_answer_lanes",
   "repair_feedback": "preregistered_generic_failure_notice_without_hidden_gold_facts",
   "primary_endpoints": ["first_pass_correct", "first_answer_ns", "confirmed_time_to_correct_ns", "passed_within_budget"],
