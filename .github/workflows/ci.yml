@@ -3,7 +3,7 @@ name: Validate VelGraphing
 on:
   pull_request:
   push:
-    branches: [main, codex/velgraphing-time-to-correct-audit-repair]
+    branches: [main]
   workflow_dispatch:
 
 permissions:

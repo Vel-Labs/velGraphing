@@ -3,11 +3,13 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import sys
+import tempfile
 import threading
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts/benchmarks'))
-from time_to_correct import Answer, Budget, Grade, MeasurementError, Trial, digest, summarize, union_ns
+from time_to_correct import (Answer, Budget, Grade, MeasurementError, Trial, digest,
+                             load_completed_trials, save_completed_trial, summarize, union_ns)
 
 
 class Clock:
@@ -88,6 +90,21 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(result['phases']['repair']['inclusive_union_ns'], 35)
         self.assertEqual(result['observed_active_execution_ns'], 70)  # Not 105 with repair double-counted.
 
+    def test_phase_observed_in_only_one_repair_attempt_is_partial(self):
+        def prep(t, n):
+            if n == 0:
+                with t.phase('candidate_discovery'):
+                    self.clock.advance(10)
+            return b'actual request'
+        result = self.execute((False, True), prepare=prep)
+        phase = result['phases']['candidate_discovery']
+        self.assertEqual(phase['status'], 'partial')
+        self.assertFalse(phase['complete'])
+        self.assertEqual(phase['attempts_total'], 2)
+        self.assertEqual(phase['observed_attempts'], 1)
+        self.assertEqual(phase['missing_attempts'], 1)
+        self.assertEqual(phase['inclusive_union_ns'], 10)
+
     def test_budget_exhaustion_keeps_failed_attempts(self):
         result = self.execute((False,))
         self.assertEqual(len(result['attempts']), 3)
@@ -110,6 +127,15 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(len(result['attempts']), 1)
         self.assertIsNone(result['confirmed_time_to_correct_ns'])
         self.assertGreater(result['user_visible_wall_ns'], 1000)  # Actual overrun, not truncated to budget.
+
+    def test_callback_timeout_is_not_controller_deadline(self):
+        def timed_out(*_):
+            raise TimeoutError('private host detail')
+        result = self.execute(answer=timed_out)
+        self.assertEqual(result['terminal_reason'], 'callback_timeout')
+        self.assertEqual(result['attempts'][0]['failure_stage'], 'answer')
+        self.assertEqual(result['attempts'][0]['failure_reason'], 'callback_timeout')
+        self.assertNotIn('private host detail', json.dumps(result))
 
     def test_slow_prepare_does_not_dispatch_answer(self):
         def slow(t, n):
@@ -163,8 +189,20 @@ class ControllerTests(unittest.TestCase):
             t.not_applicable('provider', 'cold_graph_build')
             return b''
         result = self.execute(prepare=prep)
-        self.assertEqual(result['phases']['provider'], {'status': 'not_applicable', 'inclusive_union_ns': 0})
-        self.assertEqual(result['phases']['warm_graph_load'], {'status': 'missing', 'inclusive_union_ns': None})
+        self.assertEqual(result['phases']['provider']['status'], 'not_applicable')
+        self.assertTrue(result['phases']['provider']['complete'])
+        self.assertEqual(result['phases']['provider']['inclusive_union_ns'], 0)
+        self.assertEqual(result['phases']['warm_graph_load']['status'], 'missing')
+        self.assertFalse(result['phases']['warm_graph_load']['complete'])
+        self.assertIsNone(result['phases']['warm_graph_load']['inclusive_union_ns'])
+
+    def test_named_required_fact_recall_drives_frozen_gate(self):
+        result = self.execute(grader=lambda *_: Grade(
+            True, 9, 10, True, 0, 'independent-grader', 'e' * 64))
+        self.assertEqual(result['terminal_reason'], 'passed')
+        self.assertEqual(result['attempts'][0]['grade']['required_fact_score'], 9)
+        self.assertEqual(result['attempts'][0]['grade']['required_fact_maximum'], 10)
+        self.assertEqual(result['attempts'][0]['grade']['required_fact_recall'], 0.9)
 
     def test_not_applicable_phase_cannot_run(self):
         def prep(t, n):
@@ -243,7 +281,7 @@ class ControllerTests(unittest.TestCase):
 
     def test_grader_identity_rubric_and_gate_enforced(self):
         bad = [replace(grade(), grader_id='answer-lane'), replace(grade(), rubric_sha256='a'*64),
-               replace(grade(), score=0.8), replace(grade(), unsupported_material_claims=1)]
+               replace(grade(), required_fact_score=0.8), replace(grade(), unsupported_material_claims=1)]
         for item in bad:
             with self.subTest(item=item):
                 self.setUp()
@@ -317,6 +355,19 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(summary['trials'][1]['terminal_reason'], 'missing')
         self.assertIsNone(summary['mean_observed_terminal_wall_ns'])
         self.assertIsNone(summary['mean_time_to_correct_ns'])
+
+    def test_completed_receipt_recovers_only_preregistered_trials(self):
+        result = self.execute()
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            receipt = save_completed_trial(directory, result)
+            self.assertEqual(receipt.name, 'trial1.json')
+            self.assertEqual(save_completed_trial(directory, result), receipt)
+            recovered = load_completed_trials(directory, ['trial1', 'not-returned'])
+            summary = summarize(['trial1', 'not-returned'], recovered)
+        self.assertEqual(summary['reported_trials'], 1)
+        self.assertEqual(summary['registered_trials'], 2)
+        self.assertEqual(summary['trials'][1]['terminal_reason'], 'missing')
 
     def test_incomparable_arms_and_duplicate_trials_rejected(self):
         result = self.execute()

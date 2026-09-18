@@ -27,6 +27,14 @@ isolated module copies. `time_to_correct_jev.py` instruments the **actual Jev
 evaluator** with a replay or local fixture response. No production function is
 patched, no ranking semantics change, and the package projection is unchanged.
 
+`time_to_correct_host.py` is the external process boundary. The caller supplies
+separate answer and grader argv arrays. The module never invokes a shell. It sends
+canonical JSON on stdin and accepts canonical JSON on stdout. Each process timeout
+is bounded by the remaining trial deadline. A process timeout is recorded as
+`callback_timeout`; controller wall exhaustion is `deadline_exceeded`. Process
+errors use closed reason codes. Stderr and arbitrary exception text are not copied
+into the trial result.
+
 Graph instrumentation times the real scan/record creation plus tag-index creation
 as cold build, prompt/facet preparation as candidate discovery, and the real
 retrieval invocation including custody verification as retrieval. Those definitions
@@ -57,13 +65,14 @@ The last field is null for unresolved/failed/cancelled/late trials. Their actual
 terminal wall time is retained, not dropped or substituted for time-to-correct.
 A late passing grade is recorded but does not count as success within the budget.
 
-The current deadline is checked **between callbacks**. It is not a forced kill
-of a blocked model or native-agent session. Record actual overrun. A real host
-adapter must implement supported cancellation/timeouts; this controller does not
-pretend that a socket timeout is an end-to-end execution deadline. SIGKILL or a
-machine crash can lose an in-memory trace: preregistration keeps the missing trial
-visible, but cannot reconstruct its duration. There is no daemon or crash-recovery
-service in this repair.
+The controller deadline is checked **between callbacks** with a private signal.
+A callback-raised `TimeoutError` is not relabeled as controller wall exhaustion.
+The external process boundary enforces a per-call timeout and kills its child when
+that timeout expires. This does not claim native Codex lifecycle cancellation.
+An in-flight trial can still be lost after SIGKILL or machine failure. A completed
+trial can be atomically saved and loaded after restart. A missing preregistered
+trial remains missing in the denominator. There is no daemon, database, scheduler,
+or general agent runtime.
 
 All durations use `time.monotonic_ns()` from one benchmark-controller process and
 thread. Only differences in that domain are meaningful. The trace rejects worker
@@ -84,6 +93,9 @@ contain observable host queue time; do not add that queue twice either.
 waits. It is wall execution, not CPU time. `unattributed_ns` preserves gaps rather
 than assigning them to the model. Missing phase coverage is not zero.
 The root elapsed time is measured directly, never obtained by adding components.
+A phase has observed, missing, and not-applicable attempt counts. A phase observed
+in only some attempts is `partial`, not `observed`. Its measured interval union is
+still retained, but `complete` is false when any attempt is missing.
 A parallel experiment's makespan is a separate parent interval, not the sum of
 its task wall times. Begin with serial, counterbalanced trials to avoid shared
 hardware/provider contention confounding the four arms.
@@ -116,42 +128,62 @@ receipt makes all-in token/cost totals unknown. Summaries include failed-task
 spend when calculating cost per successful task. Unknown spend is not zero.
 Fixture receipts stay labeled fixture; they are not actual provider spend.
 
-## Wiring a real host, without pretending it is already wired
+## External answer and grader process boundary
 
 The public plugin commands are agent instructions, not a Python model dispatcher.
-The supplied runner is callable infrastructure. An authorized native-host adapter
-must provide `prepare`, `answer`, and independent `grade` callbacks:
+The supplied boundary runs caller-owned processes. It does not select a model host
+or start a nested Codex CLI. The caller still owns discovery and preparation:
 
 ```python
-from scripts.benchmarks.time_to_correct import Trial, Budget
+from pathlib import Path
+from scripts.benchmarks.time_to_correct import Budget, Trial
+from scripts.benchmarks.time_to_correct_host import run_process_trial
 
 trial = Trial(frozen_identity, Budget(max_repairs=2, wall_limit_ns=300_000_000_000))
-result = trial.run(prepare_attempt, answer_attempt, independent_grade)
+result = run_process_trial(
+    trial,
+    prepare_attempt,
+    answer_argv=["/absolute/path/to/answer-command", "--frozen-config", "answer.json"],
+    grader_argv=["/absolute/path/to/grader-command", "--frozen-config", "grader.json"],
+    cwd=Path("/authorized/run/root"),
+    answer_timeout_s=120,
+    grader_timeout_s=30,
+)
 ```
 
 The identity must contain the fields validated by `IDENTITY`, with opaque IDs,
 full hashes, frozen model/reasoning and rubric version. `prepare_attempt` performs
-actual discovery/capture/composition under `trial.phase(...)` scopes; it returns
-only the selected answer input. `answer_attempt` must return only after the full
-answer is available at the declared host boundary. `independent_grade` returns a
-`Grade` bound to the same frozen rubric. The default pass recall is 0.9 with exact
-critical facts and no unsupported material claims; changing it is an explicit,
-preregistered protocol change.
+actual discovery/capture/composition under `trial.phase(...)` scopes. It returns
+only a JSON object for the answer process. The grader receives the completed answer
+and frozen rubric identity, not the answer prompt. It returns explicit
+`required_fact_score` and `required_fact_maximum`; the controller derives
+`required_fact_recall`. The frozen threshold is `required_fact_recall >= 0.9`,
+with exact critical facts and zero unsupported material claims.
 
-The callbacks are trusted host code. Never put the `Trial`, its grades, oracle or
-hidden rubric into the answering model's context. Structural grader-ID separation
-is not proof of independent judging. Keep grader tools/data isolated and freeze
-repair feedback rules before the run. The runner supplies attempt number, not gold
-facts; a fixed generic correction prompt is the initial proposed repair policy.
+The commands are trusted host code. Never put the `Trial`, its grades, oracle or
+hidden rubric into the answer process input. Structural grader-ID separation is
+not proof of independent judging. Keep grader tools/data isolated and freeze repair
+feedback rules before the run. The runner supplies the attempt number, not gold
+facts. A fixed generic correction prompt is the initial proposed repair policy.
 
 Queue/approval phases require real host start/finish observations. If the host
 exposes only dispatch-to-completion, keep that inclusive interval and mark queue
 breakdown missing. Do not ask the answering LLM to estimate its runtime.
 
-No live/native-host adapter is claimed by the offline tests. No nested Codex CLI,
-new API SDK, background process or external service is introduced. Live execution
-still needs explicit approval and a host-enforced aggregate request budget. The
-included Jev bridge intentionally cannot make that call.
+The process seam records only the answer input it delivered and the usage receipts
+returned by each process. Completeness flags remain false unless the host can attest
+that all nested calls and contexts are included. Missing values stay null. No live
+provider or native Codex lifecycle integration is claimed by the offline tests.
+Live execution still needs explicit approval and a host-enforced aggregate request
+budget. The included Jev bridge intentionally cannot make that call.
+
+## Completed-trial recovery
+
+Call `save_completed_trial(receipt_directory, result)` after each terminal trial.
+On restart, call `load_completed_trials(receipt_directory, registered_trial_ids)`
+and pass those rows to `summarize`. Each completed receipt is canonical JSON and is
+written atomically. A conflicting receipt is rejected. The loader reads only the
+preregistered IDs. It does not turn an absent or interrupted trial into a result.
 
 ## Repeated trials and component removal
 

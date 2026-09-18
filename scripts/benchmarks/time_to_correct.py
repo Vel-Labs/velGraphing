@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import os
+from pathlib import Path
 import re
 import threading
 import time
@@ -45,6 +46,16 @@ PROVENANCES = {"provider_reported", "host_observed", "fixture", "unavailable"}
 
 class MeasurementError(ValueError):
     """Closed reason codes only; never attach source or arbitrary exceptions."""
+
+    def __init__(self, reason: str) -> None:
+        if type(reason) is not str or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", reason):
+            reason = "measurement_error"
+        self.reason = reason
+        super().__init__(reason)
+
+
+class _ControllerDeadline(Exception):
+    """Private signal for the controller-owned wall deadline."""
 
 
 def canonical(value: Any) -> bytes:
@@ -110,20 +121,25 @@ class Answer:
 @dataclass(frozen=True)
 class Grade:
     passed: bool
-    score: float
-    maximum: float
+    required_fact_score: float
+    required_fact_maximum: float
     critical_facts_exact: bool
     unsupported_material_claims: int
     grader_id: str
     rubric_sha256: str
 
+    @property
+    def required_fact_recall(self) -> float:
+        return self.required_fact_score / self.required_fact_maximum
+
     def validate(self, identity: Mapping[str, Any]) -> None:
         if type(self.passed) is not bool or type(self.critical_facts_exact) is not bool:
             raise MeasurementError("invalid_grade")
-        for value in (self.score, self.maximum):
+        for value in (self.required_fact_score, self.required_fact_maximum):
             if type(value) not in (int, float) or not math.isfinite(value):
                 raise MeasurementError("invalid_grade")
-        if not 0 <= self.score <= self.maximum or self.maximum <= 0:
+        if (self.required_fact_maximum <= 0 or not 0 <= self.required_fact_score
+                <= self.required_fact_maximum):
             raise MeasurementError("invalid_grade")
         integer(self.unsupported_material_claims)
         identifier(self.grader_id)
@@ -211,6 +227,13 @@ class Trial:
                             "t_ns": timestamp, "attempt_id": self.current["attempt_id"] if self.current else None,
                             **metadata})
         return timestamp
+
+    def remaining_ns(self) -> int:
+        return max(0, self.budget.wall_limit_ns - self.now())
+
+    def _check_deadline(self) -> None:
+        if self.remaining_ns() == 0:
+            raise _ControllerDeadline
 
     @contextmanager
     def phase(self, name: str) -> Iterator[None]:
@@ -348,7 +371,7 @@ class Trial:
             raise MeasurementError("trial_already_run")
         reason = "repair_budget_exhausted"
         for number in range(self.budget.max_repairs + 1):
-            if self.now() >= self.budget.wall_limit_ns:
+            if self.remaining_ns() == 0:
                 reason = "deadline_exceeded"
                 break
             self.current = {
@@ -359,6 +382,7 @@ class Trial:
                 "coverage": {"source_operations": False, "model_calls": False, "context_deliveries": False},
                 "grade": None, "answer_sha256": None, "answer_completed_ns": None,
                 "grade_completed_ns": None, "terminal_reason": None,
+                "failure_stage": None, "failure_reason": None,
             }
             self.current["bindings"]["source_snapshot_sha256"] = self.identity["source_snapshot_sha256"]
             self.attempts.append(self.current)
@@ -369,44 +393,54 @@ class Trial:
             else:
                 self.not_applicable("repair")
             try:
+                stage = "prepare"
                 prepared = prepare(self, number)
-                if self.now() >= self.budget.wall_limit_ns:
-                    raise TimeoutError()
+                self._check_deadline()
                 self.stamp("answer_dispatch")
+                stage = "answer"
                 with self.phase("answer_generation"):
                     produced = answer(self, prepared, number)
                 if not isinstance(produced, Answer) or type(produced.content) is not str:
                     raise MeasurementError("invalid_answer")
                 self.current["answer_sha256"] = digest(produced.content.encode("utf-8"))
                 self.current["answer_completed_ns"] = self.stamp("answer_completed")
-                if self.now() >= self.budget.wall_limit_ns:
-                    raise TimeoutError()
+                self._check_deadline()
+                stage = "grader"
                 with self.phase("grading"):
                     scored = grade(self, produced, number)
                     if not isinstance(scored, Grade):
                         raise MeasurementError("invalid_grade")
                     scored.validate(self.identity)
-                    expected_pass = (scored.score / scored.maximum >= self.pass_recall_min
+                    expected_pass = (scored.required_fact_recall >= self.pass_recall_min
                                      and scored.critical_facts_exact and scored.unsupported_material_claims == 0)
                     if scored.passed != expected_pass:
                         raise MeasurementError("grade_disagrees_with_frozen_gate")
                 self.current["grade_completed_ns"] = self.stamp("independent_grade_completed")
-                self.current["grade"] = dict(vars(scored))
-                if self.now() >= self.budget.wall_limit_ns:
-                    raise TimeoutError()
+                self.current["grade"] = {**vars(scored), "required_fact_recall": scored.required_fact_recall}
+                self._check_deadline()
                 if scored.passed:
                     self.stamp("first_passing_answer")
                     reason = "passed"
                 else:
                     reason = "repair_budget_exhausted" if number == self.budget.max_repairs else "needs_repair"
-            except TimeoutError:
+            except _ControllerDeadline:
                 reason = "deadline_exceeded"
+                self.current["failure_stage"] = "controller"
+                self.current["failure_reason"] = reason
+            except TimeoutError:
+                reason = "callback_timeout"
+                self.current["failure_stage"] = stage
+                self.current["failure_reason"] = reason
             except (KeyboardInterrupt, InterruptedError):
                 reason = "cancelled"
-            except MeasurementError:
+            except MeasurementError as exc:
                 reason = "measurement_error"
+                self.current["failure_stage"] = stage
+                self.current["failure_reason"] = exc.reason
             except (Exception, SystemExit):
                 reason = "callback_error"
+                self.current["failure_stage"] = stage
+                self.current["failure_reason"] = reason
             finally:
                 if repair:
                     repair.__exit__(None, None, None)
@@ -428,9 +462,27 @@ class Trial:
         phase_totals: dict[str, Any] = {}
         for phase in PHASES:
             intervals = [(r["start_ns"], r["end_ns"]) for r in self.intervals if r["phase"] == phase]
-            status = "observed" if intervals else (
-                "not_applicable" if self.attempts and all(a["phase_status"][phase] == "not_applicable" for a in self.attempts) else "missing")
-            phase_totals[phase] = {"status": status, "inclusive_union_ns": union_ns(intervals) if status != "missing" else None}
+            statuses = [attempt["phase_status"][phase] for attempt in self.attempts]
+            observed = statuses.count("observed")
+            missing = statuses.count("missing")
+            not_applicable = statuses.count("not_applicable")
+            if statuses and observed == len(statuses):
+                status = "observed"
+            elif statuses and not_applicable == len(statuses):
+                status = "not_applicable"
+            elif statuses and missing == len(statuses):
+                status = "missing"
+            else:
+                status = "partial"
+            phase_totals[phase] = {
+                "status": status,
+                "complete": bool(statuses) and missing == 0,
+                "attempts_total": len(statuses),
+                "observed_attempts": observed,
+                "missing_attempts": missing,
+                "not_applicable_attempts": not_applicable,
+                "inclusive_union_ns": union_ns(intervals) if intervals else (0 if status == "not_applicable" else None),
+            }
         first = self.attempts[0] if self.attempts else None
         passing = next((a for a in self.attempts if a["terminal_reason"] == "passed"), None)
         receipts = [r for a in self.attempts for r in a["model_calls"]]
@@ -510,3 +562,54 @@ def summarize(expected_trial_ids: Sequence[str], results: Sequence[Mapping[str, 
             "cost_per_success_usd": sum(r["all_attempt_cost_usd"] for r in results) / passing
                 if passing and len(results) == len(expected) and all(r["all_attempt_cost_usd"] is not None for r in results) else None,
             "trials": rows}
+
+
+def save_completed_trial(directory: Path, result: Mapping[str, Any]) -> Path:
+    """Atomically retain one terminal trial for interrupted-run recovery."""
+    if result.get("schema_version") != "velgraphing-time-to-correct-v1" or not result.get("terminal_reason"):
+        raise MeasurementError("invalid_completed_trial")
+    trial_id = identifier(result.get("identity", {}).get("trial_id"))
+    raw = canonical(result)
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / f"{trial_id}.json"
+    if destination.exists():
+        if destination.read_bytes() != raw:
+            raise MeasurementError("completed_trial_receipt_conflict")
+        return destination
+    temporary = directory / f".{trial_id}.{uuid.uuid4().hex}.tmp"
+    try:
+        with temporary.open("xb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, destination)
+        directory_fd = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return destination
+
+
+def load_completed_trials(directory: Path, expected_trial_ids: Sequence[str]) -> list[dict[str, Any]]:
+    """Load only preregistered completed receipts. Missing IDs remain missing."""
+    results = []
+    for trial_id in expected_trial_ids:
+        trial_id = identifier(trial_id)
+        path = directory / f"{trial_id}.json"
+        if not path.exists():
+            continue
+        raw = path.read_bytes()
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError:
+            raise MeasurementError("invalid_completed_trial") from None
+        if raw != canonical(result) or result.get("schema_version") != "velgraphing-time-to-correct-v1":
+            raise MeasurementError("invalid_completed_trial")
+        if result.get("identity", {}).get("trial_id") != trial_id or not result.get("terminal_reason"):
+            raise MeasurementError("invalid_completed_trial")
+        results.append(result)
+    return results

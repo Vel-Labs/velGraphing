@@ -26,9 +26,10 @@ contract; and historical result boundaries. This is a caller/measurement audit,
 not a claim to have executed every legacy or experimental product path.
 No ignored inputs, private corpus checkout, credentials or live provider were
 accessed. Retained grades were inspected, not independently regraded from raw
-answers. The local network clone failed on DNS; GitHub reads established the
-exact base, and full-checkout validation is delegated to branch CI. The local
-staging directory is not represented as the operator's checkout.
+answers. The original local network clone failed on DNS. GitHub reads established
+the exact base. The repair was later validated in an isolated worktree and by the
+pull-request workflow. The original staging directory is not represented as the
+operator's checkout.
 
 ## 1. Findings ordered by severity
 
@@ -48,8 +49,11 @@ Evidence: [packet generation and instructions](https://github.com/Vel-Labs/velGr
 
 Resolution: a benchmark-owned monotonic controller now records acceptance,
 attempts, answer dispatch/completion, independent grading, repairs and first pass.
-A real native-host adapter still must supply those callbacks. Offline qualification
-is not that deployment and does not reconstruct historical wall time.
+A separate process boundary now accepts caller-supplied answer and grader commands
+as argv arrays. It exchanges canonical JSON without a shell and bounds each child
+process by the remaining trial deadline. The caller still supplies preparation.
+This offline qualification is not a native Codex deployment and does not
+reconstruct historical wall time.
 
 ### F02 / P1 / Integration defect in the experiment: topology and warm reuse are not exercised
 
@@ -193,6 +197,7 @@ and changed publication policy. No historical artifact is modified here.
     -> optional permutation with required slots locked -> host reads/answers
 
 answer generation and independent grading: native host / Parent, not graph core
+benchmark process seam: caller-owned answer command -> separate grader command
 core assist / retrieve_hybrid: separate caller-owned fallback APIs
 V5 navigation: separate bounded API, not the graph-find CLI entry point
 package projector: canonical core/contracts/adapters -> portable runtime copies
@@ -231,8 +236,8 @@ proof. The audit leaves these source/authority boundaries intact.
 | Provider round trip | Not separately observed | Host-owned transport span; offline fixture clearly typed |
 | Response validation / source revalidation | Included in composite elapsed | Actual parse call / second prepare call |
 | Queue / operator approval | Missing | Separate controller start/finish spans when observable |
-| Answer generation | Missing | Host dispatch to full completion, inclusive of any hidden queue |
-| Independent grade | Parent-supplied score, no duration | Controller wraps isolated grader completion |
+| Answer generation | Missing | External answer process dispatch to completion; native hidden queue stays unmeasured |
+| Independent grade | Parent-supplied score, no duration | Separate external grader process, timed by the controller |
 | Repairs | Not performed under a fixed budget | Bounded attempts, all earlier work retained |
 | First passing answer | Missing | Retrospective answer completion and separate grade confirmation |
 | CPU time | Not measured | Still not measured; active wall is not CPU time |
@@ -241,17 +246,19 @@ Clock origins from different domains are not comparable. Component spans may
 nest; interval unions avoid double counting. The root stopwatch is the source
 for wall time. Unobserved gaps remain unattributed. User-visible here means the
 chosen host boundary; browser rendering or delivery after that boundary is not
-invented. A real adapter must declare that boundary and any queue visibility.
+invented. The process seam declares dispatch-to-completion. A native adapter must
+declare any additional lifecycle boundary and queue visibility.
 
 ## 5. Minimal repair implemented
 
-Added the benchmark controller, graph/Jev qualification bridges, a runnable
-synthetic four-arm timing demonstration, retained-receipt diagnostics, focused
-unit/integration tests, and the successor protocol/operator documentation.
-The npm test suite now includes benchmark tests. CI validates this authorized
-branch before a PR is opened and runs the requested commands plus a second
-projector pass. Existing product source, runtime projection and sealed results
-are unchanged. No new dependency, daemon, SDK or model client is introduced.
+Added the benchmark controller, graph/Jev qualification bridges, a caller-owned
+answer/grader process boundary, completed-trial receipts, a runnable synthetic
+four-arm timing demonstration, retained-receipt diagnostics, focused tests, and
+the successor protocol/operator documentation. The npm test suite includes the
+benchmark tests. CI validates pull requests and pushes to `main`. It runs the
+requested commands plus a second projector pass. Existing product source, runtime
+projection and sealed results are unchanged. No new dependency, daemon, SDK or
+model client is introduced.
 
 Each attempt inherits immutable run/task/arm/repository/model/prompt/rubric
 identities from its trial receipt and has its own attempt ID, candidate/request/
@@ -259,11 +266,14 @@ context bindings, source operations, model-call receipts, stage states, grade
 and terminal reason. Missing data stays null. Context and source contents are
 not serialized into the trace. The clock is owned by the controller, not the LLM.
 
-The controller's deadline is cooperative at callback boundaries. A blocked host
-call requires host cancellation support; overruns are retained and not credited.
-Crash/SIGKILL recovery is not implemented: missing preregistered trials remain in
-the denominator rather than becoming imaginary successes. The actual native-host
-answer/grade adapter remains a clearly identified follow-up, not a mock completion.
+The controller's own deadline is cooperative at callback boundaries. The process
+seam applies a timeout to each direct child process. Arbitrary callbacks and native
+Codex sessions still require owner cancellation support. Callback timeout and wall
+deadline are separate terminal reasons. Each completed trial can be saved as one
+atomic canonical receipt and loaded after restart. In-flight SIGKILL recovery is
+not implemented. Missing preregistered trials remain in the denominator rather
+than becoming imaginary successes. Native Codex lifecycle integration remains a
+follow-up, not a mock completion.
 
 ## 6. Deferred architecture changes and gates
 
@@ -279,8 +289,8 @@ answer/grade adapter remains a clearly identified follow-up, not a mock completi
   do not weaken current protection to improve a score.
 - Jev no-op routing: consider avoiding calls when policy leaves fewer than two
   movable candidates. Prove behavior equivalence and all-in benefit before change.
-- Native-host transport/grade integration: requires real dispatch/completion and
-  usage receipts, isolation, cancellation and explicit aggregate live-call budget.
+- Native Codex lifecycle integration: requires real dispatch/completion and usage
+  receipts, isolation, cancellation and an explicit aggregate live-call budget.
 
 ## 7. Repeated-trial proposal
 
@@ -326,7 +336,7 @@ attempt to get a favorable product result by changing selection or removing a ga
 | Direct-source fallback | Retain. |
 | Required-position locking | Retain for this repair; evaluate a later inclusion/position distinction separately. |
 | Old phase-field summation as total runtime | Remove as a measurement method; preserve historical artifacts. |
-| Benchmark controller | Adopt after CI/local review; supply a real host adapter before live performance claims. |
+| Benchmark controller and process seam | Adopt after CI/local review; supply authorized live processes and complete receipts before performance claims. |
 
 Review this report first, then the successor README/protocol, controller,
 graph/Jev bridges, tests, and exact CI/PR validation receipt. Re-run locally on
@@ -335,10 +345,24 @@ authorized by this report.
 
 ## Validation receipt
 
-Local standalone controller tests and the synthetic demo are executable without
-the unavailable full clone. Full repository, actual graph/Jev integration,
-projection parity and double-projector idempotence are run on a clean GitHub
-checkout of the named branch. The PR body records exact head/base SHAs, commands,
-results and the Actions run. Do not use an earlier candidate's successful test
+Validation runs in an isolated worktree of the named branch. Focused benchmark
+tests include the real local answer/grader subprocess boundary, actual graph/Jev
+bridges, deadline classification, phase completeness, receipt recovery, and
+unknown-usage handling. The PR body records exact head/base SHAs, commands,
+results, and the Actions run. Do not use an earlier candidate's successful test
 count as proof for a later change. Any CI failure must be classified and repaired
 from evidence, not rerun unchanged until green.
+
+Local repair candidate results:
+
+- `python3 -m unittest discover -s tests/benchmarks -v`: 61 passed.
+- `python3 -m unittest discover -s tests/core -p 'test_jev.py' -v`: 57 passed.
+- `npm test`: 358 passed across scaffold, core, adapters, skills, benchmarks,
+  and parity.
+- `python3 -m json.tool` for the protocol, `py_compile` for the two changed
+  controller modules, and `git diff --check`: passed.
+- The package projector was not rerun locally because no canonical or
+  package-consumed input changed. Pull-request CI retains the two-pass projector
+  and parity check.
+- No live provider call, package installation, production source change, package
+  projection, release, or merge was performed.
