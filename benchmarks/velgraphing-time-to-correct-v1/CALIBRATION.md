@@ -53,13 +53,15 @@ run data do not make the controller dirty. A resume must use the same controller
 identity. Tracked or index changes are refused.
 
 Each corpus checkout is verified before the trial and again after the native answer
-and grader return. The commit, index and status, manifest bytes, source bytes, and
-snapshot digest must remain exact. A changed corpus prevents the terminal trial
-receipt from being saved. Lane directories and files are opened through no-follow
-directory descriptors so a symlink cannot redirect a request, response, or receipt
-outside the canonical run root. The aggregate `jev-calls` cap ledger uses the same
-contained no-follow operations for counting, reserving, reading, and completing
-call receipts.
+and grader return. The pinned commit, restricted stage-0 index, selected worktree
+diff, untracked-file set, manifest bytes, source bytes, and snapshot digest must
+remain exact. The restricted index must contain only manifest paths in mode 100644
+or 100755. Intentional omissions from the full upstream tree are not dirty state.
+A changed selected file, index, or extra file prevents the terminal trial receipt
+from being saved. Lane directories and files are opened through no-follow directory
+descriptors so a symlink cannot redirect a request, response, or receipt outside
+the canonical run root. The aggregate `jev-calls` cap ledger uses the same contained
+no-follow operations for counting, reserving, reading, and completing call receipts.
 
 ## Native answer lane
 
@@ -166,6 +168,8 @@ call ran.
 - All 76 benchmark tests passed.
 - All 57 focused Jev tests passed.
 - Package source parity passed for 87 files.
+- The actual v4 restricted lanes passed for all four corpora: 8, 149, 179, and
+  63 manifest/index entries.
 - Python compilation and `git diff --check` passed.
 
 ## Parent start command

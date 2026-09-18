@@ -179,17 +179,38 @@ def verify_lane(repo: Path, corpus: Mapping[str, Any], corpus_root: Path) -> tup
     if snapshot_sha256 != corpus["snapshot_sha256"]:
         raise MeasurementError("corpus_snapshot_mismatch")
     head = _git(corpus_root, "rev-parse", "--verify", "HEAD").decode("ascii").strip()
-    status = _git(corpus_root, "status", "--porcelain=v1", "-z")
-    index = _git(corpus_root, "diff", "--cached", "--binary", "--no-ext-diff", "HEAD", "--")
-    if head != corpus["commit"] or status or index:
+    index = _git(corpus_root, "ls-files", "--stage", "-z")
+    entries = []
+    try:
+        for raw_entry in (entry for entry in index.split(b"\0") if entry):
+            metadata, raw_path = raw_entry.split(b"\t", 1)
+            mode, object_id, stage = metadata.split(b" ")
+            entries.append((mode.decode("ascii"), object_id.decode("ascii"),
+                            stage.decode("ascii"), raw_path.decode("utf-8")))
+    except (UnicodeError, ValueError):
+        raise MeasurementError("corpus_index_invalid") from None
+    expected_paths = [row["path"] for row in rows]
+    indexed_paths = [entry[3] for entry in entries]
+    if (head != corpus["commit"] or len(set(expected_paths)) != len(expected_paths)
+            or len(entries) != len(expected_paths) or set(indexed_paths) != set(expected_paths)
+            or any(mode not in {"100644", "100755"} or stage != "0"
+                   for mode, _, stage, _ in entries)):
+        raise MeasurementError("corpus_index_invalid")
+    worktree_diff = _git(corpus_root, "diff", "--no-ext-diff", "--binary", "--")
+    untracked = _git(corpus_root, "ls-files", "--others", "--exclude-standard", "-z")
+    if worktree_diff or untracked:
         raise MeasurementError("corpus_checkout_not_clean")
-    return [row["path"] for row in rows], {
+    identity = {
         "git_head": head,
         "index_sha256": digest(index),
-        "status_sha256": digest(status),
+        "index_entry_count": len(entries),
+        "selected_worktree_diff_sha256": digest(worktree_diff),
+        "untracked_sha256": digest(untracked),
         "manifest_sha256": digest(manifest_raw),
         "snapshot_sha256": snapshot_sha256,
     }
+    identity["restricted_state_sha256"] = digest(canonical(identity))
+    return expected_paths, identity
 
 
 def revalidate_lane(repo: Path, corpus: Mapping[str, Any], corpus_root: Path,
@@ -490,7 +511,8 @@ def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
     corpus_root = lane_root / corpus_id
     scope, lane_before = verify_lane(repo, corpus, corpus_root)
     identity = trial_identity(
-        config, registration, packet, corpus, oracle, lane_before["status_sha256"])
+        config, registration, packet, corpus, oracle,
+        lane_before["restricted_state_sha256"])
     trial = Trial(identity, Budget(**config["repair_budget"]), execution="observed")
     timeouts = config["timeouts_seconds"]
 
