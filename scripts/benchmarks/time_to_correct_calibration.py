@@ -12,7 +12,7 @@ import sys
 from typing import Any, Mapping
 import uuid
 
-from time_to_correct import (Budget, MeasurementError, Trial, canonical, digest,
+from time_to_correct import (Answer, Budget, Grade, MeasurementError, Trial, canonical, digest,
                              identifier, load_completed_trials, save_completed_trial,
                              summarize)
 from time_to_correct_graph import observe_graph_find
@@ -23,6 +23,9 @@ from time_to_correct_handoff import (HandoffError, atomic_write, atomic_write_at
 from time_to_correct_host import (ANSWER_RESPONSE_CONTRACT, GRADER_RESPONSE_CONTRACT,
                                   USAGE_KEYS, _invoke, run_process_trial)
 from time_to_correct_jev import evaluate_live, evaluate_offline, load_jev, prepare_preview
+from time_to_correct_packet import (EVIDENCE_BUDGET_BYTES, MAX_CANDIDATES,
+                                    MAX_SPAN_BYTES, build_candidate_packet,
+                                    compose_answer_payload)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +35,49 @@ ARMS = ("A", "B", "C", "D")
 JEV_ARMS = {"B", "D"}
 DEFAULT_CALIBRATION_ID = "velgraphing-ttc-calibration-v1"
 V2_CALIBRATION_ID = "velgraphing-ttc-calibration-v2"
+V3_CALIBRATION_ID = "velgraphing-ttc-calibration-v3"
+V3_CANDIDATE_POLICY = {
+    "max_candidates": MAX_CANDIDATES,
+    "max_span_bytes": MAX_SPAN_BYTES,
+    "answer_evidence_budget_bytes": EVIDENCE_BUDGET_BYTES,
+    "incremental_batches": False,
+    "dynamic_fallback": False,
+    "direct_route": "direct_flat",
+    "graph_route": "graph_find_tag_index",
+    "graph_edge_expansion": "not_available",
+}
+V3_MEASUREMENT_CONTRACT = {
+    "version": "velgraphing-ttc-measurement-v3",
+    "metrics": [
+        "registered_reported_pass_and_time_to_correct",
+        "full_and_operator_approval_excluded_wall_and_time_to_correct",
+        "active_wait_and_unattributed_time",
+        "answer_request_bytes", "answer_model_usage_when_complete",
+        "grader_usage_when_complete",
+        "source_operation_count_and_range_bytes_with_completeness",
+        "source_capture_candidate_discovery_and_context_composition",
+        "answer_generation_and_grading",
+        "cold_graph_build_status_and_duration", "retrieval_status_and_duration",
+        "fallback_status_and_duration", "jev_request_state_and_questions_bytes",
+        "jev_candidate_and_question_counts", "jev_rubric_version",
+        "jev_source_bytes_verified", "jev_scores_probabilities_and_distribution_confidence",
+        "jev_evaluator_elapsed_ms", "provider_input_and_output_tokens",
+        "provider_call_count_and_interval", "provider_and_task_retries",
+        "confidence_linked_task_failures", "paired_arm_contrasts",
+    ],
+    "unknown_boundaries": {
+        "shared_state_tokens": "provider_does_not_report_request_token_split",
+        "question_suffix_tokens": "provider_does_not_report_request_token_split",
+        "candidate_calibration": "unscored_without_candidate_level_oracle",
+        "missing_measurements": "null_never_zero",
+        "warm_graph_load": "not_applicable_for_current_cold_in_memory_route",
+    },
+    "primary_provider_budget": {"calls": 12, "retries": 0},
+    "sensitivity_ablation": {
+        "status": "future_companion_not_authorized",
+        "requires": ["distinct_provider_call_budget", "candidate_level_labels"],
+    },
+}
 CALIBRATION_SPECS = {
     DEFAULT_CALIBRATION_ID: {
         "path": "benchmarks/velgraphing-time-to-correct-v1/calibration.json",
@@ -43,6 +89,13 @@ CALIBRATION_SPECS = {
     V2_CALIBRATION_ID: {
         "path": "benchmarks/velgraphing-time-to-correct-v2/calibration.json",
         "base_commit": "ac5ba612da42d4d677250e7bd94c720b521d9f68",
+        "repair_budget": {"max_repairs": 0, "wall_limit_ns": 600_000_000_000},
+        "timeouts_seconds": {"preparation": 180, "jev_approval": 60,
+                             "answer": 180, "grader": 120},
+    },
+    V3_CALIBRATION_ID: {
+        "path": "benchmarks/velgraphing-time-to-correct-v3/calibration.json",
+        "base_commit": "031a8390ae3accce7fe4b3756f01f98f2c606ee6",
         "repair_budget": {"max_repairs": 0, "wall_limit_ns": 600_000_000_000},
         "timeouts_seconds": {"preparation": 180, "jev_approval": 60,
                              "answer": 180, "grader": 120},
@@ -128,7 +181,10 @@ def load_calibration(repo: Path = REPO_ROOT,
             or config.get("repair_budget") != spec["repair_budget"]
             or config.get("timeouts_seconds") != spec["timeouts_seconds"]
             or config.get("dispatch_design") != "balanced_latin_square_abdc_bcad_cdba_dacb_repeated_for_six_tasks"
-            or registrations != EXPECTED_REGISTRATIONS):
+            or registrations != EXPECTED_REGISTRATIONS
+            or (calibration_id == V3_CALIBRATION_ID
+                and (config.get("measurement_contract") != V3_MEASUREMENT_CONTRACT
+                     or config.get("candidate_policy") != V3_CANDIDATE_POLICY))):
         raise MeasurementError("calibration_freeze_invalid")
     source = config.get("source_pilot", {})
     paths = {
@@ -343,6 +399,288 @@ def jev_answer_payload(packet: Mapping[str, Any], result: Mapping[str, Any]) -> 
     return payload
 
 
+V3_NUMERIC_METRICS = (
+    "user_visible_wall_ns", "confirmed_time_to_correct_ns", "answer_request_bytes",
+    "wall_excluding_operator_approval_ns", "ttc_excluding_operator_approval_ns",
+    "observed_active_execution_ns", "observed_wait_union_ns", "unattributed_ns",
+    "operator_approval_ns", "answer_input_tokens", "answer_output_tokens",
+    "grader_input_tokens", "grader_output_tokens", "source_operation_count",
+    "source_range_bytes", "source_capture_ns", "candidate_discovery_ns",
+    "context_composition_ns", "answer_generation_ns", "grading_ns",
+    "cold_graph_build_ns", "retrieval_ns", "fallback_ns",
+    "jev_request_bytes", "jev_shared_state_bytes", "jev_questions_bytes",
+    "jev_candidate_count", "jev_question_count", "jev_source_bytes_verified",
+    "jev_evaluator_elapsed_ms", "provider_input_tokens",
+    "provider_output_tokens", "provider_calls", "provider_interval_ns",
+    "provider_retries", "task_retries", "graph_record_count", "graph_edge_count",
+)
+
+
+def _phase_measurement(result: Mapping[str, Any], name: str) -> dict[str, Any]:
+    phase = result.get("phases", {}).get(name, {})
+    return {
+        "status": phase.get("status", "missing"),
+        "duration_ns": phase.get("inclusive_union_ns"),
+    }
+
+
+def _usage(attempts: list[Mapping[str, Any]], kind: str,
+           complete: bool) -> tuple[int | None, int | None]:
+    rows = [row for attempt in attempts for row in attempt.get("model_calls", [])
+            if row.get("kind") == kind]
+    if (not complete or not rows
+            or any(row.get("provenance") == "unavailable"
+                   or row.get("input_tokens") is None
+                   or row.get("output_tokens") is None for row in rows)):
+        return None, None
+    return (sum(row["input_tokens"] for row in rows),
+            sum(row["output_tokens"] for row in rows))
+
+
+def _v3_trial_measurement(registration: Mapping[str, Any],
+                          result: Mapping[str, Any] | None) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "trial_id": registration["trial_id"],
+        "task_id": registration["task_id"],
+        "terminal_reason": "missing" if result is None else result.get("terminal_reason"),
+    }
+    if result is None:
+        row.update({key: None for key in V3_NUMERIC_METRICS})
+        row.update({
+            "first_pass_correct": None,
+            "source_operations_complete": False,
+            "cold_graph_build": {"status": "missing", "duration_ns": None},
+            "warm_graph_load": {"status": "missing", "duration_ns": None},
+            "source_capture": {"status": "missing", "duration_ns": None},
+            "candidate_discovery": {"status": "missing", "duration_ns": None},
+            "context_composition": {"status": "missing", "duration_ns": None},
+            "answer_generation": {"status": "missing", "duration_ns": None},
+            "grading": {"status": "missing", "duration_ns": None},
+            "retrieval": {"status": "missing", "duration_ns": None},
+            "fallback": {"status": "missing", "duration_ns": None},
+            "provider": {"status": "missing", "duration_ns": None},
+            "jev_rubric_version": None,
+            "answer_usage_complete": False,
+            "grader_usage_complete": False,
+            "jev_score_observation": None,
+            "shared_state_tokens": None,
+            "question_suffix_tokens": None,
+            "confidence_linked_failure": None,
+        })
+        return row
+
+    attempts = result.get("attempts", [])
+    answer_complete = bool(attempts) and all(
+        attempt.get("coverage", {}).get("model_calls") is True
+        and attempt.get("answer_boundary", {}).get("model_calls_complete") is True
+        for attempt in attempts
+    )
+    answer_input, answer_output = _usage(attempts, "answer", answer_complete)
+    grader_complete = bool(attempts) and all(
+        attempt.get("coverage", {}).get("model_calls") is True for attempt in attempts)
+    grader_input, grader_output = _usage(attempts, "grader", grader_complete)
+    source_complete = bool(attempts) and all(
+        attempt.get("coverage", {}).get("source_operations") is True for attempt in attempts)
+    source_operations = [operation for attempt in attempts
+                         for operation in attempt.get("source_operations", [])]
+    answer_requests = [delivery for attempt in attempts
+                       for delivery in attempt.get("context_deliveries", [])
+                       if delivery.get("kind") == "answer_request"]
+    jev_observations = [attempt["jev_observation"] for attempt in attempts
+                        if type(attempt.get("jev_observation")) is dict]
+    candidate_observations = [attempt["candidate_observation"] for attempt in attempts
+                              if type(attempt.get("candidate_observation")) is dict]
+    jev = jev_observations[0] if len(jev_observations) == 1 else {}
+    candidate = candidate_observations[0] if len(candidate_observations) == 1 else {}
+    provider_status = _phase_measurement(result, "provider")
+    approval_status = _phase_measurement(result, "operator_approval")
+    provider_complete = provider_status["status"] in {"observed", "not_applicable"}
+    provider_input, provider_output = _usage(attempts, "jev", provider_complete)
+    provider_calls = (0 if provider_status["status"] == "not_applicable"
+                      else sum(observation.get("attempted_calls", 0)
+                               for observation in jev_observations)
+                      if jev_observations and all(
+                          type(observation.get("attempted_calls")) is int
+                          for observation in jev_observations) else None)
+    confidences = [score.get("distribution_confidence") for observation in jev_observations
+                   for score in observation.get("scores", [])
+                   if type(score.get("distribution_confidence")) in (int, float)]
+    failed = result.get("terminal_reason") != "passed"
+    confidence_failure = None
+    if failed and confidences:
+        confidence_failure = {
+            "terminal_reason": result.get("terminal_reason"),
+            "candidate_count": len(confidences),
+            "mean_distribution_confidence": sum(confidences) / len(confidences),
+            "max_distribution_confidence": max(confidences),
+            "interpretation": "descriptive_not_candidate_calibration",
+        }
+    row.update({
+        "first_pass_correct": result.get("first_pass_correct"),
+        "user_visible_wall_ns": result.get("user_visible_wall_ns"),
+        "confirmed_time_to_correct_ns": result.get("confirmed_time_to_correct_ns"),
+        "operator_approval_ns": approval_status["duration_ns"],
+        "wall_excluding_operator_approval_ns": (
+            result.get("user_visible_wall_ns") - approval_status["duration_ns"]
+            if result.get("user_visible_wall_ns") is not None
+            and approval_status["duration_ns"] is not None else None),
+        "ttc_excluding_operator_approval_ns": (
+            result.get("confirmed_time_to_correct_ns") - approval_status["duration_ns"]
+            if result.get("confirmed_time_to_correct_ns") is not None
+            and approval_status["duration_ns"] is not None else None),
+        "observed_active_execution_ns": result.get("observed_active_execution_ns"),
+        "observed_wait_union_ns": result.get("observed_wait_union_ns"),
+        "unattributed_ns": result.get("unattributed_ns"),
+        "answer_request_bytes": (answer_requests[-1].get("bytes")
+                                 if answer_requests and any(
+                                     attempt.get("phase_status", {}).get("answer_generation") == "observed"
+                                     for attempt in attempts) else None),
+        "answer_input_tokens": answer_input,
+        "answer_output_tokens": answer_output,
+        "answer_usage_complete": answer_complete,
+        "grader_input_tokens": grader_input,
+        "grader_output_tokens": grader_output,
+        "grader_usage_complete": grader_complete,
+        "source_operation_count": len(source_operations) if source_complete else None,
+        "source_range_bytes": (sum(operation["byte_end"] - operation["byte_start"]
+                                   for operation in source_operations)
+                               if source_complete else None),
+        "source_operations_complete": source_complete,
+        "source_capture": _phase_measurement(result, "source_capture"),
+        "candidate_discovery": _phase_measurement(result, "candidate_discovery"),
+        "context_composition": _phase_measurement(result, "context_composition"),
+        "answer_generation": _phase_measurement(result, "answer_generation"),
+        "grading": _phase_measurement(result, "grading"),
+        "cold_graph_build": _phase_measurement(result, "cold_graph_build"),
+        "warm_graph_load": _phase_measurement(result, "warm_graph_load"),
+        "retrieval": _phase_measurement(result, "retrieval"),
+        "fallback": _phase_measurement(result, "fallback"),
+        "provider": provider_status,
+        "source_capture_ns": _phase_measurement(result, "source_capture")["duration_ns"],
+        "candidate_discovery_ns": _phase_measurement(result, "candidate_discovery")["duration_ns"],
+        "context_composition_ns": _phase_measurement(result, "context_composition")["duration_ns"],
+        "answer_generation_ns": _phase_measurement(result, "answer_generation")["duration_ns"],
+        "grading_ns": _phase_measurement(result, "grading")["duration_ns"],
+        "cold_graph_build_ns": _phase_measurement(result, "cold_graph_build")["duration_ns"],
+        "retrieval_ns": _phase_measurement(result, "retrieval")["duration_ns"],
+        "fallback_ns": _phase_measurement(result, "fallback")["duration_ns"],
+        "jev_request_bytes": jev.get("request_bytes"),
+        "jev_shared_state_bytes": jev.get("shared_state_bytes"),
+        "jev_questions_bytes": jev.get("questions_bytes"),
+        "jev_candidate_count": jev.get("candidate_count"),
+        "jev_question_count": jev.get("question_count"),
+        "jev_source_bytes_verified": jev.get("source_bytes_verified"),
+        "jev_evaluator_elapsed_ms": jev.get("elapsed_ms"),
+        "jev_rubric_version": jev.get("rubric_version"),
+        "jev_score_observation": (jev.get("scores") if jev_observations else None),
+        "shared_state_tokens": None,
+        "question_suffix_tokens": None,
+        "provider_input_tokens": provider_input,
+        "provider_output_tokens": provider_output,
+        "provider_calls": provider_calls,
+        "provider_interval_ns": provider_status["duration_ns"],
+        "provider_retries": max(0, provider_calls - 1) if provider_calls is not None else None,
+        "task_retries": max(0, len(attempts) - 1),
+        "graph_record_count": candidate.get("record_count"),
+        "graph_edge_count": candidate.get("edge_count"),
+        "discovery_route": candidate.get("route"),
+        "edge_expansion_status": candidate.get("edge_expansion_status"),
+        "confidence_linked_failure": confidence_failure,
+    })
+    return row
+
+
+def _metric_summary(rows: list[Mapping[str, Any]], metric: str) -> dict[str, Any]:
+    values = [row[metric] for row in rows if type(row.get(metric)) in (int, float)]
+    return {
+        "observed_trials": len(values),
+        "missing_trials": len(rows) - len(values),
+        "mean": sum(values) / len(values) if values else None,
+    }
+
+
+def _paired_contrast(left: str, right: str,
+                     rows_by_arm: Mapping[str, list[Mapping[str, Any]]]) -> dict[str, Any]:
+    left_by_task = {row["task_id"]: row for row in rows_by_arm[left]}
+    right_by_task = {row["task_id"]: row for row in rows_by_arm[right]}
+    metrics = {}
+    for metric in V3_NUMERIC_METRICS:
+        deltas = []
+        for task in TASKS:
+            left_value = left_by_task[task].get(metric)
+            right_value = right_by_task[task].get(metric)
+            if type(left_value) in (int, float) and type(right_value) in (int, float):
+                deltas.append(left_value - right_value)
+        metrics[metric] = {
+            "paired_tasks": len(deltas),
+            "missing_pairs": len(TASKS) - len(deltas),
+            "mean_delta_left_minus_right": sum(deltas) / len(deltas) if deltas else None,
+        }
+    return {"left_arm": left, "right_arm": right, "metrics": metrics}
+
+
+def _v3_measurements(config: Mapping[str, Any], completed: list[dict[str, Any]],
+                     arm_summaries: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    results = {result["identity"]["trial_id"]: result for result in completed}
+    for task in TASKS:
+        for left, right in (("A", "B"), ("C", "D")):
+            pair = [results.get(f"{arm}-{task}") for arm in (left, right)]
+            if any(result is None for result in pair):
+                continue
+            observations = []
+            for result in pair:
+                attempts = result.get("attempts", [])
+                found = [attempt.get("candidate_observation") for attempt in attempts
+                         if type(attempt.get("candidate_observation")) is dict]
+                if len(found) != 1:
+                    raise MeasurementError("paired_candidate_packet_missing")
+                observations.append(found[0])
+            for key in ("candidate_packet_sha256", "baseline_order_sha256"):
+                if (type(observations[0].get(key)) is not str
+                        or observations[0][key] != observations[1].get(key)):
+                    raise MeasurementError("paired_candidate_packet_mismatch")
+    rows_by_arm: dict[str, list[dict[str, Any]]] = {}
+    summaries = {}
+    for arm in ARMS:
+        registrations = [row for row in config["registered_trials"] if row["arm"] == arm]
+        rows = [_v3_trial_measurement(row, results.get(row["trial_id"])) for row in registrations]
+        rows_by_arm[arm] = rows
+        summaries[arm] = {
+            "outcomes": {key: arm_summaries[arm][key] for key in (
+                "registered_trials", "reported_trials", "passed_within_budget",
+                "pass_rate_registered", "first_pass_correct_registered",
+                "mean_observed_terminal_wall_ns", "mean_time_to_correct_ns",
+                "ttc_mean_policy", "coverage_complete",
+            )},
+            "metrics": {metric: _metric_summary(rows, metric)
+                        for metric in V3_NUMERIC_METRICS},
+            "trials": rows,
+            "confidence_linked_task_failures": [
+                {"trial_id": row["trial_id"], **row["confidence_linked_failure"]}
+                for row in rows if row["confidence_linked_failure"] is not None
+            ],
+            "jev_score_observations": [
+                {"trial_id": row["trial_id"], "scores": row["jev_score_observation"]}
+                for row in rows if row["jev_score_observation"] is not None
+            ],
+        }
+    return {
+        "measurement_summaries": summaries,
+        "paired_contrasts": {
+            name: _paired_contrast(left, right, rows_by_arm)
+            for name, left, right in (
+                ("B-A", "B", "A"), ("D-C", "D", "C"),
+                ("C-A", "C", "A"), ("D-B", "D", "B"),
+            )
+        },
+        "candidate_calibration": {
+            "status": "unscored",
+            "reason": "no_candidate_level_oracle_exists",
+            "confidence_linked_failures_are": "descriptive_only",
+        },
+    }
+
+
 def summarize_calibration(config: Mapping[str, Any], completed: list[dict[str, Any]],
                           controller: Mapping[str, Any]) -> dict[str, Any]:
     """Close one mixed-arm calibration without weakening protocol comparison."""
@@ -370,7 +708,7 @@ def summarize_calibration(config: Mapping[str, Any], completed: list[dict[str, A
                 })
         arm_summaries[arm] = summarize(trial_ids, results)
     coverage_complete = all(row["coverage_complete"] for row in arm_summaries.values())
-    return {
+    output = {
         "schema_version": "velgraphing-ttc-calibration-result-v1",
         "calibration_id": config["calibration_id"],
         "status": "closed" if coverage_complete else "incomplete",
@@ -381,6 +719,14 @@ def summarize_calibration(config: Mapping[str, Any], completed: list[dict[str, A
         "coverage_complete": coverage_complete,
         "arm_summaries": arm_summaries,
     }
+    if config["calibration_id"] == V3_CALIBRATION_ID:
+        measurements = _v3_measurements(config, completed, arm_summaries)
+        output.update({
+            "schema_version": "velgraphing-ttc-calibration-result-v3",
+            "measurement_contract": config["measurement_contract"],
+            **measurements,
+        })
+    return output
 
 
 def request_candidates(trial: Trial, repo: Path, run_root: Path, payload: dict[str, Any],
@@ -608,9 +954,51 @@ def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
         lane_before["restricted_state_sha256"])
     trial = Trial(identity, Budget(**config["repair_budget"]), execution="observed")
     timeouts = config["timeouts_seconds"]
-    v2 = config["calibration_id"] == V2_CALIBRATION_ID
+    contracted = config["calibration_id"] in {V2_CALIBRATION_ID, V3_CALIBRATION_ID}
+    v3 = config["calibration_id"] == V3_CALIBRATION_ID
 
     def prepare(current: Trial, attempt: int) -> dict[str, Any]:
+        if v3:
+            navigation = None
+            route = "direct"
+            if registration["arm"] in {"C", "D"}:
+                route = "graph"
+                navigation = observe_graph_find(
+                    current, repo, graph_argv(packet, repo, corpus_root))
+            else:
+                current.not_applicable("cold_graph_build", "warm_graph_load")
+            current.not_applicable("fallback")
+            candidate = build_candidate_packet(
+                current, corpus_root, packet["question"], scope,
+                route=route, graph_navigation=navigation,
+            )
+            order = [row["id"] for row in candidate["candidates"]]
+            if registration["arm"] in JEV_ARMS:
+                prepared = prepare_preview(current, repo, candidate, corpus_root)
+                approval_response(
+                    current, repo, run_root, prepared,
+                    timeouts["jev_approval"], budget.cap,
+                )
+                receipt_path, call_number = budget.reserve(
+                    registration["trial_id"], prepared["request_sha256"])
+                result = evaluate_live(
+                    current, repo, candidate, corpus_root,
+                    approved_request_sha256=prepared["request_sha256"],
+                    runtime_approved=True, max_live_calls=budget.cap,
+                    call_number=call_number, retain_packet_telemetry=True,
+                )
+                budget.complete(receipt_path, result)
+                order = jev_answer_payload(candidate, result)["order"]
+            else:
+                current.not_applicable(
+                    "jev_preparation", "provider", "source_revalidation",
+                    "response_validation", "operator_approval",
+                )
+            answer_payload = compose_answer_payload(
+                current, corpus_root, candidate, order)
+            current.coverage(source_operations=True)
+            return answer_payload
+
         base = {
             "schema_version": "velgraphing-native-lane-packet-v1",
             "trial_id": registration["trial_id"],
@@ -631,7 +1019,7 @@ def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
         if registration["arm"] in JEV_ARMS:
             candidate = request_candidates(
                 current, repo, run_root, base, timeouts["preparation"],
-                PREPARATION_RESPONSE_CONTRACT if v2 else None,
+                PREPARATION_RESPONSE_CONTRACT if contracted else None,
             )
             prepared = prepare_preview(current, repo, candidate, corpus_root)
             approval_response(current, repo, run_root, prepared, timeouts["jev_approval"], budget.cap)
@@ -665,8 +1053,8 @@ def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
         trial, prepare, answer_argv=answer_command, grader_argv=grader_command,
         cwd=repo, answer_timeout_s=timeouts["answer"] + 1,
         grader_timeout_s=timeouts["grader"] + 1, grader_context=grader_context,
-        answer_response_contract=ANSWER_RESPONSE_CONTRACT if v2 else None,
-        grader_response_contract=GRADER_RESPONSE_CONTRACT if v2 else None,
+        answer_response_contract=ANSWER_RESPONSE_CONTRACT if contracted else None,
+        grader_response_contract=GRADER_RESPONSE_CONTRACT if contracted else None,
     )
     revalidate_lane(repo, corpus, corpus_root, lane_before)
     return result
@@ -780,7 +1168,8 @@ def replay_envelope(repo: Path, packet: dict[str, Any], source: Path) -> dict[st
 def qualify(repo: Path = REPO_ROOT,
             calibration_id: str = DEFAULT_CALIBRATION_ID) -> dict[str, Any]:
     config = load_calibration(repo, calibration_id)
-    v2 = config["calibration_id"] == V2_CALIBRATION_ID
+    contracted = config["calibration_id"] in {V2_CALIBRATION_ID, V3_CALIBRATION_ID}
+    v3 = config["calibration_id"] == V3_CALIBRATION_ID
     local_root = repo / ".velgraphing-local"
     local_root.mkdir(mode=0o700, exist_ok=True)
     root = local_root / f"ttc-calibration-qualification-{uuid.uuid4().hex}"
@@ -793,26 +1182,57 @@ def qualify(repo: Path = REPO_ROOT,
         def direct_prepare(trial: Trial, _: int) -> dict[str, Any]:
             trial.not_applicable("cold_graph_build", "warm_graph_load", "jev_preparation", "provider",
                                  "source_revalidation", "response_validation", "operator_approval")
+            if v3:
+                trial.not_applicable("fallback")
+                candidate = build_candidate_packet(
+                    trial, source,
+                    "Find cancel_task cancellation implementation and documentation",
+                    ["README.md", "cancel.py"], route="direct")
+                payload = compose_answer_payload(
+                    trial, source, candidate,
+                    [row["id"] for row in candidate["candidates"]])
+                trial.coverage(source_operations=True)
+                return payload
             return {"fixture_answer": "distinct direct fixture answer", "source_scope": ["README.md", "cancel.py"]}
         direct = run_process_trial(
             direct_trial, direct_prepare,
             answer_argv=handoff_argv(handoff_root, "direct-off", "answer", 1),
             grader_argv=handoff_argv(handoff_root, "direct-off", "grader", 1),
             cwd=repo, answer_timeout_s=1.5, grader_timeout_s=1.5,
-            answer_response_contract=ANSWER_RESPONSE_CONTRACT if v2 else None,
-            grader_response_contract=GRADER_RESPONSE_CONTRACT if v2 else None,
+            answer_response_contract=ANSWER_RESPONSE_CONTRACT if contracted else None,
+            grader_response_contract=GRADER_RESPONSE_CONTRACT if contracted else None,
         )
         finish_workers(direct_workers)
 
-        graph_workers = [start_fixture_worker(handoff_root, "graph-on", lane) for lane in ("preparation", "answer", "grader")]
+        graph_lanes = ("answer", "grader") if v3 else ("preparation", "answer", "grader")
+        graph_workers = [start_fixture_worker(handoff_root, "graph-on", lane) for lane in graph_lanes]
         graph_trial = Trial(fixture_identity("graph-on", "D", snapshot), Budget(0, 3_000_000_000), execution="fixture")
+        qualified_navigation: dict[str, Any] = {}
         def graph_prepare(trial: Trial, _: int) -> dict[str, Any]:
+            qualification_question = (
+                "cancel_task" if v3
+                else "Find cancel_task cancellation implementation and documentation")
             navigation = observe_graph_find(
-                trial, repo, ["--root", str(source), "--prompt", "Find cancel_task cancellation implementation and documentation"],
+                trial, repo, ["--root", str(source), "--prompt", qualification_question],
             )
+            qualified_navigation["value"] = navigation
             evidence = navigation["evidence"]
             if not evidence:
                 raise MeasurementError("qualification_graph_evidence_missing")
+            if v3:
+                trial.not_applicable("fallback", "operator_approval", "provider")
+                candidate = build_candidate_packet(
+                    trial, source,
+                    qualification_question,
+                    ["README.md", "cancel.py"], route="graph",
+                    graph_navigation=navigation)
+                envelope = replay_envelope(repo, candidate, source)
+                result = evaluate_offline(
+                    trial, repo, candidate, source, envelope=envelope,
+                    retain_packet_telemetry=True)
+                payload = compose_answer_payload(trial, source, candidate, result["order"])
+                trial.coverage(source_operations=True)
+                return payload
             candidates = [{
                 "id": f"c{index}", "path": item["source_path"],
                 "source_sha256": item["source_sha256"], "byte_start": item["byte_start"],
@@ -824,7 +1244,7 @@ def qualify(repo: Path = REPO_ROOT,
             captured = request_candidates(
                 trial, repo, handoff_root,
                 {"fixture_candidate_packet": packet, "graph_navigation": navigation}, 1,
-                PREPARATION_RESPONSE_CONTRACT if v2 else None,
+                PREPARATION_RESPONSE_CONTRACT if contracted else None,
             )
             envelope = replay_envelope(repo, captured, source)
             result = evaluate_offline(trial, repo, captured, source, envelope=envelope)
@@ -836,10 +1256,68 @@ def qualify(repo: Path = REPO_ROOT,
             answer_argv=handoff_argv(handoff_root, "graph-on", "answer", 1),
             grader_argv=handoff_argv(handoff_root, "graph-on", "grader", 1),
             cwd=repo, answer_timeout_s=1.5, grader_timeout_s=1.5,
-            answer_response_contract=ANSWER_RESPONSE_CONTRACT if v2 else None,
-            grader_response_contract=GRADER_RESPONSE_CONTRACT if v2 else None,
+            answer_response_contract=ANSWER_RESPONSE_CONTRACT if contracted else None,
+            grader_response_contract=GRADER_RESPONSE_CONTRACT if contracted else None,
         )
         finish_workers(graph_workers)
+
+        pair_proof = None
+        if v3:
+            def paired_observation(arm: str, route: str,
+                                   navigation: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                paired = Trial(fixture_identity(f"pair-{arm}", arm, snapshot),
+                               Budget(0, 1_000_000_000), execution="fixture")
+                def prepare_pair(current: Trial, _: int) -> dict[str, Any]:
+                    current.not_applicable(
+                        "cold_graph_build", "warm_graph_load", "fallback",
+                        "jev_preparation", "provider", "source_revalidation",
+                        "response_validation", "operator_approval",
+                    )
+                    if navigation is not None:
+                        current.current["graph_observation"] = graph["attempts"][0]["graph_observation"]
+                    pair_question = (
+                        "cancel_task" if route == "graph"
+                        else "Find cancel_task cancellation implementation and documentation"
+                    )
+                    candidate = build_candidate_packet(
+                        current, source,
+                        pair_question,
+                        ["README.md", "cancel.py"], route=route,
+                        graph_navigation=navigation)
+                    payload = compose_answer_payload(
+                        current, source, candidate,
+                        [row["id"] for row in candidate["candidates"]])
+                    current.coverage(source_operations=True)
+                    return payload
+                def answer_pair(current: Trial, payload: Mapping[str, Any], _: int) -> Answer:
+                    current.context(canonical(payload))
+                    current.usage(f"answer-pair-{arm}", "answer", provenance="fixture",
+                                  model="fixture-model", input_tokens=1, output_tokens=1)
+                    return Answer("pair qualification")
+                def grade_pair(current: Trial, _answer: Answer, _: int) -> Grade:
+                    current.coverage(model_calls=True, context_deliveries=True)
+                    return Grade(True, 1, 1, True, 0, "pair-grader", digest(b"fixture rubric"))
+                result = paired.run(prepare_pair, answer_pair, grade_pair)
+                return result["attempts"][0]["candidate_observation"]
+            direct_a = direct["attempts"][0]["candidate_observation"]
+            direct_b = paired_observation("B", "direct")
+            graph_d = graph["attempts"][0]["candidate_observation"]
+            graph_c = paired_observation("C", "graph", qualified_navigation["value"])
+            pair_proof = {
+                "direct": {
+                    "candidate_packet_sha256": direct_a["candidate_packet_sha256"],
+                    "baseline_order_sha256": direct_a["baseline_order_sha256"],
+                    "a_b_match": all(direct_a[key] == direct_b[key] for key in (
+                        "candidate_packet_sha256", "baseline_order_sha256")),
+                },
+                "graph": {
+                    "candidate_packet_sha256": graph_d["candidate_packet_sha256"],
+                    "baseline_order_sha256": graph_d["baseline_order_sha256"],
+                    "c_d_match": all(graph_c[key] == graph_d[key] for key in (
+                        "candidate_packet_sha256", "baseline_order_sha256")),
+                },
+                "answer_evidence_budget_bytes": V3_CANDIDATE_POLICY["answer_evidence_budget_bytes"],
+            }
 
         missing_trial = Trial(fixture_identity("missing-response", "A", snapshot),
                               Budget(0, 1_000_000_000), execution="fixture")
@@ -852,8 +1330,8 @@ def qualify(repo: Path = REPO_ROOT,
             answer_argv=handoff_argv(handoff_root, "missing-response", "answer", 0.05),
             grader_argv=handoff_argv(handoff_root, "missing-response", "grader", 0.05),
             cwd=repo, answer_timeout_s=0.5, grader_timeout_s=0.5,
-            answer_response_contract=ANSWER_RESPONSE_CONTRACT if v2 else None,
-            grader_response_contract=GRADER_RESPONSE_CONTRACT if v2 else None,
+            answer_response_contract=ANSWER_RESPONSE_CONTRACT if contracted else None,
+            grader_response_contract=GRADER_RESPONSE_CONTRACT if contracted else None,
         )
         receipt = read_lane(
             handoff_root, "missing-response", 0, "answer", "receipt.json")[1]
@@ -872,6 +1350,7 @@ def qualify(repo: Path = REPO_ROOT,
             "graph_on_replay": {"terminal_reason": graph["terminal_reason"],
                                 "graph_records": graph["attempts"][0]["graph_observation"]["record_count"],
                                 "jev_execution": graph["attempts"][0]["jev_observation"]["measurement_execution"]},
+            **({"pair_proof": pair_proof} if pair_proof is not None else {}),
             "missing_response": {"terminal_reason": missing["terminal_reason"],
                                  "handoff_status": receipt["status"]},
             "live_refusal": refusal,
