@@ -12,9 +12,11 @@ from typing import Any, Mapping
 import uuid
 
 from time_to_correct import (Budget, MeasurementError, Trial, canonical, digest,
-                             load_completed_trials, save_completed_trial, summarize)
+                             identifier, load_completed_trials, save_completed_trial,
+                             summarize)
 from time_to_correct_graph import observe_graph_find
-from time_to_correct_handoff import atomic_write, read_canonical, run_root as validate_run_root, write_response
+from time_to_correct_handoff import (atomic_write, read_canonical, read_lane,
+                                     run_root as validate_run_root, write_response)
 from time_to_correct_host import USAGE_KEYS, _invoke, run_process_trial
 from time_to_correct_jev import evaluate_live, evaluate_offline, load_jev, prepare_preview
 
@@ -96,10 +98,56 @@ def load_pilot(repo: Path, config: Mapping[str, Any]) -> tuple[dict[str, Any], d
     return packet_by_id, corpus_by_id, tasks
 
 
-def verify_lane(repo: Path, corpus: Mapping[str, Any], corpus_root: Path) -> tuple[list[str], str]:
+def _git(repo: Path, *args: str) -> bytes:
+    completed = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, check=False)
+    if completed.returncode:
+        raise MeasurementError("git_identity_unavailable")
+    return completed.stdout
+
+
+def controller_identity(repo: Path) -> dict[str, Any]:
+    """Bind execution to a clean tracked checkout while ignoring untracked run data."""
+    head = _git(repo, "rev-parse", "--verify", "HEAD").decode("ascii").strip()
+    tree = _git(repo, "rev-parse", "HEAD^{tree}").decode("ascii").strip()
+    status = _git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=no")
+    index = _git(repo, "diff", "--cached", "--binary", "--no-ext-diff", "HEAD", "--")
+    worktree = _git(repo, "diff", "--binary", "--no-ext-diff", "HEAD", "--")
+    if status or index or worktree:
+        raise MeasurementError("controller_checkout_not_clean")
+    identity = {
+        "schema_version": "velgraphing-controller-identity-v1",
+        "git_head": head,
+        "git_tree": tree,
+        "tracked_status_sha256": digest(status),
+        "index_diff_sha256": digest(index),
+        "worktree_diff_sha256": digest(worktree),
+    }
+    identity["tracked_state_sha256"] = digest(canonical(identity))
+    return identity
+
+
+def bind_controller(root: Path, identity: Mapping[str, Any]) -> dict[str, Any]:
+    path = root / "controller.json"
+    raw = canonical(identity)
+    if path.exists():
+        if read_canonical(path)[0] != raw:
+            raise MeasurementError("controller_identity_changed")
+    else:
+        atomic_write(path, raw)
+    return dict(identity)
+
+
+def verify_lane(repo: Path, corpus: Mapping[str, Any], corpus_root: Path) -> tuple[list[str], dict[str, Any]]:
     if not corpus_root.is_absolute() or corpus_root.is_symlink():
         raise MeasurementError("corpus_root_invalid")
-    manifest = read_json(repo / "benchmarks/velgraphing-corpus-pilot-v1" / corpus["manifest"])
+    manifest_path = repo / "benchmarks/velgraphing-corpus-pilot-v1" / corpus["manifest"]
+    try:
+        manifest_raw = manifest_path.read_bytes()
+        manifest = json.loads(manifest_raw)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise MeasurementError("corpus_manifest_invalid") from None
+    if type(manifest) is not dict:
+        raise MeasurementError("corpus_manifest_invalid")
     sources = manifest.get("sources")
     if type(sources) is not list or manifest.get("snapshot_sha256") != corpus["snapshot_sha256"]:
         raise MeasurementError("corpus_manifest_invalid")
@@ -124,15 +172,31 @@ def verify_lane(repo: Path, corpus: Mapping[str, Any], corpus_root: Path) -> tup
         if len(raw) != source.get("byte_length") or digest(raw) != source.get("sha256"):
             raise MeasurementError("corpus_source_invalid")
         rows.append({"path": path, "byte_length": len(raw), "sha256": digest(raw)})
-    if digest(canonical({"sources": rows})) != corpus["snapshot_sha256"]:
+    snapshot_sha256 = digest(canonical({"sources": rows}))
+    if snapshot_sha256 != corpus["snapshot_sha256"]:
         raise MeasurementError("corpus_snapshot_mismatch")
-    head = subprocess.run(["git", "-C", str(corpus_root), "rev-parse", "HEAD"],
-                          capture_output=True, check=False).stdout.decode("ascii", "ignore").strip()
-    status = subprocess.run(["git", "-C", str(corpus_root), "status", "--porcelain=v1", "-z"],
-                            capture_output=True, check=False).stdout
-    if head != corpus["commit"] or status:
+    head = _git(corpus_root, "rev-parse", "--verify", "HEAD").decode("ascii").strip()
+    status = _git(corpus_root, "status", "--porcelain=v1", "-z")
+    index = _git(corpus_root, "diff", "--cached", "--binary", "--no-ext-diff", "HEAD", "--")
+    if head != corpus["commit"] or status or index:
         raise MeasurementError("corpus_checkout_not_clean")
-    return [row["path"] for row in rows], digest(status)
+    return [row["path"] for row in rows], {
+        "git_head": head,
+        "index_sha256": digest(index),
+        "status_sha256": digest(status),
+        "manifest_sha256": digest(manifest_raw),
+        "snapshot_sha256": snapshot_sha256,
+    }
+
+
+def revalidate_lane(repo: Path, corpus: Mapping[str, Any], corpus_root: Path,
+                    expected: Mapping[str, Any]) -> None:
+    try:
+        _, observed = verify_lane(repo, corpus, corpus_root)
+    except MeasurementError:
+        raise MeasurementError("corpus_changed_during_trial") from None
+    if observed != expected:
+        raise MeasurementError("corpus_changed_during_trial")
 
 
 def replace_runtime(value: str, repo: Path, corpus_root: Path, question: str) -> str:
@@ -192,7 +256,8 @@ def jev_answer_payload(packet: Mapping[str, Any], result: Mapping[str, Any]) -> 
     return payload
 
 
-def summarize_calibration(config: Mapping[str, Any], completed: list[dict[str, Any]]) -> dict[str, Any]:
+def summarize_calibration(config: Mapping[str, Any], completed: list[dict[str, Any]],
+                          controller: Mapping[str, Any]) -> dict[str, Any]:
     """Close one mixed-arm calibration without weakening protocol comparison."""
     registrations = config["registered_trials"]
     expected = {row["trial_id"]: row["arm"] for row in registrations}
@@ -222,6 +287,7 @@ def summarize_calibration(config: Mapping[str, Any], completed: list[dict[str, A
         "calibration_id": config["calibration_id"],
         "status": "closed" if coverage_complete else "incomplete",
         "oracle_set_sha256": oracle_set_sha256,
+        "controller_identity": dict(controller),
         "registered_trials": len(registrations),
         "reported_trials": len(completed),
         "coverage_complete": coverage_complete,
@@ -366,8 +432,9 @@ def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
     if type(corpus_id) is not str or not corpus_id or PurePosixPath(corpus_id).name != corpus_id:
         raise MeasurementError("corpus_root_invalid")
     corpus_root = lane_root / corpus_id
-    scope, dirty = verify_lane(repo, corpus, corpus_root)
-    identity = trial_identity(config, registration, packet, corpus, oracle, dirty)
+    scope, lane_before = verify_lane(repo, corpus, corpus_root)
+    identity = trial_identity(
+        config, registration, packet, corpus, oracle, lane_before["status_sha256"])
     trial = Trial(identity, Budget(**config["repair_budget"]), execution="observed")
     timeouts = config["timeouts_seconds"]
 
@@ -419,20 +486,24 @@ def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
         "critical_facts": oracle["critical_facts"],
         "acceptable_spans": oracle["acceptable_spans"],
     }
-    return run_process_trial(
+    result = run_process_trial(
         trial, prepare, answer_argv=answer_command, grader_argv=grader_command,
         cwd=repo, answer_timeout_s=timeouts["answer"] + 1,
         grader_timeout_s=timeouts["grader"] + 1, grader_context=grader_context,
     )
+    revalidate_lane(repo, corpus, corpus_root, lane_before)
+    return result
 
 
 def run_calibration(args: argparse.Namespace) -> dict[str, Any]:
     repo = Path(args.repo_root).resolve()
     if repo != REPO_ROOT.resolve():
         raise MeasurementError("repository_root_mismatch")
+    controller = controller_identity(repo)
     config = load_calibration(repo)
     validate_live_authority(config, args.allow_live_jev, args.approved_max_live_jev_calls)
     root = calibration_run_root(repo, config, args.run_root)
+    controller = bind_controller(root, controller)
     lane_root = Path(args.lane_root).resolve()
     allowed_lane_root = (repo / "benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes").resolve()
     try:
@@ -461,7 +532,7 @@ def run_calibration(args: argparse.Namespace) -> dict[str, Any]:
         save_completed_trial(receipt_root, result)
         completed.append(result)
         completed_ids.add(trial_id)
-    return summarize_calibration(config, completed)
+    return summarize_calibration(config, completed, controller)
 
 
 def start_fixture_worker(root: Path, trial_id: str, lane: str, wait: float = 5) -> subprocess.Popen[bytes]:
@@ -597,7 +668,8 @@ def qualify(repo: Path = REPO_ROOT) -> dict[str, Any]:
             grader_argv=handoff_argv(handoff_root, "missing-response", "grader", 0.05),
             cwd=repo, answer_timeout_s=0.5, grader_timeout_s=0.5,
         )
-        receipt = read_canonical(handoff_root / "trials/missing-response/attempt-0/answer/receipt.json")[1]
+        receipt = read_lane(
+            handoff_root, "missing-response", 0, "answer", "receipt.json")[1]
         config = load_calibration(repo)
         try:
             validate_live_authority(config, False, None)
@@ -626,22 +698,22 @@ def approve(args: argparse.Namespace) -> dict[str, Any]:
     config = load_calibration(repo)
     root = calibration_run_root(repo, config, args.run_root)
     validate_live_authority(config, True, args.approved_max_live_jev_calls)
-    request_path = root / "trials" / args.trial_id / "attempt-0/jev-approval/request.json"
-    request = read_canonical(request_path)[1]
+    trial_id = identifier(args.trial_id)
+    request = read_lane(root, trial_id, 0, "jev-approval", "request.json")[1]
     if (request.get("schema_version") != "velgraphing-jev-approval-request-v1"
-            or request.get("trial_id") != args.trial_id
+            or request.get("trial_id") != trial_id
             or request.get("request_sha256") != args.request_sha256
             or request.get("max_live_jev_calls") != 12):
         raise MeasurementError("jev_request_not_approved")
     response = {
         "schema_version": "velgraphing-jev-approval-v1",
-        "trial_id": args.trial_id,
+        "trial_id": trial_id,
         "request_sha256": args.request_sha256,
         "approved": True,
         "max_live_jev_calls": 12,
     }
-    write_response(root, args.trial_id, 0, "jev-approval", canonical(response))
-    return {"status": "approved", "trial_id": args.trial_id,
+    write_response(root, trial_id, 0, "jev-approval", canonical(response))
+    return {"status": "approved", "trial_id": trial_id,
             "request_sha256": args.request_sha256}
 
 

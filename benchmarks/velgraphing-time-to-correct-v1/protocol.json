@@ -1,6 +1,7 @@
 {
   "schema_version": "velgraphing-time-to-correct-proposal-v1",
-  "status": "calibration_approved_not_executed",
+  "status": "historical_proposal_superseded_by_calibration_json",
+  "document_role": "historical_proposed_design_not_executable_authority",
   "audited_base_commit": "916c3c993dcb214c2700dbec063794dba418bdd8",
   "arms": {
     "A": {"discovery": "direct", "jev": "off"},
@@ -10,8 +11,14 @@
   },
   "current_authorized_live_provider_calls": 12,
   "authorized_calibration_freeze": "calibration.json",
+  "executable_calibration_authority": {
+    "file": "calibration.json",
+    "registered_trials": 24,
+    "max_repairs": 0,
+    "max_live_jev_calls": 12
+  },
   "primary_context_policy": "preserve_current_membership_and_required_positions",
-  "repair_budget": {"max_repairs": 2, "wall_limit_ns": 300000000000},
+  "historical_proposed_repair_budget": {"max_repairs": 2, "wall_limit_ns": 300000000000},
   "default_pass_gate": {"required_fact_recall_min": 0.9, "critical_facts_exact": true, "unsupported_material_claims": 0},
   "deadline_enforcement": "private_controller_deadline_plus_process_timeout_bounded_by_remaining_trial_budget",
   "callback_timeout_terminal_reason": "callback_timeout",
@@ -26,9 +33,9 @@
   "phase_coverage": "per_attempt_counts_with_partial_status_when_any_attempt_is_missing",
   "completed_trial_recovery": "atomic_one_file_per_terminal_trial_loaded_only_by_preregistered_id",
   "diagnostic_tasks": "six_previous_pilot_tasks_not_fresh_held_out",
-  "proposed_repetitions_per_task": 10,
-  "proposed_initial_trial_count": 240,
-  "dispatch": "serial_randomized_counterbalanced_within_task_and_repetition",
+  "historical_proposed_repetitions_per_task": 10,
+  "historical_proposed_initial_trial_count": 240,
+  "historical_proposed_dispatch": "serial_randomized_counterbalanced_within_task_and_repetition",
   "future_provider_budget": "calls_beyond_the_approved_12_require_separate_authority",
   "answer_model": "gpt-5.6-sol",
   "reasoning": "medium_in_every_arm",

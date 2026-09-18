@@ -47,6 +47,18 @@ The lanes are `preparation`, `jev-approval`, `answer`, and `grader`. Request and
 response bodies stay under the ignored run root. Public trial receipts retain only
 hashes, byte counts, closed status values, and source-free observations.
 
+At run start, the coordinator records the executing controller's actual Git HEAD,
+tree, and clean tracked-state hashes in `controller.json`. Untracked and ignored
+run data do not make the controller dirty. A resume must use the same controller
+identity. Tracked or index changes are refused.
+
+Each corpus checkout is verified before the trial and again after the native answer
+and grader return. The commit, index and status, manifest bytes, source bytes, and
+snapshot digest must remain exact. A changed corpus prevents the terminal trial
+receipt from being saved. Lane directories and files are opened through no-follow
+directory descriptors so a symlink cannot redirect a request, response, or receipt
+outside the canonical run root.
+
 ## Native answer lane
 
 Create one fresh Codex task for each trial. Use `gpt-5.6-sol` with medium
@@ -148,8 +160,8 @@ Validation on 2026-09-18 used the frozen package 0.1.6 checkout. No live Jev
 call ran.
 
 - Offline qualification passed with zero provider calls.
-- All 9 focused calibration tests passed.
-- All 71 benchmark tests passed.
+- All 13 focused calibration tests passed.
+- All 75 benchmark tests passed.
 - All 57 focused Jev tests passed.
 - Package source parity passed for 87 files.
 - Python compilation and `git diff --check` passed.

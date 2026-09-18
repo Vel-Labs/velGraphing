@@ -56,8 +56,12 @@ def run_root(value: str) -> Path:
     current = Path(path.anchor)
     for part in path.parts[1:]:
         current /= part
-        if current.exists() and current.is_symlink():
-            raise HandoffError("run_root_symlink")
+        try:
+            metadata = current.lstat()
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise HandoffError("run_root_invalid")
     return path
 
 
@@ -66,6 +70,131 @@ def lane_root(root: Path, trial_id: str, attempt: int, lane: str) -> Path:
     if type(attempt) is not int or attempt < 0 or lane not in LANES:
         raise HandoffError("invalid_lane")
     return root / "trials" / trial_id / f"attempt-{attempt}" / lane
+
+
+def _open_lane(root: Path, trial_id: str, attempt: int, lane: str, *, create: bool) -> int:
+    """Open a contained lane through no-follow directory descriptors."""
+    root = run_root(str(root))
+    lane_root(root, trial_id, attempt, lane)
+    if not hasattr(os, "O_NOFOLLOW") or os.open not in os.supports_dir_fd:
+        raise HandoffError("secure_handoff_unsupported")
+    if create:
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    run_root(str(root))
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        directory = os.open(root, flags)
+    except FileNotFoundError:
+        raise HandoffError("handoff_lane_missing") from None
+    except OSError:
+        raise HandoffError("handoff_lane_invalid") from None
+    try:
+        for part in ("trials", trial_id, f"attempt-{attempt}", lane):
+            if create:
+                try:
+                    os.mkdir(part, mode=0o700, dir_fd=directory)
+                except FileExistsError:
+                    pass
+                except OSError:
+                    raise HandoffError("handoff_lane_invalid") from None
+            try:
+                child = os.open(part, flags, dir_fd=directory)
+            except FileNotFoundError:
+                raise HandoffError("handoff_lane_missing") from None
+            except OSError:
+                raise HandoffError("handoff_lane_invalid") from None
+            os.close(directory)
+            directory = child
+        return directory
+    except Exception:
+        os.close(directory)
+        raise
+
+
+def _file_name(value: str) -> str:
+    if type(value) is not str or value in {"", ".", ".."} or Path(value).name != value:
+        raise HandoffError("handoff_file_invalid")
+    return value
+
+
+def _read_lane_fd(directory: int, name: str) -> tuple[bytes, dict[str, Any]]:
+    name = _file_name(name)
+    try:
+        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
+    except FileNotFoundError:
+        raise HandoffError("handoff_file_missing") from None
+    except OSError:
+        raise HandoffError("handoff_file_invalid") from None
+    try:
+        before = os.fstat(descriptor)
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                or before.st_size > MAX_BYTES):
+            raise HandoffError("handoff_file_invalid")
+        chunks, size = [], 0
+        while size <= MAX_BYTES:
+            chunk = os.read(descriptor, min(65536, MAX_BYTES + 1 - size))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            size += len(chunk)
+        after = os.fstat(descriptor)
+        identity = lambda item: (item.st_dev, item.st_ino, item.st_size,
+                                 item.st_mtime_ns, item.st_ctime_ns, item.st_nlink)
+        if size > MAX_BYTES or identity(before) != identity(after):
+            raise HandoffError("handoff_file_invalid")
+        raw = b"".join(chunks)
+        return raw, decode(raw)
+    finally:
+        os.close(descriptor)
+
+
+def read_lane(root: Path, trial_id: str, attempt: int, lane: str,
+              name: str) -> tuple[bytes, dict[str, Any]]:
+    directory = _open_lane(root, trial_id, attempt, lane, create=False)
+    try:
+        return _read_lane_fd(directory, name)
+    finally:
+        os.close(directory)
+
+
+def _write_lane(root: Path, trial_id: str, attempt: int, lane: str,
+                name: str, raw: bytes, *, create: bool = False,
+                replace: bool = False) -> None:
+    name = _file_name(name)
+    directory = _open_lane(root, trial_id, attempt, lane, create=create)
+    temporary = f".{name}.{uuid.uuid4().hex}.tmp"
+    try:
+        if not replace:
+            try:
+                os.stat(name, dir_fd=directory, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                raise HandoffError("handoff_file_exists")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                             0o600, dir_fd=directory)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(stream.fileno())
+        if not replace:
+            try:
+                os.stat(name, dir_fd=directory, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                raise HandoffError("handoff_file_exists")
+        os.replace(temporary, name, src_dir_fd=directory, dst_dir_fd=directory)
+        metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise HandoffError("handoff_file_invalid")
+        os.fsync(directory)
+    finally:
+        try:
+            os.unlink(temporary, dir_fd=directory)
+        except FileNotFoundError:
+            pass
+        os.close(directory)
 
 
 def atomic_write(path: Path, raw: bytes, *, replace: bool = False) -> None:
@@ -105,9 +234,9 @@ def read_canonical(path: Path) -> tuple[bytes, dict[str, Any]]:
     return raw, decode(raw)
 
 
-def receipt(path: Path, *, trial_id: str, attempt: int, lane: str, status: str,
+def receipt(root: Path, *, trial_id: str, attempt: int, lane: str, status: str,
             request_sha256: str, response_sha256: str | None, wait_ns: int) -> None:
-    atomic_write(path, canonical({
+    _write_lane(root, trial_id, attempt, lane, "receipt.json", canonical({
         "schema_version": "velgraphing-file-handoff-receipt-v1",
         "trial_id": trial_id,
         "attempt": attempt,
@@ -121,34 +250,32 @@ def receipt(path: Path, *, trial_id: str, attempt: int, lane: str, status: str,
 
 def wait_for_response(root: Path, trial_id: str, attempt: int, lane: str,
                       wait_seconds: float, request_raw: bytes) -> bytes:
-    directory = lane_root(root, trial_id, attempt, lane)
-    request_path = directory / "request.json"
-    response_path = directory / "response.json"
-    receipt_path = directory / "receipt.json"
     request = decode(request_raw)
     del request
     request_hash = digest(request_raw)
-    atomic_write(request_path, request_raw)
+    _write_lane(root, trial_id, attempt, lane, "request.json", request_raw, create=True)
     start = time.monotonic_ns()
-    receipt(receipt_path, trial_id=trial_id, attempt=attempt, lane=lane,
+    receipt(root, trial_id=trial_id, attempt=attempt, lane=lane,
             status="request_written", request_sha256=request_hash,
             response_sha256=None, wait_ns=0)
     deadline = time.monotonic() + wait_seconds
     while time.monotonic() < deadline:
-        if response_path.exists():
-            try:
-                response_raw, _ = read_canonical(response_path)
-            except HandoffError:
-                receipt(receipt_path, trial_id=trial_id, attempt=attempt, lane=lane,
+        try:
+            response_raw, _ = read_lane(root, trial_id, attempt, lane, "response.json")
+        except HandoffError as error:
+            if str(error) in {"handoff_file_missing", "handoff_lane_missing"}:
+                time.sleep(min(0.05, max(0.001, wait_seconds / 20)))
+                continue
+            if str(error) in {"handoff_file_invalid", "invalid_canonical_json"}:
+                receipt(root, trial_id=trial_id, attempt=attempt, lane=lane,
                         status="response_invalid", request_sha256=request_hash,
                         response_sha256=None, wait_ns=time.monotonic_ns() - start)
-                raise
-            receipt(receipt_path, trial_id=trial_id, attempt=attempt, lane=lane,
-                    status="completed", request_sha256=request_hash,
-                    response_sha256=digest(response_raw), wait_ns=time.monotonic_ns() - start)
-            return response_raw
-        time.sleep(min(0.05, max(0.001, wait_seconds / 20)))
-    receipt(receipt_path, trial_id=trial_id, attempt=attempt, lane=lane,
+            raise
+        receipt(root, trial_id=trial_id, attempt=attempt, lane=lane,
+                status="completed", request_sha256=request_hash,
+                response_sha256=digest(response_raw), wait_ns=time.monotonic_ns() - start)
+        return response_raw
+    receipt(root, trial_id=trial_id, attempt=attempt, lane=lane,
             status="response_timeout", request_sha256=request_hash,
             response_sha256=None, wait_ns=time.monotonic_ns() - start)
     raise HandoffError("response_timeout")
@@ -156,7 +283,7 @@ def wait_for_response(root: Path, trial_id: str, attempt: int, lane: str,
 
 def write_response(root: Path, trial_id: str, attempt: int, lane: str, raw: bytes) -> None:
     decode(raw)
-    atomic_write(lane_root(root, trial_id, attempt, lane) / "response.json", raw)
+    _write_lane(root, trial_id, attempt, lane, "response.json", raw)
 
 
 def fixture_response(lane: str, trial_id: str, request: dict[str, Any]) -> dict[str, Any]:
@@ -198,11 +325,15 @@ def fixture_response(lane: str, trial_id: str, request: dict[str, Any]) -> dict[
     raise HandoffError("fixture_lane_forbidden")
 
 
-def wait_for_request(path: Path, wait_seconds: float) -> dict[str, Any]:
+def wait_for_request(root: Path, trial_id: str, attempt: int, lane: str,
+                     wait_seconds: float) -> dict[str, Any]:
     deadline = time.monotonic() + wait_seconds
     while time.monotonic() < deadline:
-        if path.exists():
-            return read_canonical(path)[1]
+        try:
+            return read_lane(root, trial_id, attempt, lane, "request.json")[1]
+        except HandoffError as error:
+            if str(error) not in {"handoff_file_missing", "handoff_lane_missing"}:
+                raise
         time.sleep(min(0.05, max(0.001, wait_seconds / 20)))
     raise HandoffError("request_timeout")
 
@@ -239,9 +370,9 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "respond":
             if args.response_file:
                 source = Path(args.response_file)
-                if source.parent.resolve() != directory.resolve() or source.name == "response.json":
+                if source.parent != directory or source.name == "response.json":
                     raise HandoffError("response_draft_path_invalid")
-                raw = read_canonical(source)[0]
+                raw = read_lane(root, args.trial_id, args.attempt, args.lane, source.name)[0]
             else:
                 raw = sys.stdin.buffer.read(MAX_BYTES + 1)
             if len(raw) > MAX_BYTES:
@@ -251,7 +382,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             if args.lane == "jev-approval" or not (0 < args.wait_seconds <= 300):
                 raise HandoffError("fixture_lane_forbidden")
-            request = wait_for_request(directory / "request.json", args.wait_seconds)
+            request = wait_for_request(root, args.trial_id, args.attempt, args.lane,
+                                       args.wait_seconds)
             write_response(root, args.trial_id, args.attempt, args.lane,
                            canonical(fixture_response(args.lane, args.trial_id, request)))
         return 0
