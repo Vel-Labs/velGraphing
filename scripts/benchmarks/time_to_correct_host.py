@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
+import re
 import subprocess
 from typing import Any, Callable, Mapping
 
@@ -197,6 +198,14 @@ def run_process_trial(
             raise MeasurementError("invalid_answer_output")
         if type(output["model_calls_complete"]) is not bool or type(output["context_deliveries_complete"]) is not bool:
             raise MeasurementError("invalid_answer_output")
+        if prepared.get("schema_version") == "velgraphing-answer-evidence-v3":
+            allowed = {row.get("id") for row in prepared.get("evidence", [])
+                       if type(row) is dict and type(row.get("id")) is str}
+            cited = re.findall(r"\[([A-Za-z0-9_-]+)\]", output["answer_text"])
+            if not cited:
+                raise MeasurementError("answer_evidence_citation_missing")
+            if any(candidate_id not in allowed for candidate_id in cited):
+                raise MeasurementError("answer_evidence_citation_invalid")
         if output["usage"] is not None:
             if type(output["usage"]) is not dict or set(output["usage"]) != USAGE_KEYS:
                 raise MeasurementError("invalid_process_usage")
@@ -238,6 +247,7 @@ def run_process_trial(
         _record_usage(t, "grader", output["usage"], attempt, "unknown-grader")
         answer_boundary = t._attempt().get("answer_boundary", {})
         t.coverage(
+            source_operations=bool(t._attempt()["coverage"]["source_operations"]),
             model_calls=bool(answer_boundary.get("model_calls_complete") and output["model_calls_complete"]),
             context_deliveries=bool(answer_boundary.get("context_deliveries_complete")),
         )

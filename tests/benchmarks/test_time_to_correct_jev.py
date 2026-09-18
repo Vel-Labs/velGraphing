@@ -1,5 +1,6 @@
 """Real Jev evaluator integration, local synthetic source, no credentials/network."""
 from pathlib import Path
+import json
 import sys
 import tempfile
 import unittest
@@ -40,7 +41,8 @@ class JevTimingTests(unittest.TestCase):
                  for i, score in enumerate([0,2,2])},
             'usage': {'input_tokens': 99, 'output_tokens': 7}})
 
-    def run_fixture(self, *, provider=False, mode='rerank', stale=False):
+    def run_fixture(self, *, provider=False, mode='rerank', stale=False,
+                    retain_packet_telemetry=False):
         trial = Trial(identity(), Budget(0, 5_000_000_000), execution='fixture')
         seen = []
         def prep(t, n):
@@ -49,7 +51,9 @@ class JevTimingTests(unittest.TestCase):
             # Patching getenv to fail does not inspect or enumerate real values.
             with patch('os.environ.get', side_effect=AssertionError('credential lookup prohibited')):
                 result = evaluate_offline(t, ROOT, self.packet, self.root,
-                                          envelope=self.envelope, mode=mode, fixture_provider=provider)
+                                          envelope=self.envelope, mode=mode,
+                                          fixture_provider=provider,
+                                          retain_packet_telemetry=retain_packet_telemetry)
             seen.append(result)
             return result['order']
         def answer(t, order, n):
@@ -78,6 +82,35 @@ class JevTimingTests(unittest.TestCase):
         self.assertEqual(observations[0]['execution'], 'injected_transport')
         self.assertEqual(result['attempts'][0]['jev_observation']['measurement_execution'], 'fixture_provider')
         self.assertEqual(observations[0]['order'], ['c1','c0','c2'])
+
+    def test_observation_retains_source_free_v3_packet_telemetry(self):
+        result, _ = self.run_fixture(provider=True, retain_packet_telemetry=True)
+        observation = result['attempts'][0]['jev_observation']
+        prepared = self.module.prepare(self.packet, self.root)
+        self.assertEqual(set(observation), {
+            'status', 'reason', 'baseline_order', 'order', 'required_ids',
+            'candidate_set_sha256', 'request_sha256', 'source_revalidated',
+            'resolved_model', 'request_bytes', 'shared_state_bytes',
+            'questions_bytes', 'candidate_count', 'question_count',
+            'rubric_version', 'shared_state_tokens', 'question_suffix_tokens',
+            'source_bytes_verified', 'scores', 'elapsed_ms', 'attempted_calls',
+            'measurement_execution',
+        })
+        self.assertEqual(observation['request_bytes'], prepared['request_bytes'])
+        self.assertEqual(observation['shared_state_bytes'],
+                         len(self.module.canonical(prepared['request']['state'])))
+        self.assertEqual(observation['questions_bytes'],
+                         len(self.module.canonical(prepared['request']['questions'])))
+        self.assertEqual((observation['candidate_count'], observation['question_count']), (3, 3))
+        self.assertEqual(observation['rubric_version'], self.module.RUBRIC_VERSION)
+        self.assertEqual(observation['source_bytes_verified'],
+                         2 * sum((self.root / name).stat().st_size for name in ('a.py', 'b.py', 'c.py')))
+        self.assertIsNone(observation['shared_state_tokens'])
+        self.assertIsNone(observation['question_suffix_tokens'])
+        self.assertEqual(observation['scores'][0]['probabilities'], {'0': 1.0, '1': 0.0, '2': 0.0})
+        retained = json.dumps(observation, sort_keys=True)
+        for private in ('Find cancellation', 'a.py', 'BACKGROUND = 1', str(self.root)):
+            self.assertNotIn(private, retained)
 
     def test_shadow_preserves_every_candidate_and_order(self):
         result, observations = self.run_fixture(mode='shadow')

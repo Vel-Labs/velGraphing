@@ -94,11 +94,11 @@ class HostBoundaryTests(unittest.TestCase):
         self.cwd = Path(self.temp.name)
 
     def run_host(self, answer_code=ANSWER_CODE, *, answer_timeout_s=2,
-                 wall_limit_ns=5_000_000_000):
+                 wall_limit_ns=5_000_000_000, prepared=None):
         trial = Trial(identity(), Budget(0, wall_limit_ns), execution="fixture")
         return run_process_trial(
             trial,
-            lambda *_: {"question": "frozen question", "evidence": ["opaque-source-pointer"]},
+            lambda *_: prepared or {"question": "frozen question", "evidence": ["opaque-source-pointer"]},
             answer_argv=[sys.executable, "-c", answer_code],
             grader_argv=[sys.executable, "-c", GRADER_CODE],
             cwd=self.cwd,
@@ -163,6 +163,26 @@ class HostBoundaryTests(unittest.TestCase):
                 grader_argv=[sys.executable, "-c", GRADER_CODE], cwd=self.cwd,
                 answer_timeout_s=1, grader_timeout_s=1,
             )
+
+    def test_v3_answer_requires_known_evidence_citation(self):
+        prepared = {
+            "schema_version": "velgraphing-answer-evidence-v3",
+            "question": "frozen question",
+            "citation_instruction": "Cite supporting evidence IDs as [cN].",
+            "evidence": [{"id": "c0"}],
+        }
+        missing = self.run_host(ANSWER_CODE, prepared=prepared)
+        self.assertEqual(missing["attempts"][0]["failure_reason"],
+                         "answer_evidence_citation_missing")
+        invalid = self.run_host(
+            ANSWER_CODE.replace("observed subprocess answer", "unsupported [c9]"),
+            prepared=prepared)
+        self.assertEqual(invalid["attempts"][0]["failure_reason"],
+                         "answer_evidence_citation_invalid")
+        valid = self.run_host(
+            ANSWER_CODE.replace("observed subprocess answer", "supported [c0]"),
+            prepared=prepared)
+        self.assertEqual(valid["terminal_reason"], "passed")
 
 
 if __name__ == "__main__":

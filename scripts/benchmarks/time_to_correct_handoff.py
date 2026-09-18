@@ -315,7 +315,12 @@ def fixture_response(lane: str, trial_id: str, request: dict[str, Any]) -> dict[
             "context_deliveries_complete": True,
         }
     if lane == "answer":
-        answer = request.get("payload", {}).get("fixture_answer", f"fixture answer for {trial_id}")
+        payload = request.get("payload", {})
+        answer = payload.get("fixture_answer", f"fixture answer for {trial_id}")
+        if payload.get("schema_version") == "velgraphing-answer-evidence-v3":
+            evidence = payload.get("evidence", [])
+            candidate_id = evidence[0].get("id") if evidence and type(evidence[0]) is dict else None
+            answer = f"fixture answer [{candidate_id}]" if candidate_id else answer
         if type(answer) is not str:
             raise HandoffError("fixture_answer_invalid")
         return {

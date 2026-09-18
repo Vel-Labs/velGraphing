@@ -22,7 +22,8 @@ from time_to_correct_calibration import (HANDOFF_PATH, LiveJevBudget, bind_contr
                                          request_candidates, require_resumable, revalidate_lane,
                                          run_calibration, start_fixture_worker,
                                          summarize_calibration, trial_identity,
-                                         validate_live_authority, verify_lane)
+                                         validate_live_authority, verify_lane,
+                                         V3_CANDIDATE_POLICY, V3_MEASUREMENT_CONTRACT)
 from time_to_correct_handoff import read_canonical
 from time_to_correct_host import (ANSWER_RESPONSE_CONTRACT, GRADER_RESPONSE_CONTRACT,
                                   run_process_trial)
@@ -82,6 +83,24 @@ class CalibrationTests(unittest.TestCase):
                                   "trial_id": "A-C-01", "arm": "A"}}
         with self.assertRaisesRegex(MeasurementError, "calibration_result_mismatch"):
             summarize_calibration(v2, [copied_v1], {})
+
+    def test_v3_freeze_reuses_v2_inputs_and_pins_measurement_contract(self):
+        v2 = load_calibration(ROOT, "velgraphing-ttc-calibration-v2")
+        v3 = load_calibration(ROOT, "velgraphing-ttc-calibration-v3")
+        self.assertEqual(v3["registered_trials"], v2["registered_trials"])
+        self.assertEqual(v3["source_pilot"], v2["source_pilot"])
+        self.assertEqual(v3["base_commit"], "031a8390ae3accce7fe4b3756f01f98f2c606ee6")
+        self.assertEqual(v3["measurement_contract"], V3_MEASUREMENT_CONTRACT)
+        self.assertEqual(v3["candidate_policy"], V3_CANDIDATE_POLICY)
+        self.assertEqual(v3["measurement_contract"]["primary_provider_budget"],
+                         {"calls": 12, "retries": 0})
+        self.assertEqual(v3["measurement_contract"]["sensitivity_ablation"]["status"],
+                         "future_companion_not_authorized")
+        changed = deepcopy(v3)
+        changed["measurement_contract"]["unknown_boundaries"]["shared_state_tokens"] = "estimated"
+        with patch("time_to_correct_calibration.read_json", return_value=changed):
+            with self.assertRaisesRegex(MeasurementError, "calibration_freeze_invalid"):
+                load_calibration(ROOT, "velgraphing-ttc-calibration-v3")
 
     def test_v1_and_v2_require_separate_canonical_run_roots(self):
         v1 = load_calibration(ROOT)
@@ -282,6 +301,151 @@ class CalibrationTests(unittest.TestCase):
             self.assertEqual((summary["registered_trials"], summary["reported_trials"],
                               summary["coverage_complete"]), (6, 6, True), arm)
 
+    def test_v3_aggregation_retains_arm_metrics_contrasts_and_unknowns(self):
+        config = load_calibration(ROOT, "velgraphing-ttc-calibration-v3")
+        results = []
+        arm_value = {"A": 1, "B": 2, "C": 3, "D": 4}
+        for registration in config["registered_trials"]:
+            arm = registration["arm"]
+            jev_on = arm in {"B", "D"}
+            failed = registration["trial_id"] == "B-C-01"
+            phase = lambda status, duration: {
+                "status": status, "inclusive_union_ns": duration,
+            }
+            model_calls = [{
+                "call_id": f"answer-{registration['trial_id']}", "kind": "answer",
+                "model": config["answer_model"], "provenance": "provider_reported",
+                "input_tokens": 100 + arm_value[arm], "output_tokens": 10,
+            }, {
+                "call_id": f"grader-{registration['trial_id']}", "kind": "grader",
+                "model": "grader", "provenance": "provider_reported",
+                "input_tokens": 50, "output_tokens": 5,
+            }]
+            jev_observation = None
+            if jev_on:
+                model_calls.append({
+                    "call_id": f"jev-{registration['trial_id']}", "kind": "jev",
+                    "model": "jev-1.13.0", "provenance": "provider_reported",
+                    "input_tokens": 30, "output_tokens": 2,
+                })
+                jev_observation = {
+                    "request_bytes": 900, "shared_state_bytes": 500,
+                    "questions_bytes": 300, "candidate_count": 3,
+                    "question_count": 3, "rubric_version": "evidence-usefulness-v1",
+                    "shared_state_tokens": None, "question_suffix_tokens": None,
+                    "source_bytes_verified": 700, "elapsed_ms": 4.5,
+                    "attempted_calls": 1,
+                    "scores": [{"id": "c0", "score": 2.0,
+                                "probabilities": {"0": 0.0, "1": 0.1, "2": 0.9},
+                                "distribution_confidence": 0.9}],
+                }
+            attempt = {
+                "coverage": {"model_calls": True, "source_operations": True,
+                             "context_deliveries": True},
+                "phase_status": {"answer_generation": "observed"},
+                "answer_boundary": {"model_calls_complete": True,
+                                    "context_deliveries_complete": True},
+                "context_deliveries": [{"kind": "answer_request",
+                                        "bytes": 1000 + arm_value[arm], "sha256": "a" * 64}],
+                "source_operations": [{"operation_id": "read-1", "source_sha256": "b" * 64,
+                                       "byte_start": 5, "byte_end": 25, "access": "file_read"}],
+                "model_calls": model_calls,
+                "terminal_reason": "repair_budget_exhausted" if failed else "passed",
+            }
+            if jev_observation is not None:
+                attempt["jev_observation"] = jev_observation
+            graph_on = arm in {"C", "D"}
+            attempt["candidate_observation"] = {
+                "route": "graph_find_tag_index" if graph_on else "direct_flat",
+                "candidate_packet_sha256": digest(
+                    f"{registration['task_id']}:{'graph' if graph_on else 'direct'}".encode()),
+                "baseline_order_sha256": digest(
+                    f"{registration['task_id']}:{'graph' if graph_on else 'direct'}:order".encode()),
+                "record_count": 10 if graph_on else None,
+                "edge_count": 0 if graph_on else None,
+                "edge_expansion_status": "not_available" if graph_on else "not_applicable",
+            }
+            result = {
+                "identity": {
+                    "run_id": config["calibration_id"], "trial_id": registration["trial_id"],
+                    "arm": arm, "answer_model": config["answer_model"],
+                    "reasoning": config["reasoning"], "rubric_version": "task-rubric-v1",
+                    "rubric_sha256": digest(registration["task_id"].encode("utf-8")),
+                },
+                "budget": config["repair_budget"], "pass_recall_min": 0.9,
+                "execution": "observed",
+                "terminal_reason": "repair_budget_exhausted" if failed else "passed",
+                "first_pass_correct": not failed,
+                "user_visible_wall_ns": 1000 + arm_value[arm],
+                "confirmed_time_to_correct_ns": None if failed else 900 + arm_value[arm],
+                "all_attempt_cost_usd": None,
+                "observed_active_execution_ns": 700,
+                "observed_wait_union_ns": 100 if jev_on else 0,
+                "unattributed_ns": 200,
+                "attempts": [attempt],
+                "phases": {
+                    "source_capture": phase("observed", 10),
+                    "candidate_discovery": phase("observed", 11),
+                    "context_composition": phase("observed", 12),
+                    "answer_generation": phase("observed", 13),
+                    "grading": phase("observed", 14),
+                    "cold_graph_build": phase("observed", 30) if graph_on else phase("not_applicable", 0),
+                    "warm_graph_load": phase("not_applicable", 0),
+                    "retrieval": phase("observed", 20) if graph_on else phase("missing", None),
+                    "fallback": phase("missing", None),
+                    "provider": phase("observed", 40) if jev_on else phase("not_applicable", 0),
+                    "operator_approval": phase("observed", 5) if jev_on else phase("not_applicable", 0),
+                },
+            }
+            results.append(result)
+        output = summarize_calibration(config, results, {})
+        self.assertEqual(output["schema_version"], "velgraphing-ttc-calibration-result-v3")
+        self.assertEqual(set(output["paired_contrasts"]), {"B-A", "D-C", "C-A", "D-B"})
+        self.assertEqual(output["measurement_summaries"]["D"]["metrics"]["jev_request_bytes"],
+                         {"observed_trials": 6, "missing_trials": 0, "mean": 900.0})
+        self.assertEqual(output["measurement_summaries"]["D"]["metrics"]["grader_input_tokens"]["mean"], 50.0)
+        self.assertEqual(len(output["measurement_summaries"]["D"]["jev_score_observations"]), 6)
+        b_failure = output["measurement_summaries"]["B"]["confidence_linked_task_failures"]
+        self.assertEqual(b_failure[0]["trial_id"], "B-C-01")
+        self.assertEqual(b_failure[0]["interpretation"], "descriptive_not_candidate_calibration")
+        direct = output["measurement_summaries"]["A"]["trials"][0]
+        self.assertIsNone(direct["shared_state_tokens"])
+        self.assertIsNone(direct["question_suffix_tokens"])
+        self.assertEqual(direct["warm_graph_load"]["status"], "not_applicable")
+        graph = output["measurement_summaries"]["C"]["trials"][0]
+        self.assertEqual((graph["discovery_route"], graph["graph_edge_count"],
+                          graph["edge_expansion_status"]),
+                         ("graph_find_tag_index", 0, "not_available"))
+        self.assertEqual(output["candidate_calibration"], {
+            "status": "unscored", "reason": "no_candidate_level_oracle_exists",
+            "confidence_linked_failures_are": "descriptive_only",
+        })
+        self.assertEqual(output["paired_contrasts"]["B-A"]["metrics"]["user_visible_wall_ns"], {
+            "paired_tasks": 6, "missing_pairs": 0, "mean_delta_left_minus_right": 1.0})
+        self.assertEqual(output["paired_contrasts"]["B-A"]["metrics"]["operator_approval_ns"], {
+            "paired_tasks": 6, "missing_pairs": 0, "mean_delta_left_minus_right": 5.0})
+
+    def test_v1_v2_summary_shape_is_unchanged_by_v3_aggregation(self):
+        for calibration_id in ("velgraphing-ttc-calibration-v1",
+                               "velgraphing-ttc-calibration-v2"):
+            config = load_calibration(ROOT, calibration_id)
+            output = summarize_calibration(config, [], {})
+            self.assertEqual(output["schema_version"], "velgraphing-ttc-calibration-result-v1")
+            self.assertNotIn("measurement_summaries", output)
+            self.assertNotIn("paired_contrasts", output)
+
+    def test_v3_missing_trials_remain_missing_and_numeric_values_stay_null(self):
+        config = load_calibration(ROOT, "velgraphing-ttc-calibration-v3")
+        output = summarize_calibration(config, [], {})
+        row = output["measurement_summaries"]["A"]["trials"][0]
+        self.assertEqual(row["terminal_reason"], "missing")
+        self.assertIsNone(row["user_visible_wall_ns"])
+        self.assertIsNone(row["source_operation_count"])
+        self.assertIsNone(row["provider_calls"])
+        self.assertEqual(row["warm_graph_load"], {"status": "missing", "duration_ns": None})
+        self.assertEqual(output["paired_contrasts"]["B-A"]["metrics"]["provider_calls"], {
+            "paired_tasks": 0, "missing_pairs": 6, "mean_delta_left_minus_right": None})
+
     def test_offline_qualification_exercises_required_lifecycle(self):
         result = qualify(ROOT)
         self.assertEqual(result["provider_calls_made"], 0)
@@ -291,6 +455,15 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(result["missing_response"], {
             "terminal_reason": "measurement_error", "handoff_status": "response_timeout"})
         self.assertEqual(result["live_refusal"], "live_jev_not_approved")
+
+    def test_v3_qualification_proves_fixed_pairs_without_provider_calls(self):
+        result = qualify(ROOT, "velgraphing-ttc-calibration-v3")
+        self.assertEqual(result["provider_calls_made"], 0)
+        self.assertEqual(result["direct_off"]["terminal_reason"], "passed")
+        self.assertEqual(result["graph_on_replay"]["terminal_reason"], "passed")
+        self.assertTrue(result["pair_proof"]["direct"]["a_b_match"])
+        self.assertTrue(result["pair_proof"]["graph"]["c_d_match"])
+        self.assertEqual(result["pair_proof"]["answer_evidence_budget_bytes"], 16384)
 
     def test_live_path_refuses_before_network_without_approval_or_cap(self):
         config = load_calibration(ROOT)
