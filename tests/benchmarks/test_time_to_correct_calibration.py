@@ -9,9 +9,10 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/benchmarks"))
-from time_to_correct import Budget, MeasurementError, Trial, canonical, digest
-from time_to_correct_calibration import (HANDOFF_PATH, fixture_identity, load_calibration,
-                                         qualify, require_resumable, start_fixture_worker,
+from time_to_correct import Budget, MeasurementError, Trial, canonical, digest, summarize
+from time_to_correct_calibration import (HANDOFF_PATH, fixture_identity, jev_answer_payload,
+                                         load_calibration, qualify, require_resumable,
+                                         start_fixture_worker, summarize_calibration,
                                          validate_live_authority)
 from time_to_correct_handoff import read_canonical
 from time_to_correct_jev import evaluate_live
@@ -59,6 +60,78 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(receipt["status"], "completed")
         self.assertEqual(receipt["request_sha256"], digest(request))
         self.assertEqual(receipt["response_sha256"], digest(completed.stdout))
+
+    def test_response_file_cli_publishes_canonical_draft(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            lane = root / "trials/publish/attempt-0/answer"
+            lane.mkdir(parents=True)
+            response = canonical({"schema_version": "fixture-response-v1", "answer": "published"})
+            draft = lane / "draft-response.json"
+            draft.write_bytes(response)
+            completed = subprocess.run(
+                [sys.executable, str(HANDOFF_PATH), "respond", "--run-root", str(root),
+                 "--trial-id", "publish", "--attempt", "0", "--lane", "answer",
+                 "--response-file", str(draft)],
+                cwd=ROOT, env={}, capture_output=True, check=False,
+            )
+            published = (lane / "response.json").read_bytes()
+            draft_value = read_canonical(draft)[1]
+        self.assertEqual((completed.returncode, completed.stderr), (0, b""))
+        self.assertEqual(published, response)
+        self.assertEqual(draft_value["answer"], "published")
+
+    def test_jev_order_resolves_exact_candidates_for_answer_lane(self):
+        candidates = [
+            {"id": "required", "path": "a.py", "source_sha256": "a" * 64,
+             "byte_start": 0, "byte_end": 8, "required": True},
+            {"id": "low", "path": "b.py", "source_sha256": "b" * 64,
+             "byte_start": 2, "byte_end": 10, "required": False},
+            {"id": "high", "path": "c.py", "source_sha256": "c" * 64,
+             "byte_start": 4, "byte_end": 12, "required": False},
+        ]
+        result = {"status": "reranked", "order": ["required", "high", "low"],
+                  "baseline_order": ["required", "low", "high"],
+                  "required_ids": ["required"]}
+        payload = jev_answer_payload({"candidates": candidates}, result)
+        self.assertEqual(payload["order"], result["order"])
+        self.assertEqual([row["id"] for row in payload["ordered_candidates"]], result["order"])
+        self.assertEqual({row["id"]: row for row in payload["ordered_candidates"]},
+                         {row["id"]: row for row in candidates})
+        fallback = jev_answer_payload(
+            {"candidates": candidates},
+            {**result, "status": "fallback", "order": result["baseline_order"]},
+        )
+        self.assertEqual([row["id"] for row in fallback["ordered_candidates"]],
+                         result["baseline_order"])
+
+    def test_mixed_arm_finalization_returns_four_complete_summaries(self):
+        config = load_calibration(ROOT)
+        results = []
+        for row in config["registered_trials"]:
+            results.append({
+                "identity": {
+                    "run_id": config["calibration_id"], "trial_id": row["trial_id"],
+                    "arm": row["arm"], "answer_model": config["answer_model"],
+                    "reasoning": config["reasoning"], "rubric_version": "task-rubric-v1",
+                    "rubric_sha256": digest(row["task_id"].encode("utf-8")),
+                },
+                "budget": config["repair_budget"], "pass_recall_min": 0.9,
+                "execution": "observed", "terminal_reason": "passed",
+                "first_pass_correct": True, "user_visible_wall_ns": 100,
+                "confirmed_time_to_correct_ns": 90, "all_attempt_cost_usd": None,
+            })
+        expected_ids = [row["trial_id"] for row in config["registered_trials"]]
+        with self.assertRaisesRegex(MeasurementError, "incomparable_trials"):
+            summarize(expected_ids, results)
+        output = summarize_calibration(config, results)
+        self.assertEqual((output["status"], output["registered_trials"],
+                          output["reported_trials"], output["coverage_complete"]),
+                         ("closed", 24, 24, True))
+        self.assertEqual(set(output["arm_summaries"]), {"A", "B", "C", "D"})
+        for arm, summary in output["arm_summaries"].items():
+            self.assertEqual((summary["registered_trials"], summary["reported_trials"],
+                              summary["coverage_complete"]), (6, 6, True), arm)
 
     def test_offline_qualification_exercises_required_lifecycle(self):
         result = qualify(ROOT)

@@ -166,6 +166,69 @@ def record_usage(trial: Trial, output: Mapping[str, Any], call_id: str) -> None:
     trial.usage(call_id, "answer", **usage)
 
 
+def jev_answer_payload(packet: Mapping[str, Any], result: Mapping[str, Any]) -> dict[str, Any]:
+    """Resolve the evaluator order to the exact private source candidates."""
+    candidates = packet.get("candidates")
+    order = result.get("order")
+    if type(candidates) is not list or type(order) is not list:
+        raise MeasurementError("jev_order_invalid")
+    by_id = {row.get("id"): row for row in candidates if type(row) is dict}
+    if (not all(type(candidate_id) is str for candidate_id in order)
+            or len(by_id) != len(candidates) or len(order) != len(candidates)
+            or len(set(order)) != len(order) or set(order) != set(by_id)):
+        raise MeasurementError("jev_order_invalid")
+    for index, candidate in enumerate(candidates):
+        if candidate.get("required") is True and order[index] != candidate.get("id"):
+            raise MeasurementError("jev_required_position_changed")
+    if result.get("status") == "fallback" and order != result.get("baseline_order"):
+        raise MeasurementError("jev_fallback_order_invalid")
+    payload = {
+        key: result.get(key) for key in (
+            "status", "reason", "baseline_order", "order", "required_ids",
+            "request_sha256", "source_revalidated", "resolved_model",
+        )
+    }
+    payload["ordered_candidates"] = [dict(by_id[candidate_id]) for candidate_id in order]
+    return payload
+
+
+def summarize_calibration(config: Mapping[str, Any], completed: list[dict[str, Any]]) -> dict[str, Any]:
+    """Close one mixed-arm calibration without weakening protocol comparison."""
+    registrations = config["registered_trials"]
+    expected = {row["trial_id"]: row["arm"] for row in registrations}
+    seen: set[str] = set()
+    for result in completed:
+        identity = result.get("identity", {})
+        trial_id, arm = identity.get("trial_id"), identity.get("arm")
+        if trial_id not in expected or trial_id in seen or expected[trial_id] != arm:
+            raise MeasurementError("calibration_result_mismatch")
+        seen.add(trial_id)
+    oracle_set_sha256 = config["source_pilot"]["oracle_sha256"]
+    arm_summaries = {}
+    for arm in ARMS:
+        trial_ids = [row["trial_id"] for row in registrations if row["arm"] == arm]
+        results = []
+        for result in completed:
+            if result["identity"]["arm"] == arm:
+                # Each task has its own rubric; the sealed oracle file is the arm-level protocol.
+                results.append({
+                    **result,
+                    "identity": {**result["identity"], "rubric_sha256": oracle_set_sha256},
+                })
+        arm_summaries[arm] = summarize(trial_ids, results)
+    coverage_complete = all(row["coverage_complete"] for row in arm_summaries.values())
+    return {
+        "schema_version": "velgraphing-ttc-calibration-result-v1",
+        "calibration_id": config["calibration_id"],
+        "status": "closed" if coverage_complete else "incomplete",
+        "oracle_set_sha256": oracle_set_sha256,
+        "registered_trials": len(registrations),
+        "reported_trials": len(completed),
+        "coverage_complete": coverage_complete,
+        "arm_summaries": arm_summaries,
+    }
+
+
 def request_candidates(trial: Trial, repo: Path, run_root: Path, payload: dict[str, Any],
                        wait_seconds: float) -> dict[str, Any]:
     request = {
@@ -337,12 +400,7 @@ def run_registered_trial(repo: Path, run_root: Path, lane_root: Path,
                 max_live_calls=budget.cap, call_number=call_number,
             )
             budget.complete(receipt_path, result)
-            base["jev"] = {
-                key: result.get(key) for key in (
-                    "status", "reason", "baseline_order", "order", "required_ids",
-                    "request_sha256", "source_revalidated", "resolved_model",
-                )
-            }
+            base["jev"] = jev_answer_payload(candidate, result)
         else:
             current.not_applicable(
                 "jev_preparation", "provider", "source_revalidation",
@@ -403,7 +461,7 @@ def run_calibration(args: argparse.Namespace) -> dict[str, Any]:
         save_completed_trial(receipt_root, result)
         completed.append(result)
         completed_ids.add(trial_id)
-    return summarize(expected_ids, completed)
+    return summarize_calibration(config, completed)
 
 
 def start_fixture_worker(root: Path, trial_id: str, lane: str, wait: float = 5) -> subprocess.Popen[bytes]:
@@ -518,7 +576,7 @@ def qualify(repo: Path = REPO_ROOT) -> dict[str, Any]:
             result = evaluate_offline(trial, repo, captured, source, envelope=envelope)
             trial.not_applicable("operator_approval")
             return {"fixture_answer": "distinct graph replay fixture answer",
-                    "graph_navigation": navigation, "jev_order": result["order"]}
+                    "graph_navigation": navigation, "jev": jev_answer_payload(captured, result)}
         graph = run_process_trial(
             graph_trial, graph_prepare,
             answer_argv=handoff_argv(handoff_root, "graph-on", "answer", 1),

@@ -67,9 +67,14 @@ byte_end, and required flags. Required candidates must stay in their positions.
 Do not answer the task yet.
 
 After the Parent approves and the coordinator writes the answer request, continue
-in this same fresh task. Re-read only the authorized exact sources. Return one
-velgraphing-answer-output-v1 object. Do not include a grade or hidden rubric data.
-Report usage as null and completeness false unless the host exposes exact values.
+in this same fresh task. For a Jev-on request, consume `jev.ordered_candidates`
+first and in its exact listed order. Re-read each candidate's exact `path`, verify
+its `source_sha256`, and use only its `[byte_start, byte_end)` span. Do not drop or
+duplicate candidates. Keep required candidates in their registered positions. A
+fallback list is the baseline order. Then read only other authorized exact sources
+needed to answer. Return one velgraphing-answer-output-v1 object. Do not include a
+grade or hidden rubric data. Report usage as null and completeness false unless the
+host exposes exact values.
 ```
 
 Preparation response shape:
@@ -143,12 +148,11 @@ Validation on 2026-09-18 used the frozen package 0.1.6 checkout. No live Jev
 call ran.
 
 - Offline qualification passed with zero provider calls.
-- All 68 benchmark tests passed.
+- All 9 focused calibration tests passed.
+- All 71 benchmark tests passed.
 - All 57 focused Jev tests passed.
 - Package source parity passed for 87 files.
-- The full `npm test` suite passed: 11 scaffold, 229 core, 18 adapter, 29
-  skill, 68 benchmark, and 10 parity tests.
-- Python compilation, JSON parsing, and `git diff --check` passed.
+- Python compilation and `git diff --check` passed.
 
 ## Parent start command
 
