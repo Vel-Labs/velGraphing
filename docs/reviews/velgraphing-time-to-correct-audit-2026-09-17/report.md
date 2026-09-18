@@ -355,12 +355,13 @@ from evidence, not rerun unchanged until green.
 
 Local repair candidate results:
 
-- `python3 -m unittest discover -s tests/benchmarks -v`: 61 passed.
+- `python3 -m unittest discover -s tests/benchmarks -v`: 62 passed.
 - `python3 -m unittest discover -s tests/core -p 'test_jev.py' -v`: 57 passed.
-- `npm test`: 358 passed across scaffold, core, adapters, skills, benchmarks,
-  and parity.
+- `npm test`: 358 passed at repair head `4094679`. The non-benchmark suite
+  result is reused because the follow-up changes only benchmark host code, its
+  focused test, and documentation. All 62 benchmark tests passed on the follow-up.
 - `python3 -m json.tool` for the protocol, `py_compile` for the two changed
-  controller modules, and `git diff --check`: passed.
+  controller modules, package parity, and `git diff --check`: passed.
 - The package projector was not rerun locally because no canonical or
   package-consumed input changed. Pull-request CI retains the two-pass projector
   and parity check.

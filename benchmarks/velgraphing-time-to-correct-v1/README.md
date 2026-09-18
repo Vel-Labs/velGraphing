@@ -30,10 +30,11 @@ patched, no ranking semantics change, and the package projection is unchanged.
 `time_to_correct_host.py` is the external process boundary. The caller supplies
 separate answer and grader argv arrays. The module never invokes a shell. It sends
 canonical JSON on stdin and accepts canonical JSON on stdout. Each process timeout
-is bounded by the remaining trial deadline. A process timeout is recorded as
-`callback_timeout`; controller wall exhaustion is `deadline_exceeded`. Process
-errors use closed reason codes. Stderr and arbitrary exception text are not copied
-into the trial result.
+is bounded by the remaining trial deadline. A configured process timeout is
+`callback_timeout` when it expires before the controller budget. A process timeout
+clipped by an expired controller budget is `deadline_exceeded`. Process errors use
+closed reason codes. Stderr and arbitrary exception text are not copied into the
+trial result.
 
 Graph instrumentation times the real scan/record creation plus tag-index creation
 as cold build, prompt/facet preparation as candidate discovery, and the real

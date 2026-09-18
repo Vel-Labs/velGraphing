@@ -89,8 +89,9 @@ class HostBoundaryTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.cwd = Path(self.temp.name)
 
-    def run_host(self, answer_code=ANSWER_CODE, *, answer_timeout_s=2):
-        trial = Trial(identity(), Budget(0, 5_000_000_000), execution="fixture")
+    def run_host(self, answer_code=ANSWER_CODE, *, answer_timeout_s=2,
+                 wall_limit_ns=5_000_000_000):
+        trial = Trial(identity(), Budget(0, wall_limit_ns), execution="fixture")
         return run_process_trial(
             trial,
             lambda *_: {"question": "frozen question", "evidence": ["opaque-source-pointer"]},
@@ -122,6 +123,19 @@ class HostBoundaryTests(unittest.TestCase):
         receipt = result["attempts"][0]["host_processes"][0]
         self.assertEqual(receipt["status"], "timeout")
         self.assertLessEqual(receipt["timeout_limit_ns"], result["budget"]["wall_limit_ns"])
+
+    def test_process_timeout_clipped_by_wall_budget_is_deadline(self):
+        result = self.run_host(
+            "import time; time.sleep(1)",
+            answer_timeout_s=2,
+            wall_limit_ns=50_000_000,
+        )
+        self.assertEqual(result["terminal_reason"], "deadline_exceeded")
+        self.assertEqual(result["attempts"][0]["failure_stage"], "controller")
+        self.assertEqual(result["attempts"][0]["failure_reason"], "deadline_exceeded")
+        receipt = result["attempts"][0]["host_processes"][0]
+        self.assertEqual(receipt["status"], "timeout")
+        self.assertLess(receipt["timeout_limit_ns"], 2_000_000_000)
 
     def test_unknown_usage_stays_unknown(self):
         result = self.run_host(ANSWER_UNKNOWN_USAGE_CODE)

@@ -69,7 +69,9 @@ def _invoke(trial: Trial, kind: str, argv_value: Any, payload: Mapping[str, Any]
     timeout_s = _timeout(call_timeout_s)
     trial._check_deadline()
     remaining_ns = trial.remaining_ns()
-    timeout_limit_ns = min(int(timeout_s * 1_000_000_000), remaining_ns)
+    configured_timeout_ns = int(timeout_s * 1_000_000_000)
+    controller_limited = remaining_ns < configured_timeout_ns
+    timeout_limit_ns = min(configured_timeout_ns, remaining_ns)
     raw = canonical(payload)
     try:
         completed = subprocess.run(
@@ -85,6 +87,8 @@ def _invoke(trial: Trial, kind: str, argv_value: Any, payload: Mapping[str, Any]
         output = exc.stdout or b""
         error = exc.stderr or b""
         _receipt(trial, kind, argv, raw, output, error, None, timeout_limit_ns, "timeout")
+        if controller_limited:
+            trial._check_deadline()
         raise TimeoutError from None
     except OSError:
         _receipt(trial, kind, argv, raw, b"", b"", None, timeout_limit_ns, "unavailable")
