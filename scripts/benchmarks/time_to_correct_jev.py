@@ -1,8 +1,8 @@
-"""Offline timing integration with the REAL Jev evaluator in an isolated module.
+"""Timing integration with the real Jev evaluator in an isolated module.
 
-No production module is patched. This bridge deliberately cannot make network
-calls or access credentials. Fixture provider duration is local response-copy
-work; replay has no provider stage. Neither is a live latency measurement.
+No production module is patched. Offline evaluation cannot make network calls or
+access credentials. Live evaluation requires explicit runtime authority and cap
+binding before the canonical evaluator can read its credential.
 """
 from __future__ import annotations
 
@@ -18,35 +18,27 @@ except ImportError:
     from time_to_correct import MeasurementError, Trial, digest
 
 
-def load_jev(repo: Path) -> Any:
+def _load_jev(repo: Path, *, forbid_live: bool) -> Any:
     spec = importlib.util.spec_from_file_location("jev_benchmark_" + uuid.uuid4().hex,
                                                   repo / "packages/core/jev.py")
     if spec is None or spec.loader is None:
         raise MeasurementError("jev_module_unavailable")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    # Defense in depth: even accidental fallthrough cannot invoke the real HTTP
-    # function. Do not run status or inspect the environment in this bridge.
-    def forbidden(*args: Any, **kwargs: Any) -> None:
-        raise MeasurementError("live_provider_forbidden")
-    module._http = forbidden
+    if forbid_live:
+        # Defense in depth: offline fallthrough cannot invoke the real HTTP function.
+        def forbidden(*args: Any, **kwargs: Any) -> None:
+            raise MeasurementError("live_provider_forbidden")
+        module._http = forbidden
     return module
 
 
-def evaluate_offline(trial: Trial, repo: Path, packet: dict[str, Any], root: Path, *,
-                     envelope: dict[str, Any], mode: str = "rerank",
-                     fixture_provider: bool = False) -> dict[str, Any]:
-    """Instrument existing prepare/parse/revalidation without changing ranking.
+def load_jev(repo: Path) -> Any:
+    """Load a credential-blind evaluator for replay and fixture use."""
+    return _load_jev(repo, forbid_live=True)
 
-    envelope must be a request-bound replay envelope, including in fixture mode.
-    Use this only in a single-owner benchmark controller. A live-host adapter
-    needs its own explicit provider authorization and complete call ledger.
-    """
-    if trial.execution not in {"fixture", "replay"}:
-        raise MeasurementError("offline_bridge_requires_fixture_or_replay")
-    if type(fixture_provider) is not bool or mode not in {"off", "shadow", "rerank"}:
-        raise MeasurementError("invalid_offline_options")
-    module = load_jev(repo)
+
+def _instrument(module: Any, trial: Trial, *, operation_prefix: str = "jev") -> None:
     original_prepare, original_parse, original_read = module.prepare, module.parse_response, module._read_source
     preparation_calls = 0
     source_calls = 0
@@ -65,12 +57,53 @@ def evaluate_offline(trial: Trial, repo: Path, packet: dict[str, Any], root: Pat
         raw = original_read(*args, **kwargs)
         source_calls += 1
         trial.source(digest(raw), 0, len(raw), access="file_read",
-                     operation_id=f"jev-{trial.current['attempt_id']}-read{source_calls}")
+                     operation_id=f"{operation_prefix}-{trial.current['attempt_id']}-read{source_calls}")
         return raw
     def parse(*args: Any, **kwargs: Any) -> Any:
         with trial.phase("response_validation"):
             return original_parse(*args, **kwargs)
     module.prepare, module.parse_response, module._read_source = prepare, parse, read
+
+
+def prepare_preview(trial: Trial, repo: Path, packet: dict[str, Any], root: Path) -> dict[str, Any]:
+    """Prepare the exact request hash for caller-owned approval, without network."""
+    module = load_jev(repo)
+    _instrument(module, trial, operation_prefix="jev-preview")
+    return module.prepare(packet, root, module.DEFAULT_MODEL)
+
+
+def _record(trial: Trial, module: Any, result: dict[str, Any], *, execution: str,
+            provenance: str) -> None:
+    usage = result.get("usage") if execution in {"live", "fixture_provider"} else result.get("replayed_usage")
+    trial.usage(f"jev-{trial.current['attempt_id']}", "jev",
+                provenance=provenance if usage else "unavailable",
+                model=result.get("resolved_model") or module.DEFAULT_MODEL,
+                input_tokens=usage["input_tokens"] if usage else None,
+                output_tokens=usage["output_tokens"] if usage else None)
+    trial.current["jev_observation"] = {
+        key: result.get(key) for key in (
+            "status", "reason", "baseline_order", "order", "required_ids",
+            "candidate_set_sha256", "request_sha256", "source_revalidated", "resolved_model",
+        )
+    }
+    trial.current["jev_observation"]["measurement_execution"] = execution
+
+
+def evaluate_offline(trial: Trial, repo: Path, packet: dict[str, Any], root: Path, *,
+                     envelope: dict[str, Any], mode: str = "rerank",
+                     fixture_provider: bool = False) -> dict[str, Any]:
+    """Instrument existing prepare/parse/revalidation without changing ranking.
+
+    envelope must be a request-bound replay envelope, including in fixture mode.
+    Use this only in a single-owner benchmark controller. A live-host adapter
+    needs its own explicit provider authorization and complete call ledger.
+    """
+    if trial.execution not in {"fixture", "replay"}:
+        raise MeasurementError("offline_bridge_requires_fixture_or_replay")
+    if type(fixture_provider) is not bool or mode not in {"off", "shadow", "rerank"}:
+        raise MeasurementError("invalid_offline_options")
+    module = load_jev(repo)
+    _instrument(module, trial)
     def transport(payload: Any, timeout: float) -> Any:
         if (set(envelope) != {"schema_version", "request_sha256", "response"}
                 or envelope["schema_version"] != "velgraphing-jev-replay-v1"
@@ -89,15 +122,32 @@ def evaluate_offline(trial: Trial, repo: Path, packet: dict[str, Any], root: Pat
     else:
         trial.not_applicable("provider")
         result = module.evaluate(packet, root, mode=mode, replay=envelope)
-    usage = result.get("usage") if fixture_provider else result.get("replayed_usage")
-    trial.usage(f"jev-{trial.current['attempt_id']}", "jev", provenance="fixture" if usage else "unavailable",
-                model=module.DEFAULT_MODEL,
-                input_tokens=usage["input_tokens"] if usage else None,
-                output_tokens=usage["output_tokens"] if usage else None)
-    trial.current["jev_observation"] = {
-        # Opaque IDs, hashes and scalar decisions only. Never retain request text.
-        key: result.get(key) for key in ("status", "reason", "baseline_order", "order", "required_ids",
-                    "candidate_set_sha256", "request_sha256", "source_revalidated", "resolved_model")
-    }
-    trial.current["jev_observation"]["measurement_execution"] = "fixture_provider" if fixture_provider else "replay"
+    _record(trial, module, result,
+            execution="fixture_provider" if fixture_provider else "replay",
+            provenance="fixture")
+    return result
+
+
+def evaluate_live(trial: Trial, repo: Path, packet: dict[str, Any], root: Path, *,
+                  approved_request_sha256: str, runtime_approved: bool,
+                  max_live_calls: int, call_number: int, timeout_s: float = 10) -> dict[str, Any]:
+    """Run one canonical live evaluation after caller-owned approval and cap checks."""
+    if trial.execution != "observed" or runtime_approved is not True:
+        raise MeasurementError("live_jev_not_approved")
+    if (type(max_live_calls) is not int or type(call_number) is not int
+            or max_live_calls < 1 or not 1 <= call_number <= max_live_calls):
+        raise MeasurementError("live_jev_cap_not_bound")
+    module = _load_jev(repo, forbid_live=False)
+    original_http = module._http
+    _instrument(module, trial, operation_prefix="jev-live")
+    def observed_http(payload: Any, timeout: float) -> Any:
+        with trial.phase("provider"):
+            return original_http(payload, timeout)
+    module._http = observed_http
+    result = module.evaluate(
+        packet, root, mode="rerank", allow_network=True,
+        approved_request_sha256=approved_request_sha256,
+        model=module.DEFAULT_MODEL, timeout_s=timeout_s,
+    )
+    _record(trial, module, result, execution="live", provenance="provider_reported")
     return result

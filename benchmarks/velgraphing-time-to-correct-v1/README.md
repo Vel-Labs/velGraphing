@@ -1,8 +1,9 @@
 # VelGraphing time-to-correct v1
 
 Status: executable measurement tooling and offline qualification, **not a new
-performance result**. The six-task pilot remains unchanged. No provider is
-called by the included demo or qualification bridges.
+performance result**. The six-task pilot remains unchanged. The approved
+24-trial calibration is frozen in `calibration.json`, but it has not run. The
+included demo and `qualify` command make zero provider calls.
 
 ## Run locally
 
@@ -11,6 +12,8 @@ From a clean checkout with the existing project dependencies installed:
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/benchmarks -v
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/benchmarks/time_to_correct_fixture.py
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/benchmarks/time_to_correct_calibration.py plan
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/benchmarks/time_to_correct_calibration.py qualify
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/benchmarks/audit_pilot_receipts.py
 ```
 
@@ -35,6 +38,12 @@ is bounded by the remaining trial deadline. A configured process timeout is
 clipped by an expired controller budget is `deadline_exceeded`. Process errors use
 closed reason codes. Stderr and arbitrary exception text are not copied into the
 trial result.
+
+`time_to_correct_handoff.py` writes each native-lane request atomically under an
+ignored `.velgraphing-local` run root and waits for a separate canonical response.
+`time_to_correct_calibration.py` owns the frozen serial dispatch, completed-trial
+resume, exact Jev approval hash, and aggregate 12-call ledger. It never launches
+Codex. See `CALIBRATION.md` for the Parent-operated native lane procedure.
 
 Graph instrumentation times the real scan/record creation plus tag-index creation
 as cold build, prompt/facet preparation as candidate discovery, and the real
@@ -173,10 +182,11 @@ breakdown missing. Do not ask the answering LLM to estimate its runtime.
 
 The process seam records only the answer input it delivered and the usage receipts
 returned by each process. Completeness flags remain false unless the host can attest
-that all nested calls and contexts are included. Missing values stay null. No live
-provider or native Codex lifecycle integration is claimed by the offline tests.
-Live execution still needs explicit approval and a host-enforced aggregate request
-budget. The included Jev bridge intentionally cannot make that call.
+that all nested calls and contexts are included. Missing values stay null. Offline
+tests claim no live provider or native Codex execution. The approved live coordinator
+still requires the Parent's runtime flag, exact 12-call cap binding, per-request hash
+approval, credential-bearing terminal, and separately created native answer and
+grader tasks.
 
 ## Completed-trial recovery
 

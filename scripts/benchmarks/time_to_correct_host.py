@@ -122,12 +122,15 @@ def run_process_trial(
     cwd: Path,
     answer_timeout_s: float,
     grader_timeout_s: float,
+    grader_context: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run a trial through frozen answer and grader subprocess boundaries."""
     answer_command = list(_argv(answer_argv))
     grader_command = list(_argv(grader_argv))
     answer_timeout = _timeout(answer_timeout_s)
     grader_timeout = _timeout(grader_timeout_s)
+    if grader_context is not None and type(grader_context) is not dict:
+        raise MeasurementError("invalid_grader_context")
 
     def answer(t: Trial, prepared: Mapping[str, Any], attempt: int) -> Answer:
         if type(prepared) is not dict:
@@ -176,6 +179,9 @@ def run_process_trial(
             },
             "answer_text": produced.content,
         }
+        if grader_context is not None:
+            payload["grader_context"] = grader_context
+            t.context(canonical(payload), kind="tool_message")
         output = _invoke(t, "grader", grader_command, payload, cwd, grader_timeout)
         expected = {
             "schema_version", "required_fact_score", "required_fact_maximum",
