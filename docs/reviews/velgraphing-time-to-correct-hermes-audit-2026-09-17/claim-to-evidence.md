@@ -71,7 +71,7 @@ Verdict: claims match implementation and disclaimers. The audit confirms there i
 
 Source: this audit (`minimal-repair.md`).
 
-Evidence: the repair in `benchmarks/velgraphing-time-to-correct-v1/` emits one JSONL line per event with `event_id`, `phase`, `t_monotonic_ns`, `task_id`, `arm`, `packet_id`. The events listed in `event-trace.md` are: `task_accept`, `graph_build_or_load`, `discovery_start`, `discovery_end`, `jev_prepare_start`, `jev_prepare_end`, `jev_provider_call_start` (only on rerank with replay or live approval), `jev_provider_call_end`, `jev_revalidate_end`, `answer_dispatch_start`, `answer_dispatch_end`, `grade_start`, `grade_end`, `repair_attempt_n_start`, `repair_attempt_n_end`, `first_pass_correctness`, `time_to_correct` (computed from grade events), `active_execution_ms` (sum of phases minus queue time), `queue_approval_ms` (sum of approval waits), `user_visible_wall_ms` (recorded by parent). `total_wall_ms` in the prior pilot is replaced by these per-event fields.
+Evidence: the repair in `benchmarks/velgraphing-time-to-correct-v1/` emits one JSONL line per event with `event_id`, `phase`, `t_monotonic_ns`, `task_id`, `arm`, and `packet_id`. It directly observes canonical Jev replay, answer subprocess, grader subprocess, repair attempts, first-pass correctness, time-to-correct, active execution, queue ownership, and user-visible wall. Graph discovery remains caller-owned and is not asserted as measured by this version. `total_wall_ms` in the prior pilot is not retroactively changed.
 
 Verdict: claim is supportable by the harness design and is tested by `tests/benchmarks/test_velgraphing_time_to_correct_v1.py`.
 
@@ -79,7 +79,7 @@ Verdict: claim is supportable by the harness design and is tested by `tests/benc
 
 Source: this audit.
 
-Evidence: `scripts/benchmarks/velgraphing_time_to_correct_v1.py` keeps a row for every attempt, including `status: failed`, `terminal_reason: <reason>`, and `censored: true` when wall-clock is unavailable. The `tests/benchmarks/test_velgraphing_time_to_correct_v1.py::test_censored_row_is_retained` test asserts this.
+Evidence: `scripts/benchmarks/velgraphing_time_to_correct_v1.py` keeps a row for every attempt, including `status: failed`, `terminal_reason: <reason>`, and censored rows for unavailable answer, grader, or replay boundaries. The benchmark tests assert fail-closed lane behavior and failed-grade retention.
 
 Verdict: claim is enforced by the harness and tested.
 
@@ -87,6 +87,6 @@ Verdict: claim is enforced by the harness and tested.
 
 Source: this audit; brief instruction.
 
-Evidence: `packages/core/jev.py:330-400` `evaluate()` accepts a `replay` parameter bound to a request-hash-keyed envelope. The harness invokes `evaluate(replay=...)` only. `tests/benchmarks/test_velgraphing_time_to_correct_v1.py::test_jev_replay_path_emits_provider_call_events` asserts no `TYPESAFE_API_KEY` is read and no transport other than the replay fixture is used. The harness script also raises if `TYPESAFE_API_KEY` is set in the environment.
+Evidence: `packages/core/jev.py:330-400` `evaluate()` accepts a replay parameter bound to a request-hash-keyed envelope. The harness invokes `evaluate(replay=...)` only in Jev-on arms. The benchmark tests assert canonical replay, marker-backed answer/grader subprocesses, and no `TYPESAFE_API_KEY` execution path. The harness also refuses to start if `TYPESAFE_API_KEY` is set.
 
 Verdict: claim matches implementation and tests.

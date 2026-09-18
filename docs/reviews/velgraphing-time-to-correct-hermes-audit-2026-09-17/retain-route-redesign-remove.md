@@ -12,25 +12,25 @@ Per-finding recommendation. "Retain" means: keep as-is, no PR change. "Route" me
 
 **Recommendation:** Retain. The current contract is documented and tested (`tests/core/test_jev.py::test_rerank_is_complete_permutation`). It is correct as a "reorder-only" primitive.
 
-**Rationale:** Removing the pruning capability would be a feature change, not a defect repair. The harness in this PR measures whether rerank *matters* before any decision about whether to add pruning.
+**Rationale:** Removing the pruning capability would be a feature change, not a defect repair. A future frozen run can measure whether rerank matters; this repair does not claim that the current product path is wired.
 
 ## F3 (product): Required-position locking suppresses ranking changes.
 
 **Recommendation:** Retain. Required-position locking is part of the contract (`packages/core/jev.py:386-387`) and the protocol (`freeze.json:131-133`). Removing it would invalidate the pilot's claim "required IDs remain present."
 
-**Rationale:** Required-position locking is a stability guarantee for the answer lane, not a correctness claim. The harness measures the effect of the guarantee on time-to-correct; future redesigns (D2) can address whether the guarantee should be relaxed.
+**Rationale:** Required-position locking is a stability guarantee for the answer lane, not a correctness claim. A future frozen run can measure its effect on time-to-correct; future redesigns (D2) can address whether the guarantee should be relaxed.
 
 ## F4 (integration): `graph_find.py` never imports `jev`.
 
 **Recommendation:** Route. The current architecture routes Jev through the parent operator's shell templates (`freeze.json:136-139`). Keep this for now.
 
-**Rationale:** Wiring Jev into `graph_find.py` is a product change (D1) that needs operator approval. The harness measures the three hypotheses under the current architecture so the wiring decision can be evidence-based.
+**Rationale:** Wiring Jev into `graph_find.py` is a product change (D1). The successor harness preserves a bounded replay/subprocess measurement seam, but does not make the product-wiring decision.
 
 ## F5 (integration): `selection.py` selects whole records, not ordered bytes.
 
 **Recommendation:** Retain the current selection logic; defer any change to D2.
 
-**Rationale:** The current `select_documents()` is documented, tested, and the corpus pilot measured under it. Changing it would change the prior pilot's interpretation. The harness measures the time-to-correct effect of the current logic before any change.
+**Rationale:** The current `select_documents()` is documented and tested, and the corpus pilot is sealed. Changing it would change the prior pilot's interpretation. A fresh run can measure a frozen caller path before any product change.
 
 ## F6 (harness): No monotonic event trace; `total_wall_ms` is `unknown` for most rows.
 
@@ -66,7 +66,7 @@ Per-finding recommendation. "Retain" means: keep as-is, no PR change. "Route" me
 
 **Recommendation:** Measure via the new harness under the *current* architecture; revisit under D1/D2 if the result suggests it.
 
-**Rationale:** The brief asked us to separate the three hypotheses. The current architecture cannot test hypothesis 2 because Jev is not in the host loop. The harness measures what it can; future redesigns can test what it cannot.
+**Rationale:** The brief asked us to separate the three hypotheses. The current architecture cannot test hypothesis 2 because Jev is not in the host loop. The successor harness measures only the explicit replay and subprocess seams; future redesigns can test the product path it cannot reach.
 
 ## Summary table
 

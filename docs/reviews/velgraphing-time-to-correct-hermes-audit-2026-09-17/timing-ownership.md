@@ -54,11 +54,11 @@ The pilot's `unknown_policy` (`freeze.json:162`) makes this *permitted* — but 
 | Phase | Event | Owner |
 | --- | --- | --- |
 | Task acceptance | `task_accept` | Harness |
-| Graph build (cold) | `graph_build_or_load:cold` | Harness (calls `graph_find.py` once; times subprocess wall) |
-| Graph load (warm) | `graph_build_or_load:warm` | Harness |
-| Discovery (graph or direct) | `discovery_start`, `discovery_end` | Harness |
+| Graph build (cold) | caller-owned | Not measured by this successor harness |
+| Graph load (warm) | caller-owned | Not measured by this successor harness |
+| Discovery (graph or direct) | caller-owned | Not measured by this successor harness |
 | Jev prepare | `jev_prepare_start`, `jev_prepare_end` | Harness |
-| Jev provider call | `jev_provider_call_start`, `jev_provider_call_end` | Harness (only when `--allow-network` is set AND `TYPESAFE_API_KEY` is present AND no replay is provided; otherwise recorded as `skipped`) |
+| Jev replay evaluation | `jev_provider_call_start`, `jev_provider_call_end` | Harness; canonical `evaluate(replay=...)`, no live provider |
 | Jev revalidate | `jev_revalidate_end` | Harness |
 | Answer dispatch | `answer_dispatch_start`, `answer_dispatch_end` | Harness (wall around the answer-lane subprocess) |
 | Independent grade | `grade_start`, `grade_end` | Harness (subprocess around the grader) |
@@ -70,8 +70,8 @@ The pilot's `unknown_policy` (`freeze.json:162`) makes this *permitted* — but 
 | User-visible wall | `user_visible_wall_ms` | Harness (subprocess wall around the full task; `unknown` if the parent operator did not record it; the harness records it) |
 | Terminal reason | `terminal_reason` | Harness (one of `pass`, `fail_no_pass_under_budget`, `fail_censored`, `fail_invalid_response`, `fail_provider_error`, `fail_fallback_unavailable`) |
 
-The harness refuses to start if `TYPESAFE_API_KEY` is set and `--allow-network` is not explicitly passed.
+The harness refuses to start if `TYPESAFE_API_KEY` is set. Missing replay, answer, or grader boundaries fail closed and remain in the summary.
 
 ## Censored-row retention
 
-Every attempt produces a row, including failed and censored ones. A row is `censored: true` if `total_wall_ms` is unavailable. The aggregate report computes per-arm medians, IQRs, and pass rates with and without censored rows; the comparison report refuses to claim a wall-clock effect when censored-row fraction is above a documented threshold (default 0.25; configurable in `freeze.json`).
+Every attempt produces a row, including failed and censored ones. A row is `censored: true` when a required replay, answer, or grader boundary is unavailable or times out. The aggregate report computes per-arm medians, IQRs, and pass rates with and without censored rows; the comparison report refuses to claim a wall-clock effect when censored-row fraction is above a documented threshold (default 0.25; configurable in `freeze.json`).

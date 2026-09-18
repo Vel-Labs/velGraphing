@@ -32,14 +32,14 @@ Default `repair_budget: 2` (initial + 2 repairs). Configurable per benchmark in 
 Three flags, all default off:
 
 - `--without-jev`: short-circuits the Jev phase. Records `component_removal: jev`. Used to estimate the cost of running Jev.
-- `--without-graph`: short-circuits the graph-find phase. Records `component_removal: graph`. Used to estimate the benefit of graph-find.
-- `--without-fallback`: short-circuits the fallback phase. Records `component_removal: fallback`. Used to estimate the benefit of fallback.
+- `--without-graph`: records `component_removal: graph` for a caller-owned graph phase. This harness does not run or short-circuit `graph-find` itself.
+- `--without-fallback`: records `component_removal: fallback` for a caller-owned fallback phase. This harness does not simulate fallback behavior.
 
 Component-removal rows are produced in addition to the regular arms. The aggregate report reports the effect of each removal across all arms.
 
 ## Censored-row policy
 
-A row is `censored: true` when `user_visible_wall_ms` or `time_to_correct_ms` is `null`. The aggregate report refuses to claim a wall-clock effect when the censored-row fraction per arm exceeds `freeze.json::censored_row_threshold` (default 0.25).
+A row is `censored: true` when a required replay, answer, or grader boundary is unavailable or times out. A failed grade under the repair budget is retained as a non-censored failure. The aggregate report refuses to claim a wall-clock effect when the censored-row fraction per arm exceeds `freeze.json::censored_row_threshold` (default 0.25).
 
 ## Independent grading
 
@@ -73,6 +73,6 @@ The grader is outside the answer lane. The lane never sees the rubric. The grade
 
 - Every (question, arm) pair produces a row, including failed and censored ones.
 - Every row has a `terminal_reason`.
-- Every row has a monotonic event trace from `task_accept` to `terminal_reason`.
-- Every Jev-on row has either `jev_provider_call_end` with `transport: live` or `transport: replay`. There is no third option.
+- Every completed row has a monotonic event trace from `task_accept` to `terminal_reason`.
+- Every completed Jev-on row has `jev_provider_call_end` with `transport: replay`. Missing replay rows fail closed and are retained as censored.
 - No row contains `TYPESAFE_API_KEY` or any HTTP body that echoes submitted source.

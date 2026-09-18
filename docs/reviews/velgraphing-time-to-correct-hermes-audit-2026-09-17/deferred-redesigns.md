@@ -6,7 +6,7 @@ These are redesigns the audit identified as the natural next steps to make the t
 
 **Status:** DEFERRED. Requires product change.
 
-**Why deferred:** The brief asks us to make time-to-correct measurable, not to ship a new product feature. Wiring Jev into `/graph-find` is a product decision that needs operator approval for live provider calls. The harness in this PR measures the three hypotheses under the current (Jev-as-external-protocol) architecture so we can answer the question first.
+**Why deferred:** The brief asks us to make time-to-correct measurable, not to ship a new product feature. Wiring Jev into `/graph-find` is a product decision. The successor harness measures only the caller-supplied replay and subprocess boundaries; it does not claim that the current `/graph-find` product path is instrumented.
 
 **If pursued:** Add a `jev` argument to `graph_find.py` that captures spans, calls `jev.evaluate(replay=...)` against an approved hash, applies the suggested order to the byte-level span selection in `_verified_spans`, and emits timing events. The harness would then run the wired version end-to-end and the three hypotheses become directly measurable against the host's actual reads, not against an external operator-mediated rerank.
 
@@ -68,4 +68,4 @@ These are redesigns the audit identified as the natural next steps to make the t
 
 ## Summary
 
-Eight deferred redesigns. Each is justified and tagged. None are implemented in this PR. The harness in this PR is sufficient to measure the three hypotheses on the *current* installed command path; the redesigns would let the same measurements be made on *improved* command paths and let product changes be evaluated with the same instrument.
+Eight deferred redesigns. Each is justified and tagged. None are implemented in this PR. The successor harness is sufficient to measure a bounded frozen run. The redesigns would let the same measurements be made on the *current installed command path* and on improved product paths.

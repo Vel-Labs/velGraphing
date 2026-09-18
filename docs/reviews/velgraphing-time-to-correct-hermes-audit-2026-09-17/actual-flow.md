@@ -93,7 +93,7 @@ Total Jev-added work, even in the off path: zero (the lane does not call Jev whe
 Total Jev-added work in the shadow path: zero (off by default; lane must opt in).
 Total Jev-added work in the rerank path: at minimum one additional prepare+transport+parse+revalidate cycle. The rerank path **cannot** reduce source reads because it preserves every candidate (`packages/core/jev.py:384-389`). It can only change which candidate the lane reads first.
 
-The first-read change can matter *only* if the lane would otherwise read more candidates than it needs to before finding a passing answer. There is no current measurement of this. The harness in this PR measures it.
+The first-read change can matter *only* if the lane would otherwise read more candidates than it needs to before finding a passing answer. There is no current product measurement of this. The successor harness can record the effect only when the caller supplies a matching discovery command seam.
 
 ## Why a "pure reordering" cannot reduce time-to-correct by itself
 

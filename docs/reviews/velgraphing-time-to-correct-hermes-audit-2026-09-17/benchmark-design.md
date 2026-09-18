@@ -51,7 +51,7 @@ Component-removal rows are kept and counted. The aggregate report reports the ef
 
 ## Censored-row policy
 
-A row is `censored: true` when `user_visible_wall_ms` or `time_to_correct_ms` is `unknown`. The aggregate report refuses to claim a wall-clock effect when the censored-row fraction per arm exceeds `freeze.json::censored_row_threshold` (default 0.25). When the fraction is below the threshold, censored rows are still reported (count and reasons), but the median and IQR are computed over the non-censored rows.
+A row is `censored: true` when a required replay, answer, or grader boundary is unavailable or times out. A failed grade under the repair budget is retained as a non-censored failure. The aggregate report refuses to claim a wall-clock effect when the censored-row fraction per arm exceeds `freeze.json::censored_row_threshold` (default 0.25). When the fraction is below the threshold, censored rows are still reported (count and reasons), but the median and IQR are computed over the non-censored rows.
 
 ## Repair-attempt budget exhausted rows
 
@@ -84,19 +84,11 @@ The schema for events is declared in `event-trace.md`. The schema for the per-ar
 
 ## What the harness does NOT do
 
-- It does not run the answer lane itself. It wraps a lane subprocess (e.g. a `codex exec` call, or a Codex-equivalent fresh-worker call) and times the wall around it. The lane subprocess is owned by the parent operator.
+- It does not choose or launch a host-native answer lane. It executes the frozen `answer_lane_boundary.answer_command` supplied by the parent operator and times that subprocess. The same applies to the frozen independent grader command.
 - It does not make live TypeSafe calls. Jev is exercised via replay fixtures only.
 - It does not rewrite the sealed `result.json` from the prior pilot.
 - It does not change `packages/core/`.
 
 ## Validation in this PR
 
-- The unit test `tests/benchmarks/test_velgraphing_time_to_correct_v1.py` runs the harness against a synthetic corpus (3 small files, 3 questions, 4 arms) and asserts:
-  - 12 rows produced (3 questions × 4 arms).
-  - Every row has `task_id`, `arm`, `packet_id`, `time_monotonic_ns` deltas that are monotonically non-decreasing within a row.
-  - The Jev-on arms have `jev_provider_call_ms > 0` when replay is used.
-  - The Jev-off arms have `jev_provider_call_ms == 0` and `status: skipped`.
-  - `total_wall_ms` is recorded for every row (no `unknown` for user-visible wall).
-  - Censored rows are retained when the harness subprocess is killed before completion.
-  - Component-removal rows are produced when `--without-jev` is passed.
-  - No `TYPESAFE_API_KEY` is read.
+- The unit tests run the harness against a temporary corpus and caller-supplied answer/grader subprocesses. They assert canonical Jev replay, marker-backed subprocess execution, grade start/end events, real pass/fail timing, fail-closed missing-lane behavior, replay mismatch, censored retention, and component-removal events.

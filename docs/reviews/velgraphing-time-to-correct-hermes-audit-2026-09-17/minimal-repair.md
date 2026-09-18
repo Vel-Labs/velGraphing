@@ -33,22 +33,18 @@ tests/benchmarks/
 
 ## What the harness measures
 
-Twelve fields, one monotonic clock, no inference, no self-report. See `event-trace.md` for the full schema.
+One monotonic clock, no inferred or self-reported timing. See `event-trace.md` for the schema.
 
-1. `task_accept_ms` — wall around `graph_find` (or `direct` discovery) for graph vs direct arms.
-2. `graph_build_or_load_ms` — separated into `:cold` (first invocation of `graph_find.py`) and `:warm` (second invocation, where applicable).
-3. `discovery_ms` — wall around the lane's own discovery phase.
-4. `jev_prepare_ms` — wall around `jev.evaluate(replay=...)` prepare step.
-5. `jev_provider_call_ms` — wall around the transport step (replay only; recorded as `skipped` for off/shadow).
-6. `jev_revalidate_ms` — wall around `evaluate`'s second prepare.
-7. `answer_dispatch_ms` — wall around the lane's answer phase.
-8. `grade_ms` — wall around the grader subprocess.
-9. `repair_attempt_n_ms` — one event per repair attempt under a fixed repair budget.
-10. `first_pass_correctness` — value from the grader's first pass (`1.0`, `0.5`, `0.0`, `-1.0`).
-11. `time_to_correct_ms` — wall from `task_accept` to the first pass whose `first_pass_correctness >= 1.0` AND whose `critical_errors == 0` AND whose `unsupported_material_claims == 0`. If no such pass occurs under the repair budget, the row is `censored` and `time_to_correct_ms` is `unknown`.
-12. `active_execution_ms` — sum of non-queue, non-approval phases.
-13. `queue_approval_ms` — sum of approval waits (e.g. Jev preview → evaluate).
-14. `user_visible_wall_ms` — wall around the full task as observed by the harness subprocess. **Always recorded** by the harness itself; if the parent operator does not log it, the harness still has it.
+1. `task_accept` — start of the frozen row.
+2. `jev_*` — canonical Jev replay evaluation and source revalidation for Jev-on rows.
+3. `answer_dispatch_*` — wall around the frozen answer subprocess.
+4. `grade_*` — wall around the frozen grader subprocess and its observed grade object.
+5. `repair_attempt_n_*` — attempts under the fixed repair budget.
+6. `first_pass_correctness` — boolean derived from the first observed grader result.
+7. `time_to_correct` — wall from row start to the first observed passing grade.
+8. `active_execution` — sum of observed Jev, answer, and grader subprocess phases.
+9. `queue_approval` — `null`; this harness does not own approval waits.
+10. `user_visible_wall` — wall around the full frozen row.
 
 ## Censored-row retention
 
@@ -75,8 +71,8 @@ The harness supports `--without-jev`, `--without-graph`, and `--without-fallback
 
 ## Validation
 
-The harness is tested with deterministic replay fixtures. No live provider call is made. The harness refuses to start if `TYPESAFE_API_KEY` is set in the environment without `--allow-network`. The schema validator (`velgraphing_time_to_correct_trace.py`) rejects malformed events at write time, not after the run.
+The harness is tested with deterministic Jev replay fixtures and real caller-supplied answer/grader subprocesses. No live provider call is made. The harness refuses to start if `TYPESAFE_API_KEY` is set. If either frozen command is absent, the row fails closed and is retained as censored. The schema validator (`velgraphing_time_to_correct_trace.py`) rejects malformed events at validation time.
 
 ## Provider calls
 
-Zero. The audit confirms this; the harness enforces it. The harness script raises on `TYPESAFE_API_KEY` set unless `--allow-network` is passed; the unit tests do not pass `--allow-network`.
+Zero. The audit confirms this; the harness enforces it. The harness script raises when `TYPESAFE_API_KEY` is set, and the tests use only deterministic Jev replay.

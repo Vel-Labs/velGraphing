@@ -4,7 +4,7 @@
 - Auditor: Hermes session on `hermes/velgraphing-time-to-correct-audit-repair`
 - Base SHA: `916c3c993dcb214c2700dbec063794dba418bdd8` (`origin/main`)
 - Head SHA: see branch ref (`hermes/velgraphing-time-to-correct-audit-repair`)
-- Verdict: **REJECT_HYPOTHESES_2_AND_3; HYPOTHESIS_1_UNMEASURED_AT_BENCHMARK_BOUNDARY** — the installed VelGraphing path does not yet measure the hypotheses the brief asked us to separate. A minimal, harness-only repair (this PR) is sufficient; all product and integration changes are deferred.
+- Verdict: **REJECT_HYPOTHESES_2_AND_3; HYPOTHESIS_1_UNMEASURED_AT_PRODUCT_BOUNDARY** — the installed VelGraphing path still does not wire Jev into `graph-find`, so no product performance claim is made. The successor harness now provides a real deterministic Jev replay seam plus caller-supplied answer and grader subprocess seams. A fresh run is still required before judging any hypothesis.
 - Provider calls: **0** (no live TypeSafe/Jev calls; replay and `off` only)
 - Scope: read-only audit + bounded harness + tests + docs. Canonical core files unchanged. Sealed historical evidence untouched.
 
@@ -52,7 +52,7 @@ The installed VelGraphing path **does not currently measure** time-to-correct. T
 
 The retained historical README claims are not contradicted by the audit (each carries a `unscored`, `promising_single_task`, or `pilot_rejects_jev_promotion` disclaimer), but none of them measures time-to-correct, and none separates the three hypotheses. The corpus pilot *was* designed to separate them — its verdict (`pilot_rejects_jev_promotion_and_does_not_establish_wall_clock_savings`) is itself a finding: Jev-on did not improve required-fact recall, and wall-clock savings were not established.
 
-The minimal repair in this PR is therefore a **harness-only** monotonic event trace plus a four-arm repeated-trial harness. No canonical core files are changed. No sealed evidence is rewritten. No live calls are made. The PR's purpose is to make the three hypotheses measurable on the next run, not to claim any of them.
+The repair in this PR is a **harness-only** monotonic event trace plus a four-arm repeated-trial harness. It measures the canonical Jev replay path and executes frozen answer/grader subprocesses. Graph discovery remains caller-owned and is not claimed as measured by this harness. No canonical core files are changed. No sealed evidence is rewritten. No live calls are made. The PR makes a bounded successor run possible; it does not claim a product effect.
 
 ## Audit answers
 
@@ -96,7 +96,7 @@ Concrete writes:
   - `freeze.example.json` — frozen-input contract shape (no live numbers; this is the contract for the next run).
 - `scripts/benchmarks/velgraphing_time_to_correct_v1.py` — stdlib-only harness with `time.monotonic_ns()` events.
 - `scripts/benchmarks/velgraphing_time_to_correct_trace.py` — small schema validator and per-arm rollup.
-- `tests/benchmarks/test_velgraphing_time_to_correct_v1.py` — fixture-driven tests that prove the trace, repair budget, censored-row retention, and component-removal behavior, with zero provider calls.
+- `tests/benchmarks/test_velgraphing_time_to_correct_v1.py` — fixture-driven tests that prove canonical replay, frozen subprocess execution, observed grade/pass/fail timing, fail-closed missing-lane behavior, censored-row retention, and component-removal behavior, with zero provider calls.
 - `docs/reviews/velgraphing-time-to-correct-hermes-audit-2026-09-17/*` — this directory.
 
 The full repair specification lives in `minimal-repair.md`. The trial design in `benchmark-design.md`. Deferred redesigns (not in this PR) live in `deferred-redesigns.md`. Per-finding recommendation (retain/route/redesign/remove) lives in `retain-route-redesign-remove.md`.
@@ -107,7 +107,7 @@ The full repair specification lives in `minimal-repair.md`. The trial design in 
 
 ## Privacy and portability finding
 
-The corpus pilot `freeze.json:11` records `product_root: "$VELGRAPHING_ROOT"` as a logical placeholder; the `packets.json` correctly substitutes `$RUN_ROOT/<packet-id>` placeholders for execution roots. However, the **README of `benchmarks/velgraphing-corpus-pilot-v1/`** contains no portability claim, and **the audit task itself** names an explicit `Repository: /Users/steven/Workspace/40_Code/infrastructure/graph-engineering` path. The audit reports here use only relative paths and repository-internal references. The original `/Users/steven/...` absolute paths that appear in earlier review receipts (e.g. `hermes-handoff` for the website2025 work) are **out of scope** for this audit and were not read or used as evidence, in keeping with the brief's instruction not to use other review surfaces.
+The corpus pilot `freeze.json:11` records `product_root: "$VELGRAPHING_ROOT"` as a logical placeholder; the `packets.json` correctly substitutes `$RUN_ROOT/<packet-id>` placeholders for execution roots. The successor freeze keeps paths portable and requires the operator to resolve runtime roots outside the tracked event details. No machine-specific path is part of the successor contract.
 
 ## Local review order
 
@@ -121,21 +121,24 @@ The corpus pilot `freeze.json:11` records `product_root: "$VELGRAPHING_ROOT"` as
 8. `docs/reviews/velgraphing-time-to-correct-hermes-audit-2026-09-17/deferred-redesigns.md`.
 9. `docs/reviews/velgraphing-time-to-correct-hermes-audit-2026-09-17/retain-route-redesign-remove.md`.
 
-## Validation performed (before PR)
+## Validation performed (repair round)
 
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/scaffold` — OK (11/11).
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/core` — 226/229 OK, 3 pre-existing failures in `test_javascript_coordinates.py` unrelated to this audit (the JavaScript coordinate provider requires the optional Node.js parser; the provider defers with a different reason than the test expects). These failures predate the audit and are out of scope.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.core.test_jev` — OK (57/57).
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/adapters` — OK (18/18).
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/skills` — OK (29/29).
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/parity` — OK (10/10).
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.benchmarks.test_velgraphing_corpus_pilot_v1` — OK (5/5).
-- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py` — OK (87/87).
-- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/project_portable_plugin.py` — OK (projector; idempotent, no diff to runtime tree).
-- `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.benchmarks.test_velgraphing_time_to_correct_v1` — OK (added in this PR).
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py` — OK (`candidate_sha256=644d997f...`, 87 files).
+- `PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/project_portable_plugin.py` — OK twice; identical contract hash and no tracked diff.
+- `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.benchmarks.test_velgraphing_time_to_correct_v1` — OK (8/8).
+- `npm test` — not runnable in this checkout because `.venv/bin/python` is absent; the equivalent direct Python suites were run below.
 - `git diff --check` — clean.
 
 ## Remaining risks
 
-- The harness in this PR does not itself run an answer lane. It measures the *retrieval* and *Jev* phases from inside the host. Wall-clock savings across the full task require an answer-lane wrapper, which is deliberately out of scope for a harness-only PR.
-- The four-arm trial design assumes the parent operator already has a clean way to bind `total_wall_ms` to a monotonic event trace. The harness exposes the events; it does not own the answer-lane timer. This split is documented in `benchmark-design.md`.
+- The harness executes caller-supplied frozen answer and grader commands. It does not choose a host-native lane or prove that a command represents a particular model host.
+- Graph discovery and fallback timings remain unmeasured unless the caller adds explicit command seams for them. The component-removal flags record requested removals; they do not simulate missing product wiring.
+- No performance claim is eligible until a fresh run supplies valid commands, complete rows, a clean censored-row fraction, and retained grader outputs.
 - Sealed pilot `result.json` is **not** retroactively corrected. Any "the pilot measured X" claim must come from a fresh run under the new harness.
