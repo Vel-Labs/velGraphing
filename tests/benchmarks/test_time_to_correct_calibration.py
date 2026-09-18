@@ -245,20 +245,26 @@ class CalibrationTests(unittest.TestCase):
             with self.assertRaisesRegex(MeasurementError, "controller_checkout_not_clean"):
                 controller_identity(repo)
 
-    def test_post_trial_corpus_mutation_is_rejected(self):
+    def test_restricted_index_passes_and_lane_mutations_are_rejected(self):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
             repo = Path(raw) / "controller"
             corpus_root = Path(raw) / "corpus"
             corpus_root.mkdir()
             source = corpus_root / "source.py"
+            omitted = corpus_root / "omitted.py"
             source.write_text("VALUE = 1\n", encoding="utf-8")
+            omitted.write_text("OMITTED = True\n", encoding="utf-8")
             subprocess.run(["git", "init", "-q", str(corpus_root)], check=True)
-            subprocess.run(["git", "-C", str(corpus_root), "add", "source.py"], check=True)
+            subprocess.run(["git", "-C", str(corpus_root), "add", "source.py", "omitted.py"],
+                           check=True)
             subprocess.run(["git", "-C", str(corpus_root), "-c", "user.name=Fixture",
                             "-c", "user.email=fixture@example.invalid", "commit", "-qm",
                             "fixture"], check=True)
             commit = subprocess.run(["git", "-C", str(corpus_root), "rev-parse", "HEAD"],
                                     capture_output=True, check=True, text=True).stdout.strip()
+            subprocess.run(["git", "-C", str(corpus_root), "read-tree", "--empty"], check=True)
+            subprocess.run(["git", "-C", str(corpus_root), "add", "source.py"], check=True)
+            omitted.unlink()
             raw_source = source.read_bytes()
             rows = [{"path": "source.py", "byte_length": len(raw_source),
                      "sha256": digest(raw_source)}]
@@ -269,10 +275,28 @@ class CalibrationTests(unittest.TestCase):
             corpus = {"id": "fixture", "commit": commit,
                       "snapshot_sha256": snapshot, "manifest": "manifests/test.json"}
             _, before = verify_lane(repo, corpus, corpus_root)
+            self.assertEqual(before["index_entry_count"], 1)
+            status = subprocess.run(
+                ["git", "-C", str(corpus_root), "status", "--porcelain=v1", "-z"],
+                capture_output=True, check=True).stdout
+            self.assertTrue(status)  # Intentional full-tree omission is not lane dirtiness.
             source.write_text("VALUE = 2\n", encoding="utf-8")
             with self.assertRaisesRegex(MeasurementError, "corpus_changed_during_trial"):
                 revalidate_lane(repo, corpus, corpus_root, before)
             source.write_bytes(raw_source)
+            source.chmod(0o755)
+            subprocess.run(["git", "-C", str(corpus_root), "update-index", "--chmod=+x",
+                            "source.py"], check=True)
+            with self.assertRaisesRegex(MeasurementError, "corpus_changed_during_trial"):
+                revalidate_lane(repo, corpus, corpus_root, before)
+            source.chmod(0o644)
+            subprocess.run(["git", "-C", str(corpus_root), "update-index", "--chmod=-x",
+                            "source.py"], check=True)
+            extra = corpus_root / "extra.py"
+            extra.write_text("EXTRA = True\n", encoding="utf-8")
+            with self.assertRaisesRegex(MeasurementError, "corpus_changed_during_trial"):
+                revalidate_lane(repo, corpus, corpus_root, before)
+            extra.unlink()
             manifest.write_bytes(manifest.read_bytes() + b"\n")
             with self.assertRaisesRegex(MeasurementError, "corpus_changed_during_trial"):
                 revalidate_lane(repo, corpus, corpus_root, before)
