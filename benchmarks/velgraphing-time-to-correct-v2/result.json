@@ -1,0 +1,155 @@
+{
+  "schema_version": "velgraphing-ttc-calibration-retained-result-v1",
+  "calibration_id": "velgraphing-ttc-calibration-v2",
+  "status": "closed",
+  "verdict": "unresolved",
+  "claim_boundary": "This run retains observed terminal outcomes and provider usage. It does not establish a time-to-correct advantage because every arm has at least one non-passing trial and therefore has a null mean time to correct under the frozen policy.",
+  "evidence": {
+    "run_tree_sha256": "9e4ca9e06572c0435816f20456f1fca495614282f37bc654e12106f0c7420b73",
+    "coordinator_stdout_sha256": "172549aaf7b573bee3e04c2df49ced94176bb99098fc39edf9ead503197e37a0",
+    "coordinator_stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "coordinator_exit_sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "coordinator_exit_code": 0,
+    "registered_trials": 24,
+    "reported_trials": 24,
+    "coverage_complete": true
+  },
+  "controller_identity": {
+    "schema_version": "velgraphing-controller-identity-v1",
+    "git_head": "2c8151058f62edfadb464f5757129a64f872316d",
+    "git_tree": "37a90d601d03aefd7bcbaa68518d9c868838b5f7",
+    "tracked_status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "index_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "worktree_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tracked_state_sha256": "9e768d941143de704c807a4e914fbdf4f9e83e2d201dffb6785bb9281325fba7"
+  },
+  "oracle_set_sha256": "b63093c73fea135584de61f2b934215f844ca14ccec41f2cfc93af0d58a7d640",
+  "arm_summaries": {
+    "A": {
+      "registered_trials": 6,
+      "reported_trials": 6,
+      "coverage_complete": true,
+      "passed_within_budget": 4,
+      "ungraded_or_missing_trials": 2,
+      "pass_rate_registered": 0.6666666666666666,
+      "first_pass_correct_registered": 0.6666666666666666,
+      "rates_are_lower_bounds": true,
+      "mean_observed_terminal_wall_ns": 154546435819.5,
+      "mean_time_to_correct_ns": null,
+      "ttc_mean_policy": "all_registered_trials_must_pass",
+      "cost_per_success_usd": null
+    },
+    "B": {
+      "registered_trials": 6,
+      "reported_trials": 6,
+      "coverage_complete": true,
+      "passed_within_budget": 1,
+      "ungraded_or_missing_trials": 4,
+      "pass_rate_registered": 0.16666666666666666,
+      "first_pass_correct_registered": 0.16666666666666666,
+      "rates_are_lower_bounds": true,
+      "mean_observed_terminal_wall_ns": 196382884930.83334,
+      "mean_time_to_correct_ns": null,
+      "ttc_mean_policy": "all_registered_trials_must_pass",
+      "cost_per_success_usd": null
+    },
+    "C": {
+      "registered_trials": 6,
+      "reported_trials": 6,
+      "coverage_complete": true,
+      "passed_within_budget": 4,
+      "ungraded_or_missing_trials": 2,
+      "pass_rate_registered": 0.6666666666666666,
+      "first_pass_correct_registered": 0.6666666666666666,
+      "rates_are_lower_bounds": true,
+      "mean_observed_terminal_wall_ns": 152337680576.5,
+      "mean_time_to_correct_ns": null,
+      "ttc_mean_policy": "all_registered_trials_must_pass",
+      "cost_per_success_usd": null
+    },
+    "D": {
+      "registered_trials": 6,
+      "reported_trials": 6,
+      "coverage_complete": true,
+      "passed_within_budget": 3,
+      "ungraded_or_missing_trials": 1,
+      "pass_rate_registered": 0.5,
+      "first_pass_correct_registered": 0.5,
+      "rates_are_lower_bounds": true,
+      "mean_observed_terminal_wall_ns": 223311225215.33334,
+      "mean_time_to_correct_ns": null,
+      "ttc_mean_policy": "all_registered_trials_must_pass",
+      "cost_per_success_usd": null
+    }
+  },
+  "trials": [
+    {"trial_id": "A-C-01", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 155481534833, "confirmed_time_to_correct_ns": 155481503542},
+    {"trial_id": "A-C-02", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 135667498416, "confirmed_time_to_correct_ns": 135667472666},
+    {"trial_id": "A-S-01", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 139798396334, "confirmed_time_to_correct_ns": 139798367334},
+    {"trial_id": "A-L-01", "terminal_reason": "measurement_error", "first_pass_correct": null, "user_visible_wall_ns": 234984659084, "confirmed_time_to_correct_ns": null, "failure_stage": "grader", "failure_reason": "process_exit_nonzero"},
+    {"trial_id": "A-M-01", "terminal_reason": "measurement_error", "first_pass_correct": null, "user_visible_wall_ns": 91472163500, "confirmed_time_to_correct_ns": null, "failure_stage": "answer", "failure_reason": "process_exit_nonzero"},
+    {"trial_id": "A-M-02", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 169874362750, "confirmed_time_to_correct_ns": 169874344875},
+    {"trial_id": "B-C-01", "terminal_reason": "measurement_error", "first_pass_correct": null, "user_visible_wall_ns": 206837685375, "confirmed_time_to_correct_ns": null, "failure_stage": "prepare", "failure_reason": "process_exit_nonzero"},
+    {"trial_id": "B-C-02", "terminal_reason": "repair_budget_exhausted", "first_pass_correct": false, "user_visible_wall_ns": 202639359667, "confirmed_time_to_correct_ns": null},
+    {"trial_id": "B-S-01", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 228525052292, "confirmed_time_to_correct_ns": 228525020583},
+    {"trial_id": "B-L-01", "terminal_reason": "measurement_error", "first_pass_correct": null, "user_visible_wall_ns": 180078694542, "confirmed_time_to_correct_ns": null, "failure_stage": "prepare", "failure_reason": "process_exit_nonzero"},
+    {"trial_id": "B-M-01", "terminal_reason": "measurement_error", "first_pass_correct": null, "user_visible_wall_ns": 180126338167, "confirmed_time_to_correct_ns": null, "failure_stage": "prepare", "failure_reason": "process_exit_nonzero"},
+    {"trial_id": "B-M-02", "terminal_reason": "measurement_error", "first_pass_correct": null, "user_visible_wall_ns": 180090179542, "confirmed_time_to_correct_ns": null, "failure_stage": "prepare", "failure_reason": "process_exit_nonzero"},
+    {"trial_id": "C-C-01", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 192998237959, "confirmed_time_to_correct_ns": 192998205792},
+    {"trial_id": "C-C-02", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 142071465375, "confirmed_time_to_correct_ns": 142071432167},
+    {"trial_id": "C-S-01", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 130680116500, "confirmed_time_to_correct_ns": 130680079000},
+    {"trial_id": "C-L-01", "terminal_reason": "measurement_error", "first_pass_correct": null, "user_visible_wall_ns": 188908096208, "confirmed_time_to_correct_ns": null, "failure_stage": "answer", "failure_reason": "process_exit_nonzero"},
+    {"trial_id": "C-M-01", "terminal_reason": "measurement_error", "first_pass_correct": null, "user_visible_wall_ns": 93057269542, "confirmed_time_to_correct_ns": null, "failure_stage": "answer", "failure_reason": "process_exit_nonzero"},
+    {"trial_id": "C-M-02", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 166310897875, "confirmed_time_to_correct_ns": 166310869083},
+    {"trial_id": "D-C-01", "terminal_reason": "measurement_error", "first_pass_correct": null, "user_visible_wall_ns": 180598533875, "confirmed_time_to_correct_ns": null, "failure_stage": "prepare", "failure_reason": "process_exit_nonzero"},
+    {"trial_id": "D-C-02", "terminal_reason": "repair_budget_exhausted", "first_pass_correct": false, "user_visible_wall_ns": 179589166542, "confirmed_time_to_correct_ns": null},
+    {"trial_id": "D-S-01", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 171283180750, "confirmed_time_to_correct_ns": 171283159083},
+    {"trial_id": "D-L-01", "terminal_reason": "repair_budget_exhausted", "first_pass_correct": false, "user_visible_wall_ns": 280193400833, "confirmed_time_to_correct_ns": null},
+    {"trial_id": "D-M-01", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 257241745375, "confirmed_time_to_correct_ns": 257241709833},
+    {"trial_id": "D-M-02", "terminal_reason": "passed", "first_pass_correct": true, "user_visible_wall_ns": 270961323917, "confirmed_time_to_correct_ns": 270961296750}
+  ],
+  "failure_classification": {
+    "measurement_or_host_failures": ["A-L-01", "A-M-01", "B-C-01", "B-L-01", "B-M-01", "B-M-02", "C-L-01", "C-M-01", "D-C-01"],
+    "independently_graded_correctness_failures": ["B-C-02", "D-C-02", "D-L-01"],
+    "note": "A measurement_error records a failed host process or benchmark stage and is not an independently graded wrong answer. A repair_budget_exhausted result records an independently graded non-passing answer with no repair budget."
+  },
+  "jev_provider_summary": {
+    "planned_jev_on_trials": 12,
+    "approved_max_live_calls": 12,
+    "observed_live_calls": 7,
+    "provider_retries": 0,
+    "status_counts": {"reranked": 7},
+    "input_tokens": 20076,
+    "output_tokens": 478,
+    "provider_interval_total_ns": 2793315084,
+    "provider_interval_mean_ns": 399045012,
+    "pre_call_terminal_trials": ["B-C-01", "B-L-01", "B-M-01", "B-M-02", "D-C-01"],
+    "pre_call_note": "Five Jev-on trials terminated before a live provider call. No call was retried.",
+    "calls": [
+      {"call_number": 1, "trial_id": "B-C-02", "request_sha256": "5c7a0a21ae89cca7352542c7cd0fbc42aa10c7421f5521d11fbd87e52c9438aa", "status": "reranked", "input_tokens": 4006, "output_tokens": 94, "provider_interval_ns": 362974916},
+      {"call_number": 2, "trial_id": "D-C-02", "request_sha256": "598e3c00e7913ccdf59f2598007d4d330cfbf7001a8575816f086bc90877a7de", "status": "reranked", "input_tokens": 3022, "output_tokens": 79, "provider_interval_ns": 355356750},
+      {"call_number": 3, "trial_id": "D-S-01", "request_sha256": "cde9bd55089c4d15686ad338df2e2c186b820fdec2246be0192852f282ea712e", "status": "reranked", "input_tokens": 817, "output_tokens": 19, "provider_interval_ns": 315863833},
+      {"call_number": 4, "trial_id": "B-S-01", "request_sha256": "f8eb2e84d0925a53df83149350ef8f1128dfe9a2da0421ca48c04b0f3c59811a", "status": "reranked", "input_tokens": 1152, "output_tokens": 34, "provider_interval_ns": 379599167},
+      {"call_number": 5, "trial_id": "D-L-01", "request_sha256": "a812cf3cdc2101c7800b5cf3be842a4c5869eda77cc1ba1ad85776fa3bdb179c", "status": "reranked", "input_tokens": 4991, "output_tokens": 94, "provider_interval_ns": 451298084},
+      {"call_number": 6, "trial_id": "D-M-01", "request_sha256": "147449082cecffaf58f0a3dfb6c3143e807611025eb22e63b7704f9b2ce31d44", "status": "reranked", "input_tokens": 3391, "output_tokens": 79, "provider_interval_ns": 414833834},
+      {"call_number": 7, "trial_id": "D-M-02", "request_sha256": "ee8a2ff2125dcfacae8d8c98ddb80ba5344f19c4eb5e9cfb8ce2193466c16daf", "status": "reranked", "input_tokens": 2697, "output_tokens": 79, "provider_interval_ns": 513388500}
+    ]
+  },
+  "usage_boundary": {
+    "answer_model_usage_provenance": "unavailable",
+    "grader_usage_provenance": "unavailable",
+    "all_in_input_tokens": null,
+    "all_in_output_tokens": null,
+    "all_in_cost_usd": null,
+    "note": "Jev token counts are provider reported. Answer and grader token counts are unavailable, so all-in token and cost comparisons remain unknown."
+  },
+  "source_lane_revalidation": {
+    "status": "unchanged",
+    "lanes": [
+      {"corpus_id": "cpython", "git_head": "5539c2a5437acc4f4719aabac375368e0d310bd9", "source_count": 8, "snapshot_sha256": "c9f10e2dd66e033dbaeb89ad22d8d95c3b8cec7d4eadb4b96fed6cc8ae572908", "restricted_state_sha256": "c800bded3a8da1ef909638b42e910bbe4010d3cd59c8ac7d76aeaaf813ef4148"},
+      {"corpus_id": "engineering-handbook", "git_head": "d177ae2b48b4dfebf8ad0ddae51a345b3e17d99e", "source_count": 179, "snapshot_sha256": "594aa47760172eba049e18c5f3a2f602a7b96b73a315756876955d7be81cd402", "restricted_state_sha256": "389beaa9c60f8d895c0bb5c2e37bff2d5654b6f4f1659f42812b465ddd056eb1"},
+      {"corpus_id": "openchain-reference-material", "git_head": "62a42b6e6267f68f053787c88ec944c82c0e2f0d", "source_count": 63, "snapshot_sha256": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b", "restricted_state_sha256": "284999def326ec3e25a6ca2b60358ad2ea6afcac9d24ad476570bd9202f3442a"},
+      {"corpus_id": "thealgorithms-python", "git_head": "a381578994d545e44f26afabbd2303746a2dc358", "source_count": 149, "snapshot_sha256": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09", "restricted_state_sha256": "4fdd8b934102237c85c904036aa3fe953b2c4bd6cd467705e20104249d7b473d"}
+    ]
+  }
+}
