@@ -72,10 +72,14 @@ def lane_root(root: Path, trial_id: str, attempt: int, lane: str) -> Path:
     return root / "trials" / trial_id / f"attempt-{attempt}" / lane
 
 
-def _open_lane(root: Path, trial_id: str, attempt: int, lane: str, *, create: bool) -> int:
-    """Open a contained lane through no-follow directory descriptors."""
+def open_contained_directory(root: Path, parts: tuple[str, ...], *, create: bool) -> int:
+    """Open a run-root child through no-follow directory descriptors."""
     root = run_root(str(root))
-    lane_root(root, trial_id, attempt, lane)
+    if not parts or any(
+        type(part) is not str or part in {"", ".", ".."} or Path(part).name != part
+        for part in parts
+    ):
+        raise HandoffError("handoff_lane_invalid")
     if not hasattr(os, "O_NOFOLLOW") or os.open not in os.supports_dir_fd:
         raise HandoffError("secure_handoff_unsupported")
     if create:
@@ -89,7 +93,7 @@ def _open_lane(root: Path, trial_id: str, attempt: int, lane: str, *, create: bo
     except OSError:
         raise HandoffError("handoff_lane_invalid") from None
     try:
-        for part in ("trials", trial_id, f"attempt-{attempt}", lane):
+        for part in parts:
             if create:
                 try:
                     os.mkdir(part, mode=0o700, dir_fd=directory)
@@ -111,13 +115,19 @@ def _open_lane(root: Path, trial_id: str, attempt: int, lane: str, *, create: bo
         raise
 
 
+def _open_lane(root: Path, trial_id: str, attempt: int, lane: str, *, create: bool) -> int:
+    lane_root(root, trial_id, attempt, lane)
+    return open_contained_directory(
+        root, ("trials", trial_id, f"attempt-{attempt}", lane), create=create)
+
+
 def _file_name(value: str) -> str:
     if type(value) is not str or value in {"", ".", ".."} or Path(value).name != value:
         raise HandoffError("handoff_file_invalid")
     return value
 
 
-def _read_lane_fd(directory: int, name: str) -> tuple[bytes, dict[str, Any]]:
+def read_canonical_at(directory: int, name: str) -> tuple[bytes, dict[str, Any]]:
     name = _file_name(name)
     try:
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
@@ -152,16 +162,13 @@ def read_lane(root: Path, trial_id: str, attempt: int, lane: str,
               name: str) -> tuple[bytes, dict[str, Any]]:
     directory = _open_lane(root, trial_id, attempt, lane, create=False)
     try:
-        return _read_lane_fd(directory, name)
+        return read_canonical_at(directory, name)
     finally:
         os.close(directory)
 
 
-def _write_lane(root: Path, trial_id: str, attempt: int, lane: str,
-                name: str, raw: bytes, *, create: bool = False,
-                replace: bool = False) -> None:
+def atomic_write_at(directory: int, name: str, raw: bytes, *, replace: bool = False) -> None:
     name = _file_name(name)
-    directory = _open_lane(root, trial_id, attempt, lane, create=create)
     temporary = f".{name}.{uuid.uuid4().hex}.tmp"
     try:
         if not replace:
@@ -194,6 +201,15 @@ def _write_lane(root: Path, trial_id: str, attempt: int, lane: str,
             os.unlink(temporary, dir_fd=directory)
         except FileNotFoundError:
             pass
+
+
+def _write_lane(root: Path, trial_id: str, attempt: int, lane: str,
+                name: str, raw: bytes, *, create: bool = False,
+                replace: bool = False) -> None:
+    directory = _open_lane(root, trial_id, attempt, lane, create=create)
+    try:
+        atomic_write_at(directory, name, raw, replace=replace)
+    finally:
         os.close(directory)
 
 

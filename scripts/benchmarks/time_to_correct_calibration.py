@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
@@ -15,7 +16,9 @@ from time_to_correct import (Budget, MeasurementError, Trial, canonical, digest,
                              identifier, load_completed_trials, save_completed_trial,
                              summarize)
 from time_to_correct_graph import observe_graph_find
-from time_to_correct_handoff import (atomic_write, read_canonical, read_lane,
+from time_to_correct_handoff import (HandoffError, atomic_write, atomic_write_at,
+                                     open_contained_directory, read_canonical,
+                                     read_canonical_at, read_lane,
                                      run_root as validate_run_root, write_response)
 from time_to_correct_host import USAGE_KEYS, _invoke, run_process_trial
 from time_to_correct_jev import evaluate_live, evaluate_offline, load_jev, prepare_preview
@@ -349,35 +352,88 @@ class LiveJevBudget:
         self.root = root / "jev-calls"
         self.cap = cap
 
+    def _open(self, *, create: bool) -> int:
+        try:
+            return open_contained_directory(
+                self.root.parent, (self.root.name,), create=create)
+        except HandoffError:
+            raise MeasurementError("jev_call_ledger_invalid") from None
+
+    def _receipts(self, directory: int) -> dict[str, dict[str, Any]]:
+        receipts = {}
+        try:
+            names = sorted(os.listdir(directory))
+        except OSError:
+            raise MeasurementError("jev_call_ledger_invalid") from None
+        for name in names:
+            if not name.endswith(".json") or Path(name).name != name:
+                raise MeasurementError("jev_call_ledger_invalid")
+            try:
+                receipt = read_canonical_at(directory, name)[1]
+            except HandoffError:
+                raise MeasurementError("jev_call_ledger_invalid") from None
+            trial_id = receipt.get("trial_id")
+            number = receipt.get("call_number")
+            if (receipt.get("schema_version") != "velgraphing-jev-call-receipt-v1"
+                    or type(trial_id) is not str or name != f"{trial_id}.json"
+                    or type(number) is not int or not 1 <= number <= self.cap
+                    or receipt.get("max_live_jev_calls") != self.cap
+                    or receipt.get("status") not in {"reserved_unknown_if_consumed", "consumed"}):
+                raise MeasurementError("jev_call_ledger_invalid")
+            receipts[name] = receipt
+        numbers = {receipt["call_number"] for receipt in receipts.values()}
+        if numbers != set(range(1, len(receipts) + 1)):
+            raise MeasurementError("jev_call_ledger_invalid")
+        return receipts
+
     def reserve(self, trial_id: str, request_sha256: str) -> tuple[Path, int]:
-        self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        existing = sorted(self.root.glob("*.json"))
-        path = self.root / f"{trial_id}.json"
-        if path.exists():
-            raise MeasurementError("jev_call_already_reserved")
-        if len(existing) >= self.cap:
-            raise MeasurementError("jev_call_cap_exhausted")
-        number = len(existing) + 1
-        atomic_write(path, canonical({
-            "schema_version": "velgraphing-jev-call-receipt-v1",
-            "trial_id": trial_id,
-            "request_sha256": request_sha256,
-            "call_number": number,
-            "max_live_jev_calls": self.cap,
-            "status": "reserved_unknown_if_consumed",
-            "attempted_calls": None,
-        }))
-        return path, number
+        trial_id = identifier(trial_id)
+        name = f"{trial_id}.json"
+        directory = self._open(create=True)
+        try:
+            existing = self._receipts(directory)
+            if name in existing:
+                raise MeasurementError("jev_call_already_reserved")
+            if len(existing) >= self.cap:
+                raise MeasurementError("jev_call_cap_exhausted")
+            number = len(existing) + 1
+            try:
+                atomic_write_at(directory, name, canonical({
+                    "schema_version": "velgraphing-jev-call-receipt-v1",
+                    "trial_id": trial_id,
+                    "request_sha256": request_sha256,
+                    "call_number": number,
+                    "max_live_jev_calls": self.cap,
+                    "status": "reserved_unknown_if_consumed",
+                    "attempted_calls": None,
+                }))
+            except HandoffError:
+                raise MeasurementError("jev_call_ledger_invalid") from None
+        finally:
+            os.close(directory)
+        return self.root / name, number
 
     def complete(self, path: Path, result: Mapping[str, Any]) -> None:
-        reserved = read_canonical(path)[1]
-        atomic_write(path, canonical({
-            **reserved,
-            "status": "consumed",
-            "attempted_calls": result.get("attempted_calls"),
-            "provider_status": result.get("status"),
-            "provider_reason": result.get("reason"),
-        }), replace=True)
+        if path.parent != self.root:
+            raise MeasurementError("jev_call_ledger_invalid")
+        directory = self._open(create=False)
+        try:
+            receipts = self._receipts(directory)
+            reserved = receipts.get(path.name)
+            if reserved is None or reserved["status"] != "reserved_unknown_if_consumed":
+                raise MeasurementError("jev_call_ledger_invalid")
+            try:
+                atomic_write_at(directory, path.name, canonical({
+                    **reserved,
+                    "status": "consumed",
+                    "attempted_calls": result.get("attempted_calls"),
+                    "provider_status": result.get("status"),
+                    "provider_reason": result.get("reason"),
+                }), replace=True)
+            except HandoffError:
+                raise MeasurementError("jev_call_ledger_invalid") from None
+        finally:
+            os.close(directory)
 
 
 def approval_response(trial: Trial, repo: Path, run_root: Path, prepared: Mapping[str, Any],

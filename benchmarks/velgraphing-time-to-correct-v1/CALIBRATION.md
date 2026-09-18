@@ -57,7 +57,9 @@ and grader return. The commit, index and status, manifest bytes, source bytes, a
 snapshot digest must remain exact. A changed corpus prevents the terminal trial
 receipt from being saved. Lane directories and files are opened through no-follow
 directory descriptors so a symlink cannot redirect a request, response, or receipt
-outside the canonical run root.
+outside the canonical run root. The aggregate `jev-calls` cap ledger uses the same
+contained no-follow operations for counting, reserving, reading, and completing
+call receipts.
 
 ## Native answer lane
 
@@ -160,8 +162,8 @@ Validation on 2026-09-18 used the frozen package 0.1.6 checkout. No live Jev
 call ran.
 
 - Offline qualification passed with zero provider calls.
-- All 13 focused calibration tests passed.
-- All 75 benchmark tests passed.
+- All 14 focused calibration tests passed.
+- All 76 benchmark tests passed.
 - All 57 focused Jev tests passed.
 - Package source parity passed for 87 files.
 - Python compilation and `git diff --check` passed.

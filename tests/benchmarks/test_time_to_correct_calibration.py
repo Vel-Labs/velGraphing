@@ -197,13 +197,31 @@ class CalibrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
             root = Path(raw) / "run"
             budget = LiveJevBudget(root, 12)
-            reservations = [budget.reserve(f"trial-{index}", f"{index:064x}")
-                            for index in range(12)]
+            first = budget.reserve("trial-0", f"{0:064x}")
+            budget.complete(first[0], {
+                "attempted_calls": 1, "status": "reranked", "reason": "advisory_only"})
+            reservations = [first] + [
+                budget.reserve(f"trial-{index}", f"{index:064x}")
+                for index in range(1, 12)
+            ]
             self.assertEqual([number for _, number in reservations], list(range(1, 13)))
             with self.assertRaisesRegex(MeasurementError, "jev_call_already_reserved"):
                 budget.reserve("trial-0", "f" * 64)
             with self.assertRaisesRegex(MeasurementError, "jev_call_cap_exhausted"):
                 budget.reserve("trial-12", "f" * 64)
+
+    def test_jev_budget_rejects_symlinked_ledger_directory(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            outside = Path(raw) / "outside"
+            root.mkdir()
+            outside.mkdir()
+            (root / "jev-calls").symlink_to(outside, target_is_directory=True)
+            budget = LiveJevBudget(root, 12)
+            with self.assertRaisesRegex(MeasurementError, "jev_call_ledger_invalid"):
+                budget.reserve("trial-0", "a" * 64)
+            escaped = (outside / "trial-0.json").exists()
+        self.assertFalse(escaped)
 
     def test_controller_identity_ignores_untracked_and_rejects_tracked_changes(self):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
