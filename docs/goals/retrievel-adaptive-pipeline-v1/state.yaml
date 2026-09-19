@@ -1,12 +1,12 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_host_model_payload_allowlist_repaired_controller_pending
+proof_boundary: t030_d01_four_arm_controller_preflight_green_live_pending
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: d01_four_arm_controller_candidate
+current_gate: parent_review_live_enablement_and_lane_commands
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
-exact_blocker: null
+exact_blocker: tracked_plan_live_authorized_false_and_lane_commands_unapproved
 next_milestone: T030
 provider:
   name: typesafe_jev

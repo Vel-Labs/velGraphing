@@ -294,7 +294,15 @@ class JevPreviewTests(unittest.TestCase):
             "source_snapshot_sha256", "label_artifact_sha256", "result_artifact_sha256",
             "limits", "provider_calls_executed", "live_authorized",
             "provider_details_boundary", "request_details_boundary",
+            "preview_adapter_commit", "preview_artifact_sha256", "request_sha256",
+            "jev_model", "jev_rubric_version", "answer_model", "answer_reasoning",
+            "grader_model", "grader_reasoning", "answer_rubric_sha256",
+            "pool_sha256",
         })
+        self.assertEqual(
+            plan["schema_version"],
+            "velgraphing-v4-dependency-behavior-canary-plan-v2",
+        )
         self.assertEqual(plan["study_id"], mod.DEPENDENCY_STUDY)
         self.assertEqual(plan["task_id"], "D-01")
         self.assertEqual(plan["candidate_artifact_sha256"], mod.DEPENDENCY_CANDIDATE_SHA256)
@@ -310,7 +318,7 @@ class JevPreviewTests(unittest.TestCase):
         })
         self.assertEqual(plan["provider_calls_executed"], 0)
         self.assertFalse(plan["live_authorized"])
-        self.assertNotIn("request_hashes", plan)
+        self.assertEqual(set(plan["request_sha256"]), {"B", "D"})
 
     def test_valid_synthetic_observation_changes_d_membership_and_keeps_required(self) -> None:
         from dataclasses import replace

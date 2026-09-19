@@ -180,6 +180,39 @@ usefulness or authorize a provider, answer, or grader call. Parent review is the
 next gate. The historical PR9 candidate, preview, request hashes, four-call
 plan, and approval-readiness record below remain non-applicable to retrieVEL.
 
+### D-01 four-arm controller candidate
+
+`scripts/benchmarks/time_to_correct_dependency_v4.py` is the exact D-01
+controller candidate. A/B independently regenerate and verify the same Direct
+pool. C/D independently regenerate and verify the same typed-graph pool.
+Generation uses the current scanner and retrieval path; loading the frozen
+candidate artifact is identity validation, not retrieval timing. Each observed
+trial uses the existing monotonic `Trial`, zero repairs, the two-call Jev ledger,
+the existing Jev prepare/evaluate boundary, the ranked-context selector, and the
+allowlisted answer/grader subprocess boundary.
+
+The controller records cold graph construction, candidate discovery, retrieval
+including expansion, Jev preparation, provider execution, source revalidation,
+response validation, fallback, context composition, answer generation, and
+independent grading. The root trial interval remains the all-in wall clock.
+Returned provider and model usage is retained. Unavailable tokens or cost stay
+null. Selected spans are normalized to the same treatment-free answer evidence
+schema for all four arms.
+
+The source-only preflight regenerated all four pools from the pinned lane. A/B
+matched at pool SHA-256
+`3c4a9ea12b9f6d49dfe14b791dbe465d72a7948fad95144059ebe55b9a1a71e2`.
+C/D matched at pool SHA-256
+`efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58`.
+Both frozen request hashes matched, and B/D both remained selection-sensitive.
+The tracked v2 plan binds these pools, the candidate, registry, selector,
+snapshot, preview, models, rubrics, requests, caps, and zero-retry policy.
+
+Observed execution is fail-closed while `live_authorized` is false. No provider,
+answer-model, or grader-model call ran. The remaining gate is Parent approval of
+an explicit tracked plan change to live authorization and the exact local answer
+and grader lane commands. This candidate is not a benchmark result.
+
 ## Historical PR9 offline Jev preview freeze
 
 The plan in this section is retained as historical PR9 data. It is not the

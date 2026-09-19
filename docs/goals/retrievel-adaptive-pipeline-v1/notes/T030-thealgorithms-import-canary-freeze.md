@@ -163,6 +163,45 @@ Focused host and Jev preview tests passed `16/16`. The calibration consumer
 tests passed `23/23`. The three changed Python modules passed `py_compile`, and
 `git diff --check` passed. No provider, answer-model, or grader-model call ran.
 
+## D-01 Four-Arm Controller Candidate
+
+The exact offline controller candidate is
+`scripts/benchmarks/time_to_correct_dependency_v4.py`. It reuses the existing
+ranked-candidate generator, ranked-context selector, Jev prepare/evaluate
+functions, `LiveJevBudget`, monotonic `Trial`, and allowlisted host boundary.
+It does not add a provider adapter or alter product retrieval, Jev, or selection
+code.
+
+The real source-only preflight passed against the pinned TheAlgorithms lane:
+
+- A/B Direct pool SHA-256:
+  `3c4a9ea12b9f6d49dfe14b791dbe465d72a7948fad95144059ebe55b9a1a71e2`.
+- C/D typed-graph pool SHA-256:
+  `efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58`.
+- B request SHA-256:
+  `b63f730ae2e2290a3ab964c170c851c205b6ba28f1df53b9679ea25009a14277`.
+- D request SHA-256:
+  `ae0bde087faf70dd31d77f6887f5975d98bbe52996e37eb41c98f1ef7b4e47c3`.
+- B and D `jev_call_could_affect_selection`: `true`.
+- Final answer budget: `16384` bytes.
+- Aggregate Jev cap: `2`; retries and repairs: `0`.
+- Provider, answer-model, and grader-model calls executed: `0`.
+- Live authorization: `false`.
+
+Offline fixtures prove pair identity, treatment-blind model payloads, required
+evidence retention, C relationship-child omission, valid D relationship-child
+selection, provider fallback to the verified baseline, the two-call ledger cap,
+zero retries, stop gates, and complete phase accounting. The focused controller,
+host, and preview set passed `21/21`. The full benchmark suite passed `166/166`
+with one expected skip. Changed Python modules passed `py_compile`, and
+`git diff --check` passed.
+
+The controller records all-in monotonic wall time plus graph construction,
+candidate discovery, retrieval/expansion, Jev preparation/provider/revalidation,
+response validation, fallback, context composition, answer, and independent
+grade phases. Genuine returned usage is retained. Missing token or cost data
+stays null. This is an implementation and preflight receipt, not a live result.
+
 ## Validation
 
 - Focused generator and evaluator tests: 35 passed.
@@ -231,12 +270,23 @@ Offline dependency preview implementation:
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-thealgorithms-import-canary-freeze.md`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 
+D-01 four-arm controller candidate:
+
+- `benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json`
+- `benchmarks/velgraphing-time-to-correct-v4/PROTOCOL.md`
+- `scripts/benchmarks/time_to_correct_dependency_v4.py`
+- `tests/benchmarks/test_time_to_correct_dependency_v4.py`
+- `tests/benchmarks/test_time_to_correct_jev_v4.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-thealgorithms-import-canary-freeze.md`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+
 ## Remaining Boundary
 
 The dependency-behavior result proves positive isolated edge retrieval for this
 registered question. It does not prove semantic answer correctness, time, token,
 Jev usefulness, promotion, release readiness, or product acceptance. T030
-remains active. The exact next gate is the D-01 four-arm controller candidate
-after the host allowlist repair. No historical PR9 candidate, request hash,
-four-call plan, current two-call plan, or approval-readiness record grants
-authority for a live call.
+remains active. The exact next gate is Parent review of the green D-01 controller
+preflight and an explicit tracked `live_authorized: true` plan update with exact
+answer and grader lane commands. No historical PR9 candidate, request hash,
+four-call plan, current non-authorizing two-call plan, or approval-readiness
+record grants authority for a live call.
