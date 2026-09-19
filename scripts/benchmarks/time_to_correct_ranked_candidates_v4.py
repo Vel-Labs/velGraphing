@@ -654,12 +654,32 @@ def _clean_commit() -> str:
 def _output_path(path: Path) -> Path:
     if any(part in {".", ".."} for part in path.parts):
         raise GenerationError("invalid_output_path")
-    root = OUTPUT_ROOT.resolve(strict=True)
-    if OUTPUT_ROOT.is_symlink() or not root.is_dir() or root != OUTPUT_ROOT:
-        raise GenerationError("invalid_output_root")
     candidate = path if path.is_absolute() else Path.cwd() / path
-    if candidate.parent != root or candidate.name in {"", ".", ".."}:
+    if candidate.parent != OUTPUT_ROOT or candidate.name in {"", ".", ".."}:
         raise GenerationError("invalid_output_path")
+    parent = OUTPUT_ROOT.parent
+    try:
+        canonical_parent = parent.resolve(strict=True)
+        tracked_marker = parent.relative_to(ROOT) / ".gitignore"
+    except (OSError, ValueError) as error:
+        raise GenerationError("invalid_output_root") from error
+    if parent.is_symlink() or not parent.is_dir() or canonical_parent != parent:
+        raise GenerationError("invalid_output_root")
+    tracked = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "--error-unmatch", "--", str(tracked_marker)],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if tracked.returncode:
+        raise GenerationError("invalid_output_root")
+    if OUTPUT_ROOT.is_symlink():
+        raise GenerationError("invalid_output_root")
+    if not OUTPUT_ROOT.exists():
+        OUTPUT_ROOT.mkdir(mode=0o700)
+    root = OUTPUT_ROOT.resolve(strict=True)
+    if not root.is_dir() or root != OUTPUT_ROOT:
+        raise GenerationError("invalid_output_root")
     if candidate.exists() or candidate.is_symlink():
         raise GenerationError("output_exists")
     ignored = subprocess.run(

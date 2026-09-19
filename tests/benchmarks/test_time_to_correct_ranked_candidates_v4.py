@@ -265,6 +265,27 @@ class RankedCandidateTests(unittest.TestCase):
                 with self.assertRaisesRegex(mod.GenerationError, "output_exists"):
                     mod._output_path(output)
 
+    def test_output_root_bootstraps_once_and_rejects_symlink(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as raw:
+            parent = Path(raw).resolve() / "benchmark"
+            parent.mkdir()
+            output_root = parent / ".inputs"
+            output = output_root / "first.json"
+            accepted = mock.Mock(returncode=0)
+            with mock.patch.object(mod, "OUTPUT_ROOT", output_root), mock.patch.object(
+                mod.subprocess, "run", return_value=accepted
+            ):
+                self.assertFalse(output_root.exists())
+                self.assertEqual(mod._output_path(output), output)
+                self.assertTrue(output_root.is_dir())
+
+                output_root.rmdir()
+                target = parent / "redirected"
+                target.mkdir()
+                output_root.symlink_to(target, target_is_directory=True)
+                with self.assertRaisesRegex(mod.GenerationError, "invalid_output_root"):
+                    mod._output_path(output)
+
 
 if __name__ == "__main__":
     unittest.main()
