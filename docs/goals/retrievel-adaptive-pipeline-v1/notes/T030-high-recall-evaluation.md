@@ -3,9 +3,9 @@
 Date: 2026-09-19
 
 Status: the frozen high-recall candidate artifact has one independently labeled,
-post-hoc span-overlap evaluation. T030 remains active. The separate relational
-canary remains unresolved. No Jev, answer, grader, provider, credential, or
-network call ran.
+post-hoc span-overlap evaluation. The private D-01 four-arm canary is complete.
+All four correctness grades failed. T030 remains active for retrieval and
+context redesign. No promotion claim is supported.
 
 ## Bound Inputs
 
@@ -33,6 +33,8 @@ PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-e
 
 The evaluator used exclusive file creation. It validated the candidate hash
 before decoding labels. It produced 720 source-free diagnostic rows.
+The high-recall evaluation itself made no provider, answer, grader, credential,
+or network call.
 
 ## Result Artifact
 
@@ -73,12 +75,28 @@ value, Jev value, token reduction, speed, promotion, or product acceptance.
 - Semantic fact recall and candidate NDCG remain unknown.
 - The evaluator did not independently revalidate candidate source bytes.
 - The evaluator does not prove prior oracle isolation by itself.
-- The separate relational canary remains blocked by
-  `relational_canary_support_mismatch`.
+- The private relational canary completed but failed correctness in every arm.
 - T030 remains active for Parent review. No T040 work is authorized by this
   receipt.
+
+## Private D-01 Canary Closure
+
+- Private result SHA-256:
+  `bd03bd9944c55c142b1fc00773f1253f79dd4442213c3ab2b31c098b94313286`.
+- All source, model, context, and answer-boundary coverage completed.
+- All four correctness grades failed.
+- Two permitted Jev calls were consumed. No retry ran.
+- The evidence remains private and internal under the provider terms boundary.
+- Timing was contaminated. This receipt makes no speed, quality, token, cost,
+  ranking, provider-comparison, or promotion claim.
+- The live authorization is closed. The next gate is retrieval and context
+  redesign with offline proof before any broader live run.
 
 ## Files Changed
 
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+- `benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json`
+- `scripts/benchmarks/time_to_correct_dependency_v4.py`
+- `tests/benchmarks/test_time_to_correct_dependency_v4.py`
+- `tests/benchmarks/test_time_to_correct_jev_v4.py`

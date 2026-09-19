@@ -74,6 +74,7 @@ CANDIDATE_SHA256 = "8a75f792aefbabe5679fdfb934e440f723649a5993cb46196d63a437486c
 SELECTOR_COMMIT = "79adf45e8ff245c7e90701ea172d8de269228f83"
 SNAPSHOT_SHA256 = "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
 RESTRICTED_STATE_SHA256 = "ea86c846cf76908cca63090dccb6db497e4bc98ab5c20cd208b675109462f39d"
+PRIVATE_RESULT_SHA256 = "bd03bd9944c55c142b1fc00773f1253f79dd4442213c3ab2b31c098b94313286"
 PLAN_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json"
 RUBRIC = {
     "required_facts": [
@@ -200,8 +201,9 @@ def validate_plan(
         or set(requests) != {"B", "D"}
         or type(pools) is not dict
         or set(pools) != {"A_B", "C_D"}
+        or plan.get("private_result_sha256") != PRIVATE_RESULT_SHA256
         or plan.get("live_authorized") is not expected_live_authorized
-        or plan.get("provider_calls_executed") != 0
+        or plan.get("provider_calls_executed") != 2
     ):
         raise ControllerError("dependency_plan_mismatch")
     return plan

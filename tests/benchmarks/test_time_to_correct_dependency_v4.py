@@ -196,9 +196,11 @@ class DependencyControllerTests(unittest.TestCase):
                 execution="fixture",
             )
 
-    def test_plan_is_exact_and_live_authorized(self) -> None:
-        plan = mod.validate_plan(expected_live_authorized=True)
-        self.assertTrue(plan["live_authorized"])
+    def test_plan_is_exact_and_closed(self) -> None:
+        plan = mod.validate_plan()
+        self.assertFalse(plan["live_authorized"])
+        self.assertEqual(plan["provider_calls_executed"], 2)
+        self.assertEqual(plan["private_result_sha256"], mod.PRIVATE_RESULT_SHA256)
         self.assertEqual(plan["limits"]["maximum_jev_calls"], 2)
         self.assertEqual(plan["limits"]["retries"], 0)
         self.assertEqual(plan["answer_rubric_sha256"], mod.digest(mod.canonical(mod.RUBRIC)))

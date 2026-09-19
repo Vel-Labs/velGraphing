@@ -283,7 +283,7 @@ class JevPreviewTests(unittest.TestCase):
         self.assertEqual(receipt["preview_artifact_sha256"], plan["preview_artifact_sha256"])
         self.assertEqual(plan["candidate_artifact_sha256"], "d147df356e72aa6588d0840ea32940b6db5d5dae975acf2b218e3d4cfc697ae9")
 
-    def test_dependency_plan_is_source_free_and_live_authorized(self) -> None:
+    def test_dependency_plan_is_source_free_and_closed(self) -> None:
         plan = json.loads(
             (ROOT / "benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json")
             .read_text(encoding="utf-8")
@@ -292,6 +292,7 @@ class JevPreviewTests(unittest.TestCase):
             "schema_version", "study_id", "task_id", "candidate_artifact_sha256",
             "candidate_selector_commit", "question_registry_sha256", "prompt_sha256",
             "source_snapshot_sha256", "label_artifact_sha256", "result_artifact_sha256",
+            "private_result_sha256",
             "limits", "provider_calls_executed", "live_authorized",
             "provider_details_boundary", "request_details_boundary",
             "preview_adapter_commit", "preview_artifact_sha256", "request_sha256",
@@ -316,8 +317,11 @@ class JevPreviewTests(unittest.TestCase):
             "maximum_jev_calls": 2,
             "retries": 0,
         })
-        self.assertEqual(plan["provider_calls_executed"], 0)
-        self.assertTrue(plan["live_authorized"])
+        self.assertEqual(plan["provider_calls_executed"], 2)
+        self.assertFalse(plan["live_authorized"])
+        self.assertEqual(plan["private_result_sha256"], (
+            "bd03bd9944c55c142b1fc00773f1253f79dd4442213c3ab2b31c098b94313286"
+        ))
         self.assertEqual(set(plan["request_sha256"]), {"B", "D"})
 
     def test_valid_synthetic_observation_changes_d_membership_and_keeps_required(self) -> None:

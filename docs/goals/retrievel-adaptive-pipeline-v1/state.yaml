@@ -1,12 +1,12 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_d01_second_launch_answer_contract_repaired_successor_pending
+proof_boundary: t030_d01_private_canary_complete_redesign_pending
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: successor_lane_dispatch_and_controller_execution_pending
+current_gate: retrieval_context_redesign_before_any_broader_live_run
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
-exact_blocker: run2_lane_workers_not_dispatched
+exact_blocker: all_four_private_canary_arms_failed_correctness
 next_milestone: T030
 provider:
   name: typesafe_jev
@@ -14,8 +14,8 @@ provider:
   public_source_only: true
   maximum_cost_usd: 1.00
   authorized_call_total: 3
-  completed_call_total: 1
-  planned_d01_call_total: 2
+  completed_call_total: 3
+  planned_d01_call_total: 0
   request_bytes_per_call_max: 131072
   price_as_of: 2026-09-19
   price_usd_per_million_input_tokens: 0.042
@@ -26,7 +26,7 @@ provider:
   cost_telemetry: unavailable
   actual_usage_boundary: ignored_local_only
   public_results_boundary: separate_provider_permission_required
-  calls_made: 1
+  calls_made: 3
 tasks:
   T010: complete
   T020: complete
