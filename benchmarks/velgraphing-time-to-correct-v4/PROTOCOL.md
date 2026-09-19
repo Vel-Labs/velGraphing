@@ -92,6 +92,37 @@ The evaluator's budgeted prefixes are diagnostics, not deployable answer packets
 a prefix that excludes a required candidate is explicitly reported, never used
 as a valid answer packet.
 
+## Offline Jev preview freeze
+
+After the bound candidate artifact is committed and frozen, use
+`scripts/benchmarks/time_to_correct_jev_v4.py` to prepare exactly four local
+records in this order: C-02/B/direct, C-02/D/typed_graph, M-01/B/direct, and
+M-01/D/typed_graph. The adapter revalidates the candidate artifact hash, strict
+schema, registered questions, route controls, manifests, Graph records, source
+snapshots, and source bytes. It uses the direct Graph for B and the edge-enabled
+typed Graph for D. It converts the bound rows without ID remapping.
+
+Each record calls only `jev.prepare` with `jev-1.13.0` and the canonical
+`evidence-usefulness-v1` question contract. It then calls
+`select_ranked_context` with no Jev observation and a 16,384-byte serialized
+selection budget. The result must remain baseline ordered, source revalidated,
+non-fail-closed, and preserve every required candidate. The shortlist remains
+within 12 candidates and 24,576 excerpt bytes. The prepared request remains
+within 131,072 bytes.
+
+The adapter writes one exclusive canonical source-bearing artifact directly
+under the ignored v4 `.inputs` directory. It includes the full candidate packet,
+the exact ordered bound rows with record and relationship metadata, the full
+prepared request, verified lane identity, baseline selection, and a source-free
+index of hashes, byte counts, relationship counts, and selected IDs. Validation
+requires the externally supplied candidate artifact hash plus the exact selector
+and adapter commits, and always requires the registered production question
+registry hash. It records
+`provider_calls: 0` and `model_usefulness_qualified: false`. Preview generation
+does not call `jev.evaluate`, read a key, use a transport, access labels, or
+qualify Gate 3. Without an exact real replay, a future canary remains
+exploratory.
+
 Use `scripts/benchmarks/time_to_correct_retrieval_eval_v4.py` after generating the
 ranked artifact. Its schemas are strict and its public test fixture demonstrates
 all fields. The CLI requires an independently recorded candidate SHA-256:
