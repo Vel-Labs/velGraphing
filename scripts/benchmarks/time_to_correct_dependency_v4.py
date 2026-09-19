@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import contextmanager, nullcontext
 import importlib.util
 import json
+import os
 from pathlib import Path
 import stat
 import sys
@@ -712,6 +713,18 @@ def _argv_map(path: Path, root: Path) -> dict[str, list[str]]:
             or not command
             or not all(type(argument) is str and argument for argument in command)
         ):
+            raise ControllerError("dependency_lane_commands_invalid")
+        executable = Path(command[0])
+        try:
+            resolved_executable = executable.resolve(strict=True)
+            valid_executable = (
+                executable.is_absolute()
+                and resolved_executable.is_file()
+                and os.access(resolved_executable, os.X_OK)
+            )
+        except OSError:
+            valid_executable = False
+        if not valid_executable:
             raise ControllerError("dependency_lane_commands_invalid")
     return value
 

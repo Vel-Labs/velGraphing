@@ -1,12 +1,12 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_d01_independent_audit_pass_live_enabled_dispatch_pending
+proof_boundary: t030_d01_first_launch_host_path_repaired_rerun_pending
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: exact_lane_dispatch_and_controller_execution_pending
+current_gate: controller_rerun_pending
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
-exact_blocker: answer_and_grader_lane_workers_not_dispatched
+exact_blocker: repaired_controller_not_rerun
 next_milestone: T030
 provider:
   name: typesafe_jev

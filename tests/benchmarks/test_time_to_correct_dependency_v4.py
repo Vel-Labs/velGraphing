@@ -314,6 +314,22 @@ class DependencyControllerTests(unittest.TestCase):
             ):
                 mod._validated_run_root(checkout / ".velgraphing-local" / "run")
 
+    def test_lane_commands_require_absolute_executables(self) -> None:
+        commands = {
+            arm: [sys.executable, "-c", "pass"] for arm in mod.ARMS
+        }
+        valid = self.root / "valid-argv.json"
+        valid.write_bytes(mod.canonical(commands))
+        self.assertEqual(mod._argv_map(valid, self.root), commands)
+
+        commands["A"][0] = "python3"
+        relative = self.root / "relative-argv.json"
+        relative.write_bytes(mod.canonical(commands))
+        with self.assertRaisesRegex(
+            mod.ControllerError, "dependency_lane_commands_invalid"
+        ):
+            mod._argv_map(relative, self.root)
+
     def test_actual_source_read_bypasses_fail_coverage(self) -> None:
         def run(regenerate, arm="A", evaluator=None):
             root = self.root / f"bypass-{arm}-{run.calls}"

@@ -358,3 +358,15 @@ No lane, controller, provider, answer, or grader process ran during preparation.
 The exact next gate is lane dispatch followed by controller execution. No
 historical PR9 artifact or prior approval-readiness record authorizes a
 different call or public result.
+
+The first controller launch stopped in A after preparation and before handoff
+request creation. Its Trial recorded `failure_stage: answer`,
+`failure_reason: process_exit_nonzero`, and exit code `69`. The empty host
+environment resolved relative `python3` to `/usr/bin/python3`, which was blocked
+by the local Xcode-license gate. No D-01 provider or model call ran. The
+controller now requires each lane command to name an absolute executable whose
+resolved target is a real executable file. The preserved ignored argv files use
+the existing Homebrew Python.
+
+The next gate is a new controller execution; the failed launch is not a consumed
+D-01 provider call.
