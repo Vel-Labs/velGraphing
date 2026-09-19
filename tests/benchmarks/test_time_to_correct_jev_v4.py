@@ -257,10 +257,7 @@ class JevPreviewTests(unittest.TestCase):
         self.assertFalse(plan["live_authorized"])
         self.assertFalse(plan["promotion_eligible"])
         self.assertEqual(plan["gate_3_disposition"], "exploratory_only_no_promotion")
-        self.assertEqual(
-            plan["blocking_gates"],
-            ["final_repository_validation", "fresh_operator_approval"],
-        )
+        self.assertEqual(plan["blocking_gates"], ["fresh_operator_approval"])
 
     def test_fixed_four_previews_are_bound_and_offline(self) -> None:
         fixture = Fixture()

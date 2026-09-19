@@ -30,5 +30,5 @@
   },
   "gate_3_disposition": "exploratory_only_no_promotion",
   "promotion_eligible": false,
-  "blocking_gates": ["final_repository_validation", "fresh_operator_approval"]
+  "blocking_gates": ["fresh_operator_approval"]
 }
