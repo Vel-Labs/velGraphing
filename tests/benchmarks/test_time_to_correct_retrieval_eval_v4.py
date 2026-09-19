@@ -180,6 +180,13 @@ class RetrievalEvaluationTests(unittest.TestCase):
         with self.assertRaisesRegex(mod.EvaluationError, "invalid_candidate_artifact"):
             mod.validate_candidates(old)
 
+        prefixed = copy.deepcopy(artifact)
+        prefixed["runs"][0]["candidates"][0]["id"] = (
+            "candidate:" + prefixed["runs"][0]["candidates"][0]["id"]
+        )
+        with self.assertRaisesRegex(mod.EvaluationError, "invalid_candidate_identity"):
+            mod.validate_candidates(prefixed)
+
         for mutate in (
             lambda row: row.update(extra=None),
             lambda row: row.pop("record_id"),

@@ -56,9 +56,11 @@ answer-model, grader, or scoring call. Its output belongs under an ignored
 The frozen artifact uses the incompatible
 `velgraphing-ranked-candidates-v4-bound-v1` schema. Each candidate has exactly
 `id`, `path`, `source_sha256`, `byte_start`, `byte_end`, `required`,
-`record_id`, and `relationship_parent_candidate_id`. The candidate ID remains
-coordinate-derived. The artifact hash binds the record and relationship
-metadata. Each primary candidate names the exact authenticated source record
+`record_id`, and `relationship_parent_candidate_id`. The candidate ID is the
+bare 64-character lowercase SHA-256 of its canonical coordinate object. It has
+no prefix, so the same exact ID is valid in the existing Jev packet contract.
+The artifact hash binds the record and relationship metadata. Each primary
+candidate names the exact authenticated source record
 for its path and digest and has a null parent. Only a `typed_graph`
 relationship target can have a parent. It names the retained earlier primary
 candidate ID, uses `RelationshipSupport.target_record_id`, and is optional.

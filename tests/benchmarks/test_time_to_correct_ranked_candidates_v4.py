@@ -137,6 +137,8 @@ class RankedCandidateTests(unittest.TestCase):
         ]
         self.assertTrue(relationships)
         for item in typed["candidates"]:
+            self.assertEqual(len(item["id"]), 64)
+            self.assertFalse(set(item["id"]) - set("0123456789abcdef"))
             self.assertEqual(item["record_id"], f"repo:{item['path']}")
             record = records[item["record_id"]]
             self.assertEqual(record.provenance.path, item["path"])

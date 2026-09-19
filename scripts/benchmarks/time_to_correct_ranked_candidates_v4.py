@@ -285,7 +285,7 @@ def _candidate(
         "byte_end": byte_end,
     }
     return {
-        "id": f"candidate:{_digest(_canonical(identity))}",
+        "id": _digest(_canonical(identity)),
         **identity,
         "required": required,
         "record_id": record_id,

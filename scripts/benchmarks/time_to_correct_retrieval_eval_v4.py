@@ -178,7 +178,7 @@ def candidate_id(row: Mapping[str, Any]) -> str:
         json.dumps(identity, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
         + "\n"
     ).encode("utf-8")
-    return f"candidate:{hashlib.sha256(raw).hexdigest()}"
+    return hashlib.sha256(raw).hexdigest()
 
 
 def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
