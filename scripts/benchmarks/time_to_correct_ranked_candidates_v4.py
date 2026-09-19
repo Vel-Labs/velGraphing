@@ -36,12 +36,15 @@ EVALUATOR_SPEC.loader.exec_module(candidate_evaluator)
 
 from packages.core import (  # noqa: E402
     Graph,
+    RankedContextCandidate,
     Sensitivity,
     TaskSpec,
-    graph_find,
-    is_authenticated_eligible,
+    build_repository_tag_index,
+    compile_prompt,
+    compile_proof_obligations,
+    ranked_candidates_from_retrieval,
+    retrieve,
 )
-from packages.core.retrieval import _GENERIC, _STOPWORDS, _line_window  # noqa: E402
 
 
 SCHEMA_VERSION = "velgraphing-ranked-candidates-v4-bound-v1"
@@ -61,8 +64,6 @@ CORPUS_MANIFESTS = {
 }
 SEED_LIMIT = 12
 SHORTLIST_BYTE_BUDGET = 24_576
-DIRECT_WINDOW_BYTES = 800
-DIRECT_STOPWORDS = _STOPWORDS | _GENERIC
 OUTPUT_ROOT = ROOT / "benchmarks/velgraphing-time-to-correct-v4/.inputs"
 
 
@@ -237,125 +238,17 @@ class CountingReader:
         return self.reader.is_symlink(project_relative_path)
 
 
-def _candidate(
-    path: str,
-    source_sha256: str,
-    byte_start: int,
-    byte_end: int,
-    sources: Mapping[str, bytes],
-    records: Mapping[str, Any],
-    record_id: str,
-    *,
-    required: bool = False,
-    relationship_parent_candidate_id: str | None = None,
-) -> dict[str, object]:
-    if path not in sources or _digest(sources[path]) != source_sha256:
-        raise GenerationError("candidate_source_mismatch")
-    raw = sources[path]
-    if (
-        type(byte_start) is not int
-        or type(byte_end) is not int
-        or not 0 <= byte_start < byte_end <= len(raw)
-    ):
-        raise GenerationError("candidate_range_invalid")
-    try:
-        excerpt = raw[byte_start:byte_end].decode("utf-8", "strict")
-    except UnicodeDecodeError as error:
-        raise GenerationError("candidate_utf8_invalid") from error
-    if excerpt.encode("utf-8") != raw[byte_start:byte_end]:
-        raise GenerationError("candidate_utf8_invalid")
-    record = records.get(record_id)
-    if (
-        record is None
-        or record.provenance.path != path
-        or record.provenance.sha256 != source_sha256
-        or not is_authenticated_eligible(record, (Sensitivity.INTERNAL,))
-    ):
-        raise GenerationError("candidate_record_mismatch")
-    if relationship_parent_candidate_id is not None and (
-        type(relationship_parent_candidate_id) is not str
-        or not relationship_parent_candidate_id
-        or required
-    ):
-        raise GenerationError("invalid_relationship_candidate")
-    identity = {
-        "path": path,
-        "source_sha256": source_sha256,
-        "byte_start": byte_start,
-        "byte_end": byte_end,
-    }
+def _candidate_row(candidate: RankedContextCandidate) -> dict[str, object]:
     return {
-        "id": _digest(_canonical(identity)),
-        **identity,
-        "required": required,
-        "record_id": record_id,
-        "relationship_parent_candidate_id": relationship_parent_candidate_id,
+        "id": candidate.candidate_id,
+        "path": candidate.source_path,
+        "source_sha256": candidate.source_sha256,
+        "byte_start": candidate.byte_start,
+        "byte_end": candidate.byte_end,
+        "required": candidate.required,
+        "record_id": candidate.record_id,
+        "relationship_parent_candidate_id": candidate.relationship_parent_candidate_id,
     }
-
-
-def _retain(
-    rows: Sequence[tuple[dict[str, object], str]],
-) -> tuple[list[dict[str, object]], set[str]]:
-    retained: list[dict[str, object]] = []
-    record_ids: set[str] = set()
-    seen: set[str] = set()
-    used = 0
-    for row, record_id in rows:
-        if row["id"] in seen:
-            continue
-        size = int(row["byte_end"]) - int(row["byte_start"])
-        if len(retained) == SEED_LIMIT:
-            break
-        if used + size > SHORTLIST_BYTE_BUDGET:
-            continue
-        retained.append(row)
-        record_ids.add(record_id)
-        seen.add(str(row["id"]))
-        used += size
-    return retained, record_ids
-
-
-def _retain_with_supports(
-    primary: Sequence[tuple[dict[str, object], str]],
-    supports: Mapping[str, dict[str, object]],
-) -> tuple[list[dict[str, object]], int]:
-    retained: list[dict[str, object]] = []
-    seen: set[str] = set()
-    supported_seeds: set[str] = set()
-    used = 0
-
-    def append(row: dict[str, object]) -> bool:
-        nonlocal used
-        identity = str(row["id"])
-        if identity in seen:
-            return False
-        size = int(row["byte_end"]) - int(row["byte_start"])
-        if used + size > SHORTLIST_BYTE_BUDGET:
-            return False
-        retained.append(row)
-        seen.add(identity)
-        used += size
-        return True
-
-    support_count = 0
-    for row, record_id in primary:
-        if len(retained) == SEED_LIMIT:
-            break
-        primary_retained = append(row)
-        if (
-            primary_retained
-            and record_id not in supported_seeds
-            and record_id in supports
-            and len(retained) < SEED_LIMIT
-        ):
-            supported_seeds.add(record_id)
-            relationship = {
-                **supports[record_id],
-                "relationship_parent_candidate_id": row["id"],
-            }
-            if append(relationship):
-                support_count += 1
-    return retained, support_count
 
 
 def _metrics(source_operations: int, retrieval_ns: int) -> dict[str, int | None]:
@@ -400,97 +293,14 @@ def _source_rows(snapshot: Any) -> list[dict[str, object]]:
     ]
 
 
-def _direct_run(
-    task_id: str,
-    prompt: str,
-    graph: Graph,
-    snapshot: Any,
-    reader: Any,
-) -> tuple[dict[str, object], int]:
-    counting = CountingReader(reader)
-    started = time.monotonic_ns()
-    terms = tuple(
-        dict.fromkeys(
-            token.casefold()
-            for token in graph_adapter._TOKEN.findall(prompt)
-            if token.casefold() not in DIRECT_STOPWORDS
-        )
-    )
-    scored: list[tuple[int, str, list[tuple[int, int]]]] = []
-    for source in snapshot.sources:
-        raw = counting.read_bytes(source.path)
-        lowered = raw.lower()
-        anchors: list[tuple[int, int]] = []
-        score = 0
-        for term in terms:
-            encoded = term.encode("ascii")
-            cursor = 0
-            occurrences = 0
-            while occurrences < 4:
-                position = lowered.find(encoded, cursor)
-                if position < 0:
-                    break
-                anchors.append((position, position + len(encoded)))
-                score += 1
-                occurrences += 1
-                cursor = position + len(encoded)
-            if term in source.path.casefold():
-                score += 5
-        if score:
-            scored.append((score, source.path, sorted(set(anchors))))
-    scored.sort(key=lambda item: (-item[0], item[1]))
-    rows: list[tuple[dict[str, object], str]] = []
-    seed_ids: list[str] = []
-    sources = reader.sources
-    source_hashes = {source.path: source.sha256 for source in snapshot.sources}
-    records = graph.record_map()
-    for _, path, anchors in scored[:SEED_LIMIT]:
-        record_id = f"repo:{path}"
-        seed_ids.append(record_id)
-        raw = sources[path]
-        if not anchors and raw:
-            anchors = [(0, min(len(raw), DIRECT_WINDOW_BYTES))]
-        for start, end in anchors[:4]:
-            window_start, window_end = _line_window(raw, start, end, DIRECT_WINDOW_BYTES)
-            if window_end <= window_start:
-                continue
-            rows.append(
-                (
-                    _candidate(
-                        path,
-                        source_hashes[path],
-                        window_start,
-                        window_end,
-                        sources,
-                        records,
-                        record_id,
-                    ),
-                    record_id,
-                )
-            )
-    candidates, _ = _retain(rows)
-    elapsed = time.monotonic_ns() - started
-    return (
-        {
-            "task_id": task_id,
-            "route": "direct",
-            "source_snapshot_sha256": snapshot.snapshot_sha256,
-            "sources": _source_rows(snapshot),
-            "candidates": candidates,
-            "controls": _controls(seed_ids, 0, 0, False, False),
-            "metrics": _metrics(counting.operations, elapsed),
-        },
-        0,
-    )
-
-
-def _graph_run(
-    task_id: str,
-    prompt: str,
+def _route_run(
+    task: TaskSpec,
     route: str,
     graph: Graph,
     snapshot: Any,
     reader: Any,
+    index: Any,
+    facets: Any,
     *,
     derived_edge_count: int,
     active_edge_count: int,
@@ -498,72 +308,37 @@ def _graph_run(
     expand_one_hop: bool,
 ) -> tuple[dict[str, object], int]:
     counting = CountingReader(reader)
-    task = TaskSpec(
-        task_id=task_id,
-        query_terms=tuple(
-            dict.fromkeys(token.casefold() for token in graph_adapter._TOKEN.findall(prompt))
-        ),
-        node_budget=SEED_LIMIT,
-        byte_budget=SHORTLIST_BYTE_BUDGET,
-        allowed_sensitivities=(Sensitivity.INTERNAL,),
-    )
     started = time.monotonic_ns()
-    result = graph_find(
+    result = retrieve(
         graph,
         task,
-        prompt,
+        index,
+        facets,
         snapshot,
         counting,
         channels=("exact", "sparse", "wiki"),
         maximum_results=SEED_LIMIT,
         source_bound_expansion=source_bound_expansion,
         expand_one_hop=expand_one_hop,
+        minimum_coverage_percent=0.0,
+        parallel=False,
     )
-    elapsed = time.monotonic_ns() - started
     if result.fail_closed:
         raise GenerationError("retrieval_failed_closed")
-    sources = reader.sources
-    records = graph.record_map()
-    primary: list[tuple[dict[str, object], str]] = []
-    for item in result.evidence:
-        primary.append(
-            (
-                _candidate(
-                    item.source_path,
-                    item.source_sha256,
-                    item.byte_start,
-                    item.byte_end,
-                    sources,
-                    records,
-                    item.record_id,
-                ),
-                item.record_id,
-            )
-        )
-    support_rows: dict[str, dict[str, object]] = {}
-    if route == "typed_graph":
-        for support in result.relationship_supports:
-            coordinate = support.target_coordinate
-            support_rows[support.seed_record_id] = _candidate(
-                coordinate.source_path,
-                coordinate.source_sha256,
-                coordinate.byte_start,
-                coordinate.byte_end,
-                sources,
-                records,
-                support.target_record_id,
-            )
-        candidates, support_count = _retain_with_supports(primary, support_rows)
-    else:
-        candidates, _ = _retain(primary)
-        support_count = 0
+    candidates = ranked_candidates_from_retrieval(graph, task, snapshot, counting, result)
+    elapsed = time.monotonic_ns() - started
+    if not candidates:
+        raise GenerationError("candidate_shortlist_empty")
+    support_count = sum(
+        candidate.relationship_parent_candidate_id is not None for candidate in candidates
+    )
     return (
         {
-            "task_id": task_id,
+            "task_id": task.task_id,
             "route": route,
             "source_snapshot_sha256": snapshot.snapshot_sha256,
             "sources": _source_rows(snapshot),
-            "candidates": candidates,
+            "candidates": [_candidate_row(candidate) for candidate in candidates],
             "controls": _controls(
                 [hit.record_id for hit in result.hits],
                 derived_edge_count,
@@ -635,29 +410,54 @@ def generate(
     for question in questions:
         plain_graph, snapshot, reader, typed_graph, edge_count = prepared[question["corpus"]]
         no_edges = Graph(typed_graph.records)
+        task = TaskSpec(
+            task_id=question["id"],
+            query_terms=tuple(
+                dict.fromkeys(
+                    token.casefold()
+                    for token in graph_adapter._TOKEN.findall(question["prompt"])
+                )
+            ),
+            node_budget=SEED_LIMIT,
+            byte_budget=SHORTLIST_BYTE_BUDGET,
+            allowed_sensitivities=(Sensitivity.PUBLIC, Sensitivity.INTERNAL),
+        )
+        index = build_repository_tag_index(plain_graph, snapshot, reader)
+        facets = compile_prompt(question["prompt"], index)
+        if not facets.sufficient:
+            facets = compile_prompt(
+                question["prompt"], index,
+                proof_obligations=compile_proof_obligations(
+                    question["prompt"], plain_graph, index, snapshot, reader
+                ),
+            )
         route_rows = [
-            _direct_run(question["id"], question["prompt"], plain_graph, snapshot, reader),
-            _graph_run(
-                question["id"], question["prompt"], "tag_index", plain_graph,
-                snapshot, reader, derived_edge_count=0,
+            _route_run(
+                task, "direct", plain_graph, snapshot, reader, index, facets,
+                derived_edge_count=0, active_edge_count=0,
+                source_bound_expansion=False, expand_one_hop=False,
+            ),
+            _route_run(
+                task, "tag_index", plain_graph, snapshot, reader, index, facets,
+                derived_edge_count=0,
                 active_edge_count=0,
                 source_bound_expansion=False, expand_one_hop=False,
             ),
-            _graph_run(
-                question["id"], question["prompt"], "typed_graph", typed_graph,
-                snapshot, reader, derived_edge_count=edge_count,
+            _route_run(
+                task, "typed_graph", typed_graph, snapshot, reader, index, facets,
+                derived_edge_count=edge_count,
                 active_edge_count=edge_count,
                 source_bound_expansion=True, expand_one_hop=True,
             ),
-            _graph_run(
-                question["id"], question["prompt"], "typed_graph_no_edges", no_edges,
-                snapshot, reader, derived_edge_count=edge_count,
+            _route_run(
+                task, "typed_graph_no_edges", no_edges, snapshot, reader, index, facets,
+                derived_edge_count=edge_count,
                 active_edge_count=0,
                 source_bound_expansion=True, expand_one_hop=True,
             ),
-            _graph_run(
-                question["id"], question["prompt"], "typed_graph_no_expansion", typed_graph,
-                snapshot, reader, derived_edge_count=edge_count,
+            _route_run(
+                task, "typed_graph_no_expansion", typed_graph, snapshot, reader, index, facets,
+                derived_edge_count=edge_count,
                 active_edge_count=edge_count,
                 source_bound_expansion=True, expand_one_hop=False,
             ),

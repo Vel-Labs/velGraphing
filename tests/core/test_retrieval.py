@@ -30,6 +30,7 @@ from packages.core import (
     compile_proof_obligations,
     graph_find,
     navigate,
+    ranked_candidates_from_retrieval,
     retrieve,
     retrieve_hybrid,
 )
@@ -287,6 +288,20 @@ class SourceBoundExpansionTests(unittest.TestCase):
             expand_one_hop=False, source_bound_expansion=True,
         )
         self.assertEqual(result.relationship_supports, ())
+
+        forged_support = replace(
+            enabled.relationship_supports[0], source_coordinate=target_coordinate
+        )
+        object.__setattr__(bound, "source_coordinate", target_coordinate)
+        candidates = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader,
+            replace(enabled, relationship_supports=(forged_support,)),
+        )
+        self.assertTrue(candidates)
+        self.assertTrue(all(
+            candidate.relationship_parent_candidate_id is None
+            for candidate in candidates
+        ))
 
 
 class ProofObligationCompilerTests(unittest.TestCase):

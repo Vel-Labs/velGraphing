@@ -1,10 +1,10 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: installed_live_canary
+proof_boundary: candidate_unit_fixture_proof
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: candidate_unit_repair_before_public_corpus_study
+current_gate: fresh_offline_candidate_freeze_before_public_corpus_study
 exact_blocker: null
 next_milestone: T040
 provider:

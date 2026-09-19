@@ -136,6 +136,14 @@ class RankedCandidateTests(unittest.TestCase):
             if item["relationship_parent_candidate_id"] is not None
         ]
         self.assertTrue(relationships)
+        helper_support = next(
+            item for item in relationships if item["path"] == "src/helper.py"
+        )
+        helper_raw = records[helper_support["record_id"]].content.encode("utf-8")
+        self.assertEqual(
+            helper_raw[helper_support["byte_start"]:helper_support["byte_end"]],
+            helper_raw,
+        )
         for item in typed["candidates"]:
             self.assertEqual(len(item["id"]), 64)
             self.assertFalse(set(item["id"]) - set("0123456789abcdef"))
@@ -208,31 +216,33 @@ class RankedCandidateTests(unittest.TestCase):
             )
         self.assertNotIn("find alpha", json.dumps(artifact))
 
-    def test_optional_overflow_is_skipped_and_seeded_support_precedes_later_primary(self) -> None:
-        def row(identity: str, start: int, end: int) -> dict[str, object]:
-            return {
-                "id": identity, "path": "source.py", "source_sha256": "a" * 64,
-                "byte_start": start, "byte_end": end, "required": False,
-                "record_id": "repo:source.py",
-                "relationship_parent_candidate_id": None,
-            }
-
-        overflow_rows = [
-            (row("large", 0, 24_575), "seed:0"),
-            (row("overflow", 0, 2), "seed:1"),
-            (row("fits", 0, 1), "seed:2"),
-        ]
-        retained, _ = mod._retain(overflow_rows)
-        self.assertEqual([item["id"] for item in retained], ["large", "fits"])
-
-        primary = [(row(f"p{index}", index, index + 1), f"seed:{index}") for index in range(13)]
-        retained, support_count = mod._retain_with_supports(
-            primary, {"seed:0": row("support", 20, 21)}
+    def test_direct_and_graph_controls_share_complete_unit_candidates(self) -> None:
+        fixture = Fixture(
+            {
+                "sorts/quick_sort.py": (
+                    b'"""Quick sort examples."""\n\n'
+                    b"def quick_sort(values):\n"
+                    b"    if len(values) < 2:\n        return values\n"
+                    b"    return quick_sort(values[:-1]) + [values[-1]]\n"
+                )
+            },
+            "find quick_sort implementation",
         )
-        self.assertEqual(support_count, 1)
-        self.assertEqual([item["id"] for item in retained[:3]], ["p0", "support", "p1"])
-        typed_primary = [item["id"] for item in retained if item["id"].startswith("p")]
-        self.assertEqual(typed_primary, [f"p{index}" for index in range(11)])
+        try:
+            artifact, _ = mod.generate(
+                fixture.questions, fixture.manifests, fixture.lanes, "1" * 40,
+                study_id="unit-fixture",
+            )
+            raw = fixture.lane.joinpath("sorts/quick_sort.py").read_bytes()
+        finally:
+            fixture.close()
+        runs = {run["route"]: run for run in artifact["runs"]}
+        self.assertEqual(runs["direct"]["candidates"], runs["tag_index"]["candidates"])
+        candidate = runs["direct"]["candidates"][0]
+        excerpt = raw[candidate["byte_start"]:candidate["byte_end"]]
+        self.assertTrue(excerpt.startswith(b"def quick_sort"))
+        self.assertIn(b"return quick_sort", excerpt)
+        self.assertLessEqual(len(excerpt), 4096)
 
     def test_manifest_source_range_and_utf8_fail_closed(self) -> None:
         fixture = Fixture({"source.py": b"value = '\xc3\xa9'\n"}, "find value")
@@ -261,31 +271,6 @@ class RankedCandidateTests(unittest.TestCase):
             with self.assertRaisesRegex(mod.GenerationError, "manifest_totals_mismatch"):
                 mod._manifest(malformed_path)
 
-            raw = fixture.lane.joinpath("source.py").read_bytes()
-            digest = hashlib.sha256(raw).hexdigest()
-            graph, _, _, _ = mod.scan_lane(
-                fixture.lane, fixture.manifest, derive_edges=False
-            )
-            records = graph.record_map()
-            with self.assertRaisesRegex(mod.GenerationError, "candidate_range_invalid"):
-                mod._candidate(
-                    "source.py", digest, 0, len(raw) + 1, {"source.py": raw},
-                    records, "repo:source.py",
-                )
-            position = raw.index(b"\xc3\xa9")
-            with self.assertRaisesRegex(mod.GenerationError, "candidate_utf8_invalid"):
-                mod._candidate(
-                    "source.py", digest, position + 1, position + 2,
-                    {"source.py": raw}, records, "repo:source.py",
-                )
-            for record_id in ("missing", "repo:other.py"):
-                with self.subTest(record_id=record_id), self.assertRaisesRegex(
-                    mod.GenerationError, "candidate_record_mismatch"
-                ):
-                    mod._candidate(
-                        "source.py", digest, 0, 1, {"source.py": raw}, records,
-                        record_id,
-                    )
         finally:
             fixture.close()
 

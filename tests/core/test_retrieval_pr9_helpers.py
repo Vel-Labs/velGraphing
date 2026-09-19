@@ -8,9 +8,12 @@ import hashlib
 import random
 import unittest
 
-from packages.core import (Admission, Freshness, Graph, GraphRecord, Provenance,
-                           Sensitivity, SourceIdentityV4, SourceSnapshotV4,
-                           TrustClass, build_repository_tag_index)
+from packages.core import (Admission, AuthorityClass, EvidenceItem, Freshness,
+                           Graph, GraphRecord, Provenance, RetrievalHit,
+                           RetrievalResult, Sensitivity, SourceIdentityV4,
+                           SourceSnapshotV4, TaskSpec, TrustClass,
+                           build_repository_tag_index,
+                           ranked_candidates_from_retrieval)
 from packages.core.retrieval import _line_window, _MAX_TAGS_PER_RECORD
 
 
@@ -36,6 +39,13 @@ def fixture(raw):
                          freshness=Freshness.CURRENT, admission=Admission.VERIFIER, eligible=True)
     snapshot = SourceSnapshotV4((SourceIdentityV4(path, len(raw), sha),))
     return Graph((record,)), snapshot, Reader(path, raw)
+
+
+def result(path, *facets, evidence=()):
+    return RetrievalResult(
+        "direct", "fixture", (RetrievalHit(f"repo:{path}", path, 1, ("exact",), facets, 0),),
+        (), "", 0, 100.0, (), (), False, evidence=evidence,
+    )
 
 
 class Pr9RetrievalHelperTests(unittest.TestCase):
@@ -84,6 +94,101 @@ class Pr9RetrievalHelperTests(unittest.TestCase):
             self.assertTrue(0 <= left <= start < end <= right <= len(text.encode()))
             self.assertLessEqual(right-left, cap)
             text.encode()[left:right].decode()
+
+    def test_ranked_candidates_use_every_complete_source_occurrence(self):
+        raw = (
+            b'"""header and examples"""\n\n'
+            b"def quick_sort(left):\n    return quick_sort(left[1:])\n\n"
+            b"def quick_sort_right(right):\n    return quick_sort(right[:-1])\n"
+        )
+        graph, snapshot, reader = fixture(raw)
+        candidates = ranked_candidates_from_retrieval(
+            graph, TaskSpec("units", ("quick-sort",), node_budget=64), snapshot, reader,
+            result("docs/plain.md", "quick-sort"),
+        )
+        excerpts = [raw[item.byte_start:item.byte_end] for item in candidates]
+        self.assertEqual(len(excerpts), 2)
+        self.assertTrue(excerpts[0].startswith(b"def quick_sort(left)"))
+        self.assertTrue(excerpts[1].startswith(b"def quick_sort_right"))
+        self.assertEqual(candidates, ranked_candidates_from_retrieval(
+            graph, TaskSpec("units", ("quick-sort",), node_budget=64), snapshot, reader,
+            result("docs/plain.md", "quick-sort"),
+        ))
+
+    def test_required_overflow_and_changed_source_fail_closed(self):
+        raw = b"alpha " * 900
+        graph, snapshot, reader = fixture(raw)
+        digest = hashlib.sha256(raw).hexdigest()
+        evidence = EvidenceItem(
+            "repo:docs/plain.md", "docs/plain.md", digest, 0, len(raw), digest,
+            AuthorityClass.RUNTIME, ("required",),
+        )
+        with self.assertRaisesRegex(ValueError, "required_candidate_budget_exceeded"):
+            ranked_candidates_from_retrieval(
+                graph, TaskSpec("required", ("alpha",), byte_budget=20_000), snapshot,
+                reader, result("docs/plain.md", "alpha", evidence=(evidence,)),
+            )
+        reader.raw = b"changed\n"
+        with self.assertRaises(ValueError):
+            ranked_candidates_from_retrieval(
+                graph, TaskSpec("stale", ("alpha",)), snapshot, reader,
+                result("docs/plain.md", "alpha"),
+            )
+
+    def test_ranked_candidate_caps_apply_to_all_occurrences(self):
+        raw = b"\n\n".join(
+            f"alpha paragraph {index}".encode() for index in range(100)
+        ) + b"\n"
+        graph, snapshot, reader = fixture(raw)
+        candidates = ranked_candidates_from_retrieval(
+            graph, TaskSpec("caps", ("alpha",), node_budget=200, byte_budget=100_000),
+            snapshot, reader, result("docs/plain.md", "alpha"),
+        )
+        self.assertEqual(len(candidates), 64)
+        self.assertLessEqual(sum(item.byte_end-item.byte_start for item in candidates), 32_768)
+        self.assertTrue(all(item.byte_end-item.byte_start <= 4096 for item in candidates))
+        self.assertEqual(len({item.candidate_id for item in candidates}), len(candidates))
+
+    def test_noisy_first_hit_cannot_crowd_out_later_complete_unit(self):
+        sources = {
+            "docs/noisy.md": b"\n\n".join(b"alpha" for _ in range(100)) + b"\n",
+            "src/later.py": b"def alpha_later():\n    return 'kept'\n",
+        }
+        records = []
+        for path, raw in sources.items():
+            digest = hashlib.sha256(raw).hexdigest()
+            records.append(GraphRecord(
+                f"repo:{path}", "source", path, raw.decode(),
+                Provenance(path, digest, "bytes", True),
+                TrustClass.VERIFIED_SOURCE, Sensitivity.PUBLIC, Freshness.CURRENT,
+                Admission.VERIFIER, True,
+            ))
+        snapshot = SourceSnapshotV4(tuple(
+            SourceIdentityV4(path, len(raw), hashlib.sha256(raw).hexdigest())
+            for path, raw in sorted(sources.items())
+        ))
+
+        class MapReader:
+            def read_bytes(self, path): return sources[path]
+            def is_symlink(self, path): return False
+
+        retrieval = RetrievalResult(
+            "direct", "fixture", (
+                RetrievalHit("repo:docs/noisy.md", "docs/noisy.md", 2, ("exact",), ("alpha",), 0),
+                RetrievalHit("repo:src/later.py", "src/later.py", 1, ("exact",), ("alpha",), 0),
+            ), (), "", 0, 100.0, (), (), False,
+        )
+        candidates = ranked_candidates_from_retrieval(
+            Graph(tuple(records)), TaskSpec("fair", ("alpha",), node_budget=64),
+            snapshot, MapReader(), retrieval,
+        )
+        self.assertEqual(len(candidates), 64)
+        later = [item for item in candidates if item.source_path == "src/later.py"]
+        self.assertEqual(len(later), 1)
+        self.assertEqual(
+            sources["src/later.py"][later[0].byte_start:later[0].byte_end],
+            sources["src/later.py"],
+        )
 
 
 if __name__ == "__main__":
