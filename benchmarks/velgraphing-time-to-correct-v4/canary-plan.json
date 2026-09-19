@@ -1,0 +1,21 @@
+{
+  "schema_version": "velgraphing-v4-canary-plan-draft-1",
+  "status": "blocked_not_approval_ready",
+  "source_parent_commit": "6931f0ffa72bd27f79f5515bd669404dbc4667d0",
+  "material_candidate_commit": null,
+  "tasks": ["C-02", "M-01"],
+  "arms": ["A", "B", "C", "D"],
+  "repetitions": 1,
+  "provider_model": "jev-1.13.0",
+  "rubric_version": "evidence-usefulness-v1",
+  "requested_answer_model": "gpt-5.6-sol",
+  "requested_reasoning": "medium",
+  "max_jev_calls": 4,
+  "max_answer_calls": 8,
+  "max_grader_calls": 8,
+  "retries": 0,
+  "live_authorized": false,
+  "provider_calls_made": 0,
+  "request_hashes": {"B-C-02": null, "D-C-02": null, "B-M-01": null, "D-M-01": null},
+  "blocking_gates": ["typed_route", "retrieval_critical_span_labels", "candidate_judgment_qualification", "final_repository_validation", "exact_previews", "fresh_operator_approval"]
+}

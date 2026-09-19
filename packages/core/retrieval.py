@@ -695,12 +695,18 @@ def _expected_repository_tags(
             key=lambda item: (
                 _tag_priority(item.kind), item.value, item.byte_start or -1,
             ),
-        )[:_MAX_TAGS_PER_RECORD]
+        )
+        # Bound distinct retained identities, not repeated lexical occurrences.
+        # Keep the first deterministic representative for each identity.
+        retained = 0
         for tag in record_tags:
             identity = (tag.record_id, tag.kind.value, tag.value)
             if identity not in seen:
                 seen.add(identity)
                 tags.append(tag)
+                retained += 1
+                if retained == _MAX_TAGS_PER_RECORD:
+                    break
     tags.sort(key=lambda item: (item.value, item.kind.value, item.record_id, item.byte_start or -1))
     vocabulary = tuple(sorted({tag.value for tag in tags}))
     return tuple(tags), vocabulary
@@ -2072,14 +2078,33 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
 
 
 def _line_window(raw: bytes, start: int, end: int, maximum: int) -> tuple[int, int]:
-    left = raw.rfind(b"\n", max(0, start - maximum // 2), start)
-    left = 0 if left < 0 else left + 1
-    right = raw.find(b"\n", end, min(len(raw), end + maximum // 2))
-    right = len(raw) if right < 0 else right
-    if right - left > maximum:
-        right = left + maximum
-        while right > end and (raw[right : right + 1] and raw[right] & 0b11000000 == 0b10000000):
-            right -= 1
+    """Return a UTF-8-aligned window containing the entire verified anchor.
+
+    An anchor larger than the byte budget has no admissible window. Return an
+    empty range so callers cannot mistake an unrelated prefix for evidence.
+    Source validity and authority remain the caller's responsibility.
+    """
+    if (type(start) is not int or type(end) is not int or type(maximum) is not int
+            or not 0 <= start < end <= len(raw) or maximum < 1):
+        raise ValueError("invalid source window bounds")
+    if end - start > maximum:
+        return start, start
+    # Verified anchors use character boundaries. Reject invalid anchors instead
+    # of moving the anchor, truncating it, or inventing a replacement range.
+    if (raw[start] & 0b11000000 == 0b10000000
+            or (end < len(raw) and raw[end] & 0b11000000 == 0b10000000)):
+        return start, start
+    available = maximum - (end - start)
+    lower = max(0, start - available // 2)
+    left = raw.rfind(b"\n", lower, start)
+    left = lower if left < 0 else left + 1
+    while left < start and raw[left] & 0b11000000 == 0b10000000:
+        left += 1
+    limit = min(len(raw), left + maximum)
+    right = raw.find(b"\n", end, limit)
+    right = limit if right < 0 else right
+    while right > end and right < len(raw) and raw[right] & 0b11000000 == 0b10000000:
+        right -= 1
     return left, right
 
 
