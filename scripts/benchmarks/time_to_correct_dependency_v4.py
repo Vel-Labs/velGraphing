@@ -87,6 +87,9 @@ SUCCESSOR_RESULT_SHA256 = "44fc6a9b6f3cade340906195b60105d187be1185975406bd9f12e
 SUCCESSOR_B_OBSERVATION_SHA256 = "33bd29d232f461583292ab14a640c2417a7eb55aa254ad43c3571883e2702a76"
 REPAIR_RUN_ROOT = ".velgraphing-local/retrievel-d01-d-repair-v2"
 REPAIR_MAX_JEV_CALLS = 1
+REPAIR_RESULT_SHA256 = "b40d84af3b05d43adcb7bf70130762e8e644f87a1c401cb1bc0b633bbbd11a37"
+REPAIR_RESULT_SEAL_SHA256 = "313038939aab0fe2882335d97520a48892e8cbcff166fbcebf3ec47656ad63c8"
+REPAIR_RESULT_FILE_COUNT = 11
 PROVIDER_TIMEOUT_SECONDS = 10
 HANDOFF_WAIT_SECONDS = 600
 HANDOFF_PROCESS_TIMEOUT_SECONDS = 610
@@ -302,7 +305,7 @@ def validate_plan(
     pools = plan.get("pool_sha256")
     if (
         plan.get("schema_version")
-        != "velgraphing-v4-dependency-behavior-canary-plan-v4"
+        != "velgraphing-v4-dependency-behavior-canary-plan-v5"
         or plan.get("study_id") != STUDY_ID
         or plan.get("task_id") != TASK_ID
         or plan.get("candidate_artifact_sha256") != CANDIDATE_SHA256
@@ -327,15 +330,18 @@ def validate_plan(
         or plan.get("successor_result_sha256") != SUCCESSOR_RESULT_SHA256
         or plan.get("successor_b_observation_sha256") != SUCCESSOR_B_OBSERVATION_SHA256
         or plan.get("repair_run_root") != REPAIR_RUN_ROOT
+        or plan.get("repair_result_sha256") != REPAIR_RESULT_SHA256
+        or plan.get("repair_result_seal_sha256") != REPAIR_RESULT_SEAL_SHA256
+        or plan.get("repair_result_file_count") != REPAIR_RESULT_FILE_COUNT
         or plan.get("maximum_cost_usd") != 1.0
         or plan.get("aggregate_authorized_call_total") != 6
-        or plan.get("aggregate_completed_call_total") != 5
+        or plan.get("aggregate_completed_call_total") != 6
         or plan.get("aggregate_authorization_envelope_usd") != 0.033030144
         or plan.get("successor_incremental_authorization_usd") != 0.011010048
         or plan.get("successor_jev_calls_authorized") != MAX_JEV_CALLS
         or plan.get("repair_incremental_authorization_usd") != 0.005505024
         or plan.get("repair_jev_calls_authorized") != REPAIR_MAX_JEV_CALLS
-        or plan.get("repair_provider_calls_executed") != 0
+        or plan.get("repair_provider_calls_executed") != 1
         or type(limits) is not dict
         or limits.get("candidate_count") != 64
         or limits.get("candidate_aggregate_bytes") != 32_768

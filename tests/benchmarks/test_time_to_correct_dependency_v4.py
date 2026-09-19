@@ -201,21 +201,26 @@ class DependencyControllerTests(unittest.TestCase):
                 execution="fixture",
             )
 
-    def test_successor_plan_is_exact_and_authorized(self) -> None:
-        plan = mod.validate_plan(expected_live_authorized=True)
-        self.assertTrue(plan["live_authorized"])
+    def test_completed_plan_is_exact_and_closed(self) -> None:
+        plan = mod.validate_plan(expected_live_authorized=False)
+        self.assertFalse(plan["live_authorized"])
         self.assertEqual(plan["provider_calls_executed"], 2)
         self.assertEqual(plan["successor_provider_calls_executed"], 2)
-        self.assertEqual(plan["repair_provider_calls_executed"], 0)
+        self.assertEqual(plan["repair_provider_calls_executed"], 1)
         self.assertEqual(plan["repair_jev_calls_authorized"], 1)
         self.assertEqual(plan["aggregate_authorized_call_total"], 6)
-        self.assertEqual(plan["aggregate_completed_call_total"], 5)
+        self.assertEqual(plan["aggregate_completed_call_total"], 6)
         self.assertEqual(plan["repaired_candidate_commit"], mod.REPAIRED_CANDIDATE_COMMIT)
         self.assertEqual(plan["package_candidate_sha256"], mod.PACKAGE_CANDIDATE_SHA256)
         self.assertEqual(plan["successor_run_root"], mod.SUCCESSOR_RUN_ROOT)
         self.assertEqual(plan["repair_run_root"], mod.REPAIR_RUN_ROOT)
         self.assertEqual(plan["private_result_sha256"], mod.PRIVATE_RESULT_SHA256)
         self.assertEqual(plan["successor_result_sha256"], mod.SUCCESSOR_RESULT_SHA256)
+        self.assertEqual(plan["repair_result_sha256"], mod.REPAIR_RESULT_SHA256)
+        self.assertEqual(
+            plan["repair_result_seal_sha256"], mod.REPAIR_RESULT_SEAL_SHA256
+        )
+        self.assertEqual(plan["repair_result_file_count"], 11)
         self.assertEqual(plan["limits"]["maximum_jev_calls"], 2)
         self.assertEqual(plan["limits"]["retries"], 0)
         self.assertEqual(plan["answer_rubric_sha256"], mod.digest(mod.canonical(mod.RUBRIC)))

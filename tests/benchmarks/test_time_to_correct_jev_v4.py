@@ -308,10 +308,12 @@ class JevPreviewTests(unittest.TestCase):
             "successor_result_sha256", "successor_b_observation_sha256",
             "repair_incremental_authorization_usd", "repair_jev_calls_authorized",
             "repair_provider_calls_executed", "repair_run_root",
+            "repair_result_sha256", "repair_result_seal_sha256",
+            "repair_result_file_count",
         })
         self.assertEqual(
             plan["schema_version"],
-            "velgraphing-v4-dependency-behavior-canary-plan-v4",
+            "velgraphing-v4-dependency-behavior-canary-plan-v5",
         )
         self.assertEqual(plan["study_id"], mod.DEPENDENCY_STUDY)
         self.assertEqual(plan["task_id"], "D-01")
@@ -327,7 +329,7 @@ class JevPreviewTests(unittest.TestCase):
             "retries": 0,
         })
         self.assertEqual(plan["provider_calls_executed"], 2)
-        self.assertTrue(plan["live_authorized"])
+        self.assertFalse(plan["live_authorized"])
         self.assertEqual(plan["private_result_sha256"], (
             "bd03bd9944c55c142b1fc00773f1253f79dd4442213c3ab2b31c098b94313286"
         ))

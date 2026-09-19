@@ -1,17 +1,18 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_private_host_environment_failure_zero_provider_calls
+proof_boundary: t030_private_v2_completed_frozen_acceptance_not_passed
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: d_probability_sum_repair_confirmation_v2_ready
+current_gate: question_rubric_alignment_read_only_audit
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
 candidate_identity:
   repair_parent_commit: 3d4a979eae1db6a3d682caec1249c5e67d7bfbe4
   validation_commit: 3fad08c698f2c8f4c6d47fad8dec0b63f9c0cc1d
-  final_recovery_successor: direct_child_with_subject_fix_jev_prepare_zero_call_recovery
+  recovery_commit: afaf40ec8b444e5f7ce3a71b29eb2c0d863c69fc
+  final_seal_successor: direct_child_with_subject_chore_jev_seal_private_v2_result
   final_sha_record: parent_handoff_and_git_history
-exact_blocker: bounded_v2_controller_run_not_executed
+exact_blocker: read_only_question_rubric_alignment_audit_pending
 next_milestone: T030
 provider:
   name: typesafe_jev
@@ -19,8 +20,8 @@ provider:
   public_source_only: true
   maximum_cost_usd: 1.00
   authorized_call_total: 6
-  completed_call_total: 5
-  planned_d01_call_total: 1
+  completed_call_total: 6
+  planned_d01_call_total: 0
   request_bytes_per_call_max: 131072
   price_as_of: 2026-09-19
   price_usd_per_million_input_tokens: 0.042
@@ -32,10 +33,11 @@ provider:
   cost_telemetry: unavailable
   actual_usage_boundary: ignored_local_only
   public_results_boundary: separate_provider_permission_required
-  calls_made: 5
+  calls_made: 6
   non_provider_attempt_total: 1
-  last_private_result_sha256: 44fc6a9b6f3cade340906195b60105d187be1185975406bd9f12e330d46f10d2
-  last_failure_class: host_environment_pre_provider
+  last_private_result_sha256: b40d84af3b05d43adcb7bf70130762e8e644f87a1c401cb1bc0b633bbbd11a37
+  last_private_result_seal_sha256: 313038939aab0fe2882335d97520a48892e8cbcff166fbcebf3ec47656ad63c8
+  last_failure_class: frozen_acceptance_not_passed
 tasks:
   T010: complete
   T020: complete

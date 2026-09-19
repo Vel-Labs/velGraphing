@@ -188,43 +188,36 @@ consistency, candidate membership, required IDs, source revalidation, and
 fallback behavior remain strict. This policy does not claim that TypeSafe has
 a two-decimal response contract.
 
-The smallest private successor is prepared but not executed. It revalidates
-and replays the exact private observation with SHA-256
-`33bd29d232f461583292ab14a640c2417a7eb55aa254ad43c3571883e2702a76`,
-makes one new bounded integration call with zero retries, and runs one fresh
-answer lane and one fresh grader lane. The ignored run root is
-`$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v2`.
+The bounded private v2 integration completed. Its result SHA-256 is
+`b40d84af3b05d43adcb7bf70130762e8e644f87a1c401cb1bc0b633bbbd11a37`.
+The frozen acceptance did not pass. Detailed arm behavior, provider metrics,
+selected evidence, and grading details remain only in ignored local artifacts.
+This receipt does not reinterpret the frozen grade or establish TTC.
 
-With `CHECKOUT` set to this checkout, `PYTHON` set to the trusted project
-interpreter, and `LANES_ROOT` set to the retained public corpus lanes, the
-controller command is:
+The existing v2 files are sealed by source-free inventory
+`result-seal.json`. Its SHA-256 is
+`313038939aab0fe2882335d97520a48892e8cbcff166fbcebf3ec47656ad63c8`.
+The seal binds 11 pre-existing files by relative path, size, and SHA-256. It
+does not modify the completed result. Structural validation confirmed canonical
+JSON, exact schema and result identity, sorted unique paths, regular non-symlink
+files, exact sizes, and every file hash.
 
-```text
-PYTHONDONTWRITEBYTECODE=1 "$PYTHON" scripts/benchmarks/time_to_correct_dependency_v4.py confirm-d --candidates "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-thealgorithms-dependency-behavior-canary-79adf45.json" --questions "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/thealgorithms-dependency-behavior-canary-questions.json" --manifests-root "$CHECKOUT/benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests" --lanes-root "$LANES_ROOT" --preview "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-dependency-behavior-jev-preview-51e2dc7.json" --run-root "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v2" --answer-argv-json "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v2/answer-argv.json" --grader-argv-json "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v2/grader-argv.json" --replay-observations-root "$CHECKOUT/.velgraphing-local/retrievel-d01-confirmation-v1" --output "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v2/result.json"
-```
-
-The first private recovery root remains unchanged. Its host environment failed
-before the provider boundary and recorded zero attempted provider calls. It did
-not consume the planned allowance. The v2 answer and grader handoffs each wait
-`600` seconds. The controller allows `610` seconds for each handoff process and
-uses a `1240`-second serial trial deadline. This covers the `10`-second provider
-timeout plus both process limits and a `10`-second controller margin.
-
-The aggregate authorization is now six calls: five complete and one planned.
-The one-call incremental worst-case envelope is USD `0.005505024`. The
+The aggregate authorization is now six calls, all complete. No call is planned.
+The final incremental worst-case envelope was USD `0.005505024`. The
 aggregate worst-case envelope is USD `0.033030144`. The remaining allowance is
 USD `0.966969856`. These are authorization bounds, not observed cost. T030
-remains active.
+remains active pending a separate read-only question/rubric alignment audit.
 
 ### Exact Candidate Identity
 
 The numeric repair parent is commit
 `3d4a979eae1db6a3d682caec1249c5e67d7bfbe4`. The final validation candidate is
 commit `3fad08c698f2c8f4c6d47fad8dec0b63f9c0cc1d`. The final recovery candidate
-is its direct child with commit subject
-`fix(jev): prepare zero-call recovery`. The final child SHA is recorded in the
-Parent handoff and is independently recoverable from Git history. This exact
-chain avoids an impossible self-hash in this file.
+is commit `afaf40ec8b444e5f7ce3a71b29eb2c0d863c69fc`. The final seal candidate is
+its direct child with commit subject `chore(jev): seal private v2 result`. The
+final child SHA is recorded in the Parent handoff and is independently
+recoverable from Git history. This exact chain avoids an impossible self-hash
+in this file.
 
 ### Exact Validation Commands
 
@@ -257,13 +250,13 @@ not remove or modify the retained private artifacts.
   `b8a9d02d2b33f4d44565ac85a86b7f6fe30a460cad442cf2a3e93a110ca60d0e`.
 - Two projector runs produced the same package diff SHA-256
   `a239e98de166ee70c9368794c74b0eca963a17015717291833db3308ba2c93df`.
-- The offline D-01 preflight reproduced the frozen request, pool, and source
-  bindings. The private v2 successor preparation passed its hash, exact root,
-  D-only argv, lane, wait, and serial-deadline checks.
+- The private v2 seal and closed plan passed exact hash, inventory, structure,
+  and authorization checks.
 - `git diff --check` passed.
 - The full repository suite was not run. Caller discovery mapped the shared
   parser and its known consumers to the focused and consumer checks above.
-- No provider, credential, answer, grader, or model lane ran for this repair.
+- No network, provider, credential, answer, grader, or model lane ran while
+  sealing the completed artifact.
 
 ### Validator Repair Files
 
