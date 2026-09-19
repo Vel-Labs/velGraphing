@@ -17,14 +17,28 @@ import re
 import stat
 from typing import Any, Mapping, Sequence
 
+from packages.core.routing_v4 import SourceIdentityV4, SourceSnapshotV4
+
 VERSION = "velgraphing-retrieval-eval-v4"
 ROUTES = {"direct", "tag_index", "typed_graph", "typed_graph_no_edges",
           "typed_graph_no_expansion"}
 PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
 FIXTURE_STUDY = "unit-fixture"
 PRODUCTION_TASKS = {"C-01", "C-02", "S-01", "L-01", "M-01", "M-02"}
+PRODUCTION_QUESTION_REGISTRY_SHA256 = "61fe0831ab45e2ef9b6280ea6d4089f376f226d2c3d42e32d09ddd3f502be1c4"
+PRODUCTION_QUESTIONS = {
+    "C-01": ("cpython", "708324532043cbfaa0e09ed92b54616b99d60eb049ca8baac60202febbaa3499"),
+    "C-02": ("cpython", "dc768af5b2d44502cf55812264e9a503f9a499989e8553b7a031e11cfbe89273"),
+    "S-01": ("thealgorithms-python", "62cf41752a1ad335882aa8c9cf194e2bf2c4754a09a57973b5c1cb539c8620c9"),
+    "L-01": ("engineering-handbook", "d55f40ac1b3798a2e10651a4c8bb0c1354e33bba02ebd67f3e344367f86d6bc7"),
+    "M-01": ("openchain-reference-material", "95e96ddb909cd372c0edbaa774d55aa85edea303c0d9c0aa5b51f06b75a40577"),
+    "M-02": ("openchain-reference-material", "5142447b64f06e938216998638b638e60bd135f8a5efe6ed208d137617306572"),
+}
 CONTROL_KEYS = {"seed_record_ids", "seed_limit", "shortlist_byte_budget",
-                "derived_edge_count", "source_bound_expansion", "expand_one_hop"}
+                "derived_edge_count", "active_edge_count", "source_bound_expansion",
+                "expand_one_hop"}
+GATE_2_K = 12
+GATE_2_BYTE_BUDGET = 24_576
 FORBIDDEN_CANDIDATE_KEYS = {"oracle", "labels", "acceptable_spans", "critical_facts",
                             "graph_expected", "answer", "provider_response", "score"}
 MAX_INPUT_BYTES = 16 * 1024 * 1024
@@ -109,17 +123,25 @@ def positive_int(value: Any, *, zero: bool = False) -> int:
     return value
 
 
-def source_map(sources: Any) -> dict[str, tuple[str, int]]:
-    if type(sources) is not list:
+def source_map(sources: Any, snapshot_sha256: Any) -> dict[str, tuple[str, int]]:
+    if type(sources) is not list or not sources:
         raise EvaluationError("invalid_sources")
-    result = {}
+    identities = []
     for row in sources:
         exact_keys(row, {"path", "source_sha256", "byte_length"})
-        path = valid_path(row["path"])
-        if path in result:
-            raise EvaluationError("duplicate_source")
-        result[path] = (valid_sha(row["source_sha256"]), positive_int(row["byte_length"], zero=True))
-    return result
+        try:
+            identities.append(SourceIdentityV4(
+                row["path"], row["byte_length"], row["source_sha256"]
+            ))
+        except (TypeError, ValueError) as error:
+            raise EvaluationError("invalid_source_identity") from error
+    try:
+        snapshot = SourceSnapshotV4(tuple(identities))
+    except (TypeError, ValueError) as error:
+        raise EvaluationError("invalid_source_snapshot") from error
+    if snapshot.snapshot_sha256 != valid_sha(snapshot_sha256):
+        raise EvaluationError("source_snapshot_identity_mismatch")
+    return {item.path: (item.sha256, item.byte_length) for item in snapshot.sources}
 
 
 def validate_span(row: Mapping[str, Any], sources: Mapping[str, tuple[str, int]]) -> None:
@@ -146,18 +168,25 @@ def reject_oracle_fields(value: Any) -> None:
 
 def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
     reject_oracle_fields(value)
-    exact_keys(value, {"schema_version", "study_id", "selector_commit", "runs"})
+    exact_keys(value, {"schema_version", "study_id", "selector_commit",
+                       "question_registry_sha256", "runs"})
     if (value["schema_version"] != "velgraphing-ranked-candidates-v4"
             or value["study_id"] not in {FIXTURE_STUDY, PRODUCTION_STUDY}
             or type(value["selector_commit"]) is not str
             or not COMMIT.fullmatch(value["selector_commit"])
+            or type(value["question_registry_sha256"]) is not str
+            or not SHA.fullmatch(value["question_registry_sha256"])
             or type(value["runs"]) is not list or not value["runs"]):
         raise EvaluationError("invalid_candidate_artifact")
     keys = set()
     for run in value["runs"]:
-        exact_keys(run, {"task_id", "route", "source_snapshot_sha256", "sources",
-                         "candidates", "controls", "metrics"})
+        exact_keys(run, {"task_id", "corpus", "prompt_sha256", "route",
+                         "source_snapshot_sha256", "sources", "candidates",
+                         "controls", "metrics"})
         if (type(run["task_id"]) is not str or not run["task_id"]
+                or type(run["corpus"]) is not str or not run["corpus"]
+                or type(run["prompt_sha256"]) is not str
+                or not SHA.fullmatch(run["prompt_sha256"])
                 or type(run["route"]) is not str or run["route"] not in ROUTES
                 or type(run["candidates"]) is not list):
             raise EvaluationError("invalid_run")
@@ -165,8 +194,7 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
         if key in keys:
             raise EvaluationError("duplicate_run")
         keys.add(key)
-        valid_sha(run["source_snapshot_sha256"])
-        sources = source_map(run["sources"])
+        sources = source_map(run["sources"], run["source_snapshot_sha256"])
         exact_keys(run["controls"], CONTROL_KEYS)
         controls = run["controls"]
         if (type(controls["seed_record_ids"]) is not list
@@ -178,14 +206,18 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
         positive_int(controls["seed_limit"])
         positive_int(controls["shortlist_byte_budget"])
         positive_int(controls["derived_edge_count"], zero=True)
-        expected_flags = {
-            "direct": (False, False),
-            "tag_index": (False, False),
-            "typed_graph": (True, True),
-            "typed_graph_no_edges": (True, True),
-            "typed_graph_no_expansion": (True, False),
+        positive_int(controls["active_edge_count"], zero=True)
+        expected_controls = {
+            "direct": (0, False, False),
+            "tag_index": (0, False, False),
+            "typed_graph": (controls["derived_edge_count"], True, True),
+            "typed_graph_no_edges": (0, True, True),
+            "typed_graph_no_expansion": (controls["derived_edge_count"], True, False),
         }[run["route"]]
-        if (controls["source_bound_expansion"], controls["expand_one_hop"]) != expected_flags:
+        if (controls["active_edge_count"], controls["source_bound_expansion"],
+                controls["expand_one_hop"]) != expected_controls:
+            raise EvaluationError("route_control_mismatch")
+        if run["route"] in {"direct", "tag_index"} and controls["derived_edge_count"]:
             raise EvaluationError("route_control_mismatch")
         ids = set()
         for candidate in run["candidates"]:
@@ -210,8 +242,11 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
     for task_runs in by_task.values():
         first = task_runs[0]
         for run in task_runs[1:]:
+            if (run["corpus"] != first["corpus"]
+                    or run["prompt_sha256"] != first["prompt_sha256"]):
+                raise EvaluationError("paired_question_mismatch")
             if (run["source_snapshot_sha256"] != first["source_snapshot_sha256"]
-                    or source_map(run["sources"]) != source_map(first["sources"])):
+                    or run["sources"] != first["sources"]):
                 raise EvaluationError("paired_snapshot_mismatch")
             if (run["controls"]["seed_limit"] != first["controls"]["seed_limit"]
                     or run["controls"]["shortlist_byte_budget"]
@@ -229,7 +264,12 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
         expected = {(task, route) for task in PRODUCTION_TASKS for route in ROUTES}
         if keys != expected or len(value["runs"]) != 30:
             raise EvaluationError("production_run_matrix_mismatch")
+        if value["question_registry_sha256"] != PRODUCTION_QUESTION_REGISTRY_SHA256:
+            raise EvaluationError("production_question_registry_mismatch")
         for run in value["runs"]:
+            if ((run["corpus"], run["prompt_sha256"])
+                    != PRODUCTION_QUESTIONS[run["task_id"]]):
+                raise EvaluationError("production_question_binding_mismatch")
             if (run["controls"]["seed_limit"] != 12
                     or run["controls"]["shortlist_byte_budget"] != 24_576):
                 raise EvaluationError("production_control_mismatch")
@@ -244,7 +284,7 @@ def validate_labels(value: dict[str, Any], candidates: Mapping[str, Any]) -> dic
     for run in candidates["runs"]:
         old = runs.setdefault(run["task_id"], run)
         if (old["source_snapshot_sha256"] != run["source_snapshot_sha256"]
-                or source_map(old["sources"]) != source_map(run["sources"])):
+                or old["sources"] != run["sources"]):
             raise EvaluationError("paired_snapshot_mismatch")
     if set(value["tasks"]) != set(runs):
         raise EvaluationError("label_task_mismatch")
@@ -264,7 +304,12 @@ def validate_labels(value: dict[str, Any], candidates: Mapping[str, Any]) -> dic
             ids.add(group["id"])
             for span in group["acceptable_spans"]:
                 exact_keys(span, {"path", "source_sha256", "byte_start", "byte_end"})
-                validate_span(span, source_map(runs[task]["sources"]))
+                validate_span(
+                    span,
+                    source_map(
+                        runs[task]["sources"], runs[task]["source_snapshot_sha256"]
+                    ),
+                )
     return value
 
 
@@ -336,6 +381,69 @@ def score_prefix(rows: Sequence[Mapping[str, Any]], groups: Sequence[Mapping[str
     }
 
 
+def gate_2_decision(results: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Apply the registered retrieval safety gate at K=12 and 24,576 bytes."""
+    decision_rows = {
+        (row["task_id"], row["route"]): row
+        for row in results
+        if row["k"] == GATE_2_K and row["byte_budget"] == GATE_2_BYTE_BUDGET
+    }
+    reasons: list[str] = []
+    edge_deltas = []
+    for task_id in sorted(PRODUCTION_TASKS):
+        rows = {
+            route: decision_rows.get((task_id, route))
+            for route in ("direct", "typed_graph", "typed_graph_no_edges")
+        }
+        if any(row is None for row in rows.values()):
+            reasons.append(f"missing_decision_row:{task_id}")
+            continue
+        direct = rows["direct"]
+        typed = rows["typed_graph"]
+        no_edges = rows["typed_graph_no_edges"]
+        assert direct is not None and typed is not None and no_edges is not None
+        recalls = {
+            route: row["critical_span_group_overlap_recall"]
+            for route, row in rows.items()
+        }
+        if any(value is None for value in recalls.values()):
+            reasons.append(f"unknown_critical_mapping:{task_id}")
+        elif typed["critical_span_group_overlap_recall"] < direct["critical_span_group_overlap_recall"]:
+            reasons.append(f"typed_below_direct:{task_id}")
+        critical_delta = (
+            None if recalls["typed_graph"] is None or recalls["typed_graph_no_edges"] is None
+            else recalls["typed_graph"] - recalls["typed_graph_no_edges"]
+        )
+        overlap_delta = (
+            typed["acceptable_span_group_overlap_recall"]
+            - no_edges["acceptable_span_group_overlap_recall"]
+        )
+        edge_deltas.append({
+            "task_id": task_id,
+            "critical_overlap_recall_delta": critical_delta,
+            "acceptable_overlap_recall_delta": overlap_delta,
+            "useful_edge_difference": (
+                (critical_delta is not None and critical_delta > 0) or overlap_delta > 0
+            ),
+        })
+    for (task_id, route), row in sorted(decision_rows.items()):
+        metrics = row["observed_route_metrics"]
+        for metric in ("source_failures", "authority_failures"):
+            if metrics[metric] != 0:
+                reasons.append(f"{metric}_not_zero:{task_id}:{route}")
+    passed = not reasons
+    return {
+        "schema_version": "velgraphing-gate-2-v1",
+        "decision_point": {"k": GATE_2_K, "byte_budget": GATE_2_BYTE_BUDGET},
+        "status": "pass" if passed else "reject",
+        "reasons": reasons,
+        "positive_graph_value": passed and any(
+            row["useful_edge_difference"] for row in edge_deltas
+        ),
+        "edge_enabled_vs_disabled": edge_deltas,
+    }
+
+
 def evaluate(candidate_raw: bytes, expected_sha256: str, label_raw: bytes,
              ks: Sequence[int], budgets: Sequence[int]) -> dict[str, Any]:
     if hashlib.sha256(candidate_raw).hexdigest() != valid_sha(expected_sha256):
@@ -356,13 +464,22 @@ def evaluate(candidate_raw: bytes, expected_sha256: str, label_raw: bytes,
                                 "byte_budget": budget, "missing_required_ids_in_diagnostic_prefix": missing_required,
                                 **score_prefix(selected, labels["tasks"][run["task_id"]]["groups"]),
                                 "observed_route_metrics": run["metrics"]})
+    gate_2 = (
+        gate_2_decision(results)
+        if candidates["study_id"] == PRODUCTION_STUDY
+        else {
+            "schema_version": "velgraphing-gate-2-v1",
+            "status": "not_applicable",
+            "reason": "production_study_required",
+        }
+    )
     return {"schema_version": VERSION, "candidate_artifact_sha256": expected_sha256,
             "labels_sha256": hashlib.sha256(label_raw).hexdigest(),
             "selector_commit": candidates["selector_commit"], "provider_calls": 0,
             "candidate_source_bytes_independently_revalidated": False,
             "oracle_isolation_proven_by_this_scorer": False,
             "interpretation": "post_hoc_path_and_range_diagnostics_not_semantic_support_or_product_acceptance",
-            "results": results}
+            "gate_2": gate_2, "results": results}
 
 
 def main() -> int:

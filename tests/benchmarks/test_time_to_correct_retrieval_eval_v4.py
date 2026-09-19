@@ -8,12 +8,13 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from packages.core.routing_v4 import SourceIdentityV4, SourceSnapshotV4
+
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("retrieval_eval_v4", ROOT / "scripts/benchmarks/time_to_correct_retrieval_eval_v4.py")
 mod = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(mod)
 SHA = "a" * 64
-SNAP = "b" * 64
 
 
 def encoded(value):
@@ -22,20 +23,26 @@ def encoded(value):
 
 def fixture():
     sources = [{"path": path, "source_sha256": SHA, "byte_length": 100} for path in ("a.md", "b.md")]
+    snapshot = SourceSnapshotV4(tuple(
+        SourceIdentityV4(row["path"], row["byte_length"], row["source_sha256"])
+        for row in sources
+    )).snapshot_sha256
     candidates = [{"id": "c0", "path": "a.md", "source_sha256": SHA, "byte_start": 0, "byte_end": 20, "required": False},
                   {"id": "c1", "path": "b.md", "source_sha256": SHA, "byte_start": 40, "byte_end": 60, "required": True}]
     controls = {"seed_record_ids": ["repo:a.md"], "seed_limit": 2,
                 "shortlist_byte_budget": 40, "derived_edge_count": 0,
+                "active_edge_count": 0,
                 "source_bound_expansion": False, "expand_one_hop": False}
     artifact = {"schema_version": "velgraphing-ranked-candidates-v4", "study_id": "unit-fixture",
-                "selector_commit": "1"*40,
-                "runs": [{"task_id": "fixture", "route": "direct", "source_snapshot_sha256": SNAP,
+                "selector_commit": "1"*40, "question_registry_sha256": "2"*64,
+                "runs": [{"task_id": "fixture", "corpus": "fixture-corpus",
+                          "prompt_sha256": "3"*64, "route": "direct", "source_snapshot_sha256": snapshot,
                           "sources": sources, "candidates": candidates,
                           "controls": controls,
                           "metrics": dict.fromkeys(("source_operations", "cold_ns", "warm_ns", "retrieval_ns",
                                                    "expansion_ns", "fallback_ns", "source_failures", "authority_failures"))}]}
     labels = {"schema_version": "velgraphing-span-labels-v4", "tasks": {"fixture": {
-        "source_snapshot_sha256": SNAP, "groups": [{"id": "support", "critical": True,
+        "source_snapshot_sha256": snapshot, "groups": [{"id": "support", "critical": True,
         "acceptable_spans": [{"path": "b.md", "source_sha256": SHA, "byte_start": 45, "byte_end": 55}]}]}}}
     return artifact, labels
 
@@ -127,15 +134,25 @@ class RetrievalEvaluationTests(unittest.TestCase):
             with self.subTest(route=route), self.assertRaises(mod.EvaluationError):
                 run(artifact, labels)
 
-    def test_pair_snapshot_mismatch_rejected(self):
+    def test_claimed_snapshot_identity_is_recomputed(self):
         artifact, labels = fixture()
-        new = copy.deepcopy(artifact["runs"][0]); new["route"] = "typed_graph"
-        new["controls"]["source_bound_expansion"] = True
-        new["controls"]["expand_one_hop"] = True
-        new["source_snapshot_sha256"] = "c"*64
-        artifact["runs"].append(new)
-        with self.assertRaisesRegex(mod.EvaluationError, "paired_snapshot_mismatch"):
+        artifact["runs"][0]["source_snapshot_sha256"] = "c"*64
+        with self.assertRaisesRegex(mod.EvaluationError, "source_snapshot_identity_mismatch"):
             run(artifact, labels)
+
+    def test_snapshot_sources_require_canonical_nonempty_unique_identities(self):
+        for mutate in (
+            lambda rows: rows.reverse(),
+            lambda rows: rows.append(copy.deepcopy(rows[0])),
+            lambda rows: rows.clear(),
+            lambda rows: rows[0].update(byte_length=-1),
+            lambda rows: rows[0].update(path="../escape.md"),
+            lambda rows: rows[0].update(source_sha256="invalid"),
+        ):
+            artifact, _ = fixture()
+            mutate(artifact["runs"][0]["sources"])
+            with self.subTest(mutate=mutate), self.assertRaises(mod.EvaluationError):
+                mod.validate_candidates(artifact)
 
     def test_redundancy_counts_union_not_number_of_files(self):
         artifact, labels = fixture()
@@ -178,14 +195,19 @@ class RetrievalEvaluationTests(unittest.TestCase):
             for route in mod.ROUTES:
                 row = copy.deepcopy(template)
                 row["task_id"] = task
+                row["corpus"], row["prompt_sha256"] = mod.PRODUCTION_QUESTIONS[task]
                 row["route"] = route
+                derived = 1 if route.startswith("typed") else 0
+                active = 0 if route in {"direct", "tag_index", "typed_graph_no_edges"} else derived
                 row["controls"].update(
                     seed_record_ids=["repo:a.md"], seed_limit=12,
-                    shortlist_byte_budget=24576, derived_edge_count=1 if route.startswith("typed") else 0,
+                    shortlist_byte_budget=24576, derived_edge_count=derived,
+                    active_edge_count=active,
                     source_bound_expansion=flags[route][0], expand_one_hop=flags[route][1],
                 )
                 runs.append(row)
         artifact["study_id"] = mod.PRODUCTION_STUDY
+        artifact["question_registry_sha256"] = mod.PRODUCTION_QUESTION_REGISTRY_SHA256
         artifact["runs"] = runs
         mod.validate_candidates(copy.deepcopy(artifact))
         changed = copy.deepcopy(artifact)
@@ -201,6 +223,59 @@ class RetrievalEvaluationTests(unittest.TestCase):
         typed["controls"]["seed_record_ids"] = ["repo:b.md"]
         with self.assertRaisesRegex(mod.EvaluationError, "typed_seed_mismatch"):
             mod.validate_candidates(changed)
+
+        changed = copy.deepcopy(artifact)
+        no_edges = next(run for run in changed["runs"] if run["route"] == "typed_graph_no_edges")
+        no_edges["controls"]["active_edge_count"] = 1
+        with self.assertRaisesRegex(mod.EvaluationError, "route_control_mismatch"):
+            mod.validate_candidates(changed)
+
+        changed = copy.deepcopy(artifact)
+        task_id = changed["runs"][0]["task_id"]
+        for run in changed["runs"]:
+            if run["task_id"] == task_id:
+                run["prompt_sha256"] = "0" * 64
+        with self.assertRaisesRegex(mod.EvaluationError, "production_question_binding_mismatch"):
+            mod.validate_candidates(changed)
+
+    def test_gate_2_rejects_unknown_regression_or_failures_and_requires_edge_gain(self):
+        def rows(direct=0.5, typed=0.5, no_edges=0.5, failures=0):
+            output = []
+            for task in mod.PRODUCTION_TASKS:
+                for route, recall in (
+                    ("direct", direct), ("typed_graph", typed),
+                    ("typed_graph_no_edges", no_edges),
+                ):
+                    output.append({
+                        "task_id": task, "route": route, "k": 12,
+                        "byte_budget": 24_576,
+                        "critical_span_group_overlap_recall": recall,
+                        "acceptable_span_group_overlap_recall": recall,
+                        "observed_route_metrics": {
+                            "source_failures": failures,
+                            "authority_failures": 0,
+                        },
+                    })
+            return output
+
+        equal = mod.gate_2_decision(rows())
+        self.assertEqual(equal["status"], "pass")
+        self.assertFalse(equal["positive_graph_value"])
+        improved = mod.gate_2_decision(rows(typed=0.75))
+        self.assertEqual(improved["status"], "pass")
+        self.assertTrue(improved["positive_graph_value"])
+        unknown = rows()
+        for row in unknown:
+            if row["route"] == "typed_graph":
+                row["critical_span_group_overlap_recall"] = None
+        for rejected in (
+            mod.gate_2_decision(rows(direct=0.75, typed=0.5)),
+            mod.gate_2_decision(unknown),
+            mod.gate_2_decision(rows(failures=1)),
+            mod.gate_2_decision(rows()[:-1]),
+        ):
+            self.assertEqual(rejected["status"], "reject")
+            self.assertFalse(rejected["positive_graph_value"])
 
     def test_nested_oracle_shaped_field_is_rejected(self):
         artifact, _ = fixture()

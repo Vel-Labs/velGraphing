@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -111,6 +112,15 @@ class RankedCandidateTests(unittest.TestCase):
         self.assertEqual(
             typed["controls"]["seed_record_ids"], no_expansion["controls"]["seed_record_ids"]
         )
+        self.assertEqual(
+            typed["controls"]["active_edge_count"],
+            typed["controls"]["derived_edge_count"],
+        )
+        self.assertEqual(no_edges["controls"]["active_edge_count"], 0)
+        self.assertEqual(
+            no_expansion["controls"]["active_edge_count"],
+            no_expansion["controls"]["derived_edge_count"],
+        )
         self.assertEqual(no_edges["candidates"], no_expansion["candidates"])
         primary_ids = {item["id"] for item in no_expansion["candidates"]}
         typed_primary = [item for item in typed["candidates"] if item["id"] in primary_ids]
@@ -140,6 +150,28 @@ class RankedCandidateTests(unittest.TestCase):
         self.assertEqual(candidates[0], candidates[1])
         self.assertEqual(candidates[0], candidates[2])
         self.assertEqual(runs["typed_graph"]["controls"]["derived_edge_count"], 0)
+        self.assertEqual(runs["typed_graph"]["controls"]["active_edge_count"], 0)
+
+    def test_question_registry_and_run_bindings_are_frozen_without_prompt_text(self) -> None:
+        fixture = Fixture({"source.py": b"alpha evidence\n"}, "find alpha")
+        try:
+            artifact, _ = mod.generate(
+                fixture.questions, fixture.manifests, fixture.lanes, "1" * 40,
+                study_id="unit-fixture",
+            )
+            questions = json.loads(fixture.questions.read_text(encoding="utf-8"))
+        finally:
+            fixture.close()
+        self.assertEqual(
+            artifact["question_registry_sha256"],
+            hashlib.sha256(mod._canonical(questions)).hexdigest(),
+        )
+        for run in artifact["runs"]:
+            self.assertEqual(run["corpus"], "cpython")
+            self.assertEqual(
+                run["prompt_sha256"], hashlib.sha256(b"find alpha").hexdigest()
+            )
+        self.assertNotIn("find alpha", json.dumps(artifact))
 
     def test_optional_overflow_is_skipped_and_seeded_support_precedes_later_primary(self) -> None:
         def row(identity: str, start: int, end: int) -> dict[str, object]:
@@ -202,7 +234,7 @@ class RankedCandidateTests(unittest.TestCase):
         finally:
             fixture.close()
 
-    def test_output_is_canonical_and_refuses_overwrite(self) -> None:
+    def test_output_is_canonical_regular_and_confined(self) -> None:
         artifact = {
             "schema_version": mod.SCHEMA_VERSION,
             "study_id": "unit-fixture",
@@ -210,13 +242,28 @@ class RankedCandidateTests(unittest.TestCase):
             "runs": [],
         }
         with tempfile.TemporaryDirectory(dir=ROOT) as raw:
-            output = Path(raw) / "candidates.json"
-            digest, size = mod.write_artifact(output, artifact)
-            self.assertEqual(digest, hashlib.sha256(output.read_bytes()).hexdigest())
-            self.assertEqual(size, len(output.read_bytes()))
-            self.assertEqual(output.read_bytes(), mod._canonical(artifact))
-            with self.assertRaises(FileExistsError):
-                mod.write_artifact(output, artifact)
+            output_root = Path(raw).resolve()
+            output = output_root / "candidates.json"
+            with mock.patch.object(mod, "OUTPUT_ROOT", output_root), mock.patch.object(
+                mod.subprocess, "run", return_value=mock.Mock(returncode=0)
+            ):
+                self.assertEqual(mod._output_path(output), output)
+                for invalid in (
+                    output_root / ".." / "escape.json",
+                    output_root / "nested" / "candidate.json",
+                    ROOT / "outside.json",
+                ):
+                    with self.assertRaisesRegex(mod.GenerationError, "invalid_output_path"):
+                        mod._output_path(invalid)
+                digest, size = mod.write_artifact(output, artifact)
+                self.assertEqual(digest, hashlib.sha256(output.read_bytes()).hexdigest())
+                self.assertEqual(size, len(output.read_bytes()))
+                self.assertEqual(output.read_bytes(), mod._canonical(artifact))
+                self.assertTrue(output.is_file())
+                with self.assertRaises(FileExistsError):
+                    mod.write_artifact(output, artifact)
+                with self.assertRaisesRegex(mod.GenerationError, "output_exists"):
+                    mod._output_path(output)
 
 
 if __name__ == "__main__":

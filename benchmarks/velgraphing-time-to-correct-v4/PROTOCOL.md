@@ -52,6 +52,23 @@ whole source-bound relationship target after its parent seed has retained
 primary evidence. The generator emits no source bodies and makes no provider,
 answer-model, grader, or scoring call. Its output belongs under an ignored
 `.inputs` path and binds the clean selector commit.
+The artifact also binds the canonical committed question-registry digest. Each
+run records its corpus and prompt digest, but never the prompt text. The
+evaluator requires the exact registered six-task mapping. It reconstructs each
+`SourceSnapshotV4` from the canonical, non-empty source rows and rejects a
+claimed snapshot digest that does not match those rows.
+
+`derived_edge_count` records the edges extracted from the source snapshot.
+`active_edge_count` records the edges passed to retrieval. The edge-enabled and
+expansion-disabled typed arms require both counts to match. The edge-disabled
+arm requires `active_edge_count: 0`. Direct and tag-index runs require both
+counts to be zero.
+
+The generator accepts one new regular-file output directly under the benchmark
+`.inputs` directory. It rejects path traversal, symlinks, other destinations,
+non-ignored destinations, and overwrite. It requires a clean selector checkout
+before generation and verifies the tracked and untracked status after writing
+the ignored artifact.
 
 Candidate budgets: K in 4, 6 and 12. Evidence budgets: 8,192, 16,384 and 24,576
 bytes. Report exact serialized model-visible bytes separately from excerpt bytes.
@@ -99,6 +116,10 @@ qualified Direct baseline or with a new source/authority failure. Unknown critic
 labels do not pass this gate. A positive graph claim additionally requires a
 useful difference from edge removal on predeclared relationship fixtures and
 held-out tasks. Equal edge-enabled/disabled output is not proof of graph value.
+The evaluator emits the explicit `velgraphing-gate-2-v1` decision at the
+registered point K=12 and 24,576 bytes. It reports per-task edge-enabled versus
+edge-disabled recall deltas. A safety pass can still report
+`positive_graph_value: false` when no useful edge difference exists.
 
 ## Candidate labels and replay
 

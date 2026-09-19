@@ -57,6 +57,9 @@ SEED_LIMIT = 12
 SHORTLIST_BYTE_BUDGET = 24_576
 DIRECT_WINDOW_BYTES = 800
 DIRECT_STOPWORDS = _STOPWORDS | _GENERIC
+OUTPUT_ROOT = ROOT / "benchmarks/velgraphing-time-to-correct-v4/.inputs"
+
+
 class GenerationError(ValueError):
     pass
 
@@ -342,6 +345,7 @@ def _metrics(source_operations: int, retrieval_ns: int) -> dict[str, int | None]
 def _controls(
     seed_record_ids: Sequence[str],
     derived_edge_count: int,
+    active_edge_count: int,
     source_bound_expansion: bool,
     expand_one_hop: bool,
 ) -> dict[str, object]:
@@ -350,6 +354,7 @@ def _controls(
         "seed_limit": SEED_LIMIT,
         "shortlist_byte_budget": SHORTLIST_BYTE_BUDGET,
         "derived_edge_count": derived_edge_count,
+        "active_edge_count": active_edge_count,
         "source_bound_expansion": source_bound_expansion,
         "expand_one_hop": expand_one_hop,
     }
@@ -436,7 +441,7 @@ def _direct_run(
             "source_snapshot_sha256": snapshot.snapshot_sha256,
             "sources": _source_rows(snapshot),
             "candidates": candidates,
-            "controls": _controls(seed_ids, 0, False, False),
+            "controls": _controls(seed_ids, 0, 0, False, False),
             "metrics": _metrics(counting.operations, elapsed),
         },
         0,
@@ -452,6 +457,7 @@ def _graph_run(
     reader: Any,
     *,
     derived_edge_count: int,
+    active_edge_count: int,
     source_bound_expansion: bool,
     expand_one_hop: bool,
 ) -> tuple[dict[str, object], int]:
@@ -520,6 +526,7 @@ def _graph_run(
             "controls": _controls(
                 [hit.record_id for hit in result.hits],
                 derived_edge_count,
+                active_edge_count,
                 source_bound_expansion,
                 expand_one_hop,
             ),
@@ -529,20 +536,24 @@ def _graph_run(
     )
 
 
-def _questions(path: Path) -> list[dict[str, str]]:
+def _questions(path: Path) -> tuple[list[dict[str, str]], str]:
     value = _load_json(path)
     _exact_keys(value, {"schema_version", "questions"}, "questions")
     if value["schema_version"] != "velgraphing-corpus-pilot-questions-v1":
         raise GenerationError("invalid_questions")
     rows: list[dict[str, str]] = []
+    seen: set[str] = set()
     for row in value["questions"]:
         _exact_keys(row, {"id", "corpus", "prompt"}, "question")
         if any(type(row[key]) is not str or not row[key] for key in row):
             raise GenerationError("invalid_question")
         if row["corpus"] not in CORPUS_MANIFESTS:
             raise GenerationError("unknown_question_corpus")
+        if row["id"] in seen:
+            raise GenerationError("duplicate_question")
+        seen.add(row["id"])
         rows.append(dict(row))
-    return rows
+    return rows, _digest(_canonical(value))
 
 
 def generate(
@@ -553,7 +564,7 @@ def generate(
     *,
     study_id: str = PRODUCTION_STUDY,
 ) -> tuple[dict[str, object], dict[str, dict[str, int]]]:
-    questions = _questions(questions_path)
+    questions, question_registry_sha256 = _questions(questions_path)
     prepared: dict[str, tuple[Any, Any, Any, Any, int]] = {}
     for corpus in dict.fromkeys(row["corpus"] for row in questions):
         manifest = _manifest(manifests_root / CORPUS_MANIFESTS[corpus])
@@ -576,7 +587,8 @@ def generate(
 
     runs: list[dict[str, object]] = []
     summary = {
-        route: {"candidates": 0, "supports": 0, "derived_edges": 0, "retrieval_ns": 0}
+        route: {"candidates": 0, "supports": 0, "derived_edges": 0,
+                "active_edges": 0, "retrieval_ns": 0}
         for route in ROUTES
     }
     for question in questions:
@@ -587,35 +599,43 @@ def generate(
             _graph_run(
                 question["id"], question["prompt"], "tag_index", plain_graph,
                 snapshot, reader, derived_edge_count=0,
+                active_edge_count=0,
                 source_bound_expansion=False, expand_one_hop=False,
             ),
             _graph_run(
                 question["id"], question["prompt"], "typed_graph", typed_graph,
                 snapshot, reader, derived_edge_count=edge_count,
+                active_edge_count=edge_count,
                 source_bound_expansion=True, expand_one_hop=True,
             ),
             _graph_run(
                 question["id"], question["prompt"], "typed_graph_no_edges", no_edges,
                 snapshot, reader, derived_edge_count=edge_count,
+                active_edge_count=0,
                 source_bound_expansion=True, expand_one_hop=True,
             ),
             _graph_run(
                 question["id"], question["prompt"], "typed_graph_no_expansion", typed_graph,
                 snapshot, reader, derived_edge_count=edge_count,
+                active_edge_count=edge_count,
                 source_bound_expansion=True, expand_one_hop=False,
             ),
         ]
         for run, support_count in route_rows:
+            run["corpus"] = question["corpus"]
+            run["prompt_sha256"] = _digest(question["prompt"].encode("utf-8"))
             runs.append(run)
             route_summary = summary[str(run["route"])]
             route_summary["candidates"] += len(run["candidates"])
             route_summary["supports"] += support_count
             route_summary["derived_edges"] += int(run["controls"]["derived_edge_count"])
+            route_summary["active_edges"] += int(run["controls"]["active_edge_count"])
             route_summary["retrieval_ns"] += int(run["metrics"]["retrieval_ns"])
     artifact = {
             "schema_version": SCHEMA_VERSION,
             "study_id": study_id,
             "selector_commit": selector_commit,
+            "question_registry_sha256": question_registry_sha256,
             "runs": runs,
         }
     candidate_evaluator.validate_candidates(artifact)
@@ -623,7 +643,7 @@ def generate(
 
 
 def _clean_commit() -> str:
-    if _git(ROOT, "status", "--porcelain=v1", "--untracked-files=no"):
+    if _git(ROOT, "status", "--porcelain=v1", "--untracked-files=all"):
         raise GenerationError("selector_checkout_not_clean")
     commit = _git(ROOT, "rev-parse", "HEAD").decode("ascii").strip()
     if len(commit) != 40:
@@ -631,10 +651,42 @@ def _clean_commit() -> str:
     return commit
 
 
+def _output_path(path: Path) -> Path:
+    if any(part in {".", ".."} for part in path.parts):
+        raise GenerationError("invalid_output_path")
+    root = OUTPUT_ROOT.resolve(strict=True)
+    if OUTPUT_ROOT.is_symlink() or not root.is_dir() or root != OUTPUT_ROOT:
+        raise GenerationError("invalid_output_root")
+    candidate = path if path.is_absolute() else Path.cwd() / path
+    if candidate.parent != root or candidate.name in {"", ".", ".."}:
+        raise GenerationError("invalid_output_path")
+    if candidate.exists() or candidate.is_symlink():
+        raise GenerationError("output_exists")
+    ignored = subprocess.run(
+        ["git", "-C", str(ROOT), "check-ignore", "--quiet", "--", str(candidate)],
+        check=False,
+    )
+    if ignored.returncode:
+        raise GenerationError("output_not_ignored")
+    return candidate
+
+
 def write_artifact(path: Path, artifact: Mapping[str, object]) -> tuple[str, int]:
     raw = _canonical(artifact)
-    with path.open("xb") as stream:
-        stream.write(raw)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        details = os.fstat(descriptor)
+        if not stat.S_ISREG(details.st_mode) or details.st_nlink != 1:
+            raise GenerationError("invalid_output_file")
+        with os.fdopen(descriptor, "wb", closefd=False) as stream:
+            stream.write(raw)
+            stream.flush()
+            os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
     return _digest(raw), len(raw)
 
 
@@ -646,6 +698,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args(argv)
     try:
+        output = _output_path(arguments.output)
         commit = _clean_commit()
         artifact, summary = generate(
             arguments.questions,
@@ -653,7 +706,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.lanes_root,
             commit,
         )
-        output_sha256, _ = write_artifact(arguments.output, artifact)
+        output_sha256, _ = write_artifact(output, artifact)
+        if _git(ROOT, "status", "--porcelain=v1", "--untracked-files=all"):
+            raise GenerationError("selector_checkout_changed")
         print(
             json.dumps(
                 {
