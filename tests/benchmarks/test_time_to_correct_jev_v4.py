@@ -353,7 +353,7 @@ class JevPreviewTests(unittest.TestCase):
         )
 
         self.assertTrue(baseline.jev_decision.jev_call_could_affect_selection)
-        self.assertEqual(baseline.projection.selected_candidate_ids, ("c0", "c3", "c1"))
+        self.assertEqual(baseline.projection.selected_candidate_ids, ("c0", "c3"))
         self.assertEqual(reranked.projection.selected_candidate_ids, ("c0", "c1", "c2"))
         self.assertEqual(reranked.projection.required_candidate_ids, ("c0",))
         self.assertTrue(reranked.jev_source_revalidated)

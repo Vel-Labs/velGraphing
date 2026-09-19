@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 from contextlib import nullcontext, redirect_stderr
 from dataclasses import replace
+import hashlib
 import importlib.util
 import io
 import json
@@ -14,9 +15,12 @@ import tempfile
 import unittest
 from unittest import mock
 
-from packages.core import Graph
+from packages.core import Graph, SourceIdentityV4, SourceSnapshotV4
 from packages.core import jev
+from scripts.benchmarks import time_to_correct_host as host
 from tests.core.test_ranked_context_selection import (
+    SourceReader,
+    candidate,
     fixture,
     graph_with_relationship_edge,
     source_record,
@@ -36,8 +40,9 @@ ANSWER_CODE = r'''
 import json, sys
 request = json.load(sys.stdin)
 if set(request) != {"schema_version", "question", "instructions", "evidence", "response_contract"}: raise SystemExit(7)
-if any(key in json.dumps(request) for key in ("arm", "route", "jev_status", "request_sha256", "score", "relationship_parent")): raise SystemExit(8)
-if request["instructions"] != ["Cite each supporting evidence ID exactly as shown, enclosed in brackets."]: raise SystemExit(9)
+if any(key in json.dumps(request) for key in ("arm", "route", "jev_status", "request_sha256", "score")): raise SystemExit(8)
+if request["instructions"] != ["Evidence list order is not source order. Determine source adjacency only from matching path values and byte_start and byte_end coordinates.", "Cite each supporting evidence ID exactly as shown, enclosed in brackets."]: raise SystemExit(9)
+if any(set(row) != {"id", "path", "source_sha256", "byte_start", "byte_end", "relationship_parent_candidate_id", "excerpt"} for row in request["evidence"]): raise SystemExit(10)
 candidate = request["evidence"][0]["id"]
 result = {"schema_version":"velgraphing-answer-output-v1","answer_text":f"fixture [{candidate}]","usage":None,"model_calls_complete":True,"context_deliveries_complete":True}
 sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":")))
@@ -179,7 +184,7 @@ class DependencyControllerTests(unittest.TestCase):
         ledger_root = self.root / f"ledger-{arm}"
         ledger_root.mkdir(mode=0o700)
         ledger = mod.LiveJevBudget(ledger_root, 2)
-        with mock.patch.object(mod, "FINAL_ANSWER_BYTES", 1250):
+        with mock.patch.object(mod, "FINAL_ANSWER_BYTES", 1400):
             return mod.run_arm(
                 arm,
                 "a" * 40,
@@ -216,6 +221,124 @@ class DependencyControllerTests(unittest.TestCase):
         self.assertEqual(d_observation["required_candidate_ids"], ["c0"])
         self.assertEqual(c["budget"]["max_repairs"], 0)
         self.assertEqual(d["budget"]["max_repairs"], 0)
+
+    def test_d01_context_preserves_frozen_import_order_and_relationship_child(self) -> None:
+        merge_import = b"from sorts.merge_sort import merge_sort"
+        quick_import = b"from sorts.quick_sort import quick_sort"
+        benchmark_raw = b"\n".join((merge_import, quick_import, b""))
+        quick_prefix = b"from random import randrange\n\n\n"
+        quick_implementation = (
+            b"def quick_sort(collection: list) -> list:\n"
+            b"    \"\"\"A pure Python implementation of quicksort algorithm.\n\n"
+            b"    :param collection: a mutable collection of comparable items\n"
+            b"    :return: the same collection ordered in ascending order\n\n"
+            b"    Examples:\n"
+            b"    >>> quick_sort([0, 5, 3, 2, 2])\n"
+            b"    [0, 2, 2, 3, 5]\n"
+            b"    >>> quick_sort([])\n"
+            b"    []\n"
+            b"    >>> quick_sort([-2, 5, 0, -45])\n"
+            b"    [-45, -2, 0, 5]\n"
+            b"    \"\"\"\n"
+            b"    # Base case: if the collection has 0 or 1 elements, it is already sorted\n"
+            b"    if len(collection) < 2:\n"
+            b"        return collection\n\n"
+            b"    # Randomly select a pivot index and remove the pivot element from the collection\n"
+            b"    pivot_index = randrange(len(collection))\n"
+            b"    pivot = collection.pop(pivot_index)\n\n"
+            b"    # Partition the remaining elements into two groups: lesser or equal, and greater\n"
+            b"    lesser = [item for item in collection if item <= pivot]\n"
+            b"    greater = [item for item in collection if item > pivot]\n\n"
+            b"    # Recursively sort the lesser and greater groups, and combine with the pivot\n"
+            b"    return [*quick_sort(lesser), pivot, *quick_sort(greater)]\n\n\n"
+        )
+        quick_raw = quick_prefix + quick_implementation
+        benchmark_path = "sorts/benchmark_sorts.py"
+        quick_path = "sorts/quick_sort.py"
+        benchmark_sha = hashlib.sha256(benchmark_raw).hexdigest()
+        quick_sha = hashlib.sha256(quick_raw).hexdigest()
+        merge = candidate(
+            "merge-import", benchmark_path, benchmark_sha, 0, len(merge_import),
+            required=True,
+        )
+        quick_parent = candidate(
+            "quick-import",
+            benchmark_path,
+            benchmark_sha,
+            len(merge_import) + 1,
+            len(merge_import) + 1 + len(quick_import),
+            required=False,
+        )
+        quick_child = candidate(
+            "quick-implementation",
+            quick_path,
+            quick_sha,
+            len(quick_prefix),
+            len(quick_raw),
+            required=False,
+            relationship_parent_candidate_id=quick_parent.candidate_id,
+        )
+        candidates = (merge, quick_parent, quick_child)
+        reader = SourceReader({benchmark_path: benchmark_raw, quick_path: quick_raw})
+        snapshot = SourceSnapshotV4((
+            SourceIdentityV4(benchmark_path, len(benchmark_raw), benchmark_sha),
+            SourceIdentityV4(quick_path, len(quick_raw), quick_sha),
+        ))
+        graph = graph_with_relationship_edge(
+            Graph(tuple(source_record(
+                item.record_id,
+                item.source_path,
+                item.source_sha256,
+                reader.sources[item.source_path][item.byte_start:item.byte_end].decode(),
+            ) for item in candidates)),
+            snapshot,
+            reader,
+            quick_parent,
+            quick_child,
+        )
+        run = {
+            "route": "typed_graph",
+            "candidates": [{
+                "id": item.candidate_id,
+                "path": item.source_path,
+                "source_sha256": item.source_sha256,
+                "byte_start": item.byte_start,
+                "byte_end": item.byte_end,
+                "required": item.required,
+                "record_id": item.record_id,
+                "relationship_parent_candidate_id": (
+                    item.relationship_parent_candidate_id
+                ),
+            } for item in candidates],
+        }
+        lane = {
+            "plain_graph": graph,
+            "typed_graph": graph,
+            "snapshot": snapshot,
+            "reader": reader,
+        }
+
+        selection = mod._selection(run, lane, self.question, "C", None)
+        model_input = host._answer_input(
+            mod._answer_evidence(self.question["prompt"], selection)
+        )
+        evidence = model_input["evidence"]
+
+        self.assertEqual(
+            [row["excerpt"] for row in evidence[:2]],
+            [merge_import.decode(), quick_import.decode()],
+        )
+        self.assertLess(evidence[0]["byte_start"], evidence[1]["byte_start"])
+        self.assertEqual(evidence[2]["excerpt"], quick_implementation.decode())
+        self.assertEqual(
+            evidence[2]["relationship_parent_candidate_id"],
+            quick_parent.candidate_id,
+        )
+        self.assertEqual(
+            model_input["instructions"][0],
+            "Evidence list order is not source order. Determine source adjacency "
+            "only from matching path values and byte_start and byte_end coordinates.",
+        )
 
     def test_provider_fallback_keeps_verified_baseline(self) -> None:
         result = self.run_arm("D", self.fallback)

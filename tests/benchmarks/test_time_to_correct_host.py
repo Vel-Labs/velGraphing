@@ -132,7 +132,7 @@ class HostBoundaryTests(unittest.TestCase):
             '''
 if payload["question"] != "Which implementation is imported immediately after merge_sort, and how does it choose and place its pivot?": raise SystemExit(7)
 if payload["instructions"] != ["Cite supporting evidence IDs as [cN]."]: raise SystemExit(7)
-if payload["evidence"] != [{"id":"d0","path":"sorts/quick_sort.py","excerpt":"pivot = collection.pop(randint(0, len(collection) - 1))"}]: raise SystemExit(7)
+if payload["evidence"] != [{"id":"d0","path":"sorts/quick_sort.py","excerpt":"pivot = collection.pop(randint(0, len(collection) - 1))","source_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","byte_start":253,"byte_end":1299,"relationship_parent_candidate_id":"parent"}]: raise SystemExit(7)
 if "response_contract" in payload:''').replace(
                 "observed subprocess answer", "observed subprocess answer [d0]")
         grader_code = GRADER_CODE.replace(
@@ -145,7 +145,7 @@ if "response_contract" in payload:''')
             "run_id": "run", "trial_id": "trial", "arm": "D", "route": "typed_graph",
             "jev_status": "reranked", "treatment": "on", "request_sha256": "a" * 64,
             "response_sha256": "b" * 64, "score": 0.9, "probability": 0.8,
-            "confidence": 0.7, "relationship_parent_candidate_id": "parent",
+            "confidence": 0.7,
             "call_ledger": {"calls": 1}, "provider": "typesafe",
             "controller_receipt": {"status": "kept outside"},
         }
@@ -157,6 +157,7 @@ if "response_contract" in payload:''')
                 "id": "d0", "path": "sorts/quick_sort.py",
                 "excerpt": "pivot = collection.pop(randint(0, len(collection) - 1))",
                 "source_sha256": "c" * 64, "byte_start": 253, "byte_end": 1299,
+                "relationship_parent_candidate_id": "parent",
                 **prohibited,
             }],
             **prohibited,

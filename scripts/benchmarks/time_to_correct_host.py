@@ -37,7 +37,7 @@ def _answer_input(prepared: Mapping[str, Any]) -> dict[str, Any]:
     if type(question) is not str or not question:
         raise MeasurementError("invalid_answer_question")
     raw_evidence = prepared.get("evidence")
-    evidence: list[dict[str, str]] = []
+    evidence: list[dict[str, Any]] = []
     if type(raw_evidence) is list:
         for index, row in enumerate(raw_evidence):
             if type(row) is not dict:
@@ -51,7 +51,37 @@ def _answer_input(prepared: Mapping[str, Any]) -> dict[str, Any]:
                 or type(excerpt) is not str
             ):
                 raise MeasurementError("invalid_answer_evidence")
-            evidence.append({"id": candidate_id, "path": path, "excerpt": excerpt})
+            selected: dict[str, Any] = {
+                "id": candidate_id,
+                "path": path,
+                "excerpt": excerpt,
+            }
+            coordinate_keys = {"source_sha256", "byte_start", "byte_end"}
+            if coordinate_keys.intersection(row):
+                source_sha256 = row.get("source_sha256")
+                byte_start = row.get("byte_start")
+                byte_end = row.get("byte_end")
+                if (
+                    type(source_sha256) is not str
+                    or len(source_sha256) != 64
+                    or any(character not in "0123456789abcdef" for character in source_sha256)
+                    or type(byte_start) is not int
+                    or type(byte_end) is not int
+                    or byte_start < 0
+                    or byte_end <= byte_start
+                ):
+                    raise MeasurementError("invalid_answer_evidence")
+                selected.update({
+                    "source_sha256": source_sha256,
+                    "byte_start": byte_start,
+                    "byte_end": byte_end,
+                })
+            if "relationship_parent_candidate_id" in row:
+                parent = row["relationship_parent_candidate_id"]
+                if parent is not None and (type(parent) is not str or not parent):
+                    raise MeasurementError("invalid_answer_evidence")
+                selected["relationship_parent_candidate_id"] = parent
+            evidence.append(selected)
     elif raw_evidence is not None:
         raise MeasurementError("invalid_answer_evidence")
     instructions = prepared.get("instructions", [])

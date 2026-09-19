@@ -477,6 +477,9 @@ def select_ranked_context(
             "byte_start": candidate.byte_start,
             "candidate_id": candidate.candidate_id,
             "content": content,
+            "relationship_parent_candidate_id": (
+                candidate.relationship_parent_candidate_id
+            ),
             "source_path": candidate.source_path,
             "source_sha256": candidate.source_sha256,
         }
@@ -680,8 +683,26 @@ def _ranked_projection_for_order(
     spans: dict[str, dict[str, object]],
 ) -> RankedContextProjection | None:
     required_set = set(required_ids)
+    children_by_parent: dict[str, tuple[str, ...]] = {
+        candidate_id: tuple(
+            child_id
+            for child_id in effective_order
+            if candidates[child_id].relationship_parent_candidate_id == candidate_id
+        )
+        for candidate_id in effective_order
+        if candidates[candidate_id].relationship_parent_candidate_id is None
+    }
+    selected = set(required_ids)
+    for candidate_id in effective_order:
+        if candidate_id in required_set and children_by_parent.get(candidate_id):
+            # ponytail: one direct child closes the bundle; widen only if callers
+            # require every sibling relationship to be selected atomically.
+            selected.add(children_by_parent[candidate_id][0])
     required_order = tuple(
-        candidate_id for candidate_id in effective_order if candidate_id in required_set
+        candidate_id for candidate_id in effective_order if candidate_id in selected
+    )
+    required_optional_order = tuple(
+        candidate_id for candidate_id in required_order if candidate_id not in required_set
     )
     payload = _ranked_payload(
         task,
@@ -692,20 +713,21 @@ def _ranked_projection_for_order(
         order_source,
         required_order,
         required_ids,
-        (),
+        required_optional_order,
         spans,
     )
     if _payload_byte_count(payload) > task.byte_budget:
         return None
-    accepted_optional: list[str] = []
-    selected = set(required_ids)
     for candidate_id in effective_order:
-        if candidate_id in required_set:
+        if candidate_id in selected:
             continue
         parent = candidates[candidate_id].relationship_parent_candidate_id
-        if parent is not None and parent not in selected:
-            continue
-        proposed = selected | {candidate_id}
+        bundle = {candidate_id}
+        if parent is not None:
+            bundle.add(parent)
+        elif children_by_parent.get(candidate_id):
+            bundle.add(children_by_parent[candidate_id][0])
+        proposed = selected | bundle
         selected_order = tuple(item for item in effective_order if item in proposed)
         optional_order = tuple(item for item in selected_order if item not in required_set)
         candidate_payload = _ranked_payload(
@@ -721,15 +743,15 @@ def _ranked_projection_for_order(
             spans,
         )
         if _payload_byte_count(candidate_payload) <= task.byte_budget:
-            accepted_optional.append(candidate_id)
-            selected.add(candidate_id)
+            selected = proposed
             payload = candidate_payload
     selected_order = tuple(item for item in effective_order if item in selected)
+    optional_order = tuple(item for item in selected_order if item not in required_set)
     return _ranked_projection(
         payload,
         selected_order,
         required_ids,
-        tuple(accepted_optional),
+        optional_order,
     )
 
 
@@ -852,6 +874,18 @@ def _ranked_payload(
     optional_ids: tuple[str, ...],
     spans: dict[str, dict[str, object]],
 ) -> dict[str, object]:
+    source_order: dict[object, int] = {}
+    for candidate_id in selected_ids:
+        source_order.setdefault(spans[candidate_id]["source_path"], len(source_order))
+    presentation_ids = sorted(
+        selected_ids,
+        key=lambda candidate_id: (
+            source_order[spans[candidate_id]["source_path"]],
+            spans[candidate_id]["byte_start"],
+            spans[candidate_id]["byte_end"],
+            candidate_id,
+        ),
+    )
     payload: dict[str, object] = {
         "candidate_set_sha256": candidate_set_sha256,
         "fail_closed": False,
@@ -863,7 +897,7 @@ def _ranked_payload(
         "schema_version": "graph-ranked-context-baseline-v1",
         "selected_candidate_ids": list(selected_ids),
         "source_snapshot_sha256": snapshot.snapshot_sha256,
-        "spans": [spans[candidate_id] for candidate_id in selected_ids],
+        "spans": [spans[candidate_id] for candidate_id in presentation_ids],
         "task_id": task.task_id,
     }
     if order_source == "reranked":

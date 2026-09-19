@@ -92,11 +92,54 @@ value, Jev value, token reduction, speed, promotion, or product acceptance.
 - The live authorization is closed. The next gate is retrieval and context
   redesign with offline proof before any broader live run.
 
+## Offline Source-Semantics Repair
+
+The bounded offline repair is complete. Ranked selection still records selected
+candidate IDs and Jev telemetry in effective rank order. Model-visible spans now
+keep the first-seen file-group order and exact byte order within each file.
+Each span includes source coordinates, source identity, and the existing direct
+relationship-parent marker.
+
+Relationship parents and direct children now enter or leave optional context as
+one bundle. A required parent adds one deterministic direct child. If that
+required bundle does not fit, selection uses the existing fail-closed path.
+Required IDs do not change. Invalid or stale Jev observations still use the
+verified baseline.
+
+The D-01 answer boundary now preserves the allowed source metadata. It tells the
+answer lane to infer source adjacency only from matching paths and byte
+coordinates. Arm, treatment, provider, score, and request fields remain outside
+the model-visible payload.
+
+Validation:
+
+- Focused core, answer-boundary, D-01, and Jev tests: 45 passed.
+- Known retrieval, graph-core, candidate-generator, and retrieval-evaluator
+  consumers: 165 passed.
+- The frozen D-01 preview passed legacy compatibility validation.
+- The portable projector was idempotent after the canonical projection.
+- Package parity passed for 87 files with candidate SHA-256
+  `48b65ed3ba9d83e63b724ce2afb395f2fbda156d29adb1b9a194bd9c6564d941`.
+  The parity check used a clean disposable copy because an ignored bytecode
+  cache in the worktree is outside the package contract.
+- No provider, model, network, credential, answer, or grader call ran.
+
+This is retrieval and context-composition proof only. It does not prove answer
+correctness, performance, provider value, promotion, or product acceptance.
+T030 remains active for Parent review. No live rerun or T040 work is authorized.
+
 ## Files Changed
 
-- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
-- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
-- `benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json`
+- `packages/core/selection.py`
+- `plugins/graph-engineering/runtime/core/selection.py`
+- `plugins/graph-engineering/runtime/.projection-state.json`
+- `plugins/graph-engineering/.codex-plugin/release-manifest.json`
+- `scripts/benchmarks/time_to_correct_host.py`
+- `scripts/benchmarks/time_to_correct_jev_v4.py`
 - `scripts/benchmarks/time_to_correct_dependency_v4.py`
+- `tests/core/test_ranked_context_selection.py`
+- `tests/benchmarks/test_time_to_correct_host.py`
 - `tests/benchmarks/test_time_to_correct_dependency_v4.py`
 - `tests/benchmarks/test_time_to_correct_jev_v4.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`

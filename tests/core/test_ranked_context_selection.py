@@ -151,12 +151,16 @@ def graph_with_relationship_edge(
     parent: RankedContextCandidate,
     relationship: RankedContextCandidate,
 ) -> Graph:
-    raw = reader.sources[parent.source_path]
     records = tuple(
-        replace(record, content=raw.decode("utf-8")) for record in graph.records
+        replace(
+            record,
+            content=reader.sources[record.provenance.path].decode("utf-8"),
+        )
+        for record in graph.records
     )
 
     def coordinate(candidate: RankedContextCandidate) -> SourceCoordinate:
+        raw = reader.sources[candidate.source_path]
         return SourceCoordinate(
             snapshot.snapshot_sha256,
             candidate.source_path,
@@ -304,15 +308,61 @@ class RankedContextSelectionTests(unittest.TestCase):
         )
         self.assertLessEqual(reranked.projection.serialized_byte_count, tight.byte_budget)
 
+    def test_rerank_keeps_rank_telemetry_but_presents_same_file_spans_in_source_order(self) -> None:
+        path = "src/ordered.py"
+        raw = b"0\n1\n2\n3\n"
+        digest = hashlib.sha256(raw).hexdigest()
+        snapshot = SourceSnapshotV4((SourceIdentityV4(path, len(raw), digest),))
+        candidates = tuple(
+            candidate(
+                f"c{index}", path, digest, index * 2, index * 2 + 1,
+                required=index == 0,
+            )
+            for index in range(4)
+        )
+        graph = Graph(tuple(
+            source_record(item.record_id, path, digest, str(index))
+            for index, item in enumerate(candidates)
+        ))
+        reader = SourceReader({path: raw})
+        three = select(graph, spec(), snapshot, reader, candidates[:3])
+        tight = replace(
+            spec(), byte_budget=three.projection.serialized_byte_count + 128
+        )
+
+        baseline = select(graph, tight, snapshot, reader, candidates, jev_enabled=True)
+        reranked = select(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            candidates,
+            observation(candidates, ("c0", "c3", "c2", "c1"), snapshot),
+            jev_enabled=True,
+            jev_observation_qualified=True,
+        )
+        payload = json.loads(reranked.projection.content)
+
+        self.assertEqual(baseline.projection.selected_candidate_ids, ("c0", "c1", "c2"))
+        self.assertEqual(reranked.projection.selected_candidate_ids, ("c0", "c3", "c2"))
+        self.assertEqual(reranked.projection.required_candidate_ids, ("c0",))
+        self.assertEqual(
+            [span["candidate_id"] for span in payload["spans"]],
+            ["c0", "c2", "c3"],
+        )
+        self.assertTrue(all(
+            "relationship_parent_candidate_id" in span for span in payload["spans"]
+        ))
+
     def test_provider_binding_overhead_never_counts_as_jev_selection_effect(self) -> None:
         graph, snapshot, reader, candidates = fixture()
         same = observation(candidates, ("c0", "c1", "c2"), snapshot)
         changed = observation(candidates, ("c0", "c2", "c1"), snapshot)
 
         for budget, expected in (
-            (922, ("c0",)),
-            (923, ("c0", "c1")),
-            (924, ("c0", "c1")),
+            (1002, ("c0",)),
+            (1003, ("c0", "c1")),
+            (1004, ("c0", "c1")),
         ):
             with self.subTest(budget=budget):
                 task = replace(spec(), byte_budget=budget)
@@ -428,9 +478,19 @@ class RankedContextSelectionTests(unittest.TestCase):
         verified_graph = graph_with_relationship_edge(
             graph, snapshot, reader, candidates[1], relationship
         )
+        graph_bundle = select(
+            verified_graph,
+            spec(),
+            snapshot,
+            reader,
+            (candidates[0], candidates[1], relationship),
+        )
+        graph_tight = replace(
+            spec(), byte_budget=graph_bundle.projection.serialized_byte_count + 128
+        )
         direct = plan_ranked_context(
             graph,
-            tight,
+            graph_tight,
             snapshot,
             reader,
             query=QUERY,
@@ -440,7 +500,7 @@ class RankedContextSelectionTests(unittest.TestCase):
         )
         fabricated = plan_ranked_context(
             graph,
-            tight,
+            graph_tight,
             snapshot,
             reader,
             query=QUERY,
@@ -450,7 +510,7 @@ class RankedContextSelectionTests(unittest.TestCase):
         )
         planned = plan_ranked_context(
             verified_graph,
-            tight,
+            graph_tight,
             snapshot,
             reader,
             query=QUERY,
@@ -460,7 +520,7 @@ class RankedContextSelectionTests(unittest.TestCase):
         )
         changed_required = plan_ranked_context(
             verified_graph,
-            tight,
+            graph_tight,
             snapshot,
             reader,
             query=QUERY,
@@ -486,7 +546,7 @@ class RankedContextSelectionTests(unittest.TestCase):
             byte_start=candidates[1].byte_start + 1,
         )
         parent_outside = plan_ranked_context(
-            verified_graph, tight, snapshot, reader, query=QUERY,
+            verified_graph, graph_tight, snapshot, reader, query=QUERY,
             direct_candidates=candidates,
             graph_candidates=(
                 candidates[0], partial_parent, candidates[2],
@@ -497,7 +557,7 @@ class RankedContextSelectionTests(unittest.TestCase):
             ),
         )
         target_outside = plan_ranked_context(
-            verified_graph, tight, snapshot, reader, query=QUERY,
+            verified_graph, graph_tight, snapshot, reader, query=QUERY,
             direct_candidates=candidates,
             graph_candidates=(
                 *candidates,
@@ -710,6 +770,18 @@ class RankedContextSelectionTests(unittest.TestCase):
         result = select(
             graph, spec(), snapshot, reader, (candidates[0], relationship)
         )
+        required_only = select(
+            graph, spec(), snapshot, reader, (candidates[0],)
+        )
+        fail_closed = select(
+            graph,
+            replace(
+                spec(), byte_budget=required_only.projection.serialized_byte_count
+            ),
+            snapshot,
+            reader,
+            (candidates[0], relationship),
+        )
 
         self.assertEqual(result.projection.required_candidate_ids, ("c0",))
         self.assertEqual(
@@ -717,6 +789,8 @@ class RankedContextSelectionTests(unittest.TestCase):
             ("relationship-target",),
         )
         self.assertNotIn("relationship-target", result.projection.required_candidate_ids)
+        self.assertEqual(fail_closed.route, "defer")
+        self.assertTrue(fail_closed.projection.fail_closed)
 
     def test_relationship_provenance_rejects_required_missing_or_later_parent(self) -> None:
         graph, snapshot, reader, candidates = fixture()
@@ -777,6 +851,46 @@ class RankedContextSelectionTests(unittest.TestCase):
         child = replace(candidates[2], relationship_parent_candidate_id="c1")
         with self.assertRaises(ValueError):
             select(graph, spec(), snapshot, reader, (candidates[0], chained, child))
+
+    def test_relationship_parent_and_first_direct_child_are_an_atomic_bundle(self) -> None:
+        graph, snapshot, reader, candidates = fixture()
+        first_child = replace(
+            candidates[2], relationship_parent_candidate_id="c1"
+        )
+        second_child = replace(
+            first_child, candidate_id="c3", record_id="record-c3"
+        )
+        graph = Graph((*graph.records, source_record(
+            second_child.record_id,
+            second_child.source_path,
+            second_child.source_sha256,
+            "optional-b",
+        )))
+        parent_only = select(graph, spec(), snapshot, reader, candidates[:2])
+        tight = replace(
+            spec(), byte_budget=parent_only.projection.serialized_byte_count
+        )
+
+        omitted = select(
+            graph, tight, snapshot, reader, (candidates[0], candidates[1], first_child)
+        )
+        first_bundle = select(
+            graph,
+            replace(spec(), byte_budget=select(
+                graph,
+                spec(),
+                snapshot,
+                reader,
+                (candidates[0], candidates[1], first_child),
+            ).projection.serialized_byte_count),
+            snapshot,
+            reader,
+            (candidates[0], candidates[1], first_child, second_child),
+        )
+
+        self.assertEqual(omitted.projection.selected_candidate_ids, ("c0",))
+        self.assertEqual(first_bundle.projection.selected_candidate_ids, ("c0", "c1", "c2"))
+        self.assertEqual(first_bundle.projection.required_candidate_ids, ("c0",))
 
     def test_graph_record_authorization_rejects_before_source_read(self) -> None:
         graph, snapshot, _, candidates = fixture()

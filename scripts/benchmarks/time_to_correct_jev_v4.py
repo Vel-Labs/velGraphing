@@ -714,19 +714,69 @@ def validate_preview(
             "reason", "required_candidate_ids", "schema_version",
             "selected_candidate_ids", "source_snapshot_sha256", "spans", "task_id",
         }, "invalid_baseline_projection_content")
+        if type(payload["spans"]) is not list:
+            raise PreviewError("invalid_baseline_projection_content")
+        legacy_span_keys = {
+            "byte_end", "byte_start", "candidate_id", "content",
+            "source_path", "source_sha256",
+        }
+        current_span_keys = legacy_span_keys | {
+            "relationship_parent_candidate_id"
+        }
+        span_key_sets = {
+            frozenset(span) for span in payload["spans"] if type(span) is dict
+        }
+        if len(span_key_sets) != 1 or span_key_sets.pop() not in {
+            frozenset(legacy_span_keys), frozenset(current_span_keys)
+        }:
+            raise PreviewError("invalid_baseline_projection_content")
+        current_spans = all(
+            "relationship_parent_candidate_id" in span for span in payload["spans"]
+        )
+        if current_spans:
+            children_by_parent = {
+                candidate_id: {
+                    child_id for child_id, child in by_id.items()
+                    if child["relationship_parent_candidate_id"] == candidate_id
+                }
+                for candidate_id in selected_ids
+            }
+            if any(
+                children
+                and candidate_id in selected_ids
+                and not children.intersection(selected_ids)
+                for candidate_id, children in children_by_parent.items()
+            ):
+                raise PreviewError("selected_relationship_child_missing")
         expected_spans = []
         packet_by_id = {candidate["id"]: candidate for candidate in packet["candidates"]}
         state_by_id = {candidate["id"]: candidate for candidate in state["candidates"]}
-        for candidate_id in selected_ids:
+        presentation_ids = list(selected_ids)
+        if current_spans:
+            source_order: dict[str, int] = {}
+            for candidate_id in selected_ids:
+                source_order.setdefault(by_id[candidate_id]["path"], len(source_order))
+            presentation_ids.sort(key=lambda candidate_id: (
+                source_order[by_id[candidate_id]["path"]],
+                by_id[candidate_id]["byte_start"],
+                by_id[candidate_id]["byte_end"],
+                candidate_id,
+            ))
+        for candidate_id in presentation_ids:
             candidate = packet_by_id[candidate_id]
-            expected_spans.append({
+            expected_span = {
                 "byte_end": candidate["byte_end"],
                 "byte_start": candidate["byte_start"],
                 "candidate_id": candidate_id,
                 "content": state_by_id[candidate_id]["excerpt"],
                 "source_path": candidate["path"],
                 "source_sha256": candidate["source_sha256"],
-            })
+            }
+            if current_spans:
+                expected_span["relationship_parent_candidate_id"] = by_id[
+                    candidate_id
+                ]["relationship_parent_candidate_id"]
+            expected_spans.append(expected_span)
         if (
             projection["content"]
             != json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))

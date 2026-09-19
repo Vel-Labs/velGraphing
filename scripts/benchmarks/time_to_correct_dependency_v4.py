@@ -385,6 +385,10 @@ def _answer_evidence(question: str, selection: Any) -> dict[str, Any]:
     return {
         "schema_version": "velgraphing-answer-evidence-v3",
         "question": question,
+        "instructions": [
+            "Evidence list order is not source order. Determine source adjacency "
+            "only from matching path values and byte_start and byte_end coordinates."
+        ],
         "citation_instruction": (
             "Cite each supporting evidence ID exactly as shown, enclosed in brackets."
         ),
@@ -392,6 +396,12 @@ def _answer_evidence(question: str, selection: Any) -> dict[str, Any]:
             {
                 "id": span["candidate_id"],
                 "path": span["source_path"],
+                "source_sha256": span["source_sha256"],
+                "byte_start": span["byte_start"],
+                "byte_end": span["byte_end"],
+                "relationship_parent_candidate_id": span[
+                    "relationship_parent_candidate_id"
+                ],
                 "excerpt": span["content"],
             }
             for span in payload["spans"]
