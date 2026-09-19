@@ -143,6 +143,26 @@ and provider details remain in the ignored artifact. The tracked plan contains
 only hashes, limits, and authority boundaries. The preview does not qualify Jev
 model usefulness and is not authority for a live call.
 
+## Model-Payload Allowlist Repair
+
+The answer and independent-grader subprocess inputs now use exact semantic
+allowlists. Answer input contains only the question, instructions, and normalized
+`id`, `path`, and `excerpt` evidence. Grader input contains only the answer and
+the required-fact, critical-fact, and acceptable-span rubric lists. The grader
+does not receive the frozen rubric hash. The controller attaches that identity
+to the returned grade before validation.
+
+The D-01 host test injected run, trial, arm, route, Jev treatment/status,
+request and response hashes, source hashes, scores, probability, confidence,
+relationship, call-ledger, provider, and controller-receipt data. Exact
+subprocess standard-input assertions proved that none reached either model. The
+same assertions proved that the D-01 question, citation instruction, normalized
+source evidence, answer, and rubric facts remained.
+
+Focused host and Jev preview tests passed `16/16`. The calibration consumer
+tests passed `23/23`. The three changed Python modules passed `py_compile`, and
+`git diff --check` passed. No provider, answer-model, or grader-model call ran.
+
 ## Validation
 
 - Focused generator and evaluator tests: 35 passed.
@@ -216,6 +236,7 @@ Offline dependency preview implementation:
 The dependency-behavior result proves positive isolated edge retrieval for this
 registered question. It does not prove semantic answer correctness, time, token,
 Jev usefulness, promotion, release readiness, or product acceptance. T030
-remains active. The exact next gate is Parent review of the offline dependency
-preview. No historical PR9 candidate, request hash, four-call plan, current
-two-call plan, or approval-readiness record grants authority for a live call.
+remains active. The exact next gate is the D-01 four-arm controller candidate
+after the host allowlist repair. No historical PR9 candidate, request hash,
+four-call plan, current two-call plan, or approval-readiness record grants
+authority for a live call.

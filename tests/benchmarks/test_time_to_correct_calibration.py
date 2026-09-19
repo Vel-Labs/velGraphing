@@ -161,7 +161,7 @@ class CalibrationTests(unittest.TestCase):
                 request_candidates(current, ROOT, root,
                                    {"fixture_candidate_packet": packet}, 1,
                                    PREPARATION_RESPONSE_CONTRACT)
-                return {"fixture_answer": "contract answer"}
+                return {"question": "contract fixture question", "evidence": []}
 
             with patch("time_to_correct_calibration.load_jev", return_value=SimpleNamespace(
                     validate_packet=lambda value: value)):

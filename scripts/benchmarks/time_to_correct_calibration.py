@@ -1193,7 +1193,10 @@ def qualify(repo: Path = REPO_ROOT,
                     [row["id"] for row in candidate["candidates"]])
                 trial.coverage(source_operations=True)
                 return payload
-            return {"fixture_answer": "distinct direct fixture answer", "source_scope": ["README.md", "cancel.py"]}
+            return {
+                "question": "Find cancel_task cancellation implementation and documentation",
+                "evidence": [],
+            }
         direct = run_process_trial(
             direct_trial, direct_prepare,
             answer_argv=handoff_argv(handoff_root, "direct-off", "answer", 1),
@@ -1249,8 +1252,12 @@ def qualify(repo: Path = REPO_ROOT,
             envelope = replay_envelope(repo, captured, source)
             result = evaluate_offline(trial, repo, captured, source, envelope=envelope)
             trial.not_applicable("operator_approval")
-            return {"fixture_answer": "distinct graph replay fixture answer",
-                    "graph_navigation": navigation, "jev": jev_answer_payload(captured, result)}
+            return {
+                "question": "Find cancel_task cancellation implementation and documentation",
+                "evidence": [],
+                "graph_navigation": navigation,
+                "jev": jev_answer_payload(captured, result),
+            }
         graph = run_process_trial(
             graph_trial, graph_prepare,
             answer_argv=handoff_argv(handoff_root, "graph-on", "answer", 1),
@@ -1324,7 +1331,7 @@ def qualify(repo: Path = REPO_ROOT,
         def missing_prepare(trial: Trial, _: int) -> dict[str, Any]:
             trial.not_applicable("cold_graph_build", "warm_graph_load", "jev_preparation", "provider",
                                  "source_revalidation", "response_validation", "operator_approval")
-            return {}
+            return {"question": "missing response fixture", "evidence": []}
         missing = run_process_trial(
             missing_trial, missing_prepare,
             answer_argv=handoff_argv(handoff_root, "missing-response", "answer", 0.05),

@@ -23,14 +23,9 @@ def identity():
 ANSWER_CODE = r'''
 import json, sys
 payload = json.load(sys.stdin)
-forbidden = {"arm", "graph_navigation", "route", "run_id", "trial_id", "treatment", "treatment_status", "jev", "jev_status", "jev_treatment"}
-def leaks(value):
-    if isinstance(value, dict):
-        return any(key in forbidden or key.startswith("jev_") or leaks(item) for key, item in value.items())
-    if isinstance(value, list):
-        return any(leaks(item) for item in value)
-    return False
-if "rubric_sha256" in payload["identity"] or leaks(payload):
+if set(payload) != {"schema_version", "question", "instructions", "evidence"}:
+    raise SystemExit(9)
+if payload["schema_version"] != "velgraphing-answer-model-input-v1":
     raise SystemExit(9)
 if "response_contract" in payload:
     raise SystemExit(8)
@@ -69,14 +64,9 @@ sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":"), ensur
 GRADER_CODE = r'''
 import json, sys
 payload = json.load(sys.stdin)
-forbidden = {"arm", "graph_navigation", "route", "run_id", "trial_id", "treatment", "treatment_status", "jev", "jev_status", "jev_treatment"}
-def leaks(value):
-    if isinstance(value, dict):
-        return any(key in forbidden or key.startswith("jev_") or leaks(item) for key, item in value.items())
-    if isinstance(value, list):
-        return any(leaks(item) for item in value)
-    return False
-if leaks(payload):
+if set(payload) != {"schema_version", "answer_text", "rubric"}:
+    raise SystemExit(9)
+if payload["schema_version"] != "velgraphing-grader-model-input-v1":
     raise SystemExit(9)
 if "response_contract" in payload:
     raise SystemExit(8)
@@ -86,7 +76,6 @@ result = {
     "model_calls_complete": True,
     "required_fact_maximum": 10,
     "required_fact_score": 9,
-    "rubric_sha256": payload["identity"]["rubric_sha256"],
     "schema_version": "velgraphing-grader-output-v1",
     "unsupported_material_claims": 0,
     "usage": {
@@ -109,14 +98,15 @@ class HostBoundaryTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.cwd = Path(self.temp.name)
 
-    def run_host(self, answer_code=ANSWER_CODE, *, answer_timeout_s=2,
-                 wall_limit_ns=5_000_000_000, prepared=None, grader_context=None):
+    def run_host(self, answer_code=ANSWER_CODE, *, grader_code=GRADER_CODE,
+                 answer_timeout_s=2, wall_limit_ns=5_000_000_000,
+                 prepared=None, grader_context=None):
         trial = Trial(identity(), Budget(0, wall_limit_ns), execution="fixture")
         return run_process_trial(
             trial,
-            lambda *_: prepared or {"question": "frozen question", "evidence": ["opaque-source-pointer"]},
+            lambda *_: prepared or {"question": "frozen question", "evidence": []},
             answer_argv=[sys.executable, "-c", answer_code],
-            grader_argv=[sys.executable, "-c", GRADER_CODE],
+            grader_argv=[sys.executable, "-c", grader_code],
             cwd=self.cwd,
             answer_timeout_s=answer_timeout_s,
             grader_timeout_s=2,
@@ -136,17 +126,52 @@ class HostBoundaryTests(unittest.TestCase):
         self.assertTrue(result["usage_complete"])
         self.assertEqual(len(result["attempts"][0]["context_deliveries"]), 1)
 
-    def test_actual_subprocess_inputs_are_treatment_blind(self):
-        treatment = {
-            "question": "frozen question",
-            "arm": "D",
-            "route": "typed_graph",
-            "graph_navigation": {"jev_status": "reranked"},
-            "nested": [{"jev_treatment": "enabled", "evidence": "kept"}],
+    def test_actual_d01_subprocess_inputs_are_allowlisted(self):
+        answer_code = ANSWER_CODE.replace(
+            'if "response_contract" in payload:',
+            '''
+if payload["question"] != "Which implementation is imported immediately after merge_sort, and how does it choose and place its pivot?": raise SystemExit(7)
+if payload["instructions"] != ["Cite supporting evidence IDs as [cN]."]: raise SystemExit(7)
+if payload["evidence"] != [{"id":"d0","path":"sorts/quick_sort.py","excerpt":"pivot = collection.pop(randint(0, len(collection) - 1))"}]: raise SystemExit(7)
+if "response_contract" in payload:''').replace(
+                "observed subprocess answer", "observed subprocess answer [d0]")
+        grader_code = GRADER_CODE.replace(
+            'if "response_contract" in payload:',
+            '''
+if payload["answer_text"] != "observed subprocess answer [d0]": raise SystemExit(7)
+if payload["rubric"] != {"required_facts":["Names the imported implementation."],"critical_facts":["Explains pivot selection and placement."],"acceptable_spans":["sorts/quick_sort.py"]}: raise SystemExit(7)
+if "response_contract" in payload:''')
+        prohibited = {
+            "run_id": "run", "trial_id": "trial", "arm": "D", "route": "typed_graph",
+            "jev_status": "reranked", "treatment": "on", "request_sha256": "a" * 64,
+            "response_sha256": "b" * 64, "score": 0.9, "probability": 0.8,
+            "confidence": 0.7, "relationship_parent_candidate_id": "parent",
+            "call_ledger": {"calls": 1}, "provider": "typesafe",
+            "controller_receipt": {"status": "kept outside"},
+        }
+        prepared = {
+            "schema_version": "velgraphing-answer-evidence-v3",
+            "question": "Which implementation is imported immediately after merge_sort, and how does it choose and place its pivot?",
+            "citation_instruction": "Cite supporting evidence IDs as [cN].",
+            "evidence": [{
+                "id": "d0", "path": "sorts/quick_sort.py",
+                "excerpt": "pivot = collection.pop(randint(0, len(collection) - 1))",
+                "source_sha256": "c" * 64, "byte_start": 253, "byte_end": 1299,
+                **prohibited,
+            }],
+            **prohibited,
+        }
+        grader_context = {
+            "required_facts": ["Names the imported implementation."],
+            "critical_facts": ["Explains pivot selection and placement."],
+            "acceptable_spans": ["sorts/quick_sort.py"],
+            **prohibited,
         }
         result = self.run_host(
-            prepared=treatment,
-            grader_context={"run_id": "hidden", "jev": treatment, "rubric": "kept"},
+            answer_code,
+            grader_code=grader_code,
+            prepared=prepared,
+            grader_context=grader_context,
         )
         self.assertEqual(result["terminal_reason"], "passed")
 
@@ -200,7 +225,7 @@ class HostBoundaryTests(unittest.TestCase):
             "schema_version": "velgraphing-answer-evidence-v3",
             "question": "frozen question",
             "citation_instruction": "Cite supporting evidence IDs as [cN].",
-            "evidence": [{"id": "c0"}],
+            "evidence": [{"id": "c0", "path": "source.py", "excerpt": "evidence"}],
         }
         missing = self.run_host(ANSWER_CODE, prepared=prepared)
         self.assertEqual(missing["attempts"][0]["failure_reason"],

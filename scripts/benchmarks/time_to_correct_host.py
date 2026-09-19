@@ -24,22 +24,64 @@ USAGE_KEYS = {
     "model", "provenance", "input_tokens", "output_tokens",
     "cached_input_tokens", "reasoning_output_tokens", "cost_usd",
 }
-BLINDED_KEYS = {
-    "arm", "graph_navigation", "route", "run_id", "trial_id", "treatment",
-    "treatment_status", "jev", "jev_status", "jev_treatment",
-}
 
 
-def _blind(value: Any) -> Any:
-    if type(value) is dict:
-        return {
-            key: _blind(item)
-            for key, item in value.items()
-            if key not in BLINDED_KEYS and not key.startswith("jev_")
-        }
-    if type(value) is list:
-        return [_blind(item) for item in value]
-    return value
+def _string_list(value: Any, reason: str) -> list[str]:
+    if type(value) is not list or not all(type(item) is str for item in value):
+        raise MeasurementError(reason)
+    return list(value)
+
+
+def _answer_input(prepared: Mapping[str, Any]) -> dict[str, Any]:
+    question = prepared.get("question")
+    if type(question) is not str or not question:
+        raise MeasurementError("invalid_answer_question")
+    raw_evidence = prepared.get("evidence")
+    evidence: list[dict[str, str]] = []
+    if type(raw_evidence) is list:
+        for index, row in enumerate(raw_evidence):
+            if type(row) is not dict:
+                raise MeasurementError("invalid_answer_evidence")
+            candidate_id = row.get("id", f"s{index}")
+            path = row.get("path")
+            excerpt = row.get("excerpt")
+            if (
+                type(candidate_id) is not str or not candidate_id
+                or type(path) is not str or not path
+                or type(excerpt) is not str
+            ):
+                raise MeasurementError("invalid_answer_evidence")
+            evidence.append({"id": candidate_id, "path": path, "excerpt": excerpt})
+    elif raw_evidence is not None:
+        raise MeasurementError("invalid_answer_evidence")
+    instructions = prepared.get("instructions", [])
+    if type(instructions) is str:
+        instructions = [instructions]
+    instructions = _string_list(instructions, "invalid_answer_instructions")
+    citation = prepared.get("citation_instruction")
+    if citation is not None:
+        if type(citation) is not str or not citation:
+            raise MeasurementError("invalid_answer_instructions")
+        instructions.append(citation)
+    return {
+        "schema_version": "velgraphing-answer-model-input-v1",
+        "question": question,
+        "instructions": instructions,
+        "evidence": evidence,
+    }
+
+
+def _grader_input(answer_text: str, context: Mapping[str, Any] | None) -> dict[str, Any]:
+    context = context or {}
+    rubric = {
+        key: _string_list(context.get(key, []), "invalid_grader_rubric")
+        for key in ("required_facts", "critical_facts", "acceptable_spans")
+    }
+    return {
+        "schema_version": "velgraphing-grader-model-input-v1",
+        "answer_text": answer_text,
+        "rubric": rubric,
+    }
 
 
 def _response_contract(properties: Mapping[str, Any]) -> dict[str, Any]:
@@ -70,7 +112,6 @@ GRADER_RESPONSE_CONTRACT = _response_contract({
     "critical_facts_exact": {"type": "boolean"},
     "unsupported_material_claims": {"type": "integer", "minimum": 0},
     "grader_id": {"type": "string"},
-    "rubric_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "usage": {"type": ["object", "null"]},
     "model_calls_complete": {"type": "boolean"},
 })
@@ -191,18 +232,7 @@ def run_process_trial(
     def answer(t: Trial, prepared: Mapping[str, Any], attempt: int) -> Answer:
         if type(prepared) is not dict:
             raise MeasurementError("invalid_answer_input")
-        payload = {
-            "schema_version": "velgraphing-answer-input-v1",
-            "attempt": attempt,
-            "identity": {
-                key: t.identity[key] for key in (
-                    "task_id", "repository_id",
-                    "repository_commit", "source_snapshot_sha256", "answer_model",
-                    "reasoning", "prompt_sha256",
-                )
-            },
-            "payload": _blind(prepared),
-        }
+        payload = _answer_input(prepared)
         if answer_response_contract is not None:
             payload["response_contract"] = dict(answer_response_contract)
         raw = canonical(payload)
@@ -235,26 +265,16 @@ def run_process_trial(
         return Answer(output["answer_text"])
 
     def grade(t: Trial, produced: Answer, attempt: int) -> Grade:
-        payload = {
-            "schema_version": "velgraphing-grader-input-v1",
-            "attempt": attempt,
-            "identity": {
-                key: t.identity[key] for key in (
-                    "task_id", "rubric_sha256", "rubric_version",
-                )
-            },
-            "answer_text": produced.content,
-        }
+        payload = _grader_input(produced.content, grader_context)
         if grader_response_contract is not None:
             payload["response_contract"] = dict(grader_response_contract)
         if grader_context is not None:
-            payload["grader_context"] = _blind(grader_context)
             t.context(canonical(payload), kind="tool_message")
         output = _invoke(t, "grader", grader_command, payload, cwd, grader_timeout)
         expected = {
             "schema_version", "required_fact_score", "required_fact_maximum",
             "critical_facts_exact", "unsupported_material_claims", "grader_id",
-            "rubric_sha256", "usage", "model_calls_complete",
+            "usage", "model_calls_complete",
         }
         if set(output) != expected or output["schema_version"] != GRADER_OUTPUT_VERSION:
             raise MeasurementError("invalid_grader_output")
@@ -281,7 +301,7 @@ def run_process_trial(
             output["critical_facts_exact"],
             output["unsupported_material_claims"],
             output["grader_id"],
-            output["rubric_sha256"],
+            t.identity["rubric_sha256"],
         )
 
     return trial.run(prepare, answer, grade)

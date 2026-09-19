@@ -315,10 +315,9 @@ def fixture_response(lane: str, trial_id: str, request: dict[str, Any]) -> dict[
             "context_deliveries_complete": True,
         }
     if lane == "answer":
-        payload = request.get("payload", {})
-        answer = payload.get("fixture_answer", f"fixture answer for {trial_id}")
-        if payload.get("schema_version") == "velgraphing-answer-evidence-v3":
-            evidence = payload.get("evidence", [])
+        answer = f"fixture answer for {trial_id}"
+        if request.get("schema_version") == "velgraphing-answer-model-input-v1":
+            evidence = request.get("evidence", [])
             candidate_id = evidence[0].get("id") if evidence and type(evidence[0]) is dict else None
             answer = f"fixture answer [{candidate_id}]" if candidate_id else answer
         if type(answer) is not str:
@@ -331,7 +330,6 @@ def fixture_response(lane: str, trial_id: str, request: dict[str, Any]) -> dict[
             "context_deliveries_complete": True,
         }
     if lane == "grader":
-        identity = request.get("identity", {})
         return {
             "schema_version": "velgraphing-grader-output-v1",
             "required_fact_score": 1,
@@ -339,7 +337,6 @@ def fixture_response(lane: str, trial_id: str, request: dict[str, Any]) -> dict[
             "critical_facts_exact": True,
             "unsupported_material_claims": 0,
             "grader_id": f"fixture-grader-{trial_id}",
-            "rubric_sha256": identity.get("rubric_sha256"),
             "usage": None,
             "model_calls_complete": False,
         }

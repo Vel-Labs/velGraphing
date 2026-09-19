@@ -171,9 +171,11 @@ calls and zero retries, but records `live_authorized: false` and zero executed
 provider calls.
 
 The source-bearing preview and exact request bindings remain under the ignored
-`.inputs` boundary. The answer and grader subprocess boundary removes run,
-trial, arm, route, Graph-navigation, and Jev treatment identifiers recursively
-while retaining controller receipts. This preview does not qualify model
+`.inputs` boundary. The answer subprocess receives only the question,
+instructions, and normalized `id`, `path`, and `excerpt` evidence. The grader
+receives only the answer and required, critical, and acceptable-span rubric
+lists. The controller retains all identity, hash, treatment, score, relation,
+ledger, provider, and receipt metadata outside both model payloads. This preview does not qualify model
 usefulness or authorize a provider, answer, or grader call. Parent review is the
 next gate. The historical PR9 candidate, preview, request hashes, four-call
 plan, and approval-readiness record below remain non-applicable to retrieVEL.
