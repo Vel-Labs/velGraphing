@@ -507,6 +507,99 @@ class PortableSkillTests(unittest.TestCase):
         self.assertEqual(payload["scan"]["edges_derived"], 0)
         self.assertEqual(payload["relationship_supports"], [])
 
+    def test_graph_find_ignores_headings_inside_markdown_fences(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-fences-") as raw:
+            root = Path(raw)
+            (root / "docs").mkdir()
+            (root / "README.md").write_text(
+                "# Index\n"
+                "[real](docs/guide.md#real)\n"
+                "[backtick](docs/guide.md#backtick-fake)\n"
+                "[tilde](docs/guide.md#tilde-fake)\n"
+                "[unclosed](docs/guide.md#unclosed-fake)\n",
+                encoding="utf-8",
+            )
+            (root / "docs" / "guide.md").write_text(
+                "```python\n# Backtick fake\n````\n"
+                "# Real\n"
+                "~~~~ text\n# Tilde fake\n~~~~~\n"
+                "```\n# Unclosed fake\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find README Index real backtick tilde unclosed guide",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["scan"]["edges_derived"], 1)
+        self.assertEqual(
+            {item["target_coordinate"]["symbol"] for item in payload["relationship_supports"]},
+            {"real"},
+        )
+
+    def test_graph_find_resolves_only_package_valid_relative_imports(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-relative-imports-") as raw:
+            root = Path(raw)
+            (root / "pkg" / "deep").mkdir(parents=True)
+            (root / "root.py").write_text("from .helper import root_f\n", encoding="utf-8")
+            (root / "helper.py").write_text(
+                "def root_f():\n    pass\n\ndef escaped_f():\n    pass\n", encoding="utf-8"
+            )
+            (root / "pkg" / "mod.py").write_text(
+                "from ..helper import escaped_f\n", encoding="utf-8"
+            )
+            (root / "pkg" / "valid.py").write_text(
+                "from .helper import sibling_f\n", encoding="utf-8"
+            )
+            (root / "pkg" / "deep" / "mod.py").write_text(
+                "from ..helper import parent_f\n", encoding="utf-8"
+            )
+            (root / "pkg" / "helper.py").write_text(
+                "def sibling_f():\n    pass\n\ndef parent_f():\n    pass\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find root_f escaped_f sibling_f parent_f",
+                    "--maximum-results",
+                    "8",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["scan"]["edges_derived"], 2)
+        self.assertEqual(
+            {item["source_coordinate"]["source_path"] for item in payload["relationship_supports"]},
+            {"pkg/deep/mod.py", "pkg/valid.py"},
+        )
+
     def test_graph_find_subprocess_rejects_alias_and_byte_caps(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
         with tempfile.TemporaryDirectory(prefix="graph-find-unsafe-") as raw:

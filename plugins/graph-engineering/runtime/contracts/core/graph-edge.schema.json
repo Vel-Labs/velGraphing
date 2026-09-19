@@ -4,6 +4,10 @@
   "title": "GraphEdgeV1",
   "type": "object",
   "additionalProperties": false,
+  "dependentRequired": {
+    "source_coordinate": ["target_coordinate"],
+    "target_coordinate": ["source_coordinate"]
+  },
   "required": [
     "edge_id",
     "source_id",

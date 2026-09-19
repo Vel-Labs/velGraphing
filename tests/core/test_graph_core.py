@@ -202,7 +202,17 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(bound.to_dict()["source_coordinate"]["schema_version"], "source-coordinate-v1")
         self.assertNotIn("source_coordinate", edge("legacy", "R1", "R2").to_dict())
         with self.assertRaisesRegex(ValueError, "bind both"):
-            Graph((source, target), (replace(bound, target_coordinate=None),))
+            replace(bound, target_coordinate=None)
+        with self.assertRaisesRegex(ValueError, "bind both"):
+            replace(bound, source_coordinate=None)
+        forged = object.__new__(GraphEdge)
+        for key, value in bound.__dict__.items():
+            object.__setattr__(forged, key, value)
+        object.__setattr__(forged, "target_coordinate", None)
+        with self.assertRaisesRegex(ValueError, "bind both"):
+            forged.to_dict()
+        with self.assertRaisesRegex(ValueError, "bind both"):
+            Graph((source, target), (forged,))
         with self.assertRaisesRegex(ValueError, "path disagrees"):
             Graph((source, target), (replace(bound, source_coordinate=replace(source_coordinate, source_path="target.py")),))
         with self.assertRaisesRegex(ValueError, "cross source snapshots"):
@@ -213,6 +223,17 @@ class ModelTests(unittest.TestCase):
             Graph((source, target), (replace(bound, target_coordinate=replace(target_coordinate, byte_end=len(raw) + 1)),))
         with self.assertRaisesRegex(ValueError, "lines do not match"):
             Graph((source, target), (replace(bound, target_coordinate=replace(target_coordinate, line_start=2, line_end=2)),))
+
+        schema = json.loads(
+            (Path(__file__).parents[2] / "contracts/core/graph-edge.schema.json").read_text()
+        )
+        self.assertEqual(
+            schema["dependentRequired"],
+            {
+                "source_coordinate": ["target_coordinate"],
+                "target_coordinate": ["source_coordinate"],
+            },
+        )
 
     def test_every_authentication_gate_is_required(self) -> None:
         base = record("R1")

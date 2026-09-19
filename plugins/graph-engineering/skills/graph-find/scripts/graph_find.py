@@ -269,7 +269,7 @@ def _resolved_module(source_path: str, node: ast.ImportFrom) -> str | None:
     if source_path.endswith("/__init__.py"):
         package = source_path[:-12].split("/")
     keep = len(package) - node.level + 1
-    if keep < 0:
+    if not package or keep <= 0:
         return None
     return ".".join([*package[:keep], *node.module.split(".")])
 
@@ -278,6 +278,31 @@ def _heading_slug(value: str) -> str:
     value = re.sub(r"[`*_~]", "", value.casefold())
     value = re.sub(r"[^\w\s-]", "", value)
     return re.sub(r"[-\s]+", "-", value).strip("-")
+
+
+def _markdown_headings(text: str) -> list[tuple[str, int, int]]:
+    headings: list[tuple[str, int, int]] = []
+    fence: tuple[str, int] | None = None
+    offset = 0
+    for raw_line in text.splitlines(keepends=True):
+        line = raw_line.rstrip("\r\n")
+        if fence is not None:
+            character, minimum = fence
+            if re.fullmatch(rf" {{0,3}}{re.escape(character)}{{{minimum},}}[ \t]*", line):
+                fence = None
+        else:
+            opener = re.match(r" {0,3}(`{3,}|~{3,})", line)
+            if opener is not None:
+                run = opener.group(1)
+                fence = (run[0], len(run))
+            else:
+                heading = _MARKDOWN_HEADING.fullmatch(line)
+                if heading is not None:
+                    headings.append(
+                        (heading.group(1), offset + heading.start(1), offset + heading.end(1))
+                    )
+        offset += len(raw_line)
+    return headings
 
 
 def _derive_edges(
@@ -318,12 +343,12 @@ def _derive_edges(
         if path.casefold().endswith((".md", ".markdown")):
             text = data.decode("utf-8")
             by_slug: dict[str, list[SourceCoordinate]] = {}
-            for match in _MARKDOWN_HEADING.finditer(text):
-                slug = _heading_slug(match.group(1))
+            for heading, character_start, character_end in _markdown_headings(text):
+                slug = _heading_slug(heading)
                 if not slug:
                     continue
-                start = len(text[: match.start(1)].encode("utf-8"))
-                end = len(text[: match.end(1)].encode("utf-8"))
+                start = len(text[:character_start].encode("utf-8"))
+                end = len(text[:character_end].encode("utf-8"))
                 by_slug.setdefault(slug, []).append(
                     _coordinate(snapshot_sha256, path, data, start, end, "markdown_heading", "declaration", slug)
                 )

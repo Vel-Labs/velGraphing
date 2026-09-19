@@ -18,7 +18,11 @@ scanner derives only uniquely resolved Python `from module import name` and
 relative Markdown heading-link edges. The core exposes at most one verified
 `RelationshipSupport` per selected seed. This metadata does not change ranking,
 evidence, context, obligations, fallback paths, or budgets. Ambiguous or unbound
-relations do not produce support. This slice does **not** implement an adaptive
+relations do not produce support. This ranking statement applies to the
+edge-enabled, edge-disabled, and expansion-disabled arms inside source-bound
+mode. Those arms use the same exact, sparse, and wiki seed route. It does not
+claim that source-bound mode preserves the legacy graph-channel route. This
+slice does **not** implement an adaptive
 selector or the live v4 runner. It has no benchmark result and no promotion
 claim.
 

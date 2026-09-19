@@ -21,7 +21,10 @@ The JSON result contains ranked hits, exact source pointers, and optional
 coordinates for one verified `imports` or `links_to_heading` edge. It is
 navigation metadata only. It does not change seed ranking, evidence, context,
 proof obligations, fallback paths, or byte budgets. Ambiguous and unbound
-relations remain unresolved. `route: graph`
+relations remain unresolved. Here, unchanged seed ranking means that
+edge-enabled, edge-disabled, and expansion-disabled runs inside source-bound
+mode use the same exact, sparse, and wiki seed route. Enabling source-bound mode
+does not preserve the legacy graph-channel route. `route: graph`
 means the verified graph evidence met the retrieval threshold. `route: defer`
 means the evidence is incomplete; use the listed fallback paths with a direct
 source read. `fail_closed: true` means an authentication or custody boundary

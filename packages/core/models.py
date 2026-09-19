@@ -122,7 +122,15 @@ class GraphEdge:
     source_coordinate: SourceCoordinate | None = None
     target_coordinate: SourceCoordinate | None = None
 
+    def __post_init__(self) -> None:
+        self._require_coordinate_pair()
+
+    def _require_coordinate_pair(self) -> None:
+        if (self.source_coordinate is None) != (self.target_coordinate is None):
+            raise ValueError(f"edge {self.edge_id} must bind both endpoint coordinates")
+
     def to_dict(self) -> dict[str, Any]:
+        self._require_coordinate_pair()
         payload = asdict(self)
         source_coordinate = payload.pop("source_coordinate")
         target_coordinate = payload.pop("target_coordinate")
