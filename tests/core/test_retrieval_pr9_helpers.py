@@ -16,6 +16,12 @@ from packages.core import (Admission, AuthorityClass, EvidenceItem, Freshness,
                            ranked_candidates_from_retrieval)
 from packages.core.retrieval import _line_window, _MAX_TAGS_PER_RECORD
 
+BUDGET = {
+    "maximum_candidates": 64,
+    "maximum_candidate_bytes": 32_768,
+    "maximum_unit_bytes": 4096,
+}
+
 
 class Reader:
     def __init__(self, path, raw):
@@ -30,8 +36,7 @@ class Reader:
         return False
 
 
-def fixture(raw):
-    path = "docs/plain.md"
+def fixture(raw, path="docs/plain.md"):
     sha = hashlib.sha256(raw).hexdigest()
     record = GraphRecord(record_id="repo:" + path, kind="source", title=path,
                          content=raw.decode("utf-8"), provenance=Provenance(path, sha, "bytes", True),
@@ -104,7 +109,7 @@ class Pr9RetrievalHelperTests(unittest.TestCase):
         graph, snapshot, reader = fixture(raw)
         candidates = ranked_candidates_from_retrieval(
             graph, TaskSpec("units", ("quick-sort",), node_budget=64), snapshot, reader,
-            result("docs/plain.md", "quick-sort"),
+            result("docs/plain.md", "quick-sort"), **BUDGET,
         )
         excerpts = [raw[item.byte_start:item.byte_end] for item in candidates]
         self.assertEqual(len(excerpts), 2)
@@ -112,8 +117,79 @@ class Pr9RetrievalHelperTests(unittest.TestCase):
         self.assertTrue(excerpts[1].startswith(b"def quick_sort_right"))
         self.assertEqual(candidates, ranked_candidates_from_retrieval(
             graph, TaskSpec("units", ("quick-sort",), node_budget=64), snapshot, reader,
-            result("docs/plain.md", "quick-sort"),
+            result("docs/plain.md", "quick-sort"), **BUDGET,
         ))
+
+    def test_complete_function_precedes_equally_matched_header(self):
+        raw = (
+            b'"""quick_sort reference"""\n\n'
+            b"def quick_sort(values):\n    return values\n"
+        )
+        graph, snapshot, reader = fixture(raw, "src/quick_sort.py")
+        candidates = ranked_candidates_from_retrieval(
+            graph, TaskSpec("complete-first", ("quick-sort",)), snapshot, reader,
+            result("src/quick_sort.py", "quick-sort"), **BUDGET,
+        )
+        excerpts = [raw[item.byte_start:item.byte_end] for item in candidates]
+        self.assertGreaterEqual(len(excerpts), 2)
+        self.assertTrue(excerpts[0].startswith(b"def quick_sort"))
+        self.assertTrue(any(item.startswith(b'"""quick_sort') for item in excerpts[1:]))
+
+    def test_required_non_hit_evidence_is_first_and_fail_closed(self):
+        sources = {
+            "docs/hit.md": b"alpha optional\n",
+            "docs/required.md": b"required proof\n",
+        }
+        records = []
+        for path, raw in sources.items():
+            digest = hashlib.sha256(raw).hexdigest()
+            records.append(GraphRecord(
+                f"repo:{path}", "source", path, raw.decode(),
+                Provenance(path, digest, "bytes", True), TrustClass.VERIFIED_SOURCE,
+                Sensitivity.PUBLIC, Freshness.CURRENT, Admission.VERIFIER, True,
+            ))
+        snapshot = SourceSnapshotV4(tuple(
+            SourceIdentityV4(path, len(raw), hashlib.sha256(raw).hexdigest())
+            for path, raw in sorted(sources.items())
+        ))
+
+        class MapReader:
+            def read_bytes(self, path): return sources[path]
+            def is_symlink(self, path): return False
+
+        required_raw = sources["docs/required.md"]
+        evidence = EvidenceItem(
+            "repo:docs/required.md", "docs/required.md",
+            hashlib.sha256(required_raw).hexdigest(), 0, len(required_raw),
+            hashlib.sha256(required_raw).hexdigest(), AuthorityClass.RUNTIME,
+            ("proof",),
+        )
+        retrieval = RetrievalResult(
+            "direct", "fixture", (
+                RetrievalHit("repo:docs/hit.md", "docs/hit.md", 1, ("exact",), ("alpha",), 0),
+            ), (), "", 0, 100.0, (), (), False, evidence=(evidence,),
+        )
+        candidates = ranked_candidates_from_retrieval(
+            Graph(tuple(records)), TaskSpec("required-non-hit", ("alpha",)),
+            snapshot, MapReader(), retrieval, **BUDGET,
+        )
+        self.assertTrue(candidates[0].required)
+        self.assertEqual(candidates[0].source_path, "docs/required.md")
+        bad = EvidenceItem(
+            evidence.record_id, evidence.source_path, evidence.source_sha256,
+            evidence.byte_start, evidence.byte_end, "0" * 64,
+            evidence.authority_class, evidence.obligation_ids,
+        )
+        with self.assertRaisesRegex(ValueError, "required_candidate_custody_mismatch"):
+            ranked_candidates_from_retrieval(
+                Graph(tuple(records)), TaskSpec("bad-required", ("alpha",)),
+                snapshot, MapReader(),
+                RetrievalResult(
+                    "direct", "fixture", (), (), "", 0, 0.0, (), (), False,
+                    evidence=(bad,),
+                ),
+                **BUDGET,
+            )
 
     def test_required_overflow_and_changed_source_fail_closed(self):
         raw = b"alpha " * 900
@@ -126,13 +202,13 @@ class Pr9RetrievalHelperTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "required_candidate_budget_exceeded"):
             ranked_candidates_from_retrieval(
                 graph, TaskSpec("required", ("alpha",), byte_budget=20_000), snapshot,
-                reader, result("docs/plain.md", "alpha", evidence=(evidence,)),
+                reader, result("docs/plain.md", "alpha", evidence=(evidence,)), **BUDGET,
             )
         reader.raw = b"changed\n"
         with self.assertRaises(ValueError):
             ranked_candidates_from_retrieval(
                 graph, TaskSpec("stale", ("alpha",)), snapshot, reader,
-                result("docs/plain.md", "alpha"),
+                result("docs/plain.md", "alpha"), **BUDGET,
             )
 
     def test_ranked_candidate_caps_apply_to_all_occurrences(self):
@@ -142,12 +218,17 @@ class Pr9RetrievalHelperTests(unittest.TestCase):
         graph, snapshot, reader = fixture(raw)
         candidates = ranked_candidates_from_retrieval(
             graph, TaskSpec("caps", ("alpha",), node_budget=200, byte_budget=100_000),
-            snapshot, reader, result("docs/plain.md", "alpha"),
+            snapshot, reader, result("docs/plain.md", "alpha"), **BUDGET,
         )
         self.assertEqual(len(candidates), 64)
         self.assertLessEqual(sum(item.byte_end-item.byte_start for item in candidates), 32_768)
         self.assertTrue(all(item.byte_end-item.byte_start <= 4096 for item in candidates))
         self.assertEqual(len({item.candidate_id for item in candidates}), len(candidates))
+        low_node_budget = ranked_candidates_from_retrieval(
+            graph, TaskSpec("caps-low-node", ("alpha",), node_budget=1),
+            snapshot, reader, result("docs/plain.md", "alpha"), **BUDGET,
+        )
+        self.assertEqual(candidates, low_node_budget)
 
     def test_noisy_first_hit_cannot_crowd_out_later_complete_unit(self):
         sources = {
@@ -180,7 +261,7 @@ class Pr9RetrievalHelperTests(unittest.TestCase):
         )
         candidates = ranked_candidates_from_retrieval(
             Graph(tuple(records)), TaskSpec("fair", ("alpha",), node_budget=64),
-            snapshot, MapReader(), retrieval,
+            snapshot, MapReader(), retrieval, **BUDGET,
         )
         self.assertEqual(len(candidates), 64)
         later = [item for item in candidates if item.source_path == "src/later.py"]

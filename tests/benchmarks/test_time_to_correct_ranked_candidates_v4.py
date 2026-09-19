@@ -88,12 +88,15 @@ class RankedCandidateTests(unittest.TestCase):
     def test_typed_routes_keep_primary_seeds_and_only_enabled_adds_support(self) -> None:
         fixture = Fixture(
             {
-                "src/caller.py": b"from src.helper import helper\n\ndef call_helper():\n    return helper()\n",
+                "src/caller.py": (
+                    b"from src.helper import helper as call_helper_import\n\n"
+                    b"def call_helper():\n    return call_helper_import()\n"
+                ),
                 "src/helper.py": b"def helper():\n    return 1\n",
                 "README.md": b"# Index\n[install guide](docs/guide.md#install)\n",
                 "docs/guide.md": b"# Install\nUse call_helper.\n",
             },
-            "find call_helper caller Index README",
+            "find call_helper_import caller Index README",
         )
         try:
             artifact, _ = mod.generate(
@@ -126,6 +129,17 @@ class RankedCandidateTests(unittest.TestCase):
             no_expansion["controls"]["derived_edge_count"],
         )
         self.assertEqual(no_edges["candidates"], no_expansion["candidates"])
+        self.assertEqual(runs["direct"]["candidates"], runs["tag_index"]["candidates"])
+        self.assertEqual(runs["direct"]["candidates"], no_edges["candidates"])
+        candidate_budgets = {
+            (
+                run["controls"]["candidate_limit"],
+                run["controls"]["candidate_aggregate_byte_budget"],
+                run["controls"]["candidate_unit_byte_budget"],
+            )
+            for run in runs.values()
+        }
+        self.assertEqual(candidate_budgets, {(12, 24_576, 4096)})
         primary_ids = {item["id"] for item in no_expansion["candidates"]}
         typed_primary = [item for item in typed["candidates"] if item["id"] in primary_ids]
         self.assertEqual(typed_primary, no_expansion["candidates"][: len(typed_primary)])

@@ -47,7 +47,7 @@ from packages.core import (  # noqa: E402
 )
 
 
-SCHEMA_VERSION = "velgraphing-ranked-candidates-v4-bound-v1"
+SCHEMA_VERSION = "velgraphing-ranked-candidates-v4-bound-v2"
 PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
 ROUTES = (
     "direct",
@@ -62,8 +62,10 @@ CORPUS_MANIFESTS = {
     "openchain-reference-material": "openchain.json",
     "thealgorithms-python": "thealgorithms-python.json",
 }
-SEED_LIMIT = 12
-SHORTLIST_BYTE_BUDGET = 24_576
+RETRIEVAL_NODE_LIMIT = 12
+CANDIDATE_LIMIT = 12
+CANDIDATE_AGGREGATE_BYTE_BUDGET = 24_576
+CANDIDATE_UNIT_BYTE_BUDGET = 4096
 OUTPUT_ROOT = ROOT / "benchmarks/velgraphing-time-to-correct-v4/.inputs"
 
 
@@ -273,8 +275,10 @@ def _controls(
 ) -> dict[str, object]:
     return {
         "seed_record_ids": list(seed_record_ids),
-        "seed_limit": SEED_LIMIT,
-        "shortlist_byte_budget": SHORTLIST_BYTE_BUDGET,
+        "seed_limit": RETRIEVAL_NODE_LIMIT,
+        "candidate_limit": CANDIDATE_LIMIT,
+        "candidate_aggregate_byte_budget": CANDIDATE_AGGREGATE_BYTE_BUDGET,
+        "candidate_unit_byte_budget": CANDIDATE_UNIT_BYTE_BUDGET,
         "derived_edge_count": derived_edge_count,
         "active_edge_count": active_edge_count,
         "source_bound_expansion": source_bound_expansion,
@@ -317,7 +321,7 @@ def _route_run(
         snapshot,
         counting,
         channels=("exact", "sparse", "wiki"),
-        maximum_results=SEED_LIMIT,
+        maximum_results=RETRIEVAL_NODE_LIMIT,
         source_bound_expansion=source_bound_expansion,
         expand_one_hop=expand_one_hop,
         minimum_coverage_percent=0.0,
@@ -325,7 +329,12 @@ def _route_run(
     )
     if result.fail_closed:
         raise GenerationError("retrieval_failed_closed")
-    candidates = ranked_candidates_from_retrieval(graph, task, snapshot, counting, result)
+    candidates = ranked_candidates_from_retrieval(
+        graph, task, snapshot, counting, result,
+        maximum_candidates=CANDIDATE_LIMIT,
+        maximum_candidate_bytes=CANDIDATE_AGGREGATE_BYTE_BUDGET,
+        maximum_unit_bytes=CANDIDATE_UNIT_BYTE_BUDGET,
+    )
     elapsed = time.monotonic_ns() - started
     if not candidates:
         raise GenerationError("candidate_shortlist_empty")
@@ -418,8 +427,8 @@ def generate(
                     for token in graph_adapter._TOKEN.findall(question["prompt"])
                 )
             ),
-            node_budget=SEED_LIMIT,
-            byte_budget=SHORTLIST_BYTE_BUDGET,
+            node_budget=RETRIEVAL_NODE_LIMIT,
+            byte_budget=CANDIDATE_AGGREGATE_BYTE_BUDGET,
             allowed_sensitivities=(Sensitivity.PUBLIC, Sensitivity.INTERNAL),
         )
         index = build_repository_tag_index(plain_graph, snapshot, reader)

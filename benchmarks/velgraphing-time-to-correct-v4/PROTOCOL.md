@@ -54,7 +54,8 @@ answer-model, grader, or scoring call. Its output belongs under an ignored
 `.inputs` path and binds the clean selector commit.
 
 The frozen artifact uses the incompatible
-`velgraphing-ranked-candidates-v4-bound-v1` schema. Each candidate has exactly
+`velgraphing-ranked-candidates-v4-bound-v2` schema. The incompatible v1
+artifact remains historical and is not a valid input to a fresh study. Each candidate has exactly
 `id`, `path`, `source_sha256`, `byte_start`, `byte_end`, `required`,
 `record_id`, and `relationship_parent_candidate_id`. The candidate ID is the
 bare 64-character lowercase SHA-256 of its canonical coordinate object. It has
@@ -79,6 +80,12 @@ claimed snapshot digest that does not match those rows.
 expansion-disabled typed arms require both counts to match. The edge-disabled
 arm requires `active_edge_count: 0`. Direct and tag-index runs require both
 counts to be zero.
+
+Each control row records `candidate_limit`,
+`candidate_aggregate_byte_budget`, and `candidate_unit_byte_budget`. The
+evaluator requires identical values across every route and rejects values above
+the TypeSafe hard limits. `seed_limit` remains the retrieval-node limit. It is
+not a candidate-pool budget.
 
 The generator accepts one new regular-file output directly under the benchmark
 `.inputs` directory. It rejects path traversal, symlinks, other destinations,
@@ -202,7 +209,7 @@ Provisional exact caps, to be frozen at the material candidate:
 |---|---:|
 | Seed candidates before deterministic expansion | 6 |
 | Final pre-Jev shortlist candidates | 12 |
-| Excerpt bytes per candidate | 2,048 |
+| Excerpt bytes per candidate | 4,096 |
 | Aggregate pre-Jev excerpt bytes | 24,576 |
 | Serialized TypeSafe request bytes | 131,072 |
 | Final answer excerpt bytes | 16,384 |

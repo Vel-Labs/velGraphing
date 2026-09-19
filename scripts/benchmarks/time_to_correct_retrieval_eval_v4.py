@@ -20,7 +20,7 @@ from typing import Any, Mapping, Sequence
 from packages.core.routing_v4 import SourceIdentityV4, SourceSnapshotV4
 
 VERSION = "velgraphing-retrieval-eval-v4"
-CANDIDATE_SCHEMA_VERSION = "velgraphing-ranked-candidates-v4-bound-v1"
+CANDIDATE_SCHEMA_VERSION = "velgraphing-ranked-candidates-v4-bound-v2"
 ROUTES = {"direct", "tag_index", "typed_graph", "typed_graph_no_edges",
           "typed_graph_no_expansion"}
 PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
@@ -35,7 +35,8 @@ PRODUCTION_QUESTIONS = {
     "M-01": ("openchain-reference-material", "95e96ddb909cd372c0edbaa774d55aa85edea303c0d9c0aa5b51f06b75a40577"),
     "M-02": ("openchain-reference-material", "5142447b64f06e938216998638b638e60bd135f8a5efe6ed208d137617306572"),
 }
-CONTROL_KEYS = {"seed_record_ids", "seed_limit", "shortlist_byte_budget",
+CONTROL_KEYS = {"seed_record_ids", "seed_limit", "candidate_limit",
+                "candidate_aggregate_byte_budget", "candidate_unit_byte_budget",
                 "derived_edge_count", "active_edge_count", "source_bound_expansion",
                 "expand_one_hop"}
 GATE_2_K = 12
@@ -219,7 +220,13 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
                 or type(controls["expand_one_hop"]) is not bool):
             raise EvaluationError("invalid_controls")
         positive_int(controls["seed_limit"])
-        positive_int(controls["shortlist_byte_budget"])
+        positive_int(controls["candidate_limit"])
+        positive_int(controls["candidate_aggregate_byte_budget"])
+        positive_int(controls["candidate_unit_byte_budget"])
+        if (controls["candidate_limit"] > 64
+                or controls["candidate_aggregate_byte_budget"] > 32_768
+                or controls["candidate_unit_byte_budget"] > 4096):
+            raise EvaluationError("candidate_budget_exceeds_jev_limits")
         positive_int(controls["derived_edge_count"], zero=True)
         positive_int(controls["active_edge_count"], zero=True)
         expected_controls = {
@@ -264,9 +271,14 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
                     raise EvaluationError("invalid_relationship_candidate")
             ids.add(candidate["id"])
             candidates_by_id[candidate["id"]] = candidate
-        if (len(run["candidates"]) > controls["seed_limit"]
+        if (len(run["candidates"]) > controls["candidate_limit"]
                 or sum(item["byte_end"] - item["byte_start"] for item in run["candidates"])
-                > controls["shortlist_byte_budget"]):
+                > controls["candidate_aggregate_byte_budget"]
+                or any(
+                    item["byte_end"] - item["byte_start"]
+                    > controls["candidate_unit_byte_budget"]
+                    for item in run["candidates"]
+                )):
             raise EvaluationError("shortlist_control_mismatch")
         exact_keys(run["metrics"], {"source_operations", "cold_ns", "warm_ns", "retrieval_ns",
                                     "expansion_ns", "fallback_ns", "source_failures", "authority_failures"})
@@ -285,9 +297,13 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
             if (run["source_snapshot_sha256"] != first["source_snapshot_sha256"]
                     or run["sources"] != first["sources"]):
                 raise EvaluationError("paired_snapshot_mismatch")
-            if (run["controls"]["seed_limit"] != first["controls"]["seed_limit"]
-                    or run["controls"]["shortlist_byte_budget"]
-                    != first["controls"]["shortlist_byte_budget"]):
+            if any(
+                run["controls"][key] != first["controls"][key]
+                for key in (
+                    "seed_limit", "candidate_limit", "candidate_aggregate_byte_budget",
+                    "candidate_unit_byte_budget",
+                )
+            ):
                 raise EvaluationError("paired_control_mismatch")
         typed = [run for run in task_runs if run["route"].startswith("typed_graph")]
         if typed:
@@ -321,7 +337,9 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
                     != PRODUCTION_QUESTIONS[run["task_id"]]):
                 raise EvaluationError("production_question_binding_mismatch")
             if (run["controls"]["seed_limit"] != 12
-                    or run["controls"]["shortlist_byte_budget"] != 24_576):
+                    or run["controls"]["candidate_limit"] != 12
+                    or run["controls"]["candidate_aggregate_byte_budget"] != 24_576
+                    or run["controls"]["candidate_unit_byte_budget"] != 4096):
                 raise EvaluationError("production_control_mismatch")
     return value
 

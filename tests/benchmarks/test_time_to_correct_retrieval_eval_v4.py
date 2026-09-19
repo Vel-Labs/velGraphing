@@ -46,7 +46,8 @@ def fixture():
         candidate("b.md", 40, 60, required=True),
     ]
     controls = {"seed_record_ids": ["repo:a.md"], "seed_limit": 2,
-                "shortlist_byte_budget": 40, "derived_edge_count": 0,
+                "candidate_limit": 2, "candidate_aggregate_byte_budget": 40,
+                "candidate_unit_byte_budget": 20, "derived_edge_count": 0,
                 "active_edge_count": 0,
                 "source_bound_expansion": False, "expand_one_hop": False}
     artifact = {"schema_version": mod.CANDIDATE_SCHEMA_VERSION, "study_id": "unit-fixture",
@@ -187,6 +188,18 @@ class RetrievalEvaluationTests(unittest.TestCase):
         with self.assertRaisesRegex(mod.EvaluationError, "invalid_candidate_identity"):
             mod.validate_candidates(prefixed)
 
+        for key, value in (
+            ("candidate_limit", 65),
+            ("candidate_aggregate_byte_budget", 32_769),
+            ("candidate_unit_byte_budget", 4097),
+        ):
+            changed = copy.deepcopy(artifact)
+            changed["runs"][0]["controls"][key] = value
+            with self.subTest(key=key), self.assertRaisesRegex(
+                mod.EvaluationError, "candidate_budget_exceeds_jev_limits"
+            ):
+                mod.validate_candidates(changed)
+
         for mutate in (
             lambda row: row.update(extra=None),
             lambda row: row.pop("record_id"),
@@ -209,7 +222,8 @@ class RetrievalEvaluationTests(unittest.TestCase):
             source_bound_expansion=True,
             expand_one_hop=True,
             seed_limit=3,
-            shortlist_byte_budget=60,
+            candidate_limit=3,
+            candidate_aggregate_byte_budget=60,
         )
         typed["runs"][0]["candidates"].append(relationship)
         mod.validate_candidates(copy.deepcopy(typed))
@@ -260,7 +274,9 @@ class RetrievalEvaluationTests(unittest.TestCase):
         chained = copy.deepcopy(typed)
         child = candidate("a.md", 20, 40, parent=relationship["id"])
         chained["runs"][0]["candidates"].append(child)
-        chained["runs"][0]["controls"].update(seed_limit=4, shortlist_byte_budget=80)
+        chained["runs"][0]["controls"].update(
+            seed_limit=4, candidate_limit=4, candidate_aggregate_byte_budget=80
+        )
         with self.assertRaisesRegex(mod.EvaluationError, "invalid_relationship_candidate"):
             mod.validate_candidates(chained)
 
@@ -326,7 +342,9 @@ class RetrievalEvaluationTests(unittest.TestCase):
         duplicate["byte_start"], duplicate["byte_end"] = 10, 30
         duplicate["id"] = mod.candidate_id(duplicate)
         artifact["runs"][0]["candidates"].append(duplicate)
-        artifact["runs"][0]["controls"].update(seed_limit=3, shortlist_byte_budget=60)
+        artifact["runs"][0]["controls"].update(
+            seed_limit=3, candidate_limit=3, candidate_aggregate_byte_budget=60
+        )
         result = run(artifact, labels, k=(3,), budgets=(60,))["results"][0]
         self.assertAlmostEqual(result["repeated_range_byte_fraction"], 1/6)
         self.assertEqual(result["unique_paths"], 2)
@@ -369,7 +387,8 @@ class RetrievalEvaluationTests(unittest.TestCase):
                 active = 0 if route in {"direct", "tag_index", "typed_graph_no_edges"} else derived
                 row["controls"].update(
                     seed_record_ids=["repo:a.md"], seed_limit=12,
-                    shortlist_byte_budget=24576, derived_edge_count=derived,
+                    candidate_limit=12, candidate_aggregate_byte_budget=24576,
+                    candidate_unit_byte_budget=4096, derived_edge_count=derived,
                     active_edge_count=active,
                     source_bound_expansion=flags[route][0], expand_one_hop=flags[route][1],
                 )

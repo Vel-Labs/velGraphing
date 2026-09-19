@@ -143,7 +143,9 @@ class Fixture:
                     "controls": {
                         "seed_record_ids": [f"repo:{path}"],
                         "seed_limit": 12,
-                        "shortlist_byte_budget": 24_576,
+                        "candidate_limit": 12,
+                        "candidate_aggregate_byte_budget": 24_576,
+                        "candidate_unit_byte_budget": 4096,
                         "derived_edge_count": 0,
                         "active_edge_count": 0,
                         "source_bound_expansion": typed,

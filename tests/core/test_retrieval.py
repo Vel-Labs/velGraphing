@@ -193,7 +193,7 @@ class SourceBoundExpansionTests(unittest.TestCase):
         records = plain_graph.record_map()
         source_raw = sources["src/caller.py"]
         target_raw = sources["src/helper.py"]
-        source_start = source_raw.index(b"helper")
+        source_start = source_raw.rindex(b"helper")
         target_start = target_raw.index(b"def helper")
         source_coordinate = SourceCoordinate(
             snapshot.snapshot_sha256,
@@ -201,10 +201,10 @@ class SourceBoundExpansionTests(unittest.TestCase):
             hashlib.sha256(source_raw).hexdigest(),
             source_start,
             source_start + len(b"helper"),
-            1,
-            1,
-            "python_import",
-            "import",
+            4,
+            4,
+            "python_call",
+            "call",
             "helper",
         )
         target_coordinate = SourceCoordinate(
@@ -289,19 +289,43 @@ class SourceBoundExpansionTests(unittest.TestCase):
         )
         self.assertEqual(result.relationship_supports, ())
 
+        valid_candidates = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader, enabled,
+            maximum_candidates=64,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        self.assertTrue(any(
+            candidate.relationship_parent_candidate_id is not None
+            for candidate in valid_candidates
+        ))
+        with self.assertRaisesRegex(ValueError, "duplicate_relationship_support"):
+            ranked_candidates_from_retrieval(
+                graph, task(), snapshot, reader,
+                replace(
+                    enabled,
+                    relationship_supports=(
+                        enabled.relationship_supports[0],
+                        enabled.relationship_supports[0],
+                    ),
+                ),
+                maximum_candidates=64,
+                maximum_candidate_bytes=32_768,
+                maximum_unit_bytes=4096,
+            )
+
         forged_support = replace(
             enabled.relationship_supports[0], source_coordinate=target_coordinate
         )
         object.__setattr__(bound, "source_coordinate", target_coordinate)
-        candidates = ranked_candidates_from_retrieval(
-            graph, task(), snapshot, reader,
-            replace(enabled, relationship_supports=(forged_support,)),
-        )
-        self.assertTrue(candidates)
-        self.assertTrue(all(
-            candidate.relationship_parent_candidate_id is None
-            for candidate in candidates
-        ))
+        with self.assertRaisesRegex(ValueError, "relationship_support_custody_mismatch"):
+            ranked_candidates_from_retrieval(
+                graph, task(), snapshot, reader,
+                replace(enabled, relationship_supports=(forged_support,)),
+                maximum_candidates=64,
+                maximum_candidate_bytes=32_768,
+                maximum_unit_bytes=4096,
+            )
 
 
 class ProofObligationCompilerTests(unittest.TestCase):

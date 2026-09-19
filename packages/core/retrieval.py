@@ -408,8 +408,12 @@ def ranked_candidates_from_retrieval(
     snapshot: SourceSnapshotV4,
     reader: SourceReaderV4,
     retrieval: RetrievalResult,
+    *,
+    maximum_candidates: int,
+    maximum_candidate_bytes: int,
+    maximum_unit_bytes: int,
 ) -> tuple[RankedContextCandidate, ...]:
-    """Build one capped Jev shortlist from verified retrieval occurrences.
+    """Build one explicitly capped, Jev-compatible candidate shortlist.
 
     Candidate ranges are source-bound units. A bounded fallback range is not a
     completeness claim. Required status comes only from caller-declared proof
@@ -422,23 +426,92 @@ def ranked_candidates_from_retrieval(
         raise TypeError("graph and task must use exact core types")
     if type(snapshot) is not SourceSnapshotV4 or type(retrieval) is not RetrievalResult:
         raise TypeError("snapshot and retrieval must use exact core types")
+    for value, limit, label in (
+        (maximum_candidates, MAX_CANDIDATES, "maximum_candidates"),
+        (maximum_candidate_bytes, MAX_EXCERPTS_BYTES, "maximum_candidate_bytes"),
+        (maximum_unit_bytes, MAX_EXCERPT_BYTES, "maximum_unit_bytes"),
+    ):
+        if type(value) is not int or not 1 <= value <= limit:
+            raise ValueError(f"{label}_invalid")
     if retrieval.fail_closed:
         raise ValueError("retrieval_failed_closed")
     source_bytes = _read_verified_source_bytes(snapshot, reader)
     sources = {source.path: source for source in snapshot.sources}
     records = graph.record_map()
 
-    required_by_record: dict[str, dict[tuple[int, int], EvidenceItem]] = defaultdict(dict)
+    def make_candidate(
+        record_id: str,
+        path: str,
+        digest: str,
+        start: int,
+        end: int,
+        *,
+        required: bool,
+        parent_id: str | None = None,
+    ) -> RankedContextCandidate:
+        record = records.get(record_id)
+        source = sources.get(path)
+        raw = source_bytes.get(path)
+        if (
+            record is None or source is None or raw is None
+            or record.provenance.path != path
+            or record.provenance.sha256 != digest
+            or source.sha256 != digest
+            or hashlib.sha256(raw).hexdigest() != digest
+            or record.content.encode("utf-8") != raw
+            or not is_authenticated_eligible(record, task.allowed_sensitivities)
+            or not 0 <= start < end <= len(raw)
+        ):
+            raise ValueError("candidate_custody_mismatch")
+        excerpt = raw[start:end]
+        try:
+            if excerpt.decode("utf-8").encode("utf-8") != excerpt:
+                raise ValueError("candidate_not_utf8")
+        except UnicodeDecodeError as error:
+            raise ValueError("candidate_not_utf8") from error
+        if len(excerpt) > maximum_unit_bytes:
+            raise ValueError("required_candidate_budget_exceeded" if required else "candidate_unit_budget_exceeded")
+        identity = {
+            "path": path,
+            "source_sha256": digest,
+            "byte_start": start,
+            "byte_end": end,
+        }
+        return RankedContextCandidate(
+            hashlib.sha256(jev_canonical(identity)).hexdigest(),
+            path, digest, start, end, required, record_id, parent_id,
+        )
+
+    required: list[RankedContextCandidate] = []
+    required_ids: set[str] = set()
     for evidence in retrieval.evidence:
         if not evidence.obligation_ids:
             continue
-        required_by_record[evidence.record_id][
-            (evidence.byte_start, evidence.byte_end)
-        ] = evidence
+        try:
+            candidate = make_candidate(
+                evidence.record_id, evidence.source_path, evidence.source_sha256,
+                evidence.byte_start, evidence.byte_end, required=True,
+            )
+        except ValueError as error:
+            if str(error) == "required_candidate_budget_exceeded":
+                raise
+            raise ValueError("required_candidate_custody_mismatch") from error
+        raw = source_bytes[evidence.source_path]
+        if evidence.excerpt_sha256 != hashlib.sha256(
+            raw[evidence.byte_start:evidence.byte_end]
+        ).hexdigest():
+            raise ValueError("required_candidate_custody_mismatch")
+        if candidate.candidate_id in required_ids:
+            raise ValueError("duplicate_required_evidence")
+        required_ids.add(candidate.candidate_id)
+        required.append(candidate)
 
-    primary_by_record: dict[str, list[RankedContextCandidate]] = defaultdict(list)
-    first_primary_by_record: dict[str, RankedContextCandidate] = {}
-    seen_primary: set[str] = set()
+    required_bytes = sum(item.byte_end - item.byte_start for item in required)
+    if len(required) > maximum_candidates or required_bytes > maximum_candidate_bytes:
+        raise ValueError("required_candidate_budget_exceeded")
+
+    optional_by_record: dict[str, list[RankedContextCandidate]] = defaultdict(list)
+    seen_primary: set[str] = set(required_ids)
     hit_records: set[str] = set()
     hit_order: list[str] = []
     for hit in retrieval.hits:
@@ -466,9 +539,7 @@ def ranked_candidates_from_retrieval(
         if content.encode("utf-8") != raw or record.content.encode("utf-8") != raw:
             raise ValueError("retrieval_candidate_custody_mismatch")
 
-        units: dict[tuple[int, int], set[str]] = {
-            bounds: set() for bounds in required_by_record.get(hit.record_id, {})
-        }
+        units: dict[tuple[int, int], tuple[set[str], bool]] = {}
         for tag in _extract_tags(record, content):
             if (
                 tag.byte_start is None
@@ -476,75 +547,52 @@ def ranked_candidates_from_retrieval(
                 or tag.value not in hit.matched_facets
             ):
                 continue
-            start, end, _ = _bounded_source_unit_bounds(
-                raw, hit.source_path, tag.byte_start, tag.byte_end, MAX_EXCERPT_BYTES
+            start, end, complete = _bounded_source_unit_bounds(
+                raw, hit.source_path, tag.byte_start, tag.byte_end, maximum_unit_bytes
             )
             if end > start:
-                units.setdefault((start, end), set()).add(tag.value)
+                facets, prior_complete = units.setdefault((start, end), (set(), False))
+                facets.add(tag.value)
+                units[(start, end)] = facets, prior_complete or complete
 
-        required_bounds = required_by_record.get(hit.record_id, {})
         ordered_units = sorted(
             units,
             key=lambda bounds: (
-                bounds not in required_bounds,
-                -len(units[bounds]),
-                bounds[1] - bounds[0],
+                -len(units[bounds][0]),
+                not units[bounds][1],
                 bounds[0],
                 bounds[1],
             ),
         )
         for start, end in ordered_units:
-            required = (start, end) in required_bounds
-            if not 0 <= start < end <= len(raw):
-                raise ValueError("retrieval_candidate_range_invalid")
-            excerpt = raw[start:end]
             try:
-                if excerpt.decode("utf-8").encode("utf-8") != excerpt:
-                    raise ValueError("retrieval_candidate_not_utf8")
-            except UnicodeDecodeError as error:
-                raise ValueError("retrieval_candidate_not_utf8") from error
-            if required:
-                evidence = required_by_record[hit.record_id][(start, end)]
-                if (
-                    evidence.source_path != hit.source_path
-                    or evidence.source_sha256 != source.sha256
-                    or evidence.excerpt_sha256 != hashlib.sha256(excerpt).hexdigest()
-                ):
-                    raise ValueError("required_candidate_custody_mismatch")
-                if end - start > MAX_EXCERPT_BYTES:
-                    raise ValueError("required_candidate_budget_exceeded")
-            identity = {
-                "path": hit.source_path,
-                "source_sha256": source.sha256,
-                "byte_start": start,
-                "byte_end": end,
-            }
-            candidate = RankedContextCandidate(
-                hashlib.sha256(jev_canonical(identity)).hexdigest(),
-                hit.source_path,
-                source.sha256,
-                start,
-                end,
-                required,
-                hit.record_id,
-            )
+                candidate = make_candidate(
+                    hit.record_id, hit.source_path, source.sha256, start, end,
+                    required=False,
+                )
+            except ValueError as error:
+                raise ValueError("retrieval_candidate_custody_mismatch") from error
             if candidate.candidate_id in seen_primary:
                 continue
             seen_primary.add(candidate.candidate_id)
-            primary_by_record[hit.record_id].append(candidate)
-            first_primary_by_record.setdefault(hit.record_id, candidate)
+            optional_by_record[hit.record_id].append(candidate)
 
-    primary = [
+    optional = [
         candidates[offset]
-        for offset in range(max(map(len, primary_by_record.values()), default=0))
+        for offset in range(max(map(len, optional_by_record.values()), default=0))
         for record_id in hit_order
-        if offset < len(candidates := primary_by_record[record_id])
+        if offset < len(candidates := optional_by_record[record_id])
     ]
+    primary = [*required, *optional]
 
     primary_ids = {candidate.candidate_id for candidate in primary}
-    supports_by_seed: dict[str, RankedContextCandidate] = {}
+    supports_by_parent: dict[str, list[RankedContextCandidate]] = defaultdict(list)
+    seen_supports: set[RelationshipSupport] = set()
     edges = graph.edge_map()
     for support in retrieval.relationship_supports:
+        if support in seen_supports:
+            raise ValueError("duplicate_relationship_support")
+        seen_supports.add(support)
         edge = edges.get(support.edge_id)
         seed = records.get(support.seed_record_id)
         target = records.get(support.target_record_id)
@@ -555,9 +603,7 @@ def ranked_candidates_from_retrieval(
         source = sources.get(coordinate.source_path)
         raw = source_bytes.get(coordinate.source_path)
         if (
-            support.seed_record_id not in first_primary_by_record
-            or support.seed_record_id in supports_by_seed
-            or edge is None
+            edge is None
             or edge.source_id != support.seed_record_id
             or edge.target_id != support.target_record_id
             or edge.relation != support.relation
@@ -585,58 +631,52 @@ def ranked_candidates_from_retrieval(
             or not is_authenticated_eligible(target, task.allowed_sensitivities)
             or not 0 <= coordinate.byte_start < coordinate.byte_end <= len(raw)
         ):
+            raise ValueError("relationship_support_custody_mismatch")
+        parent = next(
+            (
+                item for item in primary
+                if item.record_id == support.seed_record_id
+                and item.source_path == source_coordinate.source_path
+                and item.source_sha256 == source_coordinate.source_sha256
+                and item.byte_start <= source_coordinate.byte_start
+                and source_coordinate.byte_end <= item.byte_end
+            ),
+            None,
+        )
+        if parent is None:
             continue
         start, end, _ = _bounded_source_unit_bounds(
             raw, coordinate.source_path, coordinate.byte_start,
-            coordinate.byte_end, MAX_EXCERPT_BYTES,
+            coordinate.byte_end, maximum_unit_bytes,
         )
         if end <= start:
             continue
-        excerpt = raw[start:end]
         try:
-            if excerpt.decode("utf-8").encode("utf-8") != excerpt:
-                continue
-        except UnicodeDecodeError:
-            continue
-        if len(excerpt) > MAX_EXCERPT_BYTES:
-            continue
-        identity = {
-            "path": coordinate.source_path,
-            "source_sha256": coordinate.source_sha256,
-            "byte_start": start,
-            "byte_end": end,
-        }
-        candidate = RankedContextCandidate(
-            hashlib.sha256(jev_canonical(identity)).hexdigest(),
-            coordinate.source_path,
-            coordinate.source_sha256,
-            start,
-            end,
-            False,
-            support.target_record_id,
-            first_primary_by_record[support.seed_record_id].candidate_id,
-        )
+            candidate = make_candidate(
+                support.target_record_id, coordinate.source_path,
+                coordinate.source_sha256, start, end, required=False,
+                parent_id=parent.candidate_id,
+            )
+        except ValueError as error:
+            raise ValueError("relationship_support_custody_mismatch") from error
         if candidate.candidate_id not in primary_ids:
-            supports_by_seed[support.seed_record_id] = candidate
+            supports_by_parent[parent.candidate_id].append(candidate)
 
-    ordered: list[RankedContextCandidate] = []
-    supported: set[str] = set()
-    for candidate in primary:
+    ordered: list[RankedContextCandidate] = list(required)
+    for candidate in required:
+        ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
+    for candidate in optional:
         ordered.append(candidate)
-        if candidate.record_id in supported:
-            continue
-        support = supports_by_seed.get(candidate.record_id)
-        if support is not None:
-            ordered.append(support)
-            supported.add(candidate.record_id)
+        ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
 
-    maximum_candidates = min(task.node_budget, MAX_CANDIDATES)
-    maximum_bytes = min(task.byte_budget, MAX_EXCERPTS_BYTES)
     required_candidates = [candidate for candidate in ordered if candidate.required]
     required_bytes = sum(
         candidate.byte_end - candidate.byte_start for candidate in required_candidates
     )
-    if len(required_candidates) > maximum_candidates or required_bytes > maximum_bytes:
+    if (
+        len(required_candidates) > maximum_candidates
+        or required_bytes > maximum_candidate_bytes
+    ):
         raise ValueError("required_candidate_budget_exceeded")
     retained: list[RankedContextCandidate] = []
     retained_ids: set[str] = set()
@@ -652,7 +692,7 @@ def ranked_candidates_from_retrieval(
             remaining_required_bytes -= size
         elif (
             len(retained) + 1 + remaining_required_count > maximum_candidates
-            or used + size + remaining_required_bytes > maximum_bytes
+            or used + size + remaining_required_bytes > maximum_candidate_bytes
             or (
                 candidate.relationship_parent_candidate_id is not None
                 and candidate.relationship_parent_candidate_id not in retained_ids
@@ -2286,18 +2326,20 @@ def _byte_bounds(content: str, start: int, end: int) -> tuple[int, int]:
     return len(content[:start].encode("utf-8")), len(content[:end].encode("utf-8"))
 
 
-def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[int, int]:
+def _complete_unit_bounds_with_status(
+    raw: bytes, path: str, start: int, end: int
+) -> tuple[int, int, bool]:
     """Find a bounded complete source unit around a verified anchor."""
 
     if not raw:
-        return 0, 0
+        return 0, 0, False
     line_start = raw.rfind(b"\n", 0, start) + 1
     line_end = raw.find(b"\n", end)
     line_end = len(raw) if line_end < 0 else line_end + 1
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
-        return _line_window(raw, start, end, 1200)
+        return (*_line_window(raw, start, end, 1200), False)
     lines = text.splitlines(keepends=True)
     offsets: list[int] = []
     position = 0
@@ -2328,11 +2370,11 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
                 if match and len(match.group(1)) <= heading_level:
                     finish = index
                     break
-            return offsets[heading_line], offsets[finish] if finish < len(offsets) else len(raw)
-        return _paragraph_bounds(raw, lines, offsets, anchor_line)
+            return offsets[heading_line], offsets[finish] if finish < len(offsets) else len(raw), True
+        return (*_paragraph_bounds(raw, lines, offsets, anchor_line), True)
 
     if path.lower().endswith((".rst", ".txt")):
-        return _paragraph_bounds(raw, lines, offsets, anchor_line)
+        return (*_paragraph_bounds(raw, lines, offsets, anchor_line), True)
 
     config_suffixes = (".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf")
     is_config_path = path.lower().endswith(config_suffixes) or any(
@@ -2351,7 +2393,7 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
                     elif raw[index:index + 1] == close:
                         depth -= 1
                         if depth == 0:
-                            return opening, index + 1
+                            return opening, index + 1, True
         # Python or JavaScript mapping assignments use the same bounded brace
         # rule as JSON configuration, while scalar settings remain one block.
         opening = raw.find(b"{", line_start, line_end)
@@ -2363,7 +2405,7 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
                 elif raw[index:index + 1] == b"}":
                     depth -= 1
                     if depth == 0:
-                        return line_start, index + 1
+                        return line_start, index + 1, True
         indentation = len(lines[anchor_line]) - len(stripped)
         finish = anchor_line + 1
         while finish < len(lines):
@@ -2371,7 +2413,7 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
             if candidate.strip() and len(candidate) - len(candidate.lstrip()) <= indentation:
                 break
             finish += 1
-        return offsets[anchor_line], offsets[finish] if finish < len(offsets) else len(raw)
+        return offsets[anchor_line], offsets[finish] if finish < len(offsets) else len(raw), True
 
     declaration = None
     for index in range(anchor_line, -1, -1):
@@ -2392,7 +2434,7 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
                 if candidate_indent <= indentation:
                     break
             finish += 1
-        return offsets[begin], offsets[finish] if finish < len(offsets) else len(raw)
+        return offsets[begin], offsets[finish] if finish < len(offsets) else len(raw), True
 
     brace_declaration = None
     for index in range(anchor_line, -1, -1):
@@ -2410,9 +2452,17 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
                     depth -= 1
                     if depth == 0:
                         close_end = raw.find(b"\n", index)
-                        return offsets[brace_declaration], len(raw) if close_end < 0 else close_end + 1
+                        return offsets[brace_declaration], len(raw) if close_end < 0 else close_end + 1, True
 
-    return _line_window(raw, start, end, 1200)
+    return (*_line_window(raw, start, end, 1200), False)
+
+
+def _complete_unit_bounds(
+    raw: bytes, path: str, start: int, end: int
+) -> tuple[int, int]:
+    """Return the existing two-value complete-unit interface."""
+
+    return _complete_unit_bounds_with_status(raw, path, start, end)[:2]
 
 
 def _paragraph_bounds(
@@ -2441,9 +2491,11 @@ def _bounded_source_unit_bounds(
 ) -> tuple[int, int, bool]:
     """Return a bounded source unit and whether the returned unit is complete."""
 
-    unit_start, unit_end = _complete_unit_bounds(raw, path, start, end)
+    unit_start, unit_end, complete = _complete_unit_bounds_with_status(
+        raw, path, start, end
+    )
     if unit_end > unit_start and unit_end - unit_start <= maximum:
-        return unit_start, unit_end, True
+        return unit_start, unit_end, complete
     if path.lower().endswith((".md", ".rst", ".txt")):
         try:
             text = raw.decode("utf-8")

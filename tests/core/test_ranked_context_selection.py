@@ -481,11 +481,40 @@ class RankedContextSelectionTests(unittest.TestCase):
             graph_candidates=graph_candidates,
             jev_enabled=True,
         )
+        partial_parent = replace(
+            candidates[1], candidate_id="partial-parent",
+            byte_start=candidates[1].byte_start + 1,
+        )
+        parent_outside = plan_ranked_context(
+            verified_graph, tight, snapshot, reader, query=QUERY,
+            direct_candidates=candidates,
+            graph_candidates=(
+                candidates[0], partial_parent, candidates[2],
+                replace(
+                    relationship,
+                    relationship_parent_candidate_id=partial_parent.candidate_id,
+                ),
+            ),
+        )
+        target_outside = plan_ranked_context(
+            verified_graph, tight, snapshot, reader, query=QUERY,
+            direct_candidates=candidates,
+            graph_candidates=(
+                *candidates,
+                replace(
+                    relationship,
+                    candidate_id="partial-target",
+                    byte_start=relationship.byte_start + 1,
+                ),
+            ),
+        )
 
         self.assertEqual(direct.route, "direct")
         self.assertEqual(fabricated.route, "direct")
         self.assertEqual(planned.route, "graph")
         self.assertEqual(changed_required.route, "direct")
+        self.assertEqual(parent_outside.route, "direct")
+        self.assertEqual(target_outside.route, "direct")
         self.assertIsNone(planned.baseline.approved_request_sha256)
         baseline_payload = json.loads(planned.baseline.projection.content)
         self.assertNotIn("approved_request_sha256", baseline_payload)

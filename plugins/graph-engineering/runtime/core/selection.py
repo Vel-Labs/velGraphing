@@ -779,6 +779,10 @@ def _has_verified_relationship_edge(
             == (parent.source_path, parent.source_sha256)
             and (target.source_path, target.source_sha256)
             == (candidate.source_path, candidate.source_sha256)
+            and parent.byte_start <= source.byte_start
+            and source.byte_end <= parent.byte_end
+            and candidate.byte_start <= target.byte_start
+            and target.byte_end <= candidate.byte_end
         ):
             return True
     return False

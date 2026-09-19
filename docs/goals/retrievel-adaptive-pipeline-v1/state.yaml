@@ -5,6 +5,7 @@ milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
 current_gate: fresh_offline_candidate_freeze_before_public_corpus_study
+candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
 exact_blocker: null
 next_milestone: T040
 provider:
