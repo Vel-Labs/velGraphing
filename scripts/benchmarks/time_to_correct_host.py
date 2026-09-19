@@ -24,6 +24,22 @@ USAGE_KEYS = {
     "model", "provenance", "input_tokens", "output_tokens",
     "cached_input_tokens", "reasoning_output_tokens", "cost_usd",
 }
+BLINDED_KEYS = {
+    "arm", "graph_navigation", "route", "run_id", "trial_id", "treatment",
+    "treatment_status", "jev", "jev_status", "jev_treatment",
+}
+
+
+def _blind(value: Any) -> Any:
+    if type(value) is dict:
+        return {
+            key: _blind(item)
+            for key, item in value.items()
+            if key not in BLINDED_KEYS and not key.startswith("jev_")
+        }
+    if type(value) is list:
+        return [_blind(item) for item in value]
+    return value
 
 
 def _response_contract(properties: Mapping[str, Any]) -> dict[str, Any]:
@@ -180,12 +196,12 @@ def run_process_trial(
             "attempt": attempt,
             "identity": {
                 key: t.identity[key] for key in (
-                    "run_id", "trial_id", "task_id", "arm", "repository_id",
+                    "task_id", "repository_id",
                     "repository_commit", "source_snapshot_sha256", "answer_model",
                     "reasoning", "prompt_sha256",
                 )
             },
-            "payload": prepared,
+            "payload": _blind(prepared),
         }
         if answer_response_contract is not None:
             payload["response_contract"] = dict(answer_response_contract)
@@ -224,7 +240,7 @@ def run_process_trial(
             "attempt": attempt,
             "identity": {
                 key: t.identity[key] for key in (
-                    "run_id", "trial_id", "task_id", "arm", "rubric_sha256", "rubric_version",
+                    "task_id", "rubric_sha256", "rubric_version",
                 )
             },
             "answer_text": produced.content,
@@ -232,7 +248,7 @@ def run_process_trial(
         if grader_response_contract is not None:
             payload["response_contract"] = dict(grader_response_contract)
         if grader_context is not None:
-            payload["grader_context"] = grader_context
+            payload["grader_context"] = _blind(grader_context)
             t.context(canonical(payload), kind="tool_message")
         output = _invoke(t, "grader", grader_command, payload, cwd, grader_timeout)
         expected = {

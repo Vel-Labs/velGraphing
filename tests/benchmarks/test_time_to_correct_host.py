@@ -23,7 +23,14 @@ def identity():
 ANSWER_CODE = r'''
 import json, sys
 payload = json.load(sys.stdin)
-if "rubric_sha256" in payload["identity"]:
+forbidden = {"arm", "graph_navigation", "route", "run_id", "trial_id", "treatment", "treatment_status", "jev", "jev_status", "jev_treatment"}
+def leaks(value):
+    if isinstance(value, dict):
+        return any(key in forbidden or key.startswith("jev_") or leaks(item) for key, item in value.items())
+    if isinstance(value, list):
+        return any(leaks(item) for item in value)
+    return False
+if "rubric_sha256" in payload["identity"] or leaks(payload):
     raise SystemExit(9)
 if "response_contract" in payload:
     raise SystemExit(8)
@@ -62,6 +69,15 @@ sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":"), ensur
 GRADER_CODE = r'''
 import json, sys
 payload = json.load(sys.stdin)
+forbidden = {"arm", "graph_navigation", "route", "run_id", "trial_id", "treatment", "treatment_status", "jev", "jev_status", "jev_treatment"}
+def leaks(value):
+    if isinstance(value, dict):
+        return any(key in forbidden or key.startswith("jev_") or leaks(item) for key, item in value.items())
+    if isinstance(value, list):
+        return any(leaks(item) for item in value)
+    return False
+if leaks(payload):
+    raise SystemExit(9)
 if "response_contract" in payload:
     raise SystemExit(8)
 result = {
@@ -94,7 +110,7 @@ class HostBoundaryTests(unittest.TestCase):
         self.cwd = Path(self.temp.name)
 
     def run_host(self, answer_code=ANSWER_CODE, *, answer_timeout_s=2,
-                 wall_limit_ns=5_000_000_000, prepared=None):
+                 wall_limit_ns=5_000_000_000, prepared=None, grader_context=None):
         trial = Trial(identity(), Budget(0, wall_limit_ns), execution="fixture")
         return run_process_trial(
             trial,
@@ -104,6 +120,7 @@ class HostBoundaryTests(unittest.TestCase):
             cwd=self.cwd,
             answer_timeout_s=answer_timeout_s,
             grader_timeout_s=2,
+            grader_context=grader_context,
         )
 
     def test_real_answer_and_independent_grader_subprocesses(self):
@@ -118,6 +135,20 @@ class HostBoundaryTests(unittest.TestCase):
         self.assertEqual(result["total_output_tokens"], 3)
         self.assertTrue(result["usage_complete"])
         self.assertEqual(len(result["attempts"][0]["context_deliveries"]), 1)
+
+    def test_actual_subprocess_inputs_are_treatment_blind(self):
+        treatment = {
+            "question": "frozen question",
+            "arm": "D",
+            "route": "typed_graph",
+            "graph_navigation": {"jev_status": "reranked"},
+            "nested": [{"jev_treatment": "enabled", "evidence": "kept"}],
+        }
+        result = self.run_host(
+            prepared=treatment,
+            grader_context={"run_id": "hidden", "jev": treatment, "rubric": "kept"},
+        )
+        self.assertEqual(result["terminal_reason"], "passed")
 
     def test_process_timeout_is_callback_timeout_not_wall_deadline(self):
         result = self.run_host("import time; time.sleep(1)", answer_timeout_s=0.01)

@@ -185,6 +185,7 @@ class Fixture:
                 self.manifests,
                 self.lanes,
                 "2" * 40,
+                mod.evaluator.PRODUCTION_STUDY,
             )
 
     def close(self) -> None:
@@ -198,6 +199,7 @@ class JevPreviewTests(unittest.TestCase):
             expected_candidate_artifact_sha256=candidate_sha256,
             expected_candidate_selector_commit="1" * 40,
             expected_adapter_commit="2" * 40,
+            expected_study_id=mod.evaluator.PRODUCTION_STUDY,
         )
 
     def test_direct_cli_loads_worktree_core(self) -> None:
@@ -281,6 +283,69 @@ class JevPreviewTests(unittest.TestCase):
         self.assertEqual(receipt["preview_artifact_sha256"], plan["preview_artifact_sha256"])
         self.assertEqual(plan["candidate_artifact_sha256"], "d147df356e72aa6588d0840ea32940b6db5d5dae975acf2b218e3d4cfc697ae9")
 
+    def test_dependency_plan_is_source_free_and_offline(self) -> None:
+        plan = json.loads(
+            (ROOT / "benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertEqual(set(plan), {
+            "schema_version", "study_id", "task_id", "candidate_artifact_sha256",
+            "candidate_selector_commit", "question_registry_sha256", "prompt_sha256",
+            "source_snapshot_sha256", "label_artifact_sha256", "result_artifact_sha256",
+            "limits", "provider_calls_executed", "live_authorized",
+            "provider_details_boundary", "request_details_boundary",
+        })
+        self.assertEqual(plan["study_id"], mod.DEPENDENCY_STUDY)
+        self.assertEqual(plan["task_id"], "D-01")
+        self.assertEqual(plan["candidate_artifact_sha256"], mod.DEPENDENCY_CANDIDATE_SHA256)
+        self.assertEqual(plan["candidate_selector_commit"], mod.DEPENDENCY_SELECTOR_COMMIT)
+        self.assertEqual(plan["limits"], {
+            "candidate_count": 64,
+            "candidate_aggregate_bytes": 32_768,
+            "candidate_unit_bytes": 4096,
+            "final_answer_bytes": 16_384,
+            "request_bytes": 131_072,
+            "maximum_jev_calls": 2,
+            "retries": 0,
+        })
+        self.assertEqual(plan["provider_calls_executed"], 0)
+        self.assertFalse(plan["live_authorized"])
+        self.assertNotIn("request_hashes", plan)
+
+    def test_valid_synthetic_observation_changes_d_membership_and_keeps_required(self) -> None:
+        from dataclasses import replace
+        from packages.core import Graph
+        from tests.core.test_ranked_context_selection import (
+            fixture, graph_with_relationship_edge, observation, select,
+            source_record, spec,
+        )
+
+        graph, snapshot, reader, candidates = fixture()
+        displaced = replace(candidates[2], candidate_id="c3", record_id="record-c3")
+        child = replace(candidates[2], relationship_parent_candidate_id="c1")
+        graph = Graph((*graph.records, source_record(
+            displaced.record_id, displaced.source_path, displaced.source_sha256,
+            "optional-b",
+        )))
+        graph = graph_with_relationship_edge(
+            graph, snapshot, reader, candidates[1], child
+        )
+        pool = (candidates[0], displaced, candidates[1], child)
+        three = select(graph, spec(), snapshot, reader, pool[:3])
+        task = replace(spec(), byte_budget=three.projection.serialized_byte_count + 128)
+        baseline = select(graph, task, snapshot, reader, pool, jev_enabled=True)
+        reranked = select(
+            graph, task, snapshot, reader, pool,
+            observation(pool, ("c0", "c1", "c2", "c3"), snapshot),
+            jev_enabled=True, jev_observation_qualified=True,
+        )
+
+        self.assertTrue(baseline.jev_decision.jev_call_could_affect_selection)
+        self.assertEqual(baseline.projection.selected_candidate_ids, ("c0", "c3", "c1"))
+        self.assertEqual(reranked.projection.selected_candidate_ids, ("c0", "c1", "c2"))
+        self.assertEqual(reranked.projection.required_candidate_ids, ("c0",))
+        self.assertTrue(reranked.jev_source_revalidated)
+
     def test_fixed_four_previews_are_bound_and_offline(self) -> None:
         fixture = Fixture()
         try:
@@ -322,6 +387,7 @@ class JevPreviewTests(unittest.TestCase):
                         fixture.manifests,
                         fixture.lanes,
                         "2" * 40,
+                        mod.evaluator.PRODUCTION_STUDY,
                     )
                 with self.assertRaisesRegex(mod.PreviewError, "invalid_candidate_artifact_file"):
                     mod.build_preview(
@@ -331,6 +397,7 @@ class JevPreviewTests(unittest.TestCase):
                         fixture.manifests,
                         fixture.lanes,
                         "2" * 40,
+                        mod.evaluator.PRODUCTION_STUDY,
                     )
                 alias = fixture.root / "candidate-alias.json"
                 alias.symlink_to(fixture.candidates)
@@ -342,6 +409,7 @@ class JevPreviewTests(unittest.TestCase):
                         fixture.manifests,
                         fixture.lanes,
                         "2" * 40,
+                        mod.evaluator.PRODUCTION_STUDY,
                     )
         finally:
             fixture.close()

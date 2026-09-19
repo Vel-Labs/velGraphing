@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create four offline, source-bound Jev v4 previews. No provider calls."""
+"""Create registered offline, source-bound Jev v4 previews. No provider calls."""
 
 from __future__ import annotations
 
@@ -34,15 +34,27 @@ EVALUATOR_PATH = ROOT / "scripts/benchmarks/time_to_correct_retrieval_eval_v4.py
 SCHEMA_VERSION = "velgraphing-jev-v4-preview-v1"
 MODEL = "jev-1.13.0"
 FINAL_SERIALIZED_BYTE_BUDGET = 16_384
-SHORTLIST_COUNT_CAP = 12
-SHORTLIST_BYTE_CAP = 24_576
 REQUEST_BYTE_CAP = 131_072
-PREVIEWS = (
+PRODUCTION_PREVIEWS = (
     ("C-02", "B", "direct"),
     ("C-02", "D", "typed_graph"),
     ("M-01", "B", "direct"),
     ("M-01", "D", "typed_graph"),
 )
+DEPENDENCY_PREVIEWS = (
+    ("D-01", "B", "direct"),
+    ("D-01", "D", "typed_graph"),
+)
+PREVIEWS = PRODUCTION_PREVIEWS
+DEPENDENCY_STUDY = "velgraphing-v4-thealgorithms-dependency-behavior-canary-v1"
+DEPENDENCY_CANDIDATE_SHA256 = (
+    "8a75f792aefbabe5679fdfb934e440f723649a5993cb46196d63a437486c9ce7"
+)
+DEPENDENCY_SELECTOR_COMMIT = "79adf45e8ff245c7e90701ea172d8de269228f83"
+FORBIDDEN_REQUEST_KEYS = {
+    "arm", "route", "run_id", "trial_id", "treatment", "treatment_status",
+    "jev", "jev_status", "jev_treatment",
+}
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 
@@ -62,6 +74,34 @@ def _module(name: str, path: Path) -> Any:
 
 generator = _module("jev_preview_ranked_generator", GENERATOR_PATH)
 evaluator = _module("jev_preview_ranked_evaluator", EVALUATOR_PATH)
+
+
+def _study(study_id: str) -> dict[str, Any]:
+    if study_id == evaluator.PRODUCTION_STUDY:
+        return {
+            "previews": PRODUCTION_PREVIEWS,
+            "questions": evaluator.PRODUCTION_QUESTIONS,
+            "tasks": evaluator.PRODUCTION_TASKS,
+            "registry_sha256": evaluator.PRODUCTION_QUESTION_REGISTRY_SHA256,
+            "candidate_sha256": None,
+            "selector_commit": None,
+            "candidate_count_cap": 12,
+            "candidate_byte_cap": 24_576,
+        }
+    if study_id == DEPENDENCY_STUDY:
+        return {
+            "previews": DEPENDENCY_PREVIEWS,
+            "questions": evaluator.THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_QUESTIONS,
+            "tasks": {"D-01"},
+            "registry_sha256": (
+                evaluator.THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_QUESTION_REGISTRY_SHA256
+            ),
+            "candidate_sha256": DEPENDENCY_CANDIDATE_SHA256,
+            "selector_commit": DEPENDENCY_SELECTOR_COMMIT,
+            "candidate_count_cap": 64,
+            "candidate_byte_cap": 32_768,
+        }
+    raise PreviewError("unsupported_preview_study")
 
 
 def _exact(value: object, keys: set[str], reason: str) -> Mapping[str, Any]:
@@ -116,7 +156,9 @@ def _load_inputs(
     candidates_path: Path,
     expected_candidates_sha256: str,
     questions_path: Path,
+    study_id: str,
 ) -> tuple[dict[str, Any], dict[str, dict[str, str]]]:
+    study = _study(study_id)
     if type(expected_candidates_sha256) is not str or not SHA256.fullmatch(
         expected_candidates_sha256
     ):
@@ -128,8 +170,13 @@ def _load_inputs(
         artifact = evaluator.validate_candidates(evaluator.decode(candidate_raw))
     except evaluator.EvaluationError as error:
         raise PreviewError("invalid_candidate_artifact") from error
-    if artifact["study_id"] != evaluator.PRODUCTION_STUDY:
-        raise PreviewError("production_candidate_artifact_required")
+    if artifact["study_id"] != study_id:
+        raise PreviewError("candidate_artifact_study_mismatch")
+    if study["candidate_sha256"] is not None and (
+        expected_candidates_sha256 != study["candidate_sha256"]
+        or artifact["selector_commit"] != study["selector_commit"]
+    ):
+        raise PreviewError("dependency_candidate_identity_mismatch")
 
     _canonical_file(questions_path, "invalid_question_registry_file")
     _tracked(questions_path)
@@ -139,17 +186,17 @@ def _load_inputs(
         raise PreviewError("invalid_question_registry") from error
     if (
         registry_sha256 != artifact["question_registry_sha256"]
-        or registry_sha256 != evaluator.PRODUCTION_QUESTION_REGISTRY_SHA256
+        or registry_sha256 != study["registry_sha256"]
     ):
         raise PreviewError("question_registry_mismatch")
     by_id = {row["id"]: row for row in questions}
-    if set(by_id) != evaluator.PRODUCTION_TASKS:
+    if set(by_id) != study["tasks"]:
         raise PreviewError("question_registry_task_mismatch")
     for task_id, row in by_id.items():
         if (
             row["corpus"],
             _sha256(row["prompt"].encode("utf-8")),
-        ) != evaluator.PRODUCTION_QUESTIONS[task_id]:
+        ) != study["questions"][task_id]:
             raise PreviewError("question_registry_binding_mismatch")
     return artifact, by_id
 
@@ -169,11 +216,12 @@ def _scan_corpora(
     questions: Mapping[str, Mapping[str, str]],
     manifests_root: Path,
     lanes_root: Path,
+    previews: Sequence[tuple[str, str, str]],
 ) -> dict[str, dict[str, Any]]:
     _canonical_directory(manifests_root, "invalid_manifests_root")
     _canonical_directory(lanes_root, "invalid_lanes_root")
     prepared: dict[str, dict[str, Any]] = {}
-    for corpus in dict.fromkeys(questions[task]["corpus"] for task, _, _ in PREVIEWS):
+    for corpus in dict.fromkeys(questions[task]["corpus"] for task, _, _ in previews):
         manifest_path = manifests_root / generator.CORPUS_MANIFESTS[corpus]
         _canonical_file(manifest_path, "invalid_manifest_file")
         _tracked(manifest_path)
@@ -211,6 +259,9 @@ def _selection_value(result: Any) -> dict[str, object]:
         "approved_request_sha256": result.approved_request_sha256,
         "jev_source_revalidated": result.jev_source_revalidated,
         "source_revalidated": result.source_revalidated,
+        "jev_call_could_affect_selection": (
+            result.jev_decision.jev_call_could_affect_selection
+        ),
         "projection": {
             "content": projection.content,
             "serialized_byte_count": projection.serialized_byte_count,
@@ -253,7 +304,23 @@ def _index_value(record: Mapping[str, Any]) -> dict[str, object]:
         "required_candidate_ids": projection["required_candidate_ids"],
         "serialized_byte_count": projection["serialized_byte_count"],
         "excerpt_byte_count": projection["excerpt_byte_count"],
+        "jev_call_could_affect_selection": selection[
+            "jev_call_could_affect_selection"
+        ],
     }
+
+
+def _request_has_treatment_identity(value: object) -> bool:
+    if type(value) is dict:
+        return any(
+            key in FORBIDDEN_REQUEST_KEYS
+            or key.startswith("jev_")
+            or _request_has_treatment_identity(item)
+            for key, item in value.items()
+        )
+    if type(value) is list:
+        return any(_request_has_treatment_identity(item) for item in value)
+    return False
 
 
 def _expected_questions(count: int) -> dict[str, object]:
@@ -283,6 +350,8 @@ def _preview_record(
     arm: str,
     route: str,
     lane: Mapping[str, Any],
+    candidate_count_cap: int,
+    candidate_byte_cap: int,
 ) -> tuple[dict[str, object], dict[str, object]]:
     if run["route"] != route or run["task_id"] != question["id"]:
         raise PreviewError("preview_route_binding_mismatch")
@@ -293,11 +362,11 @@ def _preview_record(
     ):
         raise PreviewError("preview_snapshot_mismatch")
     if (
-        len(run["candidates"]) > SHORTLIST_COUNT_CAP
+        len(run["candidates"]) > candidate_count_cap
         or sum(
             row["byte_end"] - row["byte_start"] for row in run["candidates"]
         )
-        > SHORTLIST_BYTE_CAP
+        > candidate_byte_cap
     ):
         raise PreviewError("preview_shortlist_budget_exceeded")
     try:
@@ -326,6 +395,8 @@ def _preview_record(
         raise PreviewError("preview_prepare_failed") from error
     if prepared["request_bytes"] > REQUEST_BYTE_CAP:
         raise PreviewError("preview_request_budget_exceeded")
+    if _request_has_treatment_identity(prepared["request"]):
+        raise PreviewError("treatment_identity_in_request")
     graph = lane["plain_graph"] if route == "direct" else lane["typed_graph"]
     task = TaskSpec(
         task_id=f"{question['id']}-{arm}",
@@ -341,6 +412,7 @@ def _preview_record(
         query=question["prompt"],
         candidates=candidates,
         approved_request_sha256=prepared["request_sha256"],
+        jev_enabled=True,
         jev_observation=None,
     )
     selected = result.projection.selected_candidate_ids
@@ -378,16 +450,18 @@ def build_preview(
     manifests_root: Path,
     lanes_root: Path,
     adapter_commit: str,
+    study_id: str,
 ) -> dict[str, object]:
     if type(adapter_commit) is not str or not COMMIT.fullmatch(adapter_commit):
         raise PreviewError("invalid_adapter_commit")
+    study = _study(study_id)
     artifact, questions = _load_inputs(
-        candidates_path, expected_candidates_sha256, questions_path
+        candidates_path, expected_candidates_sha256, questions_path, study_id
     )
-    lanes = _scan_corpora(questions, manifests_root, lanes_root)
+    lanes = _scan_corpora(questions, manifests_root, lanes_root, study["previews"])
     runs = {(run["task_id"], run["route"]): run for run in artifact["runs"]}
     records, index = [], []
-    for task_id, arm, route in PREVIEWS:
+    for task_id, arm, route in study["previews"]:
         question = questions[task_id]
         record, row = _preview_record(
             runs[(task_id, route)],
@@ -395,11 +469,14 @@ def build_preview(
             arm,
             route,
             lanes[question["corpus"]],
+            study["candidate_count_cap"],
+            study["candidate_byte_cap"],
         )
         records.append(record)
         index.append(row)
     preview = {
         "schema_version": SCHEMA_VERSION,
+        "study_id": study_id,
         "adapter_commit": adapter_commit,
         "candidate_artifact_sha256": expected_candidates_sha256,
         "candidate_schema_version": artifact["schema_version"],
@@ -417,6 +494,7 @@ def build_preview(
         expected_candidate_artifact_sha256=expected_candidates_sha256,
         expected_candidate_selector_commit=artifact["selector_commit"],
         expected_adapter_commit=adapter_commit,
+        expected_study_id=study_id,
     )
     return preview
 
@@ -427,9 +505,11 @@ def validate_preview(
     expected_candidate_artifact_sha256: str,
     expected_candidate_selector_commit: str,
     expected_adapter_commit: str,
+    expected_study_id: str,
 ) -> dict[str, Any]:
+    study = _study(expected_study_id)
     preview = _exact(value, {
-        "schema_version", "adapter_commit", "candidate_artifact_sha256",
+        "schema_version", "study_id", "adapter_commit", "candidate_artifact_sha256",
         "candidate_schema_version", "candidate_selector_commit",
         "question_registry_sha256", "model", "rubric_version", "provider_calls",
         "model_usefulness_qualified", "records", "index",
@@ -442,6 +522,7 @@ def validate_preview(
         or type(expected_adapter_commit) is not str
         or not COMMIT.fullmatch(expected_adapter_commit)
         or preview["schema_version"] != SCHEMA_VERSION
+        or preview["study_id"] != expected_study_id
         or type(preview["adapter_commit"]) is not str
         or not COMMIT.fullmatch(preview["adapter_commit"])
         or type(preview["candidate_artifact_sha256"]) is not str
@@ -457,18 +538,20 @@ def validate_preview(
         != expected_candidate_selector_commit
         or preview["adapter_commit"] != expected_adapter_commit
         or preview["question_registry_sha256"]
-        != evaluator.PRODUCTION_QUESTION_REGISTRY_SHA256
+        != study["registry_sha256"]
         or preview["model"] != MODEL
         or preview["rubric_version"] != jev.RUBRIC_VERSION
         or preview["provider_calls"] != 0
         or preview["model_usefulness_qualified"] is not False
         or type(preview["records"]) is not list
         or type(preview["index"]) is not list
-        or len(preview["records"]) != len(PREVIEWS)
-        or len(preview["index"]) != len(PREVIEWS)
+        or len(preview["records"]) != len(study["previews"])
+        or len(preview["index"]) != len(study["previews"])
     ):
         raise PreviewError("invalid_preview_identity")
-    for expected, record, index in zip(PREVIEWS, preview["records"], preview["index"]):
+    for expected, record, index in zip(
+        study["previews"], preview["records"], preview["index"]
+    ):
         task_id, arm, route = expected
         _exact(record, {
             "task_id", "arm", "route", "corpus", "source_snapshot_sha256",
@@ -477,7 +560,7 @@ def validate_preview(
         }, "invalid_preview_record")
         if (record["task_id"], record["arm"], record["route"]) != expected:
             raise PreviewError("preview_order_or_route_mismatch")
-        if record["corpus"] != evaluator.PRODUCTION_QUESTIONS[task_id][0]:
+        if record["corpus"] != study["questions"][task_id][0]:
             raise PreviewError("preview_corpus_binding_mismatch")
         try:
             packet = jev.validate_packet(record["packet"])
@@ -519,12 +602,12 @@ def validate_preview(
         if stripped != packet["candidates"]:
             raise PreviewError("bound_candidate_packet_mismatch")
         if (
-            len(packet["candidates"]) > SHORTLIST_COUNT_CAP
+            len(packet["candidates"]) > study["candidate_count_cap"]
             or sum(
                 candidate["byte_end"] - candidate["byte_start"]
                 for candidate in packet["candidates"]
             )
-            > SHORTLIST_BYTE_CAP
+            > study["candidate_byte_cap"]
         ):
             raise PreviewError("preview_shortlist_budget_exceeded")
         prepared = _exact(record["prepared"], {
@@ -533,6 +616,8 @@ def validate_preview(
             "rubric_version",
         }, "invalid_prepared_preview")
         request = _exact(prepared["request"], {"model", "state", "questions"}, "invalid_prepared_request")
+        if _request_has_treatment_identity(request):
+            raise PreviewError("treatment_identity_in_request")
         if (
             request["model"] != MODEL
             or request["questions"] != _expected_questions(len(packet["candidates"]))
@@ -583,7 +668,7 @@ def validate_preview(
         selection = _exact(record["baseline_selection"], {
             "route", "reason", "order_source", "candidate_set_sha256",
             "approved_request_sha256", "jev_source_revalidated",
-            "source_revalidated", "projection",
+            "source_revalidated", "jev_call_could_affect_selection", "projection",
         }, "invalid_baseline_selection")
         projection = _exact(selection["projection"], {
             "content", "serialized_byte_count", "excerpt_byte_count",
@@ -602,6 +687,7 @@ def validate_preview(
             or selection["approved_request_sha256"] is not None
             or selection["jev_source_revalidated"] is not False
             or selection["source_revalidated"] is not True
+            or type(selection["jev_call_could_affect_selection"]) is not bool
             or projection["fail_closed"] is not False
             or projection["serialized_byte_count"]
             != len(projection["content"].encode("utf-8"))
@@ -665,12 +751,22 @@ def validate_preview(
             raise PreviewError("preview_index_mismatch")
         if index["task_id"] != task_id or index["arm"] != arm or index["route"] != route:
             raise PreviewError("preview_index_order_mismatch")
+        if (
+            expected_study_id == DEPENDENCY_STUDY
+            and selection["jev_call_could_affect_selection"] is not True
+        ):
+            raise PreviewError("dependency_selection_not_jev_sensitive")
     return dict(preview)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--candidates", type=Path, required=True)
+    parser.add_argument(
+        "--study-id",
+        required=True,
+        choices=(evaluator.PRODUCTION_STUDY, DEPENDENCY_STUDY),
+    )
     parser.add_argument("--expected-candidates-sha256", required=True)
     parser.add_argument("--questions", type=Path, required=True)
     parser.add_argument("--manifests-root", type=Path, required=True)
@@ -687,6 +783,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.manifests_root,
             arguments.lanes_root,
             adapter_commit,
+            arguments.study_id,
         )
         output_sha256, output_bytes = generator.write_artifact(output, preview)
         if generator._git(ROOT, "status", "--porcelain=v1", "--untracked-files=all"):
