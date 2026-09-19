@@ -1,6 +1,6 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_d01_observed_source_and_coverage_gate_green_live_pending
+proof_boundary: t030_d01_authorization_envelope_bound_live_pending
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
@@ -13,8 +13,19 @@ provider:
   model: jev-1.13.0
   public_source_only: true
   maximum_cost_usd: 1.00
-  budget_status: under_cap_local_only
+  authorized_call_total: 3
+  completed_call_total: 1
+  planned_d01_call_total: 2
+  request_bytes_per_call_max: 131072
+  price_as_of: 2026-09-19
+  price_usd_per_million_input_tokens: 0.042
+  output_token_price_usd: 0.00
+  authorization_envelope_usd: 0.016515072
+  authorization_remaining_usd: 0.983484928
+  budget_status: bound_under_cap_local_only
   cost_telemetry: unavailable
+  actual_usage_boundary: ignored_local_only
+  public_results_boundary: separate_provider_permission_required
   calls_made: 1
 tasks:
   T010: complete

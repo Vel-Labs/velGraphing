@@ -231,8 +231,22 @@ is fail-closed while
 The remaining gate is Parent approval of an explicit tracked plan change to
 live authorization and the exact local answer and grader lane commands. This
 candidate is not a benchmark result. The two pinned Jev calls are far below the
-current listed-price $1 allowance, but run cost telemetry remains null. No broad
-cost or affordability claim is supported.
+current listed-price $1 allowance. The authorization envelope includes one
+completed T020 call and at most two planned D-01 calls. Each request is capped at
+`131072` UTF-8 bytes. Using the conservative bound `input_tokens <=
+request_bytes` and the Parent-verified 2026-09-19 TypeSafe price of `$0.042` per
+million input tokens with output tokens free, the maximum authorized spend is
+`3 * 131072 * 0.042 / 1000000 = $0.016515072`. This leaves `$0.983484928` of the
+`$1` authorization. Price sources: [TypeSafe](https://typesafe.ai/) and
+[Introducing System One Models and Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev).
+This is an authorization envelope, not observed provider cost or a performance
+claim. Provider-reported cost remains null, and actual usage remains
+ignored/local.
+
+TypeSafe terms prohibit public provider benchmark or performance information.
+Live request, response, usage, and result details remain ignored/local. A public
+pull request must not publish comparative Jev results without separate provider
+permission.
 
 ## Historical PR9 offline Jev preview freeze
 

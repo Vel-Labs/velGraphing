@@ -228,8 +228,14 @@ reads lane commands or starts a provider, answer, or grader process.
 Controller preflight elapsed time is recorded separately with
 `ttc_allocation: separate_not_in_arm_ttc`. Each Trial wall interval is all-in
 only for its arm after preflight. The two pinned Jev calls are far below the
-current listed-price $1 allowance. Cost telemetry remains null, so this supports
-no broad cost claim.
+current listed-price $1 allowance. Aggregate accounting now binds one completed
+T020 call plus at most two planned D-01 calls. Under the protocol's conservative
+price and request-cap rule, the authorization envelope is `$0.016515072` and
+the remaining authorization is `$0.983484928`. Provider-reported cost remains
+null, actual usage remains ignored/local, and no observed-cost or performance
+claim is supported. The protocol retains the price sources and TypeSafe public
+benchmark restriction. Comparative Jev results still require separate provider
+permission before public pull-request publication.
 
 The focused controller tests passed `9/9`. The scanner, host, and preview
 consumer tests passed `25/25`. The full four-arm fixture confirmed paired pool
