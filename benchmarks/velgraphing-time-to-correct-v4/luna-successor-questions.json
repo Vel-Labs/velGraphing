@@ -19,7 +19,7 @@
     {
       "id": "M-02",
       "corpus": "openchain-reference-material",
-      "prompt": "Using the frozen OpenChain reference material, explain the difference between defining baseline process requirements and choosing implementation details. Use the small-company playbook to give two documented choices about process documentation or training, and state whether the material presents them as mandatory or flexible. Cite the playbook and FAQ."
+      "prompt": "Using the frozen OpenChain reference material, explain the difference between defining baseline process requirements and choosing implementation details. Use the small-company playbook to give one documented process-documentation choice and one documented training choice, and state whether the material presents them as mandatory or flexible. Cite both the small-company playbook and FAQ."
     }
   ]
 }

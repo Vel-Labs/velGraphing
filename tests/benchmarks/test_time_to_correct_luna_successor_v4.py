@@ -52,6 +52,39 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertFalse(any("Kafka" in fact for fact in l_required))
         self.assertTrue(any("Kafka" in fact for fact in rubrics["L-01"]["diagnostic_facts"]))
 
+    def test_blind_review_citation_and_attribution_repairs(self) -> None:
+        questions, _ = mod.load_questions()
+        rubrics, _ = mod.load_rubrics()
+
+        s_asks = {row["id"] for row in rubrics["S-01"]["asks"]}
+        s_facts = [row["fact"] for row in rubrics["S-01"]["required_facts"]]
+        self.assertIn("citation", s_asks)
+        self.assertTrue(any("sorts/quick_sort.py" in fact for fact in s_facts))
+        input_effect = next(
+            row["fact"] for row in rubrics["S-01"]["required_facts"]
+            if row["ask_id"] == "input_effect"
+        )
+        self.assertIn("randomly selected pivot", input_effect)
+        self.assertIn("not deterministic", input_effect)
+
+        l_asks = {row["id"] for row in rubrics["L-01"]["asks"]}
+        l_facts = {row["ask_id"]: row["fact"] for row in rubrics["L-01"]["required_facts"]}
+        self.assertTrue({"citations", "attribution"}.issubset(l_asks))
+        self.assertIn("00-url-shortener.md", l_facts["citations"])
+        self.assertIn("00-scalability.md", l_facts["citations"])
+        self.assertIn("case study", l_facts["attribution"])
+        self.assertIn("scalability chapter", l_facts["attribution"])
+
+        m_prompt = questions["M-02"]["prompt"]
+        self.assertIn("one documented process-documentation choice", m_prompt)
+        self.assertIn("one documented training choice", m_prompt)
+        self.assertIn("Cite both the small-company playbook and FAQ", m_prompt)
+        m_facts = {row["ask_id"]: row["fact"] for row in rubrics["M-02"]["required_facts"]}
+        self.assertIn("reference training slides", m_facts["training"])
+        self.assertIn("LFC193/LFC194", m_facts["training"])
+        self.assertIn("Small Company Playbook", m_facts["citations"])
+        self.assertIn("OpenChain-Processes-and-FAQ/faq.md", m_facts["citations"])
+
     def test_identity_pins_luna_for_answer_and_grader(self) -> None:
         questions, _ = mod.load_questions()
         rubrics, _ = mod.load_rubrics()

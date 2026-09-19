@@ -8,16 +8,18 @@
         {"id": "input_effect", "text": "State what happens to the input list."},
         {"id": "result", "text": "State the returned list."},
         {"id": "partition", "text": "Explain one recursive partition."},
-        {"id": "base_case", "text": "Include base-case behavior."}
+        {"id": "base_case", "text": "Include base-case behavior."},
+        {"id": "citation", "text": "Cite the exact source path."}
       ],
       "required_facts": [
         {"ask_id": "base_case", "fact": "The base case returns the collection when its length is less than two."},
-        {"ask_id": "input_effect", "fact": "The implementation removes the randomly selected pivot with pop, so the supplied input list is mutated."},
+        {"ask_id": "input_effect", "fact": "The supplied input list is mutated because quick_sort removes the randomly selected pivot with pop; the final mutated contents are not deterministic because pivot selection is random."},
         {"ask_id": "partition", "fact": "The implementation builds lesser with items less than or equal to the pivot and greater with items above the pivot."},
-        {"ask_id": "result", "fact": "The recursive result for [3, 1, 2] is [1, 2, 3]."}
+        {"ask_id": "result", "fact": "The recursive result for [3, 1, 2] is [1, 2, 3]."},
+        {"ask_id": "citation", "fact": "The answer cites sorts/quick_sort.py as the exact source path."}
       ],
       "critical_facts": [
-        "The implementation removes the randomly selected pivot with pop, so the supplied input list is mutated.",
+        "The supplied input list is mutated because quick_sort removes the randomly selected pivot with pop; the final mutated contents are not deterministic because pivot selection is random.",
         "The recursive result for [3, 1, 2] is [1, 2, 3]."
       ],
       "diagnostic_facts": [],
@@ -54,13 +56,17 @@
         {"id": "traffic", "text": "Connect the stated traffic assumptions to the primary scaling problem."},
         {"id": "cache", "text": "Connect the stated cache assumptions to the primary scaling problem."},
         {"id": "vertical_horizontal", "text": "Connect vertical-versus-horizontal scaling guidance."},
-        {"id": "stateless", "text": "Connect stateless-service guidance."}
+        {"id": "stateless", "text": "Connect stateless-service guidance."},
+        {"id": "citations", "text": "Cite both chapters."},
+        {"id": "attribution", "text": "Separate case-study assumptions from general scalability guidance."}
       ],
       "required_facts": [
         {"ask_id": "traffic", "fact": "The URL shortener case study states a 100:1 redirect-to-create ratio and says the read path is hotter than the storage path."},
         {"ask_id": "cache", "fact": "The case study recommends layered caches and says the mapping is immutable once created."},
         {"ask_id": "vertical_horizontal", "fact": "The scalability chapter distinguishes vertical scaling from horizontal scaling and says horizontal scaling requires tolerance for concurrency, partial failure, and distributed state."},
-        {"ask_id": "stateless", "fact": "The scalability chapter defines a stateless service as holding no per-client information between requests and says any replica can handle any request."}
+        {"ask_id": "stateless", "fact": "The scalability chapter defines a stateless service as holding no per-client information between requests and says any replica can handle any request."},
+        {"ask_id": "citations", "fact": "The answer cites content/hld/part-8-case-studies/00-url-shortener.md and content/hld/part-1-core-fundamentals/00-scalability.md."},
+        {"ask_id": "attribution", "fact": "The answer attributes the traffic, cache, and immutability assumptions to the URL shortener case study and the vertical, horizontal, and stateless-service guidance to the scalability chapter."}
       ],
       "critical_facts": [
         "The URL shortener case study states a 100:1 redirect-to-create ratio and says the read path is hotter than the storage path.",
@@ -81,15 +87,17 @@
       "rubric_version": "velgraphing-m02-answer-rubric-v2",
       "asks": [
         {"id": "baseline", "text": "Explain baseline process requirements versus implementation details."},
-        {"id": "documentation", "text": "Give a documented process-documentation choice."},
-        {"id": "training", "text": "Give a documented training choice."},
-        {"id": "flexibility", "text": "State whether the choices are mandatory or flexible."}
+        {"id": "documentation", "text": "Give one documented process-documentation choice."},
+        {"id": "training", "text": "Give one documented training choice."},
+        {"id": "flexibility", "text": "State whether the choices are mandatory or flexible."},
+        {"id": "citations", "text": "Cite both the small-company playbook and FAQ."}
       ],
       "required_facts": [
         {"ask_id": "baseline", "fact": "The FAQ says ISO/IEC 5230 defines what and why rather than how or when and treats playbooks as separate implementation reference material."},
         {"ask_id": "documentation", "fact": "The small-company playbook gives a possible automated CI/CD process record as one documentation choice."},
-        {"ask_id": "training", "fact": "The small-company playbook documents different training approaches as implementation choices."},
-        {"ask_id": "flexibility", "fact": "The playbook examples are reference and inspiration, not mandatory prescriptive instructions."}
+        {"ask_id": "training", "fact": "The answer names one documented training choice from the playbook: reference training slides or the LFC193/LFC194 online courses."},
+        {"ask_id": "flexibility", "fact": "The playbook examples are reference and inspiration, not mandatory prescriptive instructions."},
+        {"ask_id": "citations", "fact": "The answer cites the OpenChain Small Company Playbook and OpenChain-Processes-and-FAQ/faq.md."}
       ],
       "critical_facts": [
         "The FAQ says ISO/IEC 5230 defines what and why rather than how or when and treats playbooks as separate implementation reference material.",
