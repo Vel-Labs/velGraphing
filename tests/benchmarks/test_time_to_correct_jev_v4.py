@@ -6,8 +6,10 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -194,6 +196,45 @@ class JevPreviewTests(unittest.TestCase):
             expected_candidate_artifact_sha256=candidate_sha256,
             expected_candidate_selector_commit="1" * 40,
             expected_adapter_commit="2" * 40,
+        )
+
+    def test_direct_cli_loads_worktree_core(self) -> None:
+        environment = os.environ.copy()
+        environment["PYTHONPATH"] = os.pathsep.join((str(ROOT.parents[1]), str(ROOT)))
+        help_result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/benchmarks/time_to_correct_jev_v4.py"),
+                "--help",
+            ],
+            cwd=ROOT.parent,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(help_result.returncode, 0, help_result.stderr)
+        import_result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import runpy, sys; "
+                    "runpy.run_path(sys.argv[1], run_name='_worktree_probe'); "
+                    "import packages.core; print(packages.core.__file__)"
+                ),
+                str(ROOT / "scripts/benchmarks/time_to_correct_jev_v4.py"),
+            ],
+            cwd=ROOT.parent,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(import_result.returncode, 0, import_result.stderr)
+        self.assertTrue(
+            Path(import_result.stdout.strip()).resolve().is_relative_to(ROOT),
+            import_result.stdout,
         )
 
     def test_fixed_four_previews_are_bound_and_offline(self) -> None:

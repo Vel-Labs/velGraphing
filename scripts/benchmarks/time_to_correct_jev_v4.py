@@ -14,6 +14,11 @@ import subprocess
 import sys
 from typing import Any
 
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path[:] = [entry for entry in sys.path if entry != str(ROOT)]
+sys.path.insert(0, str(ROOT))
+
 from packages.core import (
     RankedContextCandidate,
     Sensitivity,
@@ -23,7 +28,6 @@ from packages.core import (
 from packages.core import jev
 
 
-ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = ROOT / "benchmarks/velgraphing-time-to-correct-v4/.inputs"
 GENERATOR_PATH = ROOT / "scripts/benchmarks/time_to_correct_ranked_candidates_v4.py"
 EVALUATOR_PATH = ROOT / "scripts/benchmarks/time_to_correct_retrieval_eval_v4.py"
