@@ -237,6 +237,31 @@ class JevPreviewTests(unittest.TestCase):
             import_result.stdout,
         )
 
+    def test_canary_plan_binds_four_requests_without_live_authority(self) -> None:
+        plan = json.loads(
+            (ROOT / "benchmarks/velgraphing-time-to-correct-v4/canary-plan.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertEqual(plan["schema_version"], "velgraphing-v4-canary-plan-1")
+        self.assertEqual(plan["status"], "approval_ready_live_not_authorized")
+        self.assertEqual(plan["material_candidate_commit"], "06db3f1faa073fddca4a614968145758f11d55bb")
+        self.assertEqual(plan["preview_artifact_sha256"], "0005d6c26523ab2da431eb5172f89f1aa077ce28d4c1b55ca1a10cd6ab71d6a9")
+        self.assertEqual(plan["provider_request_trials"], ["B-C-02", "D-C-02", "B-M-01", "D-M-01"])
+        self.assertEqual(plan["request_hashes"], {
+            "B-C-02": "f0e48067a35d38e88b06c136e8aea7285af239e9a876deb65e23ab9ebf6026bf",
+            "D-C-02": "cb88c899dc6b2752aff978eac7b568da2f740c461d4969d282a2a2431de64ad9",
+            "B-M-01": "55a5fdcb9c20dd26fb90fec7896aab857acd14b709ae6e8a6949ccf3a496d8e7",
+            "D-M-01": "a2d81d30d5af32d0b0041fdba1e1abbc6dc173ac7056e3b2c9e63af7ce1ee16f",
+        })
+        self.assertEqual(plan["max_jev_calls"], 4)
+        self.assertFalse(plan["live_authorized"])
+        self.assertFalse(plan["promotion_eligible"])
+        self.assertEqual(plan["gate_3_disposition"], "exploratory_only_no_promotion")
+        self.assertEqual(
+            plan["blocking_gates"],
+            ["final_repository_validation", "fresh_operator_approval"],
+        )
+
     def test_fixed_four_previews_are_bound_and_offline(self) -> None:
         fixture = Fixture()
         try:

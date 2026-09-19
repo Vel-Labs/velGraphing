@@ -240,18 +240,34 @@ check before answer. A source failure never licenses answering from stale bytes.
 
 ### Approval readiness checklist
 
-There is no approval-ready request packet in this handoff. All four exact provider
-request hashes are currently null. Only after all of the following may the local
-Parent request fresh operator approval for the four exact previewed requests:
+The frozen local plan is approval-ready for operator review. It is not live
+authorized. Approval readiness means only that the exact request bytes, hashes,
+source bindings, model, rubric and four-call cap are frozen. It does not qualify
+Jev usefulness or authorize a provider, answer or grader call.
+
+The ignored source-bearing preview is `.inputs/jev-v4-preview-06db3f1.json`, SHA-256
+`0005d6c26523ab2da431eb5172f89f1aa077ce28d4c1b55ca1a10cd6ab71d6a9`.
+The four provider request bindings are:
+
+| Trial | Request SHA-256 |
+|---|---|
+| B-C-02 | `f0e48067a35d38e88b06c136e8aea7285af239e9a876deb65e23ab9ebf6026bf` |
+| D-C-02 | `cb88c899dc6b2752aff978eac7b568da2f740c461d4969d282a2a2431de64ad9` |
+| B-M-01 | `55a5fdcb9c20dd26fb90fec7896aab857acd14b709ae6e8a6949ccf3a496d8e7` |
+| D-M-01 | `a2d81d30d5af32d0b0041fdba1e1abbc6dc173ac7056e3b2c9e63af7ce1ee16f` |
+
+The local Parent may request fresh operator approval only after confirming:
 
 1. Gate 1 typed-edge/source/allowlist/staleness fixtures and observable edge-removal proof pass.
 2. Gate 2 six-task critical-label retrieval evaluation passes, S-01 separately reported.
-3. Gate 3 exact-rubric candidate labels/replay qualify the intended use, or the canary is explicitly limited to exploratory judgment collection rather than promotion.
+3. Gate 3 remains explicitly limited to exploratory judgment collection. These four requests cannot support promotion.
 4. Canonical tests, consumers, full suite, two-pass projection and source-package parity pass at one final commit.
-5. Candidate/source/rubric/model bindings and all four preview hashes are frozen.
+5. Candidate/source/rubric/model bindings and all four request hashes match the frozen plan and preview artifact.
 
-A no-op request is skipped and its quota is not reassigned. No live provider,
-answer or grader execution is performed by the files in this handoff.
+The tracked plan keeps `live_authorized=false`, `promotion_eligible=false`, and
+the hard provider cap at four. A no-op request is skipped and its quota is not
+reassigned. No live provider, answer or grader execution is performed by these
+files.
 
 ## Held-out confirmation
 

@@ -1,10 +1,16 @@
 {
-  "schema_version": "velgraphing-v4-canary-plan-draft-1",
-  "status": "blocked_not_approval_ready",
+  "schema_version": "velgraphing-v4-canary-plan-1",
+  "status": "approval_ready_live_not_authorized",
   "source_parent_commit": "6931f0ffa72bd27f79f5515bd669404dbc4667d0",
-  "material_candidate_commit": null,
+  "material_candidate_commit": "06db3f1faa073fddca4a614968145758f11d55bb",
+  "preview_artifact": ".inputs/jev-v4-preview-06db3f1.json",
+  "preview_artifact_sha256": "0005d6c26523ab2da431eb5172f89f1aa077ce28d4c1b55ca1a10cd6ab71d6a9",
+  "candidate_artifact_sha256": "d147df356e72aa6588d0840ea32940b6db5d5dae975acf2b218e3d4cfc697ae9",
+  "candidate_selector_commit": "73c7e2bba00b5bec228547f92f464967f34fb1e3",
+  "preview_adapter_commit": "06db3f1faa073fddca4a614968145758f11d55bb",
   "tasks": ["C-02", "M-01"],
   "arms": ["A", "B", "C", "D"],
+  "provider_request_trials": ["B-C-02", "D-C-02", "B-M-01", "D-M-01"],
   "repetitions": 1,
   "provider_model": "jev-1.13.0",
   "rubric_version": "evidence-usefulness-v1",
@@ -16,6 +22,13 @@
   "retries": 0,
   "live_authorized": false,
   "provider_calls_made": 0,
-  "request_hashes": {"B-C-02": null, "D-C-02": null, "B-M-01": null, "D-M-01": null},
-  "blocking_gates": ["typed_route", "retrieval_critical_span_labels", "candidate_judgment_qualification", "final_repository_validation", "exact_previews", "fresh_operator_approval"]
+  "request_hashes": {
+    "B-C-02": "f0e48067a35d38e88b06c136e8aea7285af239e9a876deb65e23ab9ebf6026bf",
+    "D-C-02": "cb88c899dc6b2752aff978eac7b568da2f740c461d4969d282a2a2431de64ad9",
+    "B-M-01": "55a5fdcb9c20dd26fb90fec7896aab857acd14b709ae6e8a6949ccf3a496d8e7",
+    "D-M-01": "a2d81d30d5af32d0b0041fdba1e1abbc6dc173ac7056e3b2c9e63af7ce1ee16f"
+  },
+  "gate_3_disposition": "exploratory_only_no_promotion",
+  "promotion_eligible": false,
+  "blocking_gates": ["final_repository_validation", "fresh_operator_approval"]
 }
