@@ -6,6 +6,10 @@ milestones_total: 5
 current_milestone: T030
 current_gate: d_probability_sum_repair_confirmation_prepared
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
+candidate_identity:
+  repair_parent_commit: 3d4a979eae1db6a3d682caec1249c5e67d7bfbe4
+  final_validation_successor: direct_child_with_subject_test_jev_close_confirm_d_validation_gaps
+  final_sha_record: parent_handoff_and_git_history
 exact_blocker: fresh_d_answer_and_grader_lanes_not_dispatched
 next_milestone: T030
 provider:

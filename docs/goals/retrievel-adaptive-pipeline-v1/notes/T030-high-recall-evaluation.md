@@ -209,10 +209,40 @@ aggregate worst-case envelope is USD `0.033030144`. The remaining allowance is
 USD `0.966969856`. These are authorization bounds, not observed cost. T030
 remains active.
 
+### Exact Candidate Identity
+
+The numeric repair parent is commit
+`3d4a979eae1db6a3d682caec1249c5e67d7bfbe4`. The final validation candidate is
+its direct child with commit subject
+`test(jev): close confirm-d validation gaps`. The final child SHA is recorded in
+the Parent handoff and is independently recoverable from Git history. This
+parent-plus-direct-child identity avoids an impossible self-hash in this file.
+
+### Exact Validation Commands
+
+```text
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m unittest tests.core.test_jev tests.benchmarks.test_time_to_correct_dependency_v4
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m unittest tests.core.test_jev tests.core.test_ranked_context_selection tests.benchmarks.test_time_to_correct_jev tests.benchmarks.test_time_to_correct_jev_v4 tests.benchmarks.test_time_to_correct_dependency_v4 tests.scaffold.test_projection_contract
+mkdir -m 700 "$CLEAN_ROOT"
+rsync -a --exclude .git --exclude .velgraphing-local --exclude __pycache__ --exclude '*.pyc' "$CHECKOUT/" "$CLEAN_ROOT/"
+(cd "$CLEAN_ROOT" && PYTHONDONTWRITEBYTECODE=1 "$PYTHON" -m unittest tests.parity.test_source_package_parity)
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" scripts/package/project_portable_plugin.py --root "$CLEAN_ROOT"
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" scripts/package/verify_source_package_parity.py --root "$CLEAN_ROOT" --write-manifest
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" scripts/package/verify_source_package_parity.py --root "$CLEAN_ROOT"
+git diff --check
+```
+
+`CLEAN_ROOT` is a fresh disposable copy under the checkout-local ignored
+validation area. The active checkout contains ignored private run artifacts in
+`.velgraphing-local` and ignored Python bytecode under `packages/core`. The
+official verifier fails closed on the bytecode path with
+`private_or_machine_path`. The clean copy excludes both ignored trees. It does
+not remove or modify the retained private artifacts.
+
 ### Validator Repair Validation
 
-- Focused adapter and D-only controller tests: `70` passed.
-- Known Jev, selection, benchmark, controller, and projection consumers: `117`
+- Focused adapter and D-only controller tests: `72` passed.
+- Known Jev, selection, benchmark, controller, and projection consumers: `119`
   passed.
 - Parity tests in a clean disposable copy: `10` passed.
 - Source-package parity: `87` files with candidate SHA-256
@@ -235,6 +265,7 @@ remains active.
 - `scripts/benchmarks/time_to_correct_dependency_v4.py`
 - `tests/core/test_jev.py`
 - `tests/benchmarks/test_time_to_correct_dependency_v4.py`
+- `tests/benchmarks/test_time_to_correct_jev_v4.py`
 - `benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`

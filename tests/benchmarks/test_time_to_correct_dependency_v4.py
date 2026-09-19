@@ -466,6 +466,65 @@ class DependencyControllerTests(unittest.TestCase):
         ):
             mod._argv_map(relative, self.root)
 
+        d_only = {"D": [sys.executable, "-c", "pass"]}
+        d_only_path = self.root / "d-only-argv.json"
+        d_only_path.write_bytes(mod.canonical(d_only))
+        self.assertEqual(mod._argv_map(d_only_path, self.root, {"D"}), d_only)
+        with self.assertRaisesRegex(
+            mod.ControllerError, "dependency_lane_commands_invalid"
+        ):
+            mod._argv_map(valid, self.root, {"D"})
+
+    def test_repair_observation_loader_rejects_each_wrong_hash(self) -> None:
+        result_raw = mod.canonical({"result": "fixture"})
+        observation = {"observation": "fixture"}
+        observation_raw = mod.canonical(observation)
+        (self.root / "result.json").write_bytes(result_raw)
+        observations = self.root / "jev-observations"
+        observations.mkdir()
+        (observations / "B.json").write_bytes(observation_raw)
+        result_sha = mod.digest(result_raw)
+        observation_sha = mod.digest(observation_raw)
+
+        with mock.patch.object(mod, "SUCCESSOR_RESULT_SHA256", result_sha), mock.patch.object(
+            mod, "SUCCESSOR_B_OBSERVATION_SHA256", observation_sha
+        ):
+            self.assertEqual(mod._load_repair_b_observation(self.root), observation)
+        for result_identity, observation_identity in (
+            ("0" * 64, observation_sha),
+            (result_sha, "0" * 64),
+        ):
+            with self.subTest(
+                result_identity=result_identity,
+                observation_identity=observation_identity,
+            ), mock.patch.object(
+                mod, "SUCCESSOR_RESULT_SHA256", result_identity
+            ), mock.patch.object(
+                mod, "SUCCESSOR_B_OBSERVATION_SHA256", observation_identity
+            ), self.assertRaisesRegex(
+                mod.ControllerError, "dependency_repair_replay_identity_mismatch"
+            ):
+                mod._load_repair_b_observation(self.root)
+
+    def test_confirm_d_cli_rejects_nonplanned_run_root(self) -> None:
+        arguments = [
+            "confirm-d",
+            "--candidates", str(self.root),
+            "--questions", str(self.root),
+            "--manifests-root", str(self.root),
+            "--lanes-root", str(self.root),
+            "--preview", str(self.root),
+            "--run-root", str(self.root),
+            "--answer-argv-json", str(self.root / "answer.json"),
+            "--grader-argv-json", str(self.root / "grader.json"),
+            "--replay-observations-root", str(self.root),
+            "--output", str(self.root / "result.json"),
+        ]
+        error = io.StringIO()
+        with mock.patch.object(mod, "validate_plan"), redirect_stderr(error):
+            self.assertEqual(mod.main(arguments), 2)
+        self.assertIn("dependency_run_root_plan_mismatch", error.getvalue())
+
     def test_actual_source_read_bypasses_fail_coverage(self) -> None:
         def run(regenerate, arm="A", evaluator=None):
             root = self.root / f"bypass-{arm}-{run.calls}"
@@ -743,6 +802,7 @@ class DependencyControllerTests(unittest.TestCase):
             mock.patch.object(mod, "FINAL_ANSWER_BYTES", 1400),
         )
         with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+            evaluate = mock.Mock(side_effect=self.evaluator)
             result = mod.run_d_confirmation(
                 self.root / "candidates.json",
                 self.root / "questions.json",
@@ -754,7 +814,7 @@ class DependencyControllerTests(unittest.TestCase):
                 grader_argv=[sys.executable, "-c", GRADER_CODE],
                 b_observation=b_observation,
                 live_authorized=True,
-                evaluate=self.evaluator,
+                evaluate=evaluate,
                 execution="fixture",
             )
         self.assertEqual(result["schema_version"], "velgraphing-d01-d-repair-result-v1")
@@ -765,6 +825,7 @@ class DependencyControllerTests(unittest.TestCase):
         )
         self.assertEqual(calls, [("direct", False), ("typed_graph", True)])
         self.assertEqual(len(list((run_root / "jev-calls").glob("*.json"))), 1)
+        evaluate.assert_called_once()
 
 
 if __name__ == "__main__":
