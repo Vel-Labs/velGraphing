@@ -309,6 +309,26 @@ class Pr9RetrievalHelperTests(unittest.TestCase):
             ("src/alpha.py",),
         )
 
+    def test_jev_incompatible_required_source_fails_closed(self):
+        raw = b"required proof\n"
+        graph, snapshot, reader = fixture(raw, "LICENSE")
+        digest = hashlib.sha256(raw).hexdigest()
+        evidence = EvidenceItem(
+            "repo:LICENSE", "LICENSE", digest, 0, len(raw), digest,
+            AuthorityClass.RUNTIME, ("proof",),
+        )
+        retrieval = RetrievalResult(
+            "direct", "fixture", (), (), "", 0, 0.0, (), (), False,
+            evidence=(evidence,),
+        )
+        with self.assertRaisesRegex(
+            ValueError, "required_candidate_jev_incompatible"
+        ):
+            ranked_candidates_from_retrieval(
+                graph, TaskSpec("required-jev-incompatible", ("proof",)),
+                snapshot, reader, retrieval, **BUDGET,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
