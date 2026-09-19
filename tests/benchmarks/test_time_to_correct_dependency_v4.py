@@ -220,6 +220,39 @@ class DependencyControllerTests(unittest.TestCase):
         self.assertEqual(plan["limits"]["retries"], 0)
         self.assertEqual(plan["answer_rubric_sha256"], mod.digest(mod.canonical(mod.RUBRIC)))
 
+    def test_handoff_timeouts_fit_serial_trial_deadline(self) -> None:
+        self.assertGreater(
+            mod.HANDOFF_PROCESS_TIMEOUT_SECONDS,
+            mod.HANDOFF_WAIT_SECONDS,
+        )
+        required_seconds = (
+            mod.PROVIDER_TIMEOUT_SECONDS
+            + 2 * mod.HANDOFF_PROCESS_TIMEOUT_SECONDS
+        )
+        self.assertGreaterEqual(
+            mod.REPAIR_TRIAL_WALL_LIMIT_SECONDS,
+            required_seconds,
+        )
+
+    def test_repair_lane_commands_bind_root_lane_and_wait(self) -> None:
+        for lane in ("answer", "grader"):
+            command = [
+                sys.executable,
+                "scripts/benchmarks/time_to_correct_handoff.py", "wait",
+                "--run-root", str(self.root), "--trial-id", "D-D-01",
+                "--attempt", "0", "--lane", lane,
+                "--wait-seconds", str(mod.HANDOFF_WAIT_SECONDS),
+            ]
+            path = self.root / f"{lane}-repair-argv.json"
+            path.write_bytes(mod.canonical({"D": command}))
+            self.assertEqual(mod._repair_argv(path, self.root, lane), command)
+            command[-1] = "599"
+            path.write_bytes(mod.canonical({"D": command}))
+            with self.assertRaisesRegex(
+                mod.ControllerError, "dependency_lane_commands_invalid"
+            ):
+                mod._repair_argv(path, self.root, lane)
+
     def test_c_omits_child_d_can_select_it_and_required_survives(self) -> None:
         c = self.run_arm("C")
         d = self.run_arm("D")
@@ -826,6 +859,10 @@ class DependencyControllerTests(unittest.TestCase):
         self.assertEqual(calls, [("direct", False), ("typed_graph", True)])
         self.assertEqual(len(list((run_root / "jev-calls").glob("*.json"))), 1)
         evaluate.assert_called_once()
+        self.assertEqual(
+            result["result"]["budget"]["wall_limit_ns"],
+            mod.REPAIR_TRIAL_WALL_LIMIT_SECONDS * 1_000_000_000,
+        )
 
 
 if __name__ == "__main__":

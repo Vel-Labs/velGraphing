@@ -1,16 +1,17 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_private_confirmation_failed_probability_sum_validation
+proof_boundary: t030_private_host_environment_failure_zero_provider_calls
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: d_probability_sum_repair_confirmation_prepared
+current_gate: d_probability_sum_repair_confirmation_v2_ready
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
 candidate_identity:
   repair_parent_commit: 3d4a979eae1db6a3d682caec1249c5e67d7bfbe4
-  final_validation_successor: direct_child_with_subject_test_jev_close_confirm_d_validation_gaps
+  validation_commit: 3fad08c698f2c8f4c6d47fad8dec0b63f9c0cc1d
+  final_recovery_successor: direct_child_with_subject_fix_jev_prepare_zero_call_recovery
   final_sha_record: parent_handoff_and_git_history
-exact_blocker: fresh_d_answer_and_grader_lanes_not_dispatched
+exact_blocker: bounded_v2_controller_run_not_executed
 next_milestone: T030
 provider:
   name: typesafe_jev
@@ -32,8 +33,9 @@ provider:
   actual_usage_boundary: ignored_local_only
   public_results_boundary: separate_provider_permission_required
   calls_made: 5
+  non_provider_attempt_total: 1
   last_private_result_sha256: 44fc6a9b6f3cade340906195b60105d187be1185975406bd9f12e330d46f10d2
-  last_failure_class: adapter_probability_sum_compatibility
+  last_failure_class: host_environment_pre_provider
 tasks:
   T010: complete
   T020: complete

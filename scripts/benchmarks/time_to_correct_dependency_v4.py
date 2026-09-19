@@ -85,8 +85,12 @@ GRADER_CONTRACT_SHA256 = "58b94d44ee16b7abd9afd234d5d57b3d96fd864798d414d65b725b
 SUCCESSOR_RUN_ROOT = ".velgraphing-local/retrievel-d01-confirmation-v1"
 SUCCESSOR_RESULT_SHA256 = "44fc6a9b6f3cade340906195b60105d187be1185975406bd9f12e330d46f10d2"
 SUCCESSOR_B_OBSERVATION_SHA256 = "33bd29d232f461583292ab14a640c2417a7eb55aa254ad43c3571883e2702a76"
-REPAIR_RUN_ROOT = ".velgraphing-local/retrievel-d01-d-repair-v1"
+REPAIR_RUN_ROOT = ".velgraphing-local/retrievel-d01-d-repair-v2"
 REPAIR_MAX_JEV_CALLS = 1
+PROVIDER_TIMEOUT_SECONDS = 10
+HANDOFF_WAIT_SECONDS = 600
+HANDOFF_PROCESS_TIMEOUT_SECONDS = 610
+REPAIR_TRIAL_WALL_LIMIT_SECONDS = 1240
 PLAN_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json"
 RUBRIC = {
     "required_facts": [
@@ -670,6 +674,9 @@ def run_arm(
     live_authorized: bool = False,
     execution: str = "observed",
     run_id: str = "velgraphing-d01-four-arm-v1",
+    answer_timeout_seconds: float = 180,
+    grader_timeout_seconds: float = 120,
+    trial_wall_limit_seconds: int = 600,
 ) -> dict[str, Any]:
     if live_authorized is not True:
         raise ControllerError("dependency_live_not_authorized")
@@ -682,7 +689,10 @@ def run_arm(
             raise ControllerError("dependency_live_not_authorized") from None
     trial = Trial(
         trial_identity(arm, repository_commit, restricted_state_sha256, run_id),
-        Budget(max_repairs=0, wall_limit_ns=600_000_000_000),
+        Budget(
+            max_repairs=0,
+            wall_limit_ns=trial_wall_limit_seconds * 1_000_000_000,
+        ),
         execution=execution,
     )
 
@@ -730,7 +740,7 @@ def run_arm(
                             allow_network=True,
                             approved_request_sha256=prepared["request_sha256"],
                             model=MODEL,
-                            timeout_s=10,
+                            timeout_s=PROVIDER_TIMEOUT_SECONDS,
                         )
                 ledger.complete(receipt, observation)
                 usage = observation.get("usage")
@@ -798,8 +808,8 @@ def run_arm(
         answer_argv=answer_argv,
         grader_argv=grader_argv,
         cwd=cwd,
-        answer_timeout_s=180,
-        grader_timeout_s=120,
+        answer_timeout_s=answer_timeout_seconds,
+        grader_timeout_s=grader_timeout_seconds,
         grader_context=RUBRIC,
         answer_response_contract=ANSWER_RESPONSE_CONTRACT,
         grader_response_contract=GRADER_RESPONSE_CONTRACT,
@@ -966,7 +976,10 @@ def run_d_confirmation(
         evaluate=evaluate,
         live_authorized=live_authorized,
         execution=execution,
-        run_id="velgraphing-d01-d-repair-v1",
+        run_id="velgraphing-d01-d-repair-v2",
+        answer_timeout_seconds=HANDOFF_PROCESS_TIMEOUT_SECONDS,
+        grader_timeout_seconds=HANDOFF_PROCESS_TIMEOUT_SECONDS,
+        trial_wall_limit_seconds=REPAIR_TRIAL_WALL_LIMIT_SECONDS,
     )
     candidate_observation = d_result["attempts"][-1]["candidate_observation"]
     coverage = d_result["attempts"][-1]["coverage"]
@@ -1032,6 +1045,17 @@ def _argv_map(
         if not valid_executable:
             raise ControllerError("dependency_lane_commands_invalid")
     return value
+
+
+def _repair_argv(path: Path, root: Path, lane: str) -> list[str]:
+    command = _argv_map(path, root, {"D"})["D"]
+    if command[1:] != [
+        "scripts/benchmarks/time_to_correct_handoff.py", "wait",
+        "--run-root", str(root), "--trial-id", "D-D-01", "--attempt", "0",
+        "--lane", lane, "--wait-seconds", str(HANDOFF_WAIT_SECONDS),
+    ]:
+        raise ControllerError("dependency_lane_commands_invalid")
+    return command
 
 
 def _validated_run_root(path: Path) -> Path:
@@ -1121,12 +1145,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = run_d_confirmation(
                 *inputs,
                 root,
-                answer_argv=_argv_map(
-                    arguments.answer_argv_json, root, {"D"}
-                )["D"],
-                grader_argv=_argv_map(
-                    arguments.grader_argv_json, root, {"D"}
-                )["D"],
+                answer_argv=_repair_argv(arguments.answer_argv_json, root, "answer"),
+                grader_argv=_repair_argv(arguments.grader_argv_json, root, "grader"),
                 b_observation=_load_repair_b_observation(replay_root),
                 live_authorized=True,
             )

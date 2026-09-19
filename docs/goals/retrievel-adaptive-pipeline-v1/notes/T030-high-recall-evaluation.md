@@ -193,15 +193,22 @@ and replays the exact private observation with SHA-256
 `33bd29d232f461583292ab14a640c2417a7eb55aa254ad43c3571883e2702a76`,
 makes one new bounded integration call with zero retries, and runs one fresh
 answer lane and one fresh grader lane. The ignored run root is
-`$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v1`.
+`$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v2`.
 
 With `CHECKOUT` set to this checkout, `PYTHON` set to the trusted project
 interpreter, and `LANES_ROOT` set to the retained public corpus lanes, the
 controller command is:
 
 ```text
-PYTHONDONTWRITEBYTECODE=1 "$PYTHON" scripts/benchmarks/time_to_correct_dependency_v4.py confirm-d --candidates "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-thealgorithms-dependency-behavior-canary-79adf45.json" --questions "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/thealgorithms-dependency-behavior-canary-questions.json" --manifests-root "$CHECKOUT/benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests" --lanes-root "$LANES_ROOT" --preview "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-dependency-behavior-jev-preview-51e2dc7.json" --run-root "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v1" --answer-argv-json "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v1/answer-argv.json" --grader-argv-json "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v1/grader-argv.json" --replay-observations-root "$CHECKOUT/.velgraphing-local/retrievel-d01-confirmation-v1" --output "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v1/result.json"
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" scripts/benchmarks/time_to_correct_dependency_v4.py confirm-d --candidates "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-thealgorithms-dependency-behavior-canary-79adf45.json" --questions "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/thealgorithms-dependency-behavior-canary-questions.json" --manifests-root "$CHECKOUT/benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests" --lanes-root "$LANES_ROOT" --preview "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-dependency-behavior-jev-preview-51e2dc7.json" --run-root "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v2" --answer-argv-json "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v2/answer-argv.json" --grader-argv-json "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v2/grader-argv.json" --replay-observations-root "$CHECKOUT/.velgraphing-local/retrievel-d01-confirmation-v1" --output "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v2/result.json"
 ```
+
+The first private recovery root remains unchanged. Its host environment failed
+before the provider boundary and recorded zero attempted provider calls. It did
+not consume the planned allowance. The v2 answer and grader handoffs each wait
+`600` seconds. The controller allows `610` seconds for each handoff process and
+uses a `1240`-second serial trial deadline. This covers the `10`-second provider
+timeout plus both process limits and a `10`-second controller margin.
 
 The aggregate authorization is now six calls: five complete and one planned.
 The one-call incremental worst-case envelope is USD `0.005505024`. The
@@ -213,10 +220,11 @@ remains active.
 
 The numeric repair parent is commit
 `3d4a979eae1db6a3d682caec1249c5e67d7bfbe4`. The final validation candidate is
-its direct child with commit subject
-`test(jev): close confirm-d validation gaps`. The final child SHA is recorded in
-the Parent handoff and is independently recoverable from Git history. This
-parent-plus-direct-child identity avoids an impossible self-hash in this file.
+commit `3fad08c698f2c8f4c6d47fad8dec0b63f9c0cc1d`. The final recovery candidate
+is its direct child with commit subject
+`fix(jev): prepare zero-call recovery`. The final child SHA is recorded in the
+Parent handoff and is independently recoverable from Git history. This exact
+chain avoids an impossible self-hash in this file.
 
 ### Exact Validation Commands
 
@@ -241,8 +249,8 @@ not remove or modify the retained private artifacts.
 
 ### Validator Repair Validation
 
-- Focused adapter and D-only controller tests: `72` passed.
-- Known Jev, selection, benchmark, controller, and projection consumers: `119`
+- Focused adapter and D-only controller tests: `74` passed.
+- Known Jev, selection, benchmark, controller, and projection consumers: `121`
   passed.
 - Parity tests in a clean disposable copy: `10` passed.
 - Source-package parity: `87` files with candidate SHA-256
@@ -250,7 +258,8 @@ not remove or modify the retained private artifacts.
 - Two projector runs produced the same package diff SHA-256
   `a239e98de166ee70c9368794c74b0eca963a17015717291833db3308ba2c93df`.
 - The offline D-01 preflight reproduced the frozen request, pool, and source
-  bindings. The private successor preparation passed its hash and argv checks.
+  bindings. The private v2 successor preparation passed its hash, exact root,
+  D-only argv, lane, wait, and serial-deadline checks.
 - `git diff --check` passed.
 - The full repository suite was not run. Caller discovery mapped the shared
   parser and its known consumers to the focused and consumer checks above.
