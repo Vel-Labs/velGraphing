@@ -202,6 +202,30 @@ response validation, fallback, context composition, answer, and independent
 grade phases. Genuine returned usage is retained. Missing token or cost data
 stays null. This is an implementation and preflight receipt, not a live result.
 
+### D-01 controller acceptance repair
+
+The controller now binds each trial to restricted lane state SHA-256
+`ea86c846cf76908cca63090dccb6db497e4bc98ab5c20cd208b675109462f39d`.
+That digest includes the commit, full index, porcelain status, untracked-path
+inventory, and selected source snapshot. It includes the pinned staged
+deletions and makes no clean-lane claim.
+
+Scanner, retrieval, selection, and Jev packet reads now create source-operation
+receipts. Source coverage becomes true only after the regeneration path reports
+complete source accounting. Source capture and source revalidation are observed
+phases. The execution entry point accepts canonical A/B/C/D argv JSON files only
+from the private ignored run root, invokes subprocess argv without a shell, and
+atomically creates one non-existing `result.json`. The tracked plan still has
+`live_authorized: false`, so the command stops before it reads lane commands or
+starts a provider, answer, or grader process.
+
+The focused controller, host, and preview tests passed `23/23`. The controller
+test invoked the complete A/B/C/D fixture path, confirmed paired pool identity,
+two Jev calls, zero repairs, ordered completion, and a stop before C/D after a
+systemic B contract failure. The real offline preflight matched both pool and
+request pairs, confirmed B/D selection sensitivity, and reported zero provider
+calls.
+
 ## Validation
 
 - Focused generator and evaluator tests: 35 passed.
@@ -271,6 +295,16 @@ Offline dependency preview implementation:
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 
 D-01 four-arm controller candidate:
+
+- `benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json`
+- `benchmarks/velgraphing-time-to-correct-v4/PROTOCOL.md`
+- `scripts/benchmarks/time_to_correct_dependency_v4.py`
+- `tests/benchmarks/test_time_to_correct_dependency_v4.py`
+- `tests/benchmarks/test_time_to_correct_jev_v4.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-thealgorithms-import-canary-freeze.md`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+
+D-01 controller acceptance repair:
 
 - `benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json`
 - `benchmarks/velgraphing-time-to-correct-v4/PROTOCOL.md`

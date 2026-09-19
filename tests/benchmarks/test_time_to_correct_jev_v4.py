@@ -297,7 +297,7 @@ class JevPreviewTests(unittest.TestCase):
             "preview_adapter_commit", "preview_artifact_sha256", "request_sha256",
             "jev_model", "jev_rubric_version", "answer_model", "answer_reasoning",
             "grader_model", "grader_reasoning", "answer_rubric_sha256",
-            "pool_sha256",
+            "pool_sha256", "restricted_state_sha256",
         })
         self.assertEqual(
             plan["schema_version"],

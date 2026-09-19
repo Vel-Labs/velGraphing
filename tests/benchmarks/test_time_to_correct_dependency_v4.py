@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import copy
+from contextlib import redirect_stderr
 from dataclasses import replace
 import importlib.util
+import io
 import json
 from pathlib import Path
 import sys
@@ -116,10 +118,15 @@ class DependencyControllerTests(unittest.TestCase):
         with trial.phase("candidate_discovery"):
             pass
         with trial.phase("retrieval"):
-            pass
+            trial.source(
+                self.run["sources"][0]["source_sha256"],
+                0,
+                self.run["sources"][0]["byte_length"],
+                operation_id="fixture-retrieval-0",
+            )
         run = copy.deepcopy(self.run)
         run["route"] = route
-        return run, self.lane
+        return run, {**self.lane, "source_reads_complete": True}
 
     @staticmethod
     def evaluator(packet, root, **kwargs):
@@ -173,6 +180,7 @@ class DependencyControllerTests(unittest.TestCase):
             return mod.run_arm(
                 arm,
                 "a" * 40,
+                "d" * 64,
                 self.question,
                 {**self.run, "route": mod.ARMS[arm]},
                 self.regenerate,
@@ -218,10 +226,15 @@ class DependencyControllerTests(unittest.TestCase):
         for phase in (
             "cold_graph_build", "candidate_discovery", "retrieval", "jev_preparation",
             "provider", "source_revalidation", "response_validation",
-            "context_composition", "answer_generation", "grading",
+            "source_capture", "context_composition", "answer_generation", "grading",
         ):
             self.assertEqual(status[phase], "observed")
         self.assertTrue(result["attempts"][0]["context_deliveries"])
+        self.assertTrue(result["attempts"][0]["coverage"]["source_operations"])
+        self.assertGreater(
+            result["attempts"][0]["candidate_observation"]["source_operation_count"],
+            0,
+        )
 
     def test_live_gate_and_call_ledger_stop_conditions(self) -> None:
         ledger_root = self.root / "cap-ledger"
@@ -229,14 +242,14 @@ class DependencyControllerTests(unittest.TestCase):
         ledger = mod.LiveJevBudget(ledger_root, 2)
         with self.assertRaisesRegex(mod.ControllerError, "dependency_live_not_authorized"):
             mod.run_arm(
-                "A", "a" * 40, self.question, self.run, self.regenerate,
+                "A", "a" * 40, "d" * 64, self.question, self.run, self.regenerate,
                 answer_argv=[sys.executable, "-c", ANSWER_CODE],
                 grader_argv=[sys.executable, "-c", GRADER_CODE],
                 cwd=self.root, ledger=ledger,
             )
         with self.assertRaisesRegex(mod.ControllerError, "dependency_live_not_authorized"):
             mod.run_arm(
-                "A", "a" * 40, self.question, self.run, self.regenerate,
+                "A", "a" * 40, "d" * 64, self.question, self.run, self.regenerate,
                 answer_argv=[sys.executable, "-c", ANSWER_CODE],
                 grader_argv=[sys.executable, "-c", GRADER_CODE],
                 cwd=self.root, ledger=ledger, live_authorized=True,
@@ -245,6 +258,119 @@ class DependencyControllerTests(unittest.TestCase):
         ledger.reserve("D-D-01", "b" * 64)
         with self.assertRaisesRegex(mod.MeasurementError, "jev_call_cap_exhausted"):
             ledger.reserve("extra-D-01", "c" * 64)
+
+    def test_run_command_cannot_execute_while_plan_is_off(self) -> None:
+        inputs = []
+        for name in ("candidates.json", "questions.json", "preview.json"):
+            path = self.root / name
+            path.write_text("{}", encoding="utf-8")
+            inputs.append(path)
+        output = self.root / "result.json"
+        with redirect_stderr(io.StringIO()):
+            status = mod.main([
+                "run",
+                "--candidates", str(inputs[0]),
+                "--questions", str(inputs[1]),
+                "--manifests-root", str(self.root),
+                "--lanes-root", str(self.root),
+                "--preview", str(inputs[2]),
+                "--run-root", str(self.root),
+                "--answer-argv-json", str(self.root / "answer.json"),
+                "--grader-argv-json", str(self.root / "grader.json"),
+                "--output", str(output),
+            ])
+        self.assertEqual(status, 2)
+        self.assertFalse(output.exists())
+
+    def test_run_four_arm_pairs_calls_and_stops_on_systemic_b_failure(self) -> None:
+        run_root = self.root / "four-arm"
+        run_root.mkdir(mode=0o700)
+        (self.root / self.question["corpus"]).mkdir()
+        artifact = {
+            "runs": [
+                {**copy.deepcopy(self.run), "route": "direct"},
+                {**copy.deepcopy(self.run), "route": "typed_graph"},
+            ]
+        }
+        commands = {
+            arm: [sys.executable, "-c", ANSWER_CODE] for arm in mod.ARMS
+        }
+        graders = {
+            arm: [sys.executable, "-c", GRADER_CODE] for arm in mod.ARMS
+        }
+        calls = []
+
+        def regenerate(route, question, manifests, lanes, trial):
+            calls.append(route)
+            return self.regenerate(trial, route)
+
+        patches = (
+            mock.patch.object(mod, "preflight", return_value={"live_authorized": True}),
+            mock.patch.object(mod.preview, "_load_inputs", return_value=(artifact, {mod.TASK_ID: self.question})),
+            mock.patch.object(mod.generator, "_manifest", return_value={"commit": "a" * 40}),
+            mock.patch.object(mod, "lane_state_sha256", return_value="d" * 64),
+            mock.patch.object(mod, "regenerate_pool", side_effect=regenerate),
+            mock.patch.object(mod, "FINAL_ANSWER_BYTES", 1250),
+        )
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+            result = mod.run_four_arm(
+                self.root / "candidates.json",
+                self.root / "questions.json",
+                self.root,
+                self.root,
+                self.root / "preview.json",
+                run_root,
+                answer_argv=commands,
+                grader_argv=graders,
+                live_authorized=True,
+                evaluate=self.evaluator,
+                execution="fixture",
+            )
+        self.assertEqual(
+            [row["identity"]["arm"] for row in result["results"]],
+            ["A", "B", "C", "D"],
+        )
+        self.assertEqual(calls, ["direct", "direct", "typed_graph", "typed_graph"])
+        self.assertEqual(
+            result["results"][0]["attempts"][0]["candidate_observation"]["pool_sha256"],
+            result["results"][1]["attempts"][0]["candidate_observation"]["pool_sha256"],
+        )
+        self.assertEqual(
+            result["results"][2]["attempts"][0]["candidate_observation"]["pool_sha256"],
+            result["results"][3]["attempts"][0]["candidate_observation"]["pool_sha256"],
+        )
+        receipts = list((run_root / "jev-calls").glob("*.json"))
+        self.assertEqual(len(receipts), 2)
+        self.assertTrue(all(row["budget"]["max_repairs"] == 0 for row in result["results"]))
+
+        failed_root = self.root / "four-arm-failure"
+        failed_root.mkdir(mode=0o700)
+        calls.clear()
+        failed_commands = dict(commands)
+        failed_commands["B"] = [
+            sys.executable,
+            "-c",
+            "import sys; sys.stdout.write('{}')",
+        ]
+        with patches[0], patches[1], patches[2], patches[3], mock.patch.object(
+            mod, "regenerate_pool", side_effect=regenerate
+        ), patches[5], self.assertRaisesRegex(
+            mod.ControllerError, "dependency_systemic_trial_failure"
+        ):
+            mod.run_four_arm(
+                self.root / "candidates.json",
+                self.root / "questions.json",
+                self.root,
+                self.root,
+                self.root / "preview.json",
+                failed_root,
+                answer_argv=failed_commands,
+                grader_argv=graders,
+                live_authorized=True,
+                evaluate=self.evaluator,
+                execution="fixture",
+            )
+        self.assertEqual(calls, ["direct", "direct"])
 
 
 if __name__ == "__main__":

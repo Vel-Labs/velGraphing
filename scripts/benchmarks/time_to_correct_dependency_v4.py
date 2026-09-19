@@ -18,6 +18,11 @@ sys.path.insert(0, str(ROOT / "scripts/benchmarks"))
 
 from time_to_correct import Budget, MeasurementError, Trial, canonical, digest
 from time_to_correct_calibration import LiveJevBudget
+from time_to_correct_handoff import (
+    HandoffError,
+    atomic_write,
+    run_root as validate_run_root,
+)
 from time_to_correct_host import (
     ANSWER_RESPONSE_CONTRACT,
     GRADER_RESPONSE_CONTRACT,
@@ -65,6 +70,7 @@ MAX_JEV_CALLS = 2
 CANDIDATE_SHA256 = "8a75f792aefbabe5679fdfb934e440f723649a5993cb46196d63a437486c9ce7"
 SELECTOR_COMMIT = "79adf45e8ff245c7e90701ea172d8de269228f83"
 SNAPSHOT_SHA256 = "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
+RESTRICTED_STATE_SHA256 = "ea86c846cf76908cca63090dccb6db497e4bc98ab5c20cd208b675109462f39d"
 PLAN_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json"
 RUBRIC = {
     "required_facts": [
@@ -86,6 +92,25 @@ RUBRIC_SHA256 = "bfd1265ff03a1347280646c76258f5e79e11b140a66cd638f169df63551877e
 
 class ControllerError(MeasurementError):
     pass
+
+
+class AuditedReader:
+    def __init__(self, reader: Any, trial: Trial | None) -> None:
+        self.reader = reader
+        self.trial = trial
+        self.operations = 0
+
+    def read_bytes(self, path: str) -> bytes:
+        raw = self.reader.read_bytes(path)
+        if self.trial is not None:
+            self.trial.source(
+                digest(raw), 0, len(raw), operation_id=f"runtime-{self.operations}"
+            )
+        self.operations += 1
+        return raw
+
+    def is_symlink(self, path: str) -> bool:
+        return self.reader.is_symlink(path)
 
 
 def _read_json(path: Path, reason: str) -> dict[str, Any]:
@@ -114,6 +139,7 @@ def validate_plan(
         or plan.get("candidate_artifact_sha256") != CANDIDATE_SHA256
         or plan.get("candidate_selector_commit") != SELECTOR_COMMIT
         or plan.get("source_snapshot_sha256") != SNAPSHOT_SHA256
+        or plan.get("restricted_state_sha256") != RESTRICTED_STATE_SHA256
         or plan.get("jev_model") != MODEL
         or plan.get("jev_rubric_version") != jev.RUBRIC_VERSION
         or plan.get("answer_model") != ANSWER_MODEL
@@ -145,6 +171,56 @@ def _phase(trial: Trial | None, name: str):
     return trial.phase(name) if trial is not None else nullcontext()
 
 
+def lane_state_sha256(lane: Path, snapshot_sha256: str) -> str:
+    state = {
+        "git_head": generator._git(lane, "rev-parse", "HEAD").decode("ascii").strip(),
+        "index_sha256": digest(generator._git(lane, "ls-files", "--stage", "-z")),
+        "status_sha256": digest(generator._git(
+            lane, "status", "--porcelain=v1", "-z", "--untracked-files=all"
+        )),
+        "untracked_sha256": digest(generator._git(
+            lane, "ls-files", "--others", "--exclude-standard", "-z"
+        )),
+        "selected_source_snapshot_sha256": snapshot_sha256,
+    }
+    return digest(canonical(state))
+
+
+def _record_snapshot_reads(
+    trial: Trial | None,
+    sources: Sequence[Mapping[str, Any]],
+    prefix: str,
+) -> None:
+    if trial is None:
+        return
+    for index, source in enumerate(sources):
+        trial.source(
+            source["sha256"],
+            0,
+            source["byte_length"],
+            operation_id=f"{prefix}-{index}",
+        )
+
+
+def _record_packet_reads(
+    trial: Trial,
+    packet: Mapping[str, Any],
+    lane: Mapping[str, Any],
+    prefix: str,
+) -> None:
+    sources = {source.path: source for source in lane["snapshot"].sources}
+    for index, path in enumerate(dict.fromkeys(
+        candidate["path"] for candidate in packet["candidates"]
+    )):
+        source = sources[path]
+        trial.source(
+            source.sha256,
+            0,
+            source.byte_length,
+            operation_id=f"{prefix}-{index}",
+        )
+
+
 def regenerate_pool(
     route: str,
     question: Mapping[str, str],
@@ -164,15 +240,18 @@ def regenerate_pool(
         typed_graph, typed_snapshot, typed_reader, _ = generator.scan_lane(
             lane_root, manifest, derive_edges=True
         )
+        _record_snapshot_reads(trial, manifest["sources"], "scan-plain")
+        _record_snapshot_reads(trial, manifest["sources"], "scan-typed")
     if (
         plain_snapshot != typed_snapshot
         or plain_graph.records != typed_graph.records
         or plain_snapshot.snapshot_sha256 != SNAPSHOT_SHA256
     ):
         raise ControllerError("dependency_snapshot_drift")
+    audited_reader = AuditedReader(plain_reader, trial)
     with _phase(trial, "candidate_discovery"):
         index = generator.build_repository_tag_index(
-            plain_graph, plain_snapshot, plain_reader
+            plain_graph, plain_snapshot, audited_reader
         )
         facets = generator.compile_prompt(question["prompt"], index)
         if not facets.sufficient:
@@ -180,7 +259,7 @@ def regenerate_pool(
                 question["prompt"],
                 index,
                 proof_obligations=generator.compile_proof_obligations(
-                    question["prompt"], plain_graph, index, plain_snapshot, plain_reader
+                    question["prompt"], plain_graph, index, plain_snapshot, audited_reader
                 ),
             )
     task = TaskSpec(
@@ -200,7 +279,7 @@ def regenerate_pool(
             route,
             graph,
             plain_snapshot,
-            plain_reader,
+            audited_reader,
             index,
             facets,
             derived_edge_count=0 if route == "direct" else len(typed_graph.edges),
@@ -220,7 +299,11 @@ def regenerate_pool(
         "plain_graph": plain_graph,
         "typed_graph": typed_graph,
         "snapshot": plain_snapshot,
-        "reader": plain_reader,
+        "reader": audited_reader,
+        "restricted_state_sha256": lane_state_sha256(
+            lane_root, plain_snapshot.snapshot_sha256
+        ),
+        "source_reads_complete": trial is not None,
     }
 
 
@@ -322,8 +405,10 @@ def preflight(
     pool_hashes: dict[str, str] = {}
     request_hashes: dict[str, str] = {}
     can_affect: dict[str, bool] = {}
+    restricted_states: set[str] = set()
     for arm, route in ARMS.items():
         run, lane = regenerate_pool(route, question, manifests_root, lanes_root)
+        restricted_states.add(lane["restricted_state_sha256"])
         if _frozen_fields(run) != _frozen_fields(frozen[(TASK_ID, route)]):
             raise ControllerError("dependency_regenerated_pool_drift")
         pool_hashes[arm] = digest(canonical(run["candidates"]))
@@ -342,6 +427,7 @@ def preflight(
         or request_hashes != plan["request_sha256"]
         or {"A_B": pool_hashes["A"], "C_D": pool_hashes["C"]}
         != plan["pool_sha256"]
+        or restricted_states != {RESTRICTED_STATE_SHA256}
     ):
         raise ControllerError("dependency_preflight_mismatch")
     preview_raw = preview._canonical_file(
@@ -371,10 +457,15 @@ def preflight(
         "retries": 0,
         "live_authorized": expected_live_authorized,
         "provider_calls_executed": 0,
+        "restricted_state_sha256": RESTRICTED_STATE_SHA256,
     }
 
 
-def trial_identity(arm: str, repository_commit: str) -> dict[str, Any]:
+def trial_identity(
+    arm: str,
+    repository_commit: str,
+    restricted_state_sha256: str,
+) -> dict[str, Any]:
     if arm not in ARMS:
         raise ControllerError("invalid_dependency_arm")
     return {
@@ -385,7 +476,7 @@ def trial_identity(arm: str, repository_commit: str) -> dict[str, Any]:
         "repository_id": "thealgorithms-python",
         "repository_commit": repository_commit,
         "source_snapshot_sha256": SNAPSHOT_SHA256,
-        "dirty_state_sha256": digest(b""),
+        "dirty_state_sha256": restricted_state_sha256,
         "answer_model": ANSWER_MODEL,
         "reasoning": REASONING,
         "prompt_sha256": evaluator.THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_QUESTIONS[TASK_ID][1],
@@ -398,6 +489,7 @@ def trial_identity(arm: str, repository_commit: str) -> dict[str, Any]:
 def run_arm(
     arm: str,
     repository_commit: str,
+    restricted_state_sha256: str,
     question: Mapping[str, str],
     frozen_run: Mapping[str, Any],
     regenerate: Callable[[Trial, str], tuple[dict[str, Any], dict[str, Any]]],
@@ -420,13 +512,13 @@ def run_arm(
         except MeasurementError:
             raise ControllerError("dependency_live_not_authorized") from None
     trial = Trial(
-        trial_identity(arm, repository_commit),
+        trial_identity(arm, repository_commit, restricted_state_sha256),
         Budget(max_repairs=0, wall_limit_ns=600_000_000_000),
         execution=execution,
     )
 
     def prepare(current: Trial, _: int) -> dict[str, Any]:
-        current.not_applicable("warm_graph_load", "source_capture", "host_queue", "operator_approval")
+        current.not_applicable("warm_graph_load", "host_queue", "operator_approval")
         run, lane = regenerate(current, ARMS[arm])
         if _frozen_fields(run) != _frozen_fields(frozen_run):
             raise ControllerError("dependency_regenerated_pool_drift")
@@ -436,6 +528,7 @@ def run_arm(
         if arm in JEV_ARMS:
             with current.phase("jev_preparation"):
                 prepared = jev.prepare(packet, lane["lane"], MODEL)
+                _record_packet_reads(current, packet, lane, "jev-prepare")
             if prepared["request_bytes"] > REQUEST_BYTES:
                 raise ControllerError("dependency_request_budget_exceeded")
             current.bind(request_sha256=prepared["request_sha256"])
@@ -454,10 +547,9 @@ def run_arm(
                 )
             ledger.complete(receipt, observation)
             usage = observation.get("usage")
-            with current.phase("source_revalidation"):
-                refreshed = jev.prepare(packet, lane["lane"], MODEL)
-                if refreshed["request_sha256"] != prepared["request_sha256"]:
-                    raise ControllerError("dependency_source_changed")
+            _record_packet_reads(current, packet, lane, "jev-evaluate-before")
+            if observation.get("source_revalidated") is True:
+                _record_packet_reads(current, packet, lane, "jev-evaluate-after")
             with current.phase("response_validation"):
                 if observation.get("attempted_calls") not in {0, 1}:
                     raise ControllerError("dependency_retry_detected")
@@ -479,18 +571,23 @@ def run_arm(
             )
         else:
             current.not_applicable(
-                "jev_preparation", "provider", "source_revalidation",
-                "response_validation", "fallback",
+                "jev_preparation", "provider", "response_validation", "fallback",
             )
+        with current.phase("source_revalidation"):
+            with current.phase("source_capture"):
+                selected = _selection(run, lane, question, arm, observation)
         with current.phase("context_composition"):
-            selected = _selection(run, lane, question, arm, observation)
             payload = _answer_evidence(question["prompt"], selected)
         current._attempt()["candidate_observation"] = {
             "pool_sha256": digest(canonical(run["candidates"])),
             "selected_candidate_ids": list(selected.projection.selected_candidate_ids),
             "required_candidate_ids": list(selected.projection.required_candidate_ids),
             "order_source": selected.order_source,
+            "source_operation_count": len(current._attempt()["source_operations"]),
         }
+        if lane.get("source_reads_complete") is not True:
+            raise ControllerError("dependency_source_coverage_incomplete")
+        current.coverage(source_operations=True)
         return payload
 
     return run_process_trial(
@@ -541,12 +638,15 @@ def run_four_arm(
     manifest = generator._manifest(
         manifests_root / generator.CORPUS_MANIFESTS[question["corpus"]]
     )
+    lane_root = (lanes_root / question["corpus"]).resolve(strict=True)
+    restricted_state = lane_state_sha256(lane_root, SNAPSHOT_SHA256)
     ledger = LiveJevBudget(run_root, MAX_JEV_CALLS)
     results = []
     for arm, route in ARMS.items():
         results.append(run_arm(
             arm,
             manifest["commit"],
+            restricted_state,
             question,
             frozen[(TASK_ID, route)],
             lambda trial, selected_route: regenerate_pool(
@@ -560,6 +660,12 @@ def run_four_arm(
             live_authorized=live_authorized,
             execution=execution,
         ))
+        if lane_state_sha256(lane_root, SNAPSHOT_SHA256) != restricted_state:
+            raise ControllerError("dependency_lane_changed_during_run")
+        if results[-1]["terminal_reason"] in {
+            "measurement_error", "deadline_exceeded", "callback_timeout"
+        }:
+            raise ControllerError("dependency_systemic_trial_failure")
     return {
         "schema_version": "velgraphing-d01-four-arm-result-v1",
         "preflight": preflight_result,
@@ -567,25 +673,88 @@ def run_four_arm(
     }
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+def _argv_map(path: Path, root: Path) -> dict[str, list[str]]:
+    if (
+        not path.is_absolute()
+        or path.parent != root
+        or path.is_symlink()
+        or path.resolve(strict=True) != path
+    ):
+        raise ControllerError("dependency_lane_commands_invalid")
+    raw = path.read_bytes()
+    value = _read_json(path, "dependency_lane_commands_invalid")
+    if raw != canonical(value) or set(value) != set(ARMS):
+        raise ControllerError("dependency_lane_commands_invalid")
+    for command in value.values():
+        if (
+            type(command) is not list
+            or not command
+            or not all(type(argument) is str and argument for argument in command)
+        ):
+            raise ControllerError("dependency_lane_commands_invalid")
+    return value
+
+
+def _add_inputs(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--candidates", type=Path, required=True)
     parser.add_argument("--questions", type=Path, required=True)
     parser.add_argument("--manifests-root", type=Path, required=True)
     parser.add_argument("--lanes-root", type=Path, required=True)
     parser.add_argument("--preview", type=Path, required=True)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    preflight_parser = commands.add_parser("preflight")
+    _add_inputs(preflight_parser)
+    run_parser = commands.add_parser("run")
+    _add_inputs(run_parser)
+    run_parser.add_argument("--run-root", type=Path, required=True)
+    run_parser.add_argument("--answer-argv-json", type=Path, required=True)
+    run_parser.add_argument("--grader-argv-json", type=Path, required=True)
+    run_parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args(argv)
     try:
-        result = preflight(
+        inputs = (
             arguments.candidates.resolve(strict=True),
             arguments.questions.resolve(strict=True),
             arguments.manifests_root.resolve(strict=True),
             arguments.lanes_root.resolve(strict=True),
             arguments.preview.resolve(strict=True),
         )
-        print(canonical(result).decode("utf-8"))
+        if arguments.command == "preflight":
+            result = preflight(*inputs)
+            print(canonical(result).decode("utf-8"))
+            return 0
+        validate_plan(expected_live_authorized=True)
+        root = validate_run_root(str(arguments.run_root.resolve()))
+        output = arguments.output
+        if (
+            not output.is_absolute()
+            or output.parent != root
+            or output.name != "result.json"
+            or output.exists()
+            or output.is_symlink()
+        ):
+            raise ControllerError("dependency_output_invalid")
+        result = run_four_arm(
+            *inputs,
+            root,
+            answer_argv=_argv_map(arguments.answer_argv_json, root),
+            grader_argv=_argv_map(arguments.grader_argv_json, root),
+            live_authorized=True,
+        )
+        atomic_write(output, canonical(result))
+        print(canonical({
+            "output": str(output),
+            "output_sha256": digest(canonical(result)),
+            "status": "written",
+        }).decode("utf-8"))
         return 0
-    except (ControllerError, MeasurementError, OSError, ValueError) as error:
+    except (
+        ControllerError, HandoffError, MeasurementError, OSError, ValueError
+    ) as error:
         reason = error.reason if isinstance(error, MeasurementError) else "dependency_preflight_failed"
         print(f"dependency-controller: {reason}", file=sys.stderr)
         return 2

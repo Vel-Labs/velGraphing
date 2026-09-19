@@ -193,11 +193,13 @@ allowlisted answer/grader subprocess boundary.
 
 The controller records cold graph construction, candidate discovery, retrieval
 including expansion, Jev preparation, provider execution, source revalidation,
-response validation, fallback, context composition, answer generation, and
-independent grading. The root trial interval remains the all-in wall clock.
-Returned provider and model usage is retained. Unavailable tokens or cost stay
-null. Selected spans are normalized to the same treatment-free answer evidence
-schema for all four arms.
+source capture, response validation, fallback, context composition, answer
+generation, and independent grading. Scanner, retrieval, selection, and Jev
+packet reads create source-operation receipts before source coverage is marked
+complete. The root trial interval remains the all-in wall clock. Returned
+provider and model usage is retained. Unavailable tokens or cost stay null.
+Selected spans are normalized to the same treatment-free answer evidence schema
+for all four arms.
 
 The source-only preflight regenerated all four pools from the pinned lane. A/B
 matched at pool SHA-256
@@ -206,12 +208,22 @@ C/D matched at pool SHA-256
 `efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58`.
 Both frozen request hashes matched, and B/D both remained selection-sensitive.
 The tracked v2 plan binds these pools, the candidate, registry, selector,
-snapshot, preview, models, rubrics, requests, caps, and zero-retry policy.
+snapshot, restricted lane state, preview, models, rubrics, requests, caps, and
+zero-retry policy. Restricted lane state hashes the lane commit, complete index,
+porcelain status including untracked paths, untracked-path inventory, and the
+selected source snapshot. It binds the pinned staged deletions; it does not
+claim that the lane is clean.
 
-Observed execution is fail-closed while `live_authorized` is false. No provider,
-answer-model, or grader-model call ran. The remaining gate is Parent approval of
-an explicit tracked plan change to live authorization and the exact local answer
-and grader lane commands. This candidate is not a benchmark result.
+The `preflight` command performs only local source validation. The `run` command
+accepts canonical answer and grader argv JSON files under one private ignored
+run root, uses direct subprocess argv without a shell, and writes only a new
+`result.json` under that root by atomic replacement. It executes A, B, C, and D
+in order, uses one two-call ledger, and stops before the next arm after a
+systemic trial failure. Observed execution is fail-closed while
+`live_authorized` is false. No provider, answer-model, or grader-model call ran.
+The remaining gate is Parent approval of an explicit tracked plan change to
+live authorization and the exact local answer and grader lane commands. This
+candidate is not a benchmark result.
 
 ## Historical PR9 offline Jev preview freeze
 

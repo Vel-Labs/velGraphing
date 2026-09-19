@@ -1,6 +1,6 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_d01_four_arm_controller_preflight_green_live_pending
+proof_boundary: t030_d01_controller_accounting_and_execution_gate_green_live_pending
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
