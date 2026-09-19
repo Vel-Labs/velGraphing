@@ -42,6 +42,17 @@ Compare `direct`, `tag_index`, `typed_graph`, `typed_graph_no_edges`, and
 budgets and final byte budgets for the ablations. Remove the actual edges, not
 just an observation counter. Keep S-01 visible individually.
 
+Generate the frozen ranked-candidate artifact with
+`scripts/benchmarks/time_to_correct_ranked_candidates_v4.py`. Run it without an
+oracle or label mount. It verifies each materialized lane against its source
+manifest and emits exactly six questions by five routes. Every run records the
+closed seed, budget, edge, and expansion controls. The three typed arms use the
+same exact, sparse, and wiki seeds. Only `typed_graph` can append an optional,
+whole source-bound relationship target after its parent seed has retained
+primary evidence. The generator emits no source bodies and makes no provider,
+answer-model, grader, or scoring call. Its output belongs under an ignored
+`.inputs` path and binds the clean selector commit.
+
 Candidate budgets: K in 4, 6 and 12. Evidence budgets: 8,192, 16,384 and 24,576
 bytes. Report exact serialized model-visible bytes separately from excerpt bytes.
 The evaluator's budgeted prefixes are diagnostics, not deployable answer packets;

@@ -20,6 +20,13 @@ from typing import Any, Mapping, Sequence
 VERSION = "velgraphing-retrieval-eval-v4"
 ROUTES = {"direct", "tag_index", "typed_graph", "typed_graph_no_edges",
           "typed_graph_no_expansion"}
+PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
+FIXTURE_STUDY = "unit-fixture"
+PRODUCTION_TASKS = {"C-01", "C-02", "S-01", "L-01", "M-01", "M-02"}
+CONTROL_KEYS = {"seed_record_ids", "seed_limit", "shortlist_byte_budget",
+                "derived_edge_count", "source_bound_expansion", "expand_one_hop"}
+FORBIDDEN_CANDIDATE_KEYS = {"oracle", "labels", "acceptable_spans", "critical_facts",
+                            "graph_expected", "answer", "provider_response", "score"}
 MAX_INPUT_BYTES = 16 * 1024 * 1024
 SHA = re.compile(r"[0-9a-f]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
@@ -126,16 +133,30 @@ def validate_span(row: Mapping[str, Any], sources: Mapping[str, tuple[str, int]]
         raise EvaluationError("invalid_span")
 
 
+def reject_oracle_fields(value: Any) -> None:
+    if type(value) is dict:
+        if set(value) & FORBIDDEN_CANDIDATE_KEYS:
+            raise EvaluationError("oracle_shaped_field")
+        for item in value.values():
+            reject_oracle_fields(item)
+    elif type(value) is list:
+        for item in value:
+            reject_oracle_fields(item)
+
+
 def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
-    exact_keys(value, {"schema_version", "selector_commit", "runs"})
+    reject_oracle_fields(value)
+    exact_keys(value, {"schema_version", "study_id", "selector_commit", "runs"})
     if (value["schema_version"] != "velgraphing-ranked-candidates-v4"
+            or value["study_id"] not in {FIXTURE_STUDY, PRODUCTION_STUDY}
             or type(value["selector_commit"]) is not str
             or not COMMIT.fullmatch(value["selector_commit"])
             or type(value["runs"]) is not list or not value["runs"]):
         raise EvaluationError("invalid_candidate_artifact")
     keys = set()
     for run in value["runs"]:
-        exact_keys(run, {"task_id", "route", "source_snapshot_sha256", "sources", "candidates", "metrics"})
+        exact_keys(run, {"task_id", "route", "source_snapshot_sha256", "sources",
+                         "candidates", "controls", "metrics"})
         if (type(run["task_id"]) is not str or not run["task_id"]
                 or type(run["route"]) is not str or run["route"] not in ROUTES
                 or type(run["candidates"]) is not list):
@@ -146,6 +167,26 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
         keys.add(key)
         valid_sha(run["source_snapshot_sha256"])
         sources = source_map(run["sources"])
+        exact_keys(run["controls"], CONTROL_KEYS)
+        controls = run["controls"]
+        if (type(controls["seed_record_ids"]) is not list
+                or any(type(item) is not str or not item for item in controls["seed_record_ids"])
+                or len(controls["seed_record_ids"]) != len(set(controls["seed_record_ids"]))
+                or type(controls["source_bound_expansion"]) is not bool
+                or type(controls["expand_one_hop"]) is not bool):
+            raise EvaluationError("invalid_controls")
+        positive_int(controls["seed_limit"])
+        positive_int(controls["shortlist_byte_budget"])
+        positive_int(controls["derived_edge_count"], zero=True)
+        expected_flags = {
+            "direct": (False, False),
+            "tag_index": (False, False),
+            "typed_graph": (True, True),
+            "typed_graph_no_edges": (True, True),
+            "typed_graph_no_expansion": (True, False),
+        }[run["route"]]
+        if (controls["source_bound_expansion"], controls["expand_one_hop"]) != expected_flags:
+            raise EvaluationError("route_control_mismatch")
         ids = set()
         for candidate in run["candidates"]:
             exact_keys(candidate, {"id", "path", "source_sha256", "byte_start", "byte_end", "required"})
@@ -154,11 +195,44 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
                 raise EvaluationError("invalid_candidate_identity")
             ids.add(candidate["id"])
             validate_span(candidate, sources)
+        if (len(run["candidates"]) > controls["seed_limit"]
+                or sum(item["byte_end"] - item["byte_start"] for item in run["candidates"])
+                > controls["shortlist_byte_budget"]):
+            raise EvaluationError("shortlist_control_mismatch")
         exact_keys(run["metrics"], {"source_operations", "cold_ns", "warm_ns", "retrieval_ns",
                                     "expansion_ns", "fallback_ns", "source_failures", "authority_failures"})
         for metric in run["metrics"].values():
             if metric is not None:
                 positive_int(metric, zero=True)
+    by_task: dict[str, list[dict[str, Any]]] = {}
+    for run in value["runs"]:
+        by_task.setdefault(run["task_id"], []).append(run)
+    for task_runs in by_task.values():
+        first = task_runs[0]
+        for run in task_runs[1:]:
+            if (run["source_snapshot_sha256"] != first["source_snapshot_sha256"]
+                    or source_map(run["sources"]) != source_map(first["sources"])):
+                raise EvaluationError("paired_snapshot_mismatch")
+            if (run["controls"]["seed_limit"] != first["controls"]["seed_limit"]
+                    or run["controls"]["shortlist_byte_budget"]
+                    != first["controls"]["shortlist_byte_budget"]):
+                raise EvaluationError("paired_control_mismatch")
+        typed = [run for run in task_runs if run["route"].startswith("typed_graph")]
+        if typed:
+            typed_seeds = {tuple(run["controls"]["seed_record_ids"]) for run in typed}
+            typed_edges = {run["controls"]["derived_edge_count"] for run in typed}
+            if len(typed_seeds) != 1:
+                raise EvaluationError("typed_seed_mismatch")
+            if len(typed_edges) != 1:
+                raise EvaluationError("typed_edge_count_mismatch")
+    if value["study_id"] == PRODUCTION_STUDY:
+        expected = {(task, route) for task in PRODUCTION_TASKS for route in ROUTES}
+        if keys != expected or len(value["runs"]) != 30:
+            raise EvaluationError("production_run_matrix_mismatch")
+        for run in value["runs"]:
+            if (run["controls"]["seed_limit"] != 12
+                    or run["controls"]["shortlist_byte_budget"] != 24_576):
+                raise EvaluationError("production_control_mismatch")
     return value
 
 

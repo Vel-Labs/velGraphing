@@ -440,7 +440,11 @@ def _derive_edges(
 
 
 def _scan(
-    root: Path, max_file_bytes: int, max_total_bytes: int
+    root: Path,
+    max_file_bytes: int,
+    max_total_bytes: int,
+    *,
+    derive_edges: bool = True,
 ) -> tuple[Graph, SourceSnapshotV4, SnapshotReader, dict[str, object]]:
     _repository_root(root)
     paths = _git(root, "ls-files", "-z", "--cached").split(b"\x00")
@@ -495,7 +499,7 @@ def _scan(
         )
         for path, data in sorted(sources.items())
     )
-    edges = _derive_edges(sources, snapshot.snapshot_sha256)
+    edges = _derive_edges(sources, snapshot.snapshot_sha256) if derive_edges else ()
     reason_counts: dict[str, int] = {}
     for item in skipped:
         reason = item["reason"]

@@ -24,9 +24,14 @@ def fixture():
     sources = [{"path": path, "source_sha256": SHA, "byte_length": 100} for path in ("a.md", "b.md")]
     candidates = [{"id": "c0", "path": "a.md", "source_sha256": SHA, "byte_start": 0, "byte_end": 20, "required": False},
                   {"id": "c1", "path": "b.md", "source_sha256": SHA, "byte_start": 40, "byte_end": 60, "required": True}]
-    artifact = {"schema_version": "velgraphing-ranked-candidates-v4", "selector_commit": "1"*40,
+    controls = {"seed_record_ids": ["repo:a.md"], "seed_limit": 2,
+                "shortlist_byte_budget": 40, "derived_edge_count": 0,
+                "source_bound_expansion": False, "expand_one_hop": False}
+    artifact = {"schema_version": "velgraphing-ranked-candidates-v4", "study_id": "unit-fixture",
+                "selector_commit": "1"*40,
                 "runs": [{"task_id": "fixture", "route": "direct", "source_snapshot_sha256": SNAP,
                           "sources": sources, "candidates": candidates,
+                          "controls": controls,
                           "metrics": dict.fromkeys(("source_operations", "cold_ns", "warm_ns", "retrieval_ns",
                                                    "expansion_ns", "fallback_ns", "source_failures", "authority_failures"))}]}
     labels = {"schema_version": "velgraphing-span-labels-v4", "tasks": {"fixture": {
@@ -92,7 +97,7 @@ class RetrievalEvaluationTests(unittest.TestCase):
     def test_oracle_field_in_candidate_contract_rejected(self):
         artifact, labels = fixture()
         artifact["oracle"] = labels
-        with self.assertRaisesRegex(mod.EvaluationError, "invalid_schema"):
+        with self.assertRaisesRegex(mod.EvaluationError, "oracle_shaped_field"):
             run(artifact, labels)
 
     def test_empty_ranked_candidate_run_set_rejected(self):
@@ -125,6 +130,8 @@ class RetrievalEvaluationTests(unittest.TestCase):
     def test_pair_snapshot_mismatch_rejected(self):
         artifact, labels = fixture()
         new = copy.deepcopy(artifact["runs"][0]); new["route"] = "typed_graph"
+        new["controls"]["source_bound_expansion"] = True
+        new["controls"]["expand_one_hop"] = True
         new["source_snapshot_sha256"] = "c"*64
         artifact["runs"].append(new)
         with self.assertRaisesRegex(mod.EvaluationError, "paired_snapshot_mismatch"):
@@ -134,6 +141,7 @@ class RetrievalEvaluationTests(unittest.TestCase):
         artifact, labels = fixture()
         candidate = copy.deepcopy(artifact["runs"][0]["candidates"][0]); candidate["id"] = "c2"
         artifact["runs"][0]["candidates"].append(candidate)
+        artifact["runs"][0]["controls"].update(seed_limit=3, shortlist_byte_budget=60)
         result = run(artifact, labels, k=(3,), budgets=(60,))["results"][0]
         self.assertAlmostEqual(result["repeated_range_byte_fraction"], 1/3)
         self.assertEqual(result["unique_paths"], 2)
@@ -156,6 +164,49 @@ class RetrievalEvaluationTests(unittest.TestCase):
         result = run(*fixture(), k=(1,))["results"][0]
         self.assertIsNone(result["first_overlapping_rank"])
         self.assertEqual(result["reciprocal_first_overlap_rank"], 0.0)
+
+    def test_production_matrix_and_controls_are_closed(self):
+        artifact, _ = fixture()
+        template = artifact["runs"][0]
+        runs = []
+        flags = {
+            "direct": (False, False), "tag_index": (False, False),
+            "typed_graph": (True, True), "typed_graph_no_edges": (True, True),
+            "typed_graph_no_expansion": (True, False),
+        }
+        for task in mod.PRODUCTION_TASKS:
+            for route in mod.ROUTES:
+                row = copy.deepcopy(template)
+                row["task_id"] = task
+                row["route"] = route
+                row["controls"].update(
+                    seed_record_ids=["repo:a.md"], seed_limit=12,
+                    shortlist_byte_budget=24576, derived_edge_count=1 if route.startswith("typed") else 0,
+                    source_bound_expansion=flags[route][0], expand_one_hop=flags[route][1],
+                )
+                runs.append(row)
+        artifact["study_id"] = mod.PRODUCTION_STUDY
+        artifact["runs"] = runs
+        mod.validate_candidates(copy.deepcopy(artifact))
+        changed = copy.deepcopy(artifact)
+        changed["runs"].pop()
+        with self.assertRaisesRegex(mod.EvaluationError, "production_run_matrix_mismatch"):
+            mod.validate_candidates(changed)
+        changed = copy.deepcopy(artifact)
+        changed["runs"][0]["controls"]["seed_limit"] = 11
+        with self.assertRaisesRegex(mod.EvaluationError, "paired_control_mismatch"):
+            mod.validate_candidates(changed)
+        changed = copy.deepcopy(artifact)
+        typed = next(run for run in changed["runs"] if run["route"] == "typed_graph")
+        typed["controls"]["seed_record_ids"] = ["repo:b.md"]
+        with self.assertRaisesRegex(mod.EvaluationError, "typed_seed_mismatch"):
+            mod.validate_candidates(changed)
+
+    def test_nested_oracle_shaped_field_is_rejected(self):
+        artifact, _ = fixture()
+        artifact["runs"][0]["controls"]["oracle"] = {}
+        with self.assertRaisesRegex(mod.EvaluationError, "oracle_shaped_field"):
+            mod.validate_candidates(artifact)
 
 
 if __name__ == "__main__":
