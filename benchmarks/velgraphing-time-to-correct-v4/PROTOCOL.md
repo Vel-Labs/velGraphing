@@ -1,8 +1,10 @@
 # Time-to-correct v4: qualification protocol, not an executed benchmark
 
-Status: **Gates 1 and 2 passed; Gate 3 is exploratory-only with no promotion; the exact canary is approval-ready but live is not authorized, and fresh operator approval remains required**.
-Source candidate: `6931f0ffa72bd27f79f5515bd669404dbc4667d0`.
-No v4 result is asserted. No live call is authorized by this document.
+Status: **T030 has positive isolated edge-retrieval evidence. The next gate is
+an offline dependency-canary Jev preview. No live call is authorized.**
+Historical PR9 source candidate: `6931f0ffa72bd27f79f5515bd669404dbc4667d0`.
+No semantic answer correctness, time, token, Jev, promotion, or product result
+is asserted.
 
 ## What changes, and what stays sealed
 
@@ -154,7 +156,19 @@ The evaluator's budgeted prefixes are diagnostics, not deployable answer packets
 a prefix that excludes a required candidate is explicitly reported, never used
 as a valid answer packet.
 
-## Offline Jev preview freeze
+## Current retrieVEL next gate
+
+The next gate is an offline dependency-canary Jev preview bound to the frozen
+dependency-behavior candidate and evaluation artifacts. This gate may prepare
+and validate local request bytes. It does not authorize a provider call. The
+historical PR9 candidate, preview, request hashes, four-call plan, and approval
+readiness below are non-applicable to retrieVEL and grant no authority for a
+live call.
+
+## Historical PR9 offline Jev preview freeze
+
+The plan in this section is retained as historical PR9 data. It is not the
+current retrieVEL plan and is not authority for a live call.
 
 After the bound candidate artifact is committed and frozen, use
 `scripts/benchmarks/time_to_correct_jev_v4.py` to prepare exactly four local
@@ -300,12 +314,13 @@ means bounded fallback or defer, not truncation or an optimistic sufficiency fla
 Provider failure restores the verified baseline selection, with a fresh source
 check before answer. A source failure never licenses answering from stale bytes.
 
-### Approval readiness checklist
+### Historical PR9 approval-readiness record
 
-The frozen local plan is approval-ready for operator review. It is not live
-authorized. Approval readiness means only that the exact request bytes, hashes,
-source bindings, model, rubric and four-call cap are frozen. It does not qualify
-Jev usefulness or authorize a provider, answer or grader call.
+The frozen local plan was approval-ready for PR9 operator review. It is not
+applicable to retrieVEL and is not live authorized. Historical approval
+readiness means only that the exact request bytes, hashes, source bindings,
+model, rubric, and four-call cap were frozen. It does not qualify Jev usefulness
+or authorize a provider, answer, or grader call.
 
 The ignored source-bearing preview is `.inputs/jev-v4-preview-06db3f1.json`, SHA-256
 `0005d6c26523ab2da431eb5172f89f1aa077ce28d4c1b55ca1a10cd6ab71d6a9`.
@@ -318,7 +333,8 @@ The four provider request bindings are:
 | B-M-01 | `55a5fdcb9c20dd26fb90fec7896aab857acd14b709ae6e8a6949ccf3a496d8e7` |
 | D-M-01 | `a2d81d30d5af32d0b0041fdba1e1abbc6dc173ac7056e3b2c9e63af7ce1ee16f` |
 
-The local Parent may request fresh operator approval only after confirming:
+The historical PR9 Parent could request fresh operator approval only after
+confirming:
 
 1. Gate 1 typed-edge/source/allowlist/staleness fixtures and observable edge-removal proof pass.
 2. Gate 2 six-task critical-label retrieval evaluation passes, S-01 separately reported.
@@ -326,7 +342,8 @@ The local Parent may request fresh operator approval only after confirming:
 4. Canonical tests, consumers, full suite, two-pass projection and source-package parity pass at one final commit.
 5. Candidate/source/rubric/model bindings and all four request hashes match the frozen plan and preview artifact.
 
-The tracked plan keeps `live_authorized=false`, `promotion_eligible=false`, and
+The historical tracked plan keeps `live_authorized=false`,
+`promotion_eligible=false`, and
 the hard provider cap at four. A no-op request is skipped and its quota is not
 reassigned. No live provider, answer or grader execution is performed by these
 files.
@@ -395,12 +412,14 @@ critical and acceptable overlap-recall delta, both `1.0`. C-01, C-02, L-01,
 M-01, and M-02 each have delta `0.0`. This limited result does not establish a
 general graph advantage.
 
-The preview artifact and four request hashes are frozen above. Its artifact
+The historical PR9 preview artifact and four request hashes are frozen above.
+They are non-applicable to retrieVEL and grant no live-call authority. Its artifact
 SHA-256 is `0005d6c26523ab2da431eb5172f89f1aa077ce28d4c1b55ca1a10cd6ab71d6a9`.
 The retained v3 result seal is
 `916c5e766b9152df5dac21b3cf3fec0116002dfee8d4f6c68eec9885bf94fd96`.
-Remaining risks are unchanged: Gate 3 is exploratory only, usefulness and
-promotion are not qualified, and fresh operator approval is still required.
+Remaining historical PR9 risks are unchanged: Gate 3 is exploratory only, and
+usefulness and promotion are not qualified. Current retrieVEL work returns to
+the offline dependency-canary Jev preview gate above.
 
 ## Held-out confirmation
 

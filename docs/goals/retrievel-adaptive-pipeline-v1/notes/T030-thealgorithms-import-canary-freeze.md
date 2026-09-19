@@ -3,10 +3,10 @@
 Date: 2026-09-19
 
 Status: the import canary is closed as mechanics-only evidence and rejected for
-positive graph value. The oracle-blind dependency-behavior canary is frozen.
-T030 remains active for Parent review. No dependency-behavior label, oracle,
-answer, grader, Jev, provider, credential, network, product-core, or host lane
-ran.
+positive graph value. The dependency-behavior canary has independent labels,
+source revalidation, and a positive isolated edge-retrieval result. T030 remains
+active. No answer, grader, Jev, provider, credential, network, product-core, or
+host lane ran.
 
 ## Import Canary Outcome
 
@@ -76,6 +76,50 @@ minus exactly one displaced optional candidate. That candidate is
 candidate remains. The retained parent is bytes 1217-1256. The relationship
 child is bytes 253-1299 and covers the registered target declaration.
 
+## Dependency-Behavior Evaluation
+
+- Context-isolated labels:
+  `benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-thealgorithms-dependency-behavior-labels-pristine.json`.
+- Label SHA-256:
+  `ca9b6fa14e18a71fd3c92b8b6062b1b369a7a3fa8c81863115964180554f5400`.
+- Result:
+  `benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-thealgorithms-dependency-behavior-eval-pristine.json`.
+- Result SHA-256:
+  `dac799a64e9d5dab95ef71b86bdb22f8038bed1a831a9e58a8edc9f3ca5af7ca`.
+- Candidate SHA-256:
+  `8a75f792aefbabe5679fdfb934e440f723649a5993cb46196d63a437486c9ce7`.
+- Provider calls: `0`.
+- Gate 2: `not_applicable`, reason `production_study_required`.
+
+| Route | Acceptable overlap | Critical overlap | Source or authority failures |
+| --- | ---: | ---: | ---: |
+| Direct | 1/3 | 1/3 | 0 |
+| Tag index | 1/3 | 1/3 | 0 |
+| Typed graph | 3/3 | 3/3 | 0 |
+| Typed graph without edges | 1/3 | 1/3 | 0 |
+| Typed graph without expansion | 1/3 | 1/3 | 0 |
+
+At K=64 and 32,768 bytes, typed Graph has a strict acceptable and critical
+overlap delta of `+0.666667` against the no-edge arm. The dependency import
+overlaps first at rank 60 in every route. The two target-behavior groups first
+appear at rank 61 only in typed Graph. This supports the isolated retrieval
+hypothesis. It does not establish semantic answer correctness, time, token, Jev,
+promotion, or product claims.
+
+## Independent Source Revalidation
+
+- Authorized lane:
+  `/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4/thealgorithms-python`.
+- Lane HEAD: `a381578994d545e44f26afabbd2303746a2dc358`.
+- Snapshot SHA-256:
+  `5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09`.
+- All 149 manifest-selected sources and all 320 candidate rows were
+  revalidated against current bytes, lengths, hashes, and ranges.
+- Selected-source differences: `0`.
+- The lane has 1,521 staged deletions. All are outside the selected manifest.
+  This result proves the selected-source boundary only. It does not claim
+  global lane cleanliness.
+
 ## Validation
 
 - Focused generator and evaluator tests: 35 passed.
@@ -94,6 +138,11 @@ child is bytes 253-1299 and covers the registered target declaration.
   retention checks.
 - `git diff --check` passed before the implementation commit.
 - The context-isolated import labels and result match their delegated hashes.
+- The dependency-behavior labels, result, candidate binding, route metrics,
+  strict delta, first-overlap ranks, and zero provider-call count match their
+  delegated hashes and source-free result.
+- Independent source revalidation passed for all 149 selected sources and 320
+  candidate rows. The staged-deletion exclusion boundary was checked exactly.
 
 ## Preserved Negative Evidence
 
@@ -119,11 +168,17 @@ Receipt commit:
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-thealgorithms-import-canary-freeze.md`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 
+Current documentation-only update:
+
+- `benchmarks/velgraphing-time-to-correct-v4/PROTOCOL.md`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-thealgorithms-import-canary-freeze.md`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+
 ## Remaining Boundary
 
-The dependency-behavior freeze proves isolated, bounded graph candidate
-addition for a question that requires imported dependency behavior. It does
-not prove semantic correctness, answer quality, positive graph value, Jev
-value, token reduction, speed, promotion, release readiness, or product
-acceptance. T030 remains active. Parent review owns any later label or
-evaluation step.
+The dependency-behavior result proves positive isolated edge retrieval for this
+registered question. It does not prove semantic answer correctness, time, token,
+Jev, promotion, release readiness, or product acceptance. T030 remains active.
+The exact next gate is an offline dependency-canary Jev preview. No historical
+PR9 candidate, request hash, four-call plan, or approval-readiness record grants
+authority for a live call.
