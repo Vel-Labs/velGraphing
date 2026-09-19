@@ -120,7 +120,7 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertNotIn("diagnostic_facts", grader)
 
     def test_plan_pairs_arms_and_caps_only_effectful_jev_calls(self) -> None:
-        plan = mod.load_plan()
+        plan = mod.load_plan(expected_live_authorized=True)
         rows = plan["arm_preflight"]
         self.assertEqual([row["trial_id"] for row in rows], list(mod.DISPATCH))
         self.assertEqual(sum(row["call_disposition"] == "planned" for row in rows), 8)
@@ -142,12 +142,12 @@ class LunaSuccessorTests(unittest.TestCase):
             self.assertEqual(arms["A"]["pool_sha256"], arms["B"]["pool_sha256"])
             self.assertEqual(arms["C"]["pool_sha256"], arms["D"]["pool_sha256"])
 
-    def test_plan_is_source_free_and_execution_closed(self) -> None:
+    def test_plan_is_source_free_and_live_authorized(self) -> None:
         plan = json.loads(mod.PLAN_PATH.read_text(encoding="utf-8"))
-        self.assertFalse(plan["live_authorized"])
+        self.assertTrue(plan["live_authorized"])
         self.assertEqual(plan["provider_calls_executed"], 0)
         self.assertEqual(
-            plan["status"], "offline_frozen_parent_exact_candidate_reaudit_pending"
+            plan["status"], "live_authorized_lane_manifest_pending"
         )
         self.assertNotIn("excerpt", json.dumps(plan))
         self.assertEqual(plan["models"]["answer"], "gpt-5.6-luna")

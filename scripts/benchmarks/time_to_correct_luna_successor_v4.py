@@ -228,7 +228,7 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
         }
         or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v2"
         or plan["study_id"] != STUDY_ID
-        or plan["status"] != "offline_frozen_parent_exact_candidate_reaudit_pending"
+        or plan["status"] != "live_authorized_lane_manifest_pending"
         or plan["run_root"] != RUN_ROOT
         or plan["live_authorized"] is not expected_live_authorized
         or plan["provider_calls_executed"] != 0

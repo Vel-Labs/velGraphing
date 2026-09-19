@@ -425,7 +425,7 @@ credential, network, push, or pull-request action ran.
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
 
-## Luna Successor Lane Identity Repair (R3, Current)
+## Luna Successor Lane Identity Repair (R3, Accepted Candidate)
 
 The exact-candidate audit found that null usage did not prove the Luna/medium
 lane. R3 fixes the host boundary without changing sealed historical response
@@ -471,6 +471,48 @@ T030 remains active. Parent exact-candidate reaudit is the current gate.
 - `scripts/benchmarks/time_to_correct_host.py`
 - `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
 - `tests/benchmarks/test_time_to_correct_host.py`
+- `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
+
+## Luna Successor Live Authorization (R4, Current)
+
+Parent accepted the exact Luna successor candidate at commit
+`57ff3e4d7446761336ceb10193598796d96cf993`. The independent Luna audit result
+was `PASS`. The tracked plan now has `live_authorized=true` and status
+`live_authorized_lane_manifest_pending`.
+
+This transition changes no candidate, preview, question, rubric, lane contract,
+dispatch, limit, stop rule, or provider budget. The authorized plan SHA-256 is
+`768760e48fd16e8a1d0830f9b8be3f31977f314cc3d700ce24acdfd94416c1df`.
+The frozen candidate, preview, and lane contract hashes remain:
+
+- `9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61`;
+- `8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9`;
+- `46e2e18a102b376cee5df40e7ba205c305a415a37e4e025addc39dc73319b4be`.
+
+The current gate is live-lane preparation. The 32 Luna answer and grader
+threads and their canonical lane manifest do not exist yet. No provider,
+model, credential, network, thread, Jev, benchmark, push, or pull-request
+action ran during this transition. Live authorization covers the private local
+result only. Public provider results still require separate permission.
+
+After Parent creates and validates the 32-entry lane manifest, the exact
+controller command is:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python scripts/benchmarks/time_to_correct_luna_successor_v4.py run --candidates /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-ranked-candidates-a14e1de.json --questions /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/luna-successor-questions.json --rubrics /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/luna-successor-rubrics.json --manifests-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests --lanes-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4 --preview /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-jev-preview-a14e1de.json --run-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r3 --lane-manifest /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r3/lane-manifest.json --output /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r3/result.json
+```
+
+Authorization-only validation passed `10` focused tests. The strict plan loader
+and source-bound preflight accepted `live_authorized=true`, retained eight
+planned Jev calls, and reported zero provider calls. JSON, YAML, and diff
+structure checks passed.
+
+### R4 Files Changed
+
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json`
+- `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
 - `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`

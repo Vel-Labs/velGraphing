@@ -1,7 +1,7 @@
 {
   "schema_version": "velgraphing-v4-luna-successor-plan-v2",
   "study_id": "velgraphing-v4-luna-four-task-successor-v1",
-  "status": "offline_frozen_parent_exact_candidate_reaudit_pending",
+  "status": "live_authorized_lane_manifest_pending",
   "candidate_artifact": {
     "path": ".inputs/t030-luna-successor-ranked-candidates-a14e1de.json",
     "sha256": "9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61",
@@ -109,6 +109,6 @@
     "authorization_remaining_usd": 0.922929664
   },
   "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r3",
-  "live_authorized": false,
+  "live_authorized": true,
   "provider_calls_executed": 0
 }
