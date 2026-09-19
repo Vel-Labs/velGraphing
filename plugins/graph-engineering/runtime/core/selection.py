@@ -154,8 +154,21 @@ class RankedContextCandidate:
     byte_start: int
     byte_end: int
     required: bool
+    record_id: str
+    relationship_parent_candidate_id: str | None = None
 
     def __post_init__(self) -> None:
+        if type(self.record_id) is not str or not self.record_id:
+            raise ValueError("record_id must be a non-empty string")
+        if (
+            self.relationship_parent_candidate_id is not None
+            and (
+                type(self.relationship_parent_candidate_id) is not str
+                or not self.relationship_parent_candidate_id
+                or self.required
+            )
+        ):
+            raise ValueError("relationship candidates must be optional with a parent ID")
         validate_packet({
             "schema_version": PACKET_VERSION,
             "query": "candidate validation",
@@ -198,6 +211,7 @@ class RankedContextResult:
 
 
 def select_ranked_context(
+    graph: Graph,
     task: TaskSpec,
     snapshot: SourceSnapshotV4,
     reader: SourceReaderV4,
@@ -206,11 +220,12 @@ def select_ranked_context(
     candidates: tuple[RankedContextCandidate, ...],
     approved_request_sha256: str,
     jev_observation: Any,
-    fallback_graph: Graph | None = None,
     fallback_source_paths: tuple[str, ...] = (),
 ) -> RankedContextResult:
     """Select verified source spans from an immutable candidate shortlist."""
 
+    if type(graph) is not Graph:
+        raise TypeError("graph must be an exact Graph")
     if type(task) is not TaskSpec:
         raise TypeError("task must be an exact TaskSpec")
     if type(snapshot) is not SourceSnapshotV4:
@@ -223,8 +238,6 @@ def select_ranked_context(
         approved_request_sha256
     ):
         raise ValueError("approved_request_sha256 must be a full lowercase SHA-256")
-    if fallback_graph is not None and type(fallback_graph) is not Graph:
-        raise TypeError("fallback_graph must be an exact Graph or None")
     if type(fallback_source_paths) is not tuple or any(
         type(path) is not str for path in fallback_source_paths
     ):
@@ -239,10 +252,24 @@ def select_ranked_context(
     required_ids = tuple(
         candidate["id"] for candidate in packet["candidates"] if candidate["required"]
     )
+    seen_candidates: dict[str, RankedContextCandidate] = {}
+    for candidate in candidates:
+        parent = candidate.relationship_parent_candidate_id
+        if parent is not None and (
+            parent == candidate.candidate_id
+            or parent not in seen_candidates
+            or seen_candidates[parent].relationship_parent_candidate_id is not None
+        ):
+            raise ValueError(
+                "relationship parent must be a distinct earlier primary candidate"
+            )
+        seen_candidates[candidate.candidate_id] = candidate
     candidate_set_sha256 = jev_sha256(jev_canonical(packet["candidates"]))
     query_sha256 = jev_sha256(packet["query"].encode("utf-8"))
     snapshot_sources = {source.path: source for source in snapshot.sources}
+    records = graph.record_map()
     selected_sources: dict[str, SourceIdentityV4] = {}
+    source_sensitivities: dict[str, object] = {}
     for candidate in candidates:
         source = snapshot_sources.get(candidate.source_path)
         if source is None or source.sha256 != candidate.source_sha256:
@@ -250,11 +277,37 @@ def select_ranked_context(
                 task, candidate_set_sha256, approved_request_sha256, required_ids,
                 "candidate_source_identity_mismatch",
             )
+        record = records.get(candidate.record_id)
+        if (
+            record is None
+            or record.provenance.path != candidate.source_path
+            or record.provenance.sha256 != candidate.source_sha256
+        ):
+            return _ranked_defer(
+                task, candidate_set_sha256, approved_request_sha256, required_ids,
+                "candidate_record_identity_mismatch",
+            )
+        if not is_authenticated_eligible(record, task.allowed_sensitivities):
+            return _ranked_defer(
+                task, candidate_set_sha256, approved_request_sha256, required_ids,
+                "candidate_record_not_authenticated",
+            )
+        prior_sensitivity = source_sensitivities.get(candidate.source_path)
+        if prior_sensitivity is not None and prior_sensitivity is not record.sensitivity:
+            return _ranked_defer(
+                task, candidate_set_sha256, approved_request_sha256, required_ids,
+                "candidate_source_sensitivity_conflict",
+            )
+        source_sensitivities[candidate.source_path] = record.sensitivity
         selected_sources[source.path] = source
     subset = SourceSnapshotV4(tuple(selected_sources[path] for path in sorted(selected_sources)))
     try:
+        if not callable(getattr(reader, "read_bytes", None)) or not callable(
+            getattr(reader, "is_symlink", None)
+        ):
+            raise TypeError("reader must implement the read-only V4 reader protocol")
         source_bytes = _read_verified_source_bytes(subset, reader)
-    except (KeyError, OSError, TypeError, ValueError):
+    except Exception:
         return _ranked_defer(
             task, candidate_set_sha256, approved_request_sha256, required_ids,
             "candidate_source_unavailable",
@@ -330,7 +383,7 @@ def select_ranked_context(
             required_ids,
             candidate_set_sha256,
             approved_request_sha256,
-            fallback_graph,
+            graph,
             fallback_source_paths,
         )
 
@@ -338,6 +391,9 @@ def select_ranked_context(
     selected = set(required_ids)
     for candidate_id in effective_order:
         if candidate_id in required_set:
+            continue
+        parent = seen_candidates[candidate_id].relationship_parent_candidate_id
+        if parent is not None and parent not in selected:
             continue
         proposed = selected | {candidate_id}
         selected_order = tuple(item for item in effective_order if item in proposed)
@@ -529,15 +585,14 @@ def _ranked_required_fallback(
     required_ids: tuple[str, ...],
     candidate_set_sha256: str,
     approved_request_sha256: str,
-    fallback_graph: Graph | None,
+    graph: Graph,
     fallback_source_paths: tuple[str, ...],
 ) -> RankedContextResult:
     required_paths = tuple(sorted({
         candidate.source_path for candidate in candidates if candidate.required
     }))
     if (
-        fallback_graph is None
-        or not required_paths
+        not required_paths
         or not _valid_required_source_paths(fallback_source_paths)
         or not set(required_paths).issubset(fallback_source_paths)
     ):
@@ -545,15 +600,21 @@ def _ranked_required_fallback(
             task, candidate_set_sha256, approved_request_sha256, required_ids,
             "required_context_exceeds_byte_budget", source_revalidated=True,
         )
-    direct = assist(
-        fallback_graph,
-        task,
-        snapshot,
-        reader,
-        required_source_paths=required_paths,
-        fallback_source_paths=fallback_source_paths,
-        required_escalation=True,
-    )
+    try:
+        direct = assist(
+            graph,
+            task,
+            snapshot,
+            reader,
+            required_source_paths=required_paths,
+            fallback_source_paths=fallback_source_paths,
+            required_escalation=True,
+        )
+    except Exception:
+        return _ranked_defer(
+            task, candidate_set_sha256, approved_request_sha256, required_ids,
+            "required_context_fallback_unavailable", source_revalidated=True,
+        )
     if direct.route != "direct" or direct.projection.fail_closed:
         return _ranked_defer(
             task, candidate_set_sha256, approved_request_sha256, required_ids,

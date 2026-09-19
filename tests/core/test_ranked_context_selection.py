@@ -30,12 +30,39 @@ class SourceReader:
     def __init__(self, sources: dict[str, bytes], symlinks: tuple[str, ...] = ()) -> None:
         self.sources = sources
         self.symlinks = set(symlinks)
+        self.read_paths: list[str] = []
+        self.checked_paths: list[str] = []
 
     def read_bytes(self, project_relative_path: str) -> bytes:
+        self.read_paths.append(project_relative_path)
         return self.sources[project_relative_path]
 
     def is_symlink(self, project_relative_path: str) -> bool:
+        self.checked_paths.append(project_relative_path)
         return project_relative_path in self.symlinks
+
+
+class ExplodingReader(SourceReader):
+    def read_bytes(self, project_relative_path: str) -> bytes:
+        self.read_paths.append(project_relative_path)
+        raise RuntimeError("INTERNAL_SOURCE_TEXT")
+
+
+class FallbackExplodingReader(SourceReader):
+    def read_bytes(self, project_relative_path: str) -> bytes:
+        self.read_paths.append(project_relative_path)
+        if len(self.read_paths) > 1:
+            raise RuntimeError("INTERNAL_FALLBACK_SOURCE_TEXT")
+        return self.sources[project_relative_path]
+
+
+class PropertyExplodingReader:
+    @property
+    def read_bytes(self):
+        raise RuntimeError("INTERNAL_READER_PROPERTY_TEXT")
+
+    def is_symlink(self, project_relative_path: str) -> bool:
+        return False
 
 
 def spec(byte_budget: int = 20_000) -> TaskSpec:
@@ -50,11 +77,49 @@ def candidate(
     end: int,
     *,
     required: bool,
+    record_id: str | None = None,
+    relationship_parent_candidate_id: str | None = None,
 ) -> RankedContextCandidate:
-    return RankedContextCandidate(identity, path, digest, start, end, required)
+    return RankedContextCandidate(
+        identity,
+        path,
+        digest,
+        start,
+        end,
+        required,
+        record_id or f"record-{identity}",
+        relationship_parent_candidate_id,
+    )
 
 
-def fixture() -> tuple[SourceSnapshotV4, SourceReader, tuple[RankedContextCandidate, ...]]:
+def source_record(
+    record_id: str,
+    path: str,
+    digest: str,
+    content: str,
+    *,
+    sensitivity: Sensitivity = Sensitivity.PUBLIC,
+    freshness: Freshness = Freshness.CURRENT,
+    eligible: bool = True,
+) -> GraphRecord:
+    return GraphRecord(
+        record_id=record_id,
+        kind="source",
+        title=record_id,
+        content=content,
+        provenance=Provenance(path, digest, "candidate", True),
+        trust=TrustClass.VERIFIED_SOURCE,
+        sensitivity=sensitivity,
+        freshness=freshness,
+        admission=Admission.VERIFIER,
+        eligible=eligible,
+        export_allowed=False,
+    )
+
+
+def fixture() -> tuple[
+    Graph, SourceSnapshotV4, SourceReader, tuple[RankedContextCandidate, ...]
+]:
     path = "src/context.py"
     raw = b"requiredxx\noptional-a\noptional-b\n"
     digest = hashlib.sha256(raw).hexdigest()
@@ -64,7 +129,16 @@ def fixture() -> tuple[SourceSnapshotV4, SourceReader, tuple[RankedContextCandid
         candidate("c1", path, digest, 11, 21, required=False),
         candidate("c2", path, digest, 22, 32, required=False),
     )
-    return snapshot, SourceReader({path: raw}), candidates
+    graph = Graph(tuple(
+        source_record(
+            item.record_id,
+            path,
+            digest,
+            raw[item.byte_start:item.byte_end].decode("utf-8"),
+        )
+        for item in candidates
+    ))
+    return graph, snapshot, SourceReader({path: raw}), candidates
 
 
 def observation(
@@ -101,16 +175,17 @@ def observation(
 
 
 def select(
+    graph: Graph,
     task: TaskSpec,
     snapshot: SourceSnapshotV4,
     reader: SourceReader,
     candidates: tuple[RankedContextCandidate, ...],
     observed: object = None,
     *,
-    fallback_graph: Graph | None = None,
     fallback_source_paths: tuple[str, ...] = (),
 ):
     return select_ranked_context(
+        graph,
         task,
         snapshot,
         reader,
@@ -118,7 +193,6 @@ def select(
         candidates=candidates,
         approved_request_sha256=APPROVED,
         jev_observation=observed,
-        fallback_graph=fallback_graph,
         fallback_source_paths=fallback_source_paths,
     )
 
@@ -142,15 +216,16 @@ def whole_source_graph(path: str, raw: bytes) -> Graph:
 
 class RankedContextSelectionTests(unittest.TestCase):
     def tight_fixture(self):
-        snapshot, reader, candidates = fixture()
-        one_optional = select(spec(), snapshot, reader, candidates[:2])
+        graph, snapshot, reader, candidates = fixture()
+        one_optional = select(graph, spec(), snapshot, reader, candidates[:2])
         tight = replace(spec(), byte_budget=one_optional.projection.serialized_byte_count)
-        return snapshot, reader, candidates, tight
+        return graph, snapshot, reader, candidates, tight
 
     def test_valid_rerank_changes_optional_inclusion_and_keeps_required_slot(self) -> None:
-        snapshot, reader, candidates, tight = self.tight_fixture()
-        baseline = select(tight, snapshot, reader, candidates)
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
+        baseline = select(graph, tight, snapshot, reader, candidates)
         reranked = select(
+            graph,
             tight,
             snapshot,
             reader,
@@ -172,7 +247,7 @@ class RankedContextSelectionTests(unittest.TestCase):
         self.assertLessEqual(reranked.projection.serialized_byte_count, tight.byte_budget)
 
     def test_malformed_forged_incomplete_or_hash_mismatched_observation_uses_baseline(self) -> None:
-        snapshot, reader, candidates, tight = self.tight_fixture()
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
         valid = observation(candidates, ("c0", "c2", "c1"), snapshot)
         variants = [None, {}, {**valid, "status": "fallback"},
                     {**valid, "schema_version": "wrong"},
@@ -189,7 +264,7 @@ class RankedContextSelectionTests(unittest.TestCase):
                     {**valid, "source_revalidated": False}]
         for changed in variants:
             with self.subTest(observation=changed):
-                result = select(tight, snapshot, reader, candidates, changed)
+                result = select(graph, tight, snapshot, reader, candidates, changed)
                 self.assertEqual(result.route, "ranked")
                 self.assertEqual(result.order_source, "baseline")
                 self.assertFalse(result.jev_source_revalidated)
@@ -199,7 +274,7 @@ class RankedContextSelectionTests(unittest.TestCase):
                 )
 
     def test_stale_digest_range_and_non_utf8_source_defer_without_source_content(self) -> None:
-        snapshot, reader, candidates = fixture()
+        graph, snapshot, reader, candidates = fixture()
         stale = (replace(candidates[0], source_sha256="0" * 64),)
         changed_reader = SourceReader({"src/context.py": b"changed"})
         outside = (replace(candidates[0], byte_end=100),)
@@ -211,31 +286,39 @@ class RankedContextSelectionTests(unittest.TestCase):
         invalid = (candidate(
             "bad", "src/invalid.py", invalid_digest, 0, 1, required=True
         ),)
+        invalid_graph = Graph((source_record(
+            invalid[0].record_id,
+            "src/invalid.py",
+            invalid_digest,
+            "invalid",
+        ),))
         cases = (
-            (snapshot, reader, stale),
-            (snapshot, changed_reader, (candidates[0],)),
-            (snapshot, reader, outside),
-            (invalid_snapshot, SourceReader({"src/invalid.py": invalid_raw}), invalid),
+            (graph, snapshot, reader, stale),
+            (graph, snapshot, changed_reader, (candidates[0],)),
+            (graph, snapshot, reader, outside),
+            (invalid_graph, invalid_snapshot, SourceReader({"src/invalid.py": invalid_raw}), invalid),
         )
         for case in cases:
             with self.subTest(case=case):
-                result = select(spec(), *case)
+                result = select(case[0], spec(), *case[1:])
                 self.assertEqual(result.route, "defer")
                 self.assertTrue(result.projection.fail_closed)
                 self.assertEqual(result.projection.excerpt_byte_count, 0)
                 self.assertNotIn("required", result.projection.content)
 
     def test_exact_serialized_boundary_and_required_overflow(self) -> None:
-        snapshot, reader, candidates = fixture()
+        graph, snapshot, reader, candidates = fixture()
         required = (candidates[0],)
-        unbounded = select(spec(), snapshot, reader, required)
+        unbounded = select(graph, spec(), snapshot, reader, required)
         exact = select(
+            graph,
             replace(spec(), byte_budget=unbounded.projection.serialized_byte_count),
             snapshot,
             reader,
             required,
         )
         overflow = select(
+            graph,
             replace(spec(), byte_budget=unbounded.projection.serialized_byte_count - 1),
             snapshot,
             reader,
@@ -256,10 +339,12 @@ class RankedContextSelectionTests(unittest.TestCase):
         raw = b"required fallback\n"
         digest = hashlib.sha256(raw).hexdigest()
         snapshot = SourceSnapshotV4((SourceIdentityV4(path, len(raw), digest),))
-        required = (candidate("r" * 64, path, digest, 0, len(raw), required=True),)
+        required = (candidate(
+            "r" * 64, path, digest, 0, len(raw), required=True, record_id="whole"
+        ),)
         reader = SourceReader({path: raw})
         graph = whole_source_graph(path, raw)
-        ranked = select(spec(), snapshot, reader, required)
+        ranked = select(graph, spec(), snapshot, reader, required)
         from packages.core import assist
         direct = assist(
             graph,
@@ -274,20 +359,19 @@ class RankedContextSelectionTests(unittest.TestCase):
         tight = replace(spec(), byte_budget=ranked.projection.serialized_byte_count - 1)
 
         selected = select(
-            tight, snapshot, reader, required,
-            fallback_graph=graph, fallback_source_paths=(path,),
+            graph, tight, snapshot, reader, required, fallback_source_paths=(path,),
         )
-        absent = select(tight, snapshot, reader, required)
+        absent = select(graph, tight, snapshot, reader, required)
         incomplete = select(
-            tight, snapshot, reader, required,
-            fallback_graph=graph, fallback_source_paths=("src/other.py",),
+            graph, tight, snapshot, reader, required,
+            fallback_source_paths=("src/other.py",),
         )
         over_budget = select(
+            graph,
             replace(tight, byte_budget=direct.projection.byte_count - 1),
             snapshot,
             reader,
             required,
-            fallback_graph=graph,
             fallback_source_paths=(path,),
         )
 
@@ -300,9 +384,15 @@ class RankedContextSelectionTests(unittest.TestCase):
             self.assertTrue(result.projection.fail_closed)
 
     def test_relationship_style_optional_candidate_never_becomes_required(self) -> None:
-        snapshot, reader, candidates = fixture()
-        relationship = replace(candidates[1], candidate_id="relationship-target")
-        result = select(spec(), snapshot, reader, (candidates[0], relationship))
+        graph, snapshot, reader, candidates = fixture()
+        relationship = replace(
+            candidates[1],
+            candidate_id="relationship-target",
+            relationship_parent_candidate_id="c0",
+        )
+        result = select(
+            graph, spec(), snapshot, reader, (candidates[0], relationship)
+        )
 
         self.assertEqual(result.projection.required_candidate_ids, ("c0",))
         self.assertEqual(
@@ -311,16 +401,180 @@ class RankedContextSelectionTests(unittest.TestCase):
         )
         self.assertNotIn("relationship-target", result.projection.required_candidate_ids)
 
+    def test_relationship_provenance_rejects_required_missing_or_later_parent(self) -> None:
+        graph, snapshot, reader, candidates = fixture()
+        relationship = replace(
+            candidates[1], relationship_parent_candidate_id="c0"
+        )
+        with self.assertRaises(ValueError):
+            replace(relationship, required=True)
+        for changed in (
+            replace(relationship, relationship_parent_candidate_id="missing"),
+            relationship,
+        ):
+            ordered = (
+                (candidates[0], changed)
+                if changed.relationship_parent_candidate_id == "missing"
+                else (changed, candidates[0])
+            )
+            with self.subTest(candidates=ordered), self.assertRaises(ValueError):
+                select(graph, spec(), snapshot, reader, ordered)
+        self.assertEqual(reader.checked_paths, [])
+        self.assertEqual(reader.read_paths, [])
+
+    def test_relationship_target_is_not_selected_without_its_primary_parent(self) -> None:
+        graph, snapshot, reader, candidates = fixture()
+        short_target = replace(candidates[2], byte_end=candidates[2].byte_start + 1)
+        target_only = select(
+            graph,
+            spec(),
+            snapshot,
+            reader,
+            (candidates[0], short_target),
+        )
+        target_only_budget = replace(
+            spec(), byte_budget=target_only.projection.serialized_byte_count
+        )
+        unbound = select(
+            graph,
+            target_only_budget,
+            snapshot,
+            reader,
+            (candidates[0], candidates[1], short_target),
+        )
+        relationship = replace(
+            short_target, relationship_parent_candidate_id=candidates[1].candidate_id
+        )
+        bound = select(
+            graph,
+            target_only_budget,
+            snapshot,
+            reader,
+            (candidates[0], candidates[1], relationship),
+        )
+
+        self.assertEqual(unbound.projection.included_optional_candidate_ids, ("c2",))
+        self.assertEqual(bound.projection.included_optional_candidate_ids, ())
+
+        chained = replace(candidates[1], relationship_parent_candidate_id="c0")
+        child = replace(candidates[2], relationship_parent_candidate_id="c1")
+        with self.assertRaises(ValueError):
+            select(graph, spec(), snapshot, reader, (candidates[0], chained, child))
+
+    def test_graph_record_authorization_rejects_before_source_read(self) -> None:
+        graph, snapshot, _, candidates = fixture()
+        selected = (candidates[0],)
+        base = graph.record_map()[candidates[0].record_id]
+        mismatched = replace(
+            base,
+            provenance=Provenance(
+                "src/other.py", base.provenance.sha256, "candidate", True
+            ),
+        )
+        cases = (
+            (Graph(()), spec()),
+            (Graph((mismatched,)), spec()),
+            (Graph((replace(base, freshness=Freshness.STALE),)), spec()),
+            (Graph((replace(base, eligible=False),)), spec()),
+            (Graph((replace(base, sensitivity=Sensitivity.INTERNAL),)), spec()),
+            (Graph((replace(base, sensitivity=Sensitivity.RESTRICTED),)), spec()),
+        )
+        for candidate_graph, task in cases:
+            reader = SourceReader({"src/context.py": b"INTERNAL_SOURCE_TEXT"})
+            with self.subTest(graph=candidate_graph):
+                result = select(candidate_graph, task, snapshot, reader, selected)
+                self.assertEqual(result.route, "defer")
+                self.assertTrue(result.projection.fail_closed)
+                self.assertEqual(reader.checked_paths, [])
+                self.assertEqual(reader.read_paths, [])
+                self.assertNotIn("INTERNAL_SOURCE_TEXT", result.projection.content)
+
+        conflict_graph = Graph((
+            base,
+            replace(
+                graph.record_map()[candidates[1].record_id],
+                sensitivity=Sensitivity.INTERNAL,
+            ),
+        ))
+        conflict_reader = SourceReader({"src/context.py": b"INTERNAL_SOURCE_TEXT"})
+        conflict_task = replace(
+            spec(),
+            allowed_sensitivities=(Sensitivity.PUBLIC, Sensitivity.INTERNAL),
+        )
+        conflict = select(
+            conflict_graph,
+            conflict_task,
+            snapshot,
+            conflict_reader,
+            candidates[:2],
+        )
+        self.assertEqual(conflict.route, "defer")
+        self.assertEqual(conflict_reader.checked_paths, [])
+        self.assertEqual(conflict_reader.read_paths, [])
+
+    def test_unexpected_reader_exception_is_sanitized(self) -> None:
+        graph, snapshot, _, candidates = fixture()
+        reader = ExplodingReader({"src/context.py": b"unused"})
+
+        result = select(graph, spec(), snapshot, reader, (candidates[0],))
+
+        self.assertEqual(result.route, "defer")
+        self.assertEqual(result.reason, "candidate_source_unavailable")
+        self.assertNotIn("INTERNAL_SOURCE_TEXT", repr(result))
+        self.assertNotIn("INTERNAL_SOURCE_TEXT", result.projection.content)
+
+        property_result = select(
+            graph,
+            spec(),
+            snapshot,
+            PropertyExplodingReader(),
+            (candidates[0],),
+        )
+        self.assertEqual(property_result.route, "defer")
+        self.assertEqual(property_result.reason, "candidate_source_unavailable")
+        self.assertNotIn("INTERNAL_READER_PROPERTY_TEXT", repr(property_result))
+        self.assertNotIn(
+            "INTERNAL_READER_PROPERTY_TEXT", property_result.projection.content
+        )
+
+    def test_unexpected_fallback_reader_exception_is_sanitized(self) -> None:
+        path = "src/fallback.py"
+        raw = b"required fallback\n"
+        digest = hashlib.sha256(raw).hexdigest()
+        graph = whole_source_graph(path, raw)
+        snapshot = SourceSnapshotV4((SourceIdentityV4(path, len(raw), digest),))
+        required = (candidate(
+            "r" * 64, path, digest, 0, len(raw), required=True, record_id="whole"
+        ),)
+        ranked = select(graph, spec(), snapshot, SourceReader({path: raw}), required)
+        tight = replace(spec(), byte_budget=ranked.projection.serialized_byte_count - 1)
+        reader = FallbackExplodingReader({path: raw})
+
+        result = select(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            required,
+            fallback_source_paths=(path,),
+        )
+
+        self.assertEqual(result.route, "defer")
+        self.assertEqual(result.reason, "required_context_fallback_unavailable")
+        self.assertEqual(reader.read_paths, [path, path])
+        self.assertNotIn("INTERNAL_FALLBACK_SOURCE_TEXT", repr(result))
+        self.assertNotIn("INTERNAL_FALLBACK_SOURCE_TEXT", result.projection.content)
+
     def test_exact_public_input_types_and_digests_are_required(self) -> None:
-        snapshot, reader, candidates = fixture()
+        graph, snapshot, reader, candidates = fixture()
         with self.assertRaises(TypeError):
             select_ranked_context(
-                spec(), snapshot, reader, query=QUERY, candidates=list(candidates),
+                graph, spec(), snapshot, reader, query=QUERY, candidates=list(candidates),
                 approved_request_sha256=APPROVED, jev_observation=None,
             )
         with self.assertRaises(ValueError):
             select_ranked_context(
-                spec(), snapshot, reader, query=QUERY, candidates=candidates,
+                graph, spec(), snapshot, reader, query=QUERY, candidates=candidates,
                 approved_request_sha256="invalid", jev_observation=None,
             )
 
