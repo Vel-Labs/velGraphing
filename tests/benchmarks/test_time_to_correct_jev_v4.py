@@ -259,6 +259,25 @@ class JevPreviewTests(unittest.TestCase):
         self.assertFalse(plan["promotion_eligible"])
         self.assertEqual(plan["gate_3_disposition"], "exploratory_only_no_promotion")
         self.assertEqual(plan["blocking_gates"], ["fresh_operator_approval"])
+        receipt = plan["evidence_receipt"]
+        self.assertEqual(receipt, {
+            "validated_candidate_commit": "e3af84719b87896d56640d8210c0f426f7b760bf",
+            "gate_1_commits": [
+                "f98d38b808bf983cde29c9e5f846c31a9b0e2fc0",
+                "e6bfa4d916cc1a916e824f8bdef85f6d220c6c29",
+                "f16aa09949ddfec5c264556706c6c476ff4a70dd",
+            ],
+            "gate_1_status": "pass",
+            "gate_2_status": "pass",
+            "gate_2_labels_sha256": "37a2050454c0359eefbe47e3d9420df4b11318a01aae40921610e65b63ef8ca2",
+            "gate_2_result_sha256": "7e0cd1b9e9582f4e087992fa8f7c40450454c0aa0373ea475bab97b048fa83a5",
+            "gate_2_positive_delta_tasks": ["S-01"],
+            "preview_artifact_sha256": "0005d6c26523ab2da431eb5172f89f1aa077ce28d4c1b55ca1a10cd6ab71d6a9",
+            "package_candidate_sha256": "0e17875d87498c04016df2c8de28d3d8dc3a4ee61e7fbec60c0826bfb0bcf4d1",
+            "v3_result_sha256": "916c5e766b9152df5dac21b3cf3fec0116002dfee8d4f6c68eec9885bf94fd96",
+        })
+        self.assertEqual(receipt["preview_artifact_sha256"], plan["preview_artifact_sha256"])
+        self.assertEqual(plan["candidate_artifact_sha256"], "d147df356e72aa6588d0840ea32940b6db5d5dae975acf2b218e3d4cfc697ae9")
 
     def test_fixed_four_previews_are_bound_and_offline(self) -> None:
         fixture = Fixture()
