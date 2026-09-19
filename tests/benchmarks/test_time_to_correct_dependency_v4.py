@@ -205,11 +205,17 @@ class DependencyControllerTests(unittest.TestCase):
         plan = mod.validate_plan(expected_live_authorized=True)
         self.assertTrue(plan["live_authorized"])
         self.assertEqual(plan["provider_calls_executed"], 2)
-        self.assertEqual(plan["successor_provider_calls_executed"], 0)
+        self.assertEqual(plan["successor_provider_calls_executed"], 2)
+        self.assertEqual(plan["repair_provider_calls_executed"], 0)
+        self.assertEqual(plan["repair_jev_calls_authorized"], 1)
+        self.assertEqual(plan["aggregate_authorized_call_total"], 6)
+        self.assertEqual(plan["aggregate_completed_call_total"], 5)
         self.assertEqual(plan["repaired_candidate_commit"], mod.REPAIRED_CANDIDATE_COMMIT)
         self.assertEqual(plan["package_candidate_sha256"], mod.PACKAGE_CANDIDATE_SHA256)
         self.assertEqual(plan["successor_run_root"], mod.SUCCESSOR_RUN_ROOT)
+        self.assertEqual(plan["repair_run_root"], mod.REPAIR_RUN_ROOT)
         self.assertEqual(plan["private_result_sha256"], mod.PRIVATE_RESULT_SHA256)
+        self.assertEqual(plan["successor_result_sha256"], mod.SUCCESSOR_RESULT_SHA256)
         self.assertEqual(plan["limits"]["maximum_jev_calls"], 2)
         self.assertEqual(plan["limits"]["retries"], 0)
         self.assertEqual(plan["answer_rubric_sha256"], mod.digest(mod.canonical(mod.RUBRIC)))
@@ -707,6 +713,58 @@ class DependencyControllerTests(unittest.TestCase):
                         execution="fixture",
                     )
                 self.assertEqual(calls, ["direct", "direct"])
+
+    def test_d_confirmation_replays_b_and_runs_only_one_live_d_call(self) -> None:
+        b_result = self.run_arm("B")
+        b_observation = b_result["attempts"][0]["jev_observation"]
+        run_root = self.root / "d-confirmation"
+        run_root.mkdir(mode=0o700)
+        (self.root / self.question["corpus"]).mkdir()
+        artifact = {
+            "runs": [
+                {**copy.deepcopy(self.run), "route": "direct"},
+                {**copy.deepcopy(self.run), "route": "typed_graph"},
+            ]
+        }
+        calls = []
+
+        def regenerate(route, question, manifests, lanes, trial=None):
+            calls.append((route, trial is not None))
+            if trial is None:
+                return {**copy.deepcopy(self.run), "route": route}, self.lane
+            return self.regenerate(trial, route)
+
+        patches = (
+            mock.patch.object(mod, "preflight", return_value={"live_authorized": True}),
+            mock.patch.object(mod.preview, "_load_inputs", return_value=(artifact, {mod.TASK_ID: self.question})),
+            mock.patch.object(mod.generator, "_manifest", return_value={"commit": "a" * 40}),
+            mock.patch.object(mod, "lane_state_sha256", return_value="d" * 64),
+            mock.patch.object(mod, "regenerate_pool", side_effect=regenerate),
+            mock.patch.object(mod, "FINAL_ANSWER_BYTES", 1400),
+        )
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+            result = mod.run_d_confirmation(
+                self.root / "candidates.json",
+                self.root / "questions.json",
+                self.root,
+                self.root,
+                self.root / "preview.json",
+                run_root,
+                answer_argv=[sys.executable, "-c", ANSWER_CODE],
+                grader_argv=[sys.executable, "-c", GRADER_CODE],
+                b_observation=b_observation,
+                live_authorized=True,
+                evaluate=self.evaluator,
+                execution="fixture",
+            )
+        self.assertEqual(result["schema_version"], "velgraphing-d01-d-repair-result-v1")
+        self.assertEqual(result["b_replay"]["order_source"], "reranked")
+        self.assertEqual(
+            result["result"]["attempts"][0]["candidate_observation"]["jev_execution"],
+            "live",
+        )
+        self.assertEqual(calls, [("direct", False), ("typed_graph", True)])
+        self.assertEqual(len(list((run_root / "jev-calls").glob("*.json"))), 1)
 
 
 if __name__ == "__main__":

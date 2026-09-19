@@ -226,6 +226,24 @@ class JevTests(unittest.TestCase):
             with self.subTest(probabilities=probabilities):
                 self.assertEqual(self.evaluate(replay=self.replay(response))["status"], "fallback")
 
+    def test_rounded_probability_sums_require_consistent_scores(self):
+        cases = (
+            ({"0": 0.0, "1": 0.49, "2": 0.50}, 1.49, "reranked", "advisory_only"),
+            ({"0": 0.0, "1": 0.51, "2": 0.50}, 1.51, "reranked", "advisory_only"),
+            ({"0": 0.0, "1": 0.49, "2": 0.50}, 1.60, "fallback", "inconsistent_score"),
+            ({"0": 0.0, "1": 0.48, "2": 0.50}, 1.48, "fallback", "invalid_probability_sum"),
+            ({"0": 0.0, "1": 0.52, "2": 0.50}, 1.52, "fallback", "invalid_probability_sum"),
+        )
+        for probabilities, score, status, reason in cases:
+            response = self.response()
+            response["answers"]["candidate_0"].update(
+                {"score": score, "probabilities": probabilities}
+            )
+            with self.subTest(probabilities=probabilities, score=score):
+                result = self.evaluate(replay=self.replay(response))
+                self.assertEqual(result["status"], status)
+                self.assertEqual(result["reason"], reason)
+
     def test_score_must_match_distribution(self):
         response = self.response()
         response["answers"]["candidate_0"]["score"] = 1

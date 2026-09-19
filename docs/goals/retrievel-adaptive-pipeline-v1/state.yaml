@@ -1,33 +1,35 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_successor_live_confirmation_prepared
+proof_boundary: t030_private_confirmation_failed_probability_sum_validation
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: fresh_eight_lane_dispatch_and_parent_owned_controller_run
+current_gate: d_probability_sum_repair_confirmation_prepared
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
-exact_blocker: fresh_answer_and_grader_lanes_not_dispatched
+exact_blocker: fresh_d_answer_and_grader_lanes_not_dispatched
 next_milestone: T030
 provider:
   name: typesafe_jev
   model: jev-1.13.0
   public_source_only: true
   maximum_cost_usd: 1.00
-  authorized_call_total: 5
-  completed_call_total: 3
-  planned_d01_call_total: 2
+  authorized_call_total: 6
+  completed_call_total: 5
+  planned_d01_call_total: 1
   request_bytes_per_call_max: 131072
   price_as_of: 2026-09-19
   price_usd_per_million_input_tokens: 0.042
   output_token_price_usd: 0.00
-  successor_incremental_authorization_usd: 0.011010048
-  authorization_envelope_usd: 0.027525120
-  authorization_remaining_usd: 0.972474880
+  successor_incremental_authorization_usd: 0.005505024
+  authorization_envelope_usd: 0.033030144
+  authorization_remaining_usd: 0.966969856
   budget_status: bound_under_cap_local_only
   cost_telemetry: unavailable
   actual_usage_boundary: ignored_local_only
   public_results_boundary: separate_provider_permission_required
-  calls_made: 3
+  calls_made: 5
+  last_private_result_sha256: 44fc6a9b6f3cade340906195b60105d187be1185975406bd9f12e330d46f10d2
+  last_failure_class: adapter_probability_sum_compatibility
 tasks:
   T010: complete
   T020: complete

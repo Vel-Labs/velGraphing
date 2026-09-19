@@ -4,9 +4,10 @@ Date: 2026-09-19
 
 Status: the frozen high-recall candidate artifact has one independently labeled,
 post-hoc span-overlap evaluation. The private D-01 four-arm canary is complete.
-All four correctness grades failed. T030 remains active for retrieval and
+Its local artifact remains private. T030 remains active for retrieval and
 context redesign. The Parent accepted the bounded offline source-semantics
-repair. No answer-validation or promotion claim is supported.
+repair. No answer-validation, provider-performance, or promotion claim is
+supported.
 
 ## Bound Inputs
 
@@ -23,7 +24,7 @@ repair. No answer-validation or promotion claim is supported.
 ## Evaluation Command
 
 ```text
-PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python scripts/benchmarks/time_to_correct_retrieval_eval_v4.py \
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" scripts/benchmarks/time_to_correct_retrieval_eval_v4.py \
   --candidates benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-high-recall-ranked-candidates-38eb61e.json \
   --expected-candidates-sha256 42d14d8daa02c92a2483f68f67b0d37d8fed2116779c6496a61a6b78159eaa24 \
   --labels benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-span-labels-v4-independent.json \
@@ -76,7 +77,7 @@ value, Jev value, token reduction, speed, promotion, or product acceptance.
 - Semantic fact recall and candidate NDCG remain unknown.
 - The evaluator did not independently revalidate candidate source bytes.
 - The evaluator does not prove prior oracle isolation by itself.
-- The private relational canary completed but failed correctness in every arm.
+- The private relational canary does not establish product correctness.
 - T030 remains active for answer validation. No T040 work is authorized by
   this receipt.
 
@@ -84,14 +85,11 @@ value, Jev value, token reduction, speed, promotion, or product acceptance.
 
 - Private result SHA-256:
   `bd03bd9944c55c142b1fc00773f1253f79dd4442213c3ab2b31c098b94313286`.
-- All source, model, context, and answer-boundary coverage completed.
-- All four correctness grades failed.
-- Two permitted Jev calls were consumed. No retry ran.
-- The evidence remains private and internal under the provider terms boundary.
-- Timing was contaminated. This receipt makes no speed, quality, token, cost,
-  ranking, provider-comparison, or promotion claim.
-- The live authorization is closed. The next gate is retrieval and context
-  redesign with offline proof before any broader live run.
+- The artifact remains ignored and private under the provider terms boundary.
+- Arm outcomes, grades, provider behavior, selected evidence, usage, and timing
+  are not tracked in this public receipt.
+- This receipt makes no speed, quality, token, cost, ranking,
+  provider-comparison, or promotion claim.
 
 ## Offline Source-Semantics Repair
 
@@ -148,13 +146,9 @@ completion.
 
 ## Private Observation Replay Gate
 
-The sealed D-01 run retains enough identity data to check the prior Jev inputs.
-The B and D request hashes, candidate-set hashes, source snapshot, query, source
-sets, and model agree with the frozen preview and tracked plan. The frozen
-preview SHA-256 is
-`ac771f605821c720e9a8d6d3e31de56bee6309c0258f1336de4662465ee4c761`.
-The sealed private result SHA-256 remains
-`bd03bd9944c55c142b1fc00773f1253f79dd4442213c3ab2b31c098b94313286`.
+The private artifact retains identity data for an exact replay check. The
+tracked plan binds the private result and frozen preview hashes without
+publishing arm outcomes or provider behavior.
 
 Exact replay is not available. The sealed run has no complete canonical
 `velgraphing-jev-observation-v1` envelope. Call receipts and the selected result
@@ -162,81 +156,88 @@ prefix do not reconstruct the full ordered observation or prove its complete
 source-set and query binding. The replay check therefore failed closed.
 
 No provider, network, credential, answer, grader, or model lane ran during this
-check. No fresh A/B/C/D confirmation or speed claim was produced.
-
-The next authorized path is:
-
-1. Recover the original full private D observation envelope, if it still exists
-   in the authorized private source.
-2. Validate its schema, status, mode, authority, sufficiency, source
-   revalidation, baseline order, required IDs, full order, candidate set, query,
-   source set, request, and model against the frozen preview and plan.
-3. If the envelope cannot be recovered, obtain separate Parent authority for
-   a new exact Jev call.
-4. Only after the observation passes validation, create a fresh ignored run
-   root and fresh host-native answer and grader lanes for A/B/C/D. Keep treatment
-   hidden from those lanes. Make no elapsed-speed claim because scheduling is
-   not controlled.
+check. The next path must remain private, hash-bound, and separately authorized.
 
 The original run remains non-replayable because its complete observations were
 not retained.
 
 ## Successor Live Confirmation Plan
 
-The Parent authorized one new private B call and one new private D call. The
-aggregate TypeSafe allowance remains USD 1.00. Both calls use model
-`jev-1.13.0`, the same frozen public D-01 source, zero retries, and the accepted
-repair candidate
-`dc0fbcd4397e997645de49d831a8c6608f2f3df2`.
+The private successor was bounded by the tracked plan and aggregate cost cap.
+Its arm outcomes, grades, provider behavior, selected evidence, usage, and
+timing remain only in ignored local artifacts. No public performance claim is
+supported. T030 remains active.
 
-The successor bindings are:
+## Private Confirmation Result And Validator Repair
 
-- B request SHA-256:
-  `b63f730ae2e2290a3ab964c170c851c205b6ba28f1df53b9679ea25009a14277`.
-- D request SHA-256:
-  `ae0bde087faf70dd31d77f6887f5975d98bbe52996e37eb41c98f1ef7b4e47c3`.
-- Maximum request size per call: `131072` bytes.
-- Source snapshot SHA-256:
-  `5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09`.
-- Jev rubric: `evidence-usefulness-v1`.
-- Answer contract SHA-256:
-  `e3226c60087d52a8b51b5bfe8a722e16c294264685c749be5e706454c57d6ddb`.
-- Grader contract SHA-256:
-  `58b94d44ee16b7abd9afd234d5d57b3d96fd864798d414d65b725b9ef2c64ebb`.
-- Maximum new Jev calls: `2`. Retries: `0`.
+The fresh private confirmation completed. Its result SHA-256 is
+`44fc6a9b6f3cade340906195b60105d187be1185975406bd9f12e330d46f10d2`.
+Integration validation found a probability-sum compatibility failure in the
+canonical adapter. The artifact remains ignored and private. Arm outcomes,
+grades, provider behavior, selected evidence, usage, and timing are not tracked
+in this public receipt. No product or provider performance claim is established.
 
-The tracked aggregate authorization is now five calls: three complete and two
-planned. The new incremental worst-case envelope is USD `0.011010048`. The
-aggregate worst-case envelope is USD `0.027525120`. The remaining allowance is
-USD `0.972474880`. These values use the tracked price and conservative
-request-byte rule. They are authorization bounds, not observed cost.
+TypeSafe's current [Score documentation](https://docs.typesafe.ai/primitives/score)
+requires probabilities to sum to 1 and defines the score as the
+probability-weighted mean. It does not specify a machine-precision tolerance.
+The adapter therefore uses an explicit `0.011` sum tolerance as a local
+validation policy. This accepts totals of `0.99` and `1.01` despite binary
+floating-point representation. It rejects totals of `0.98` and `1.02`. Exact
+keys, finite values in `[0, 1]`, weighted-score
+consistency, candidate membership, required IDs, source revalidation, and
+fallback behavior remain strict. This policy does not claim that TypeSafe has
+a two-decimal response contract.
 
-The fresh ignored run root is:
+The smallest private successor is prepared but not executed. It revalidates
+and replays the exact private observation with SHA-256
+`33bd29d232f461583292ab14a640c2417a7eb55aa254ad43c3571883e2702a76`,
+makes one new bounded integration call with zero retries, and runs one fresh
+answer lane and one fresh grader lane. The ignored run root is
+`$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v1`.
 
-`/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-d01-confirmation-v1`
-
-Its canonical answer and grader argv maps are prepared. The Parent must create
-eight fresh host-native lanes: four answer lanes and four grader lanes, one of
-each for A, B, C, and D. The answer lanes must not receive the rubric, arm,
-route, Jev treatment, score, request, provider, or controller identity. The
-grader lanes receive only the answer and frozen rubric.
-
-The exact one-line controller command is:
+With `CHECKOUT` set to this checkout, `PYTHON` set to the trusted project
+interpreter, and `LANES_ROOT` set to the retained public corpus lanes, the
+controller command is:
 
 ```text
-PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python scripts/benchmarks/time_to_correct_dependency_v4.py run --candidates /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-thealgorithms-dependency-behavior-canary-79adf45.json --questions /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/thealgorithms-dependency-behavior-canary-questions.json --manifests-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests --lanes-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4 --preview /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-dependency-behavior-jev-preview-51e2dc7.json --run-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-d01-confirmation-v1 --answer-argv-json /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-d01-confirmation-v1/answer-argv.json --grader-argv-json /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-d01-confirmation-v1/grader-argv.json --output /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-d01-confirmation-v1/result.json
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON" scripts/benchmarks/time_to_correct_dependency_v4.py confirm-d --candidates "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-thealgorithms-dependency-behavior-canary-79adf45.json" --questions "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/thealgorithms-dependency-behavior-canary-questions.json" --manifests-root "$CHECKOUT/benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests" --lanes-root "$LANES_ROOT" --preview "$CHECKOUT/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-dependency-behavior-jev-preview-51e2dc7.json" --run-root "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v1" --answer-argv-json "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v1/answer-argv.json" --grader-argv-json "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v1/grader-argv.json" --replay-observations-root "$CHECKOUT/.velgraphing-local/retrievel-d01-confirmation-v1" --output "$CHECKOUT/.velgraphing-local/retrievel-d01-d-repair-v1/result.json"
 ```
 
-The controller now retains each successful complete source-free provider
-observation immediately under `jev-observations/B.json` or
-`jev-observations/D.json`. A future run can use
-`--replay-observations-root` only with a complete B/D pair. The controller
-validates exact request, candidate set, query, source set, model, rubric, order,
-required IDs, source revalidation, and response shape before replay. Replay
-makes no provider call.
+The aggregate authorization is now six calls: five complete and one planned.
+The one-call incremental worst-case envelope is USD `0.005505024`. The
+aggregate worst-case envelope is USD `0.033030144`. The remaining allowance is
+USD `0.966969856`. These are authorization bounds, not observed cost. T030
+remains active.
 
-No provider, credential, network, answer, grader, or model lane ran during this
-preparation. Provider-comparative details remain private. T030 remains active.
+### Validator Repair Validation
+
+- Focused adapter and D-only controller tests: `70` passed.
+- Known Jev, selection, benchmark, controller, and projection consumers: `117`
+  passed.
+- Parity tests in a clean disposable copy: `10` passed.
+- Source-package parity: `87` files with candidate SHA-256
+  `b8a9d02d2b33f4d44565ac85a86b7f6fe30a460cad442cf2a3e93a110ca60d0e`.
+- Two projector runs produced the same package diff SHA-256
+  `a239e98de166ee70c9368794c74b0eca963a17015717291833db3308ba2c93df`.
+- The offline D-01 preflight reproduced the frozen request, pool, and source
+  bindings. The private successor preparation passed its hash and argv checks.
+- `git diff --check` passed.
+- The full repository suite was not run. Caller discovery mapped the shared
+  parser and its known consumers to the focused and consumer checks above.
+- No provider, credential, answer, grader, or model lane ran for this repair.
+
+### Validator Repair Files
+
+- `packages/core/jev.py`
+- `plugins/graph-engineering/runtime/core/jev.py`
+- `plugins/graph-engineering/runtime/.projection-state.json`
+- `plugins/graph-engineering/.codex-plugin/release-manifest.json`
+- `scripts/benchmarks/time_to_correct_dependency_v4.py`
+- `tests/core/test_jev.py`
+- `tests/benchmarks/test_time_to_correct_dependency_v4.py`
+- `benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
 
 ## Files Changed
 

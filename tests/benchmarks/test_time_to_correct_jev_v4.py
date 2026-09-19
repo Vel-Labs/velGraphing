@@ -299,10 +299,19 @@ class JevPreviewTests(unittest.TestCase):
             "jev_model", "jev_rubric_version", "answer_model", "answer_reasoning",
             "grader_model", "grader_reasoning", "answer_rubric_sha256",
             "pool_sha256", "restricted_state_sha256",
+            "repaired_candidate_commit", "package_candidate_sha256",
+            "answer_response_contract_sha256", "grader_response_contract_sha256",
+            "maximum_cost_usd", "aggregate_authorized_call_total",
+            "aggregate_completed_call_total", "aggregate_authorization_envelope_usd",
+            "successor_incremental_authorization_usd", "successor_jev_calls_authorized",
+            "successor_provider_calls_executed", "successor_run_root",
+            "successor_result_sha256", "successor_b_observation_sha256",
+            "repair_incremental_authorization_usd", "repair_jev_calls_authorized",
+            "repair_provider_calls_executed", "repair_run_root",
         })
         self.assertEqual(
             plan["schema_version"],
-            "velgraphing-v4-dependency-behavior-canary-plan-v2",
+            "velgraphing-v4-dependency-behavior-canary-plan-v4",
         )
         self.assertEqual(plan["study_id"], mod.DEPENDENCY_STUDY)
         self.assertEqual(plan["task_id"], "D-01")
@@ -318,7 +327,7 @@ class JevPreviewTests(unittest.TestCase):
             "retries": 0,
         })
         self.assertEqual(plan["provider_calls_executed"], 2)
-        self.assertFalse(plan["live_authorized"])
+        self.assertTrue(plan["live_authorized"])
         self.assertEqual(plan["private_result_sha256"], (
             "bd03bd9944c55c142b1fc00773f1253f79dd4442213c3ab2b31c098b94313286"
         ))

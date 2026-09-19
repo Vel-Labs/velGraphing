@@ -83,6 +83,10 @@ PACKAGE_CANDIDATE_SHA256 = "48b65ed3ba9d83e63b724ce2afb395f2fbda156d29adb1b9a194
 ANSWER_CONTRACT_SHA256 = "e3226c60087d52a8b51b5bfe8a722e16c294264685c749be5e706454c57d6ddb"
 GRADER_CONTRACT_SHA256 = "58b94d44ee16b7abd9afd234d5d57b3d96fd864798d414d65b725b9ef2c64ebb"
 SUCCESSOR_RUN_ROOT = ".velgraphing-local/retrievel-d01-confirmation-v1"
+SUCCESSOR_RESULT_SHA256 = "44fc6a9b6f3cade340906195b60105d187be1185975406bd9f12e330d46f10d2"
+SUCCESSOR_B_OBSERVATION_SHA256 = "33bd29d232f461583292ab14a640c2417a7eb55aa254ad43c3571883e2702a76"
+REPAIR_RUN_ROOT = ".velgraphing-local/retrievel-d01-d-repair-v1"
+REPAIR_MAX_JEV_CALLS = 1
 PLAN_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json"
 RUBRIC = {
     "required_facts": [
@@ -263,6 +267,26 @@ def _load_preserved_observations(root: Path) -> dict[str, dict[str, Any]]:
         os.close(directory)
 
 
+def _load_repair_b_observation(root: Path) -> dict[str, Any]:
+    root = _validated_run_root(root)
+    root_directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        result_raw, _ = read_canonical_at(root_directory, "result.json")
+    finally:
+        os.close(root_directory)
+    directory = open_contained_directory(root, ("jev-observations",), create=False)
+    try:
+        observation_raw, observation = read_canonical_at(directory, "B.json")
+    finally:
+        os.close(directory)
+    if (
+        digest(result_raw) != SUCCESSOR_RESULT_SHA256
+        or digest(observation_raw) != SUCCESSOR_B_OBSERVATION_SHA256
+    ):
+        raise ControllerError("dependency_repair_replay_identity_mismatch")
+    return observation
+
+
 def validate_plan(
     path: Path = PLAN_PATH,
     *,
@@ -274,7 +298,7 @@ def validate_plan(
     pools = plan.get("pool_sha256")
     if (
         plan.get("schema_version")
-        != "velgraphing-v4-dependency-behavior-canary-plan-v3"
+        != "velgraphing-v4-dependency-behavior-canary-plan-v4"
         or plan.get("study_id") != STUDY_ID
         or plan.get("task_id") != TASK_ID
         or plan.get("candidate_artifact_sha256") != CANDIDATE_SHA256
@@ -296,12 +320,18 @@ def validate_plan(
         or plan.get("grader_response_contract_sha256") != GRADER_CONTRACT_SHA256
         or digest(canonical(GRADER_RESPONSE_CONTRACT)) != GRADER_CONTRACT_SHA256
         or plan.get("successor_run_root") != SUCCESSOR_RUN_ROOT
+        or plan.get("successor_result_sha256") != SUCCESSOR_RESULT_SHA256
+        or plan.get("successor_b_observation_sha256") != SUCCESSOR_B_OBSERVATION_SHA256
+        or plan.get("repair_run_root") != REPAIR_RUN_ROOT
         or plan.get("maximum_cost_usd") != 1.0
-        or plan.get("aggregate_authorized_call_total") != 5
-        or plan.get("aggregate_completed_call_total") != 3
-        or plan.get("aggregate_authorization_envelope_usd") != 0.02752512
+        or plan.get("aggregate_authorized_call_total") != 6
+        or plan.get("aggregate_completed_call_total") != 5
+        or plan.get("aggregate_authorization_envelope_usd") != 0.033030144
         or plan.get("successor_incremental_authorization_usd") != 0.011010048
         or plan.get("successor_jev_calls_authorized") != MAX_JEV_CALLS
+        or plan.get("repair_incremental_authorization_usd") != 0.005505024
+        or plan.get("repair_jev_calls_authorized") != REPAIR_MAX_JEV_CALLS
+        or plan.get("repair_provider_calls_executed") != 0
         or type(limits) is not dict
         or limits.get("candidate_count") != 64
         or limits.get("candidate_aggregate_bytes") != 32_768
@@ -317,7 +347,7 @@ def validate_plan(
         or plan.get("private_result_sha256") != PRIVATE_RESULT_SHA256
         or plan.get("live_authorized") is not expected_live_authorized
         or plan.get("provider_calls_executed") != 2
-        or plan.get("successor_provider_calls_executed") != 0
+        or plan.get("successor_provider_calls_executed") != 2
     ):
         raise ControllerError("dependency_plan_mismatch")
     return plan
@@ -601,11 +631,12 @@ def trial_identity(
     arm: str,
     repository_commit: str,
     restricted_state_sha256: str,
+    run_id: str = "velgraphing-d01-four-arm-v1",
 ) -> dict[str, Any]:
     if arm not in ARMS:
         raise ControllerError("invalid_dependency_arm")
     return {
-        "run_id": "velgraphing-d01-four-arm-v1",
+        "run_id": run_id,
         "trial_id": f"{arm}-D-01",
         "task_id": TASK_ID,
         "arm": arm,
@@ -638,6 +669,7 @@ def run_arm(
     replay_observation: Mapping[str, Any] | None = None,
     live_authorized: bool = False,
     execution: str = "observed",
+    run_id: str = "velgraphing-d01-four-arm-v1",
 ) -> dict[str, Any]:
     if live_authorized is not True:
         raise ControllerError("dependency_live_not_authorized")
@@ -649,7 +681,7 @@ def run_arm(
         except MeasurementError:
             raise ControllerError("dependency_live_not_authorized") from None
     trial = Trial(
-        trial_identity(arm, repository_commit, restricted_state_sha256),
+        trial_identity(arm, repository_commit, restricted_state_sha256, run_id),
         Budget(max_repairs=0, wall_limit_ns=600_000_000_000),
         execution=execution,
     )
@@ -861,7 +893,114 @@ def run_four_arm(
     }
 
 
-def _argv_map(path: Path, root: Path) -> dict[str, list[str]]:
+def run_d_confirmation(
+    candidates_path: Path,
+    questions_path: Path,
+    manifests_root: Path,
+    lanes_root: Path,
+    preview_path: Path,
+    run_root: Path,
+    *,
+    answer_argv: list[str],
+    grader_argv: list[str],
+    b_observation: Mapping[str, Any],
+    live_authorized: bool = False,
+    evaluate: Callable[..., Mapping[str, Any]] = jev.evaluate,
+    execution: str = "observed",
+) -> dict[str, Any]:
+    if execution == "observed":
+        run_root = _validated_run_root(run_root)
+    preflight_result = preflight(
+        candidates_path,
+        questions_path,
+        manifests_root,
+        lanes_root,
+        preview_path,
+        expected_live_authorized=live_authorized,
+    )
+    preflight_result = {
+        **preflight_result,
+        "maximum_jev_calls": REPAIR_MAX_JEV_CALLS,
+    }
+    if live_authorized is not True:
+        raise ControllerError("dependency_live_not_authorized")
+    artifact, questions = preview._load_inputs(
+        candidates_path, CANDIDATE_SHA256, questions_path, STUDY_ID
+    )
+    frozen = {(run["task_id"], run["route"]): run for run in artifact["runs"]}
+    question = questions[TASK_ID]
+    manifest = generator._manifest(
+        manifests_root / generator.CORPUS_MANIFESTS[question["corpus"]]
+    )
+    lane_root = (lanes_root / question["corpus"]).resolve(strict=True)
+    restricted_state = lane_state_sha256(lane_root, SNAPSHOT_SHA256)
+
+    b_run, b_lane = regenerate_pool(
+        ARMS["B"], question, manifests_root, lanes_root
+    )
+    if _frozen_fields(b_run) != _frozen_fields(frozen[(TASK_ID, ARMS["B"])]):
+        raise ControllerError("dependency_regenerated_pool_drift")
+    b_packet = _packet(b_run, question)
+    b_prepared = jev.prepare(b_packet, b_lane["lane"], MODEL)
+    b_validated = _validate_preserved_observation(
+        b_observation, b_prepared, b_packet
+    )
+    b_selection = _selection(b_run, b_lane, question, "B", b_validated)
+    if b_selection.order_source != "reranked":
+        raise ControllerError("dependency_repair_b_replay_not_applied")
+
+    ledger = LiveJevBudget(run_root, REPAIR_MAX_JEV_CALLS)
+    d_result = run_arm(
+        "D",
+        manifest["commit"],
+        restricted_state,
+        question,
+        frozen[(TASK_ID, ARMS["D"])],
+        lambda trial, selected_route: regenerate_pool(
+            selected_route, question, manifests_root, lanes_root, trial
+        ),
+        answer_argv=answer_argv,
+        grader_argv=grader_argv,
+        cwd=ROOT,
+        ledger=ledger,
+        evaluate=evaluate,
+        live_authorized=live_authorized,
+        execution=execution,
+        run_id="velgraphing-d01-d-repair-v1",
+    )
+    candidate_observation = d_result["attempts"][-1]["candidate_observation"]
+    coverage = d_result["attempts"][-1]["coverage"]
+    if (
+        candidate_observation["jev_execution"] != "live"
+        or candidate_observation["order_source"] != "reranked"
+        or d_result["terminal_reason"] in {
+            "measurement_error", "deadline_exceeded", "callback_timeout"
+        }
+        or not coverage["model_calls"]
+        or not coverage["context_deliveries"]
+        or lane_state_sha256(lane_root, SNAPSHOT_SHA256) != restricted_state
+    ):
+        raise ControllerError("dependency_d_confirmation_failed")
+    return {
+        "schema_version": "velgraphing-d01-d-repair-result-v1",
+        "preflight": preflight_result,
+        "b_replay": {
+            "request_sha256": b_validated["request_sha256"],
+            "candidate_set_sha256": b_validated["candidate_set_sha256"],
+            "selected_candidate_ids": list(
+                b_selection.projection.selected_candidate_ids
+            ),
+            "order_source": b_selection.order_source,
+        },
+        "result": d_result,
+    }
+
+
+def _argv_map(
+    path: Path,
+    root: Path,
+    expected_arms: set[str] | frozenset[str] = frozenset(ARMS),
+) -> dict[str, list[str]]:
     if (
         not path.is_absolute()
         or path.parent != root
@@ -871,7 +1010,7 @@ def _argv_map(path: Path, root: Path) -> dict[str, list[str]]:
         raise ControllerError("dependency_lane_commands_invalid")
     raw = path.read_bytes()
     value = _read_json(path, "dependency_lane_commands_invalid")
-    if raw != canonical(value) or set(value) != set(ARMS):
+    if raw != canonical(value) or set(value) != expected_arms:
         raise ControllerError("dependency_lane_commands_invalid")
     for command in value.values():
         if (
@@ -941,6 +1080,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_parser.add_argument("--grader-argv-json", type=Path, required=True)
     run_parser.add_argument("--replay-observations-root", type=Path)
     run_parser.add_argument("--output", type=Path, required=True)
+    repair_parser = commands.add_parser("confirm-d")
+    _add_inputs(repair_parser)
+    repair_parser.add_argument("--run-root", type=Path, required=True)
+    repair_parser.add_argument("--answer-argv-json", type=Path, required=True)
+    repair_parser.add_argument("--grader-argv-json", type=Path, required=True)
+    repair_parser.add_argument("--replay-observations-root", type=Path, required=True)
+    repair_parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args(argv)
     try:
         inputs = (
@@ -956,6 +1102,41 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         validate_plan(expected_live_authorized=True)
         root = _validated_run_root(arguments.run_root)
+        if arguments.command == "confirm-d":
+            replay_root = arguments.replay_observations_root.resolve(strict=True)
+            if (
+                root != (ROOT / REPAIR_RUN_ROOT).resolve()
+                or replay_root != (ROOT / SUCCESSOR_RUN_ROOT).resolve()
+            ):
+                raise ControllerError("dependency_run_root_plan_mismatch")
+            output = arguments.output
+            if (
+                not output.is_absolute()
+                or output.parent != root
+                or output.name != "result.json"
+                or output.exists()
+                or output.is_symlink()
+            ):
+                raise ControllerError("dependency_output_invalid")
+            result = run_d_confirmation(
+                *inputs,
+                root,
+                answer_argv=_argv_map(
+                    arguments.answer_argv_json, root, {"D"}
+                )["D"],
+                grader_argv=_argv_map(
+                    arguments.grader_argv_json, root, {"D"}
+                )["D"],
+                b_observation=_load_repair_b_observation(replay_root),
+                live_authorized=True,
+            )
+            atomic_write(output, canonical(result))
+            print(canonical({
+                "output": str(output),
+                "output_sha256": digest(canonical(result)),
+                "status": "written",
+            }).decode("utf-8"))
+            return 0
         replay_observations = None
         if arguments.replay_observations_root is not None:
             replay_root = arguments.replay_observations_root.resolve(strict=True)
