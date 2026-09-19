@@ -1,7 +1,8 @@
 # Time-to-correct v4: qualification protocol, not an executed benchmark
 
-Status: **T030 has positive isolated edge-retrieval evidence. The next gate is
-an offline dependency-canary Jev preview. No live call is authorized.**
+Status: **T030 has positive isolated edge-retrieval evidence and a frozen
+offline dependency-canary Jev preview. Parent review is the next gate. No live
+call is authorized.**
 Historical PR9 source candidate: `6931f0ffa72bd27f79f5515bd669404dbc4667d0`.
 No semantic answer correctness, time, token, Jev, promotion, or product result
 is asserted.
@@ -156,14 +157,26 @@ The evaluator's budgeted prefixes are diagnostics, not deployable answer packets
 a prefix that excludes a required candidate is explicitly reported, never used
 as a valid answer packet.
 
-## Current retrieVEL next gate
+## Current retrieVEL dependency preview
 
-The next gate is an offline dependency-canary Jev preview bound to the frozen
-dependency-behavior candidate and evaluation artifacts. This gate may prepare
-and validate local request bytes. It does not authorize a provider call. The
-historical PR9 candidate, preview, request hashes, four-call plan, and approval
-readiness below are non-applicable to retrieVEL and grant no authority for a
-live call.
+The offline dependency-canary Jev preview is frozen at adapter commit
+`51e2dc70916ecdbe9f90fff8d5a44a4b5f22c714`. It contains exactly D-01/B/direct
+and D-01/D/typed_graph. Both source-bound pre-Jev pools passed fresh candidate,
+registry, manifest, snapshot, source-byte, relationship, and request validation.
+Both baseline decisions report that a Jev order could change final membership.
+The requests use at most 64 candidates, 32,768 aggregate excerpt bytes, 4,096
+bytes per candidate, 131,072 serialized request bytes, and a 16,384-byte final
+answer selection budget. The tracked source-free plan permits at most two Jev
+calls and zero retries, but records `live_authorized: false` and zero executed
+provider calls.
+
+The source-bearing preview and exact request bindings remain under the ignored
+`.inputs` boundary. The answer and grader subprocess boundary removes run,
+trial, arm, route, Graph-navigation, and Jev treatment identifiers recursively
+while retaining controller receipts. This preview does not qualify model
+usefulness or authorize a provider, answer, or grader call. Parent review is the
+next gate. The historical PR9 candidate, preview, request hashes, four-call
+plan, and approval-readiness record below remain non-applicable to retrieVEL.
 
 ## Historical PR9 offline Jev preview freeze
 

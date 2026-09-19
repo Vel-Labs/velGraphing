@@ -4,9 +4,9 @@ Date: 2026-09-19
 
 Status: the import canary is closed as mechanics-only evidence and rejected for
 positive graph value. The dependency-behavior canary has independent labels,
-source revalidation, and a positive isolated edge-retrieval result. T030 remains
-active. No answer, grader, Jev, provider, credential, network, product-core, or
-host lane ran.
+source revalidation, a positive isolated edge-retrieval result, and a frozen
+offline Jev preview. T030 remains active at Parent review. No answer, grader,
+provider, credential, network, product-core, or live host lane ran.
 
 ## Import Canary Outcome
 
@@ -120,11 +120,37 @@ promotion, or product claims.
   This result proves the selected-source boundary only. It does not claim
   global lane cleanliness.
 
+## Offline Dependency Jev Preview
+
+- Adapter commit: `51e2dc70916ecdbe9f90fff8d5a44a4b5f22c714`.
+- Source-bearing ignored artifact:
+  `benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-dependency-behavior-jev-preview-51e2dc7.json`.
+- Artifact SHA-256:
+  `ac771f605821c720e9a8d6d3e31de56bee6309c0258f1336de4662465ee4c761`.
+- Artifact size: `378614` bytes.
+- Records: exactly D-01/B/direct and D-01/D/typed_graph.
+- Request bytes: `109650` for B and `110662` for D.
+- Both records report `jev_call_could_affect_selection: true`.
+- Both records passed candidate, registry, manifest, snapshot, source-byte,
+  relationship, request-hash, request-byte, and baseline-selection validation.
+- Tracked source-free plan:
+  `benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json`.
+- Maximum Jev calls: `2`. Retries: `0`. Executed provider calls: `0`.
+- Live authorization: `false`.
+
+The source-bearing request bodies, candidate identities, source coordinates,
+and provider details remain in the ignored artifact. The tracked plan contains
+only hashes, limits, and authority boundaries. The preview does not qualify Jev
+model usefulness and is not authority for a live call.
+
 ## Validation
 
 - Focused generator and evaluator tests: 35 passed.
 - Full benchmark suite: 158 passed with one expected skip.
 - Both changed Python scripts passed `py_compile`.
+- The offline dependency preview passed strict self-validation at generation.
+- Both answer and grader test subprocesses rejected any leaked controller or
+  treatment identity in their actual standard input.
 - Both registry hashes, exact rows, prompt hash bindings, and `quick_sort`
   exclusions passed.
 - In-memory mutation tests reject wrong edge counts, changed control identity
@@ -174,11 +200,22 @@ Current documentation-only update:
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-thealgorithms-import-canary-freeze.md`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 
+Offline dependency preview implementation:
+
+- `benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json`
+- `scripts/benchmarks/time_to_correct_host.py`
+- `scripts/benchmarks/time_to_correct_jev_v4.py`
+- `tests/benchmarks/test_time_to_correct_host.py`
+- `tests/benchmarks/test_time_to_correct_jev_v4.py`
+- `benchmarks/velgraphing-time-to-correct-v4/PROTOCOL.md`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-thealgorithms-import-canary-freeze.md`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+
 ## Remaining Boundary
 
 The dependency-behavior result proves positive isolated edge retrieval for this
 registered question. It does not prove semantic answer correctness, time, token,
-Jev, promotion, release readiness, or product acceptance. T030 remains active.
-The exact next gate is an offline dependency-canary Jev preview. No historical
-PR9 candidate, request hash, four-call plan, or approval-readiness record grants
-authority for a live call.
+Jev usefulness, promotion, release readiness, or product acceptance. T030
+remains active. The exact next gate is Parent review of the offline dependency
+preview. No historical PR9 candidate, request hash, four-call plan, current
+two-call plan, or approval-readiness record grants authority for a live call.
