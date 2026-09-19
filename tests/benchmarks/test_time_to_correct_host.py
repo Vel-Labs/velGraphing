@@ -136,7 +136,7 @@ class HostBoundaryTests(unittest.TestCase):
                  answer_timeout_s=2, wall_limit_ns=5_000_000_000,
                  prepared=None, grader_context=None, grader_model=None,
                  answer_execution_identity=None, grader_execution_identity=None,
-                 strict_contracts=False):
+                 strict_contracts=False, require_answer_evidence_citation=True):
         trial = Trial(identity(), Budget(0, wall_limit_ns), execution="fixture")
         return run_process_trial(
             trial,
@@ -152,6 +152,7 @@ class HostBoundaryTests(unittest.TestCase):
             grader_response_contract=(GRADER_RESPONSE_CONTRACT if strict_contracts else None),
             answer_execution_identity=answer_execution_identity,
             grader_execution_identity=grader_execution_identity,
+            require_answer_evidence_citation=require_answer_evidence_citation,
         )
 
     def test_real_answer_and_independent_grader_subprocesses(self):
@@ -371,6 +372,30 @@ if "response_contract" in payload:''')
             ANSWER_CODE.replace("observed subprocess answer", "supported [c0]"),
             prepared=prepared)
         self.assertEqual(valid["terminal_reason"], "passed")
+
+    def test_missing_citation_can_reach_grader_but_invalid_id_still_fails(self):
+        prepared = {
+            "schema_version": "velgraphing-answer-evidence-v3",
+            "question": "frozen question",
+            "citation_instruction": "Cite supporting evidence IDs as [cN].",
+            "evidence": [{"id": "c0", "path": "source.py", "excerpt": "evidence"}],
+        }
+        missing = self.run_host(
+            ANSWER_CODE,
+            prepared=prepared,
+            require_answer_evidence_citation=False,
+        )
+        self.assertEqual(missing["terminal_reason"], "passed")
+        invalid = self.run_host(
+            ANSWER_CODE.replace("observed subprocess answer", "unsupported [c9]"),
+            prepared=prepared,
+            require_answer_evidence_citation=False,
+        )
+        self.assertEqual(invalid["terminal_reason"], "measurement_error")
+        self.assertEqual(
+            invalid["attempts"][0]["failure_reason"],
+            "answer_evidence_citation_invalid",
+        )
 
 
 if __name__ == "__main__":

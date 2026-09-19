@@ -517,7 +517,7 @@ structure checks passed.
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
 
-## R3 Infrastructure Failure and Clean R4 Restart (Current)
+## R3 Infrastructure Failure and Clean R4 Restart (R4 Attempt, Superseded by R5)
 
 The R3 live run stopped fail-closed. A-S-01 completed. B-S-01 then returned an
 incorrect `execution_identity.thread_id` after one Jev call completed. The
@@ -564,6 +564,70 @@ does not change the separate public-results permission boundary.
 
 - `benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json`
 - `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
+- `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
+
+## R4 Protocol Boundary and Resumable R5 Restart (Current)
+
+R4 completed eight trials and four R4 Jev calls. It then stopped fail-closed at
+C-L-01 because an identity-correct answer omitted evidence citations. The
+controller wrote no result. The ignored R4 run root remains unchanged and is
+excluded as a protocol or harness-boundary attempt. It is not provider-quality
+evidence.
+
+The changed hypothesis is narrow. A missing citation is answer quality and must
+reach the independent grader. A citation that names an ID outside the delivered
+evidence remains an authority error and still fails at the host boundary. The
+host keeps missing-citation rejection as its backward-compatible default. The
+Luna successor alone opts out of that missing-citation error.
+
+R5 reuses `save_completed_trial`, `load_completed_trials`, and the calibration
+resumability guard. It writes one canonical receipt after each terminal trial.
+On restart, it skips only receipts whose full trial identity and answer and
+grader lane identities and candidate-set binding match the current frozen run. It refuses receipt
+conflicts and any unreceipted trial directory before new trial work. The Jev
+ledger remains capped at eight R5 calls and permits zero retries.
+
+The fresh private R5 run root is
+`$CHECKOUT/.velgraphing-local/retrievel-t030-luna-successor-r5`. The cumulative
+authorization ledger records `11` completed prior Jev calls: six before the
+successor, one in R3, and four in R4. R5 plans eight calls, for `19` aggregate
+authorized calls. At USD `0.005505024` per worst-case call, the prior envelope
+is USD `0.060555264`, the R5 incremental envelope is USD `0.044040192`, the
+aggregate envelope is USD `0.104595456`, and USD `0.895404544` remains under
+the USD 1 cap. These are authorization bounds, not observed cost.
+
+The R5 plan remains `live_authorized=true`, records zero R5 provider calls, and
+keeps the frozen candidate, question, rubric, preview, dispatch, models,
+limits, retrieval, selection, and lane identity contract unchanged. Its
+SHA-256 is
+`f6ea7a86c46a8f09ea2520061460407ce22c245ccf76c61e5f63a7353245c6fa`.
+
+After Parent creates and validates a fresh 32-entry R5 lane manifest, the exact
+controller command is:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python scripts/benchmarks/time_to_correct_luna_successor_v4.py run --candidates /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-ranked-candidates-a14e1de.json --questions /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/luna-successor-questions.json --rubrics /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/luna-successor-rubrics.json --manifests-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests --lanes-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4 --preview /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-jev-preview-a14e1de.json --run-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r5 --lane-manifest /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r5/lane-manifest.json --output /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r5/result.json
+```
+
+Focused host and successor checks passed `24` tests. The mapped host,
+successor, persistence, calibration, retrieval, Jev, and selector consumers
+passed `230` tests. Authorization-aware source-bound preflight retained `11`
+prior calls, eight planned R5 calls, `19` aggregate calls, zero R5 provider
+calls, and the frozen lane contract hash. JSON, YAML, and diff structure checks
+passed.
+
+No lane, thread, credential, network, Jev, provider, model, benchmark, push, or
+pull-request action ran while preparing R5. Private execution authorization
+does not change the separate public-results permission boundary.
+
+### Resumable R5 Restart Files Changed
+
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json`
+- `scripts/benchmarks/time_to_correct_host.py`
+- `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
+- `tests/benchmarks/test_time_to_correct_host.py`
 - `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`

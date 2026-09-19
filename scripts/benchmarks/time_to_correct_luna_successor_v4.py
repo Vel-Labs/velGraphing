@@ -19,8 +19,16 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/benchmarks"))
 
 import time_to_correct_dependency_v4 as dependency
-from time_to_correct import Budget, MeasurementError, Trial, canonical, digest
-from time_to_correct_calibration import LiveJevBudget
+from time_to_correct import (
+    Budget,
+    MeasurementError,
+    Trial,
+    canonical,
+    digest,
+    load_completed_trials,
+    save_completed_trial,
+)
+from time_to_correct_calibration import LiveJevBudget, require_resumable
 from time_to_correct_handoff import HandoffError, atomic_write, atomic_write_at, open_contained_directory
 from time_to_correct_host import ANSWER_RESPONSE_CONTRACT, GRADER_RESPONSE_CONTRACT, run_process_trial
 
@@ -45,6 +53,7 @@ JEV_ARMS = {"B", "D"}
 ANSWER_MODEL = "gpt-5.6-luna"
 GRADER_MODEL = "gpt-5.6-luna"
 REASONING = "medium"
+REQUIRE_ANSWER_EVIDENCE_CITATION = False
 JEV_MODEL = "jev-1.13.0"
 FINAL_ANSWER_BYTES = 16_384
 REQUEST_BYTES = 131_072
@@ -52,7 +61,7 @@ PROVIDER_TIMEOUT_SECONDS = 10
 ANSWER_TIMEOUT_SECONDS = 180
 GRADER_TIMEOUT_SECONDS = 120
 TRIAL_WALL_LIMIT_SECONDS = 600
-RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r4"
+RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r5"
 LANE_ROLES = ("answer", "grader")
 LANE_MANIFEST_SCHEMA = "velgraphing-v4-luna-lane-manifest-v1"
 LANE_ENTRY_FIELDS = (
@@ -92,16 +101,16 @@ STOP_RULES = [
 ]
 CALL_AUTHORIZATION = {
     "maximum_cost_usd": 1.0,
-    "completed_prior_calls": 7,
+    "completed_prior_calls": 11,
     "planned_calls": 8,
-    "aggregate_authorized_calls": 15,
+    "aggregate_authorized_calls": 19,
     "price_usd_per_million_input_tokens": 0.042,
     "request_bytes_per_call_max": REQUEST_BYTES,
     "per_call_worst_case_usd": 0.005505024,
-    "prior_authorization_envelope_usd": 0.038535168,
+    "prior_authorization_envelope_usd": 0.060555264,
     "incremental_authorization_envelope_usd": 0.044040192,
-    "aggregate_authorization_envelope_usd": 0.08257536,
-    "authorization_remaining_usd": 0.91742464,
+    "aggregate_authorization_envelope_usd": 0.104595456,
+    "authorization_remaining_usd": 0.895404544,
 }
 
 
@@ -569,17 +578,11 @@ def run_trial(
     evaluate: Callable[..., Mapping[str, Any]] = jev.evaluate,
     execution: str = "observed",
 ) -> dict[str, Any]:
-    manifest = generator._manifest(
-        manifests_root / generator.CORPUS_MANIFESTS[question["corpus"]]
-    )
-    lane_root = (lanes_root / question["corpus"]).resolve(strict=True)
-    restricted_state = dependency.lane_state_sha256(
-        lane_root, SNAPSHOTS[question["corpus"]]
+    identity, lane_root, restricted_state = _current_trial_identity(
+        task_id, arm, question, rubric, manifests_root, lanes_root
     )
     trial = Trial(
-        trial_identity(
-            task_id, arm, question, rubric, manifest["commit"], restricted_state
-        ),
+        identity,
         Budget(max_repairs=0, wall_limit_ns=TRIAL_WALL_LIMIT_SECONDS * 1_000_000_000),
         execution=execution,
     )
@@ -669,6 +672,7 @@ def run_trial(
         grader_response_contract=GRADER_RESPONSE_CONTRACT,
         answer_execution_identity=_lane_execution_identity(answer_lane),
         grader_execution_identity=_lane_execution_identity(grader_lane),
+        require_answer_evidence_citation=REQUIRE_ANSWER_EVIDENCE_CITATION,
     )
     if dependency.lane_state_sha256(
         lane_root, SNAPSHOTS[question["corpus"]]
@@ -734,6 +738,70 @@ def _validated_run_root(path: Path) -> Path:
     return dependency._validated_run_root(path)
 
 
+def _current_trial_identity(
+    task_id: str,
+    arm: str,
+    question: Mapping[str, str],
+    rubric: Mapping[str, Any],
+    manifests_root: Path,
+    lanes_root: Path,
+) -> tuple[dict[str, Any], Path, str]:
+    manifest = generator._manifest(
+        manifests_root / generator.CORPUS_MANIFESTS[question["corpus"]]
+    )
+    lane_root = (lanes_root / question["corpus"]).resolve(strict=True)
+    restricted_state = dependency.lane_state_sha256(
+        lane_root, SNAPSHOTS[question["corpus"]]
+    )
+    return (
+        trial_identity(
+            task_id, arm, question, rubric, manifest["commit"], restricted_state
+        ),
+        lane_root,
+        restricted_state,
+    )
+
+
+def _load_current_completed(
+    receipt_root: Path,
+    identities: Mapping[str, Mapping[str, Any]],
+    candidate_sets: Mapping[str, str],
+    lane_manifest: Mapping[tuple[str, str], Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    completed = load_completed_trials(receipt_root, DISPATCH)
+    by_id: dict[str, dict[str, Any]] = {}
+    for result in completed:
+        trial_id = result["identity"]["trial_id"]
+        attempts = result.get("attempts")
+        attempt = attempts[-1] if type(attempts) is list and attempts else {}
+        if (
+            result["identity"] != identities[trial_id]
+            or attempt.get("bindings", {}).get("candidate_set_sha256")
+            != candidate_sets[trial_id]
+            or attempt.get("answer_boundary", {}).get("execution_identity")
+            != _lane_execution_identity(lane_manifest[(trial_id, "answer")])
+            or attempt.get("grader_boundary", {}).get("execution_identity")
+            != _lane_execution_identity(lane_manifest[(trial_id, "grader")])
+        ):
+            raise SuccessorError("successor_completed_trial_conflict")
+        by_id[trial_id] = result
+    return by_id
+
+
+def _require_accepted_trial(result: Mapping[str, Any]) -> None:
+    attempts = result.get("attempts")
+    attempt = attempts[-1] if type(attempts) is list and attempts else {}
+    coverage = attempt.get("coverage", {})
+    if (
+        result.get("terminal_reason") in {
+            "measurement_error", "deadline_exceeded", "callback_timeout"
+        }
+        or not coverage.get("model_calls")
+        or not coverage.get("context_deliveries")
+    ):
+        raise SuccessorError("successor_systemic_trial_failure")
+
+
 def run_successor(
     candidates_path: Path,
     questions_path: Path,
@@ -765,9 +833,29 @@ def run_successor(
     if set(lane_manifest) != set(validated_lanes):
         raise SuccessorError("successor_lane_manifest_invalid")
     lane_manifest = validated_lanes
-    ledger = LiveJevBudget(run_root, plan["call_authorization"]["planned_calls"])
-    results = []
+    identities = {}
+    candidate_sets = {}
     for trial_id in DISPATCH:
+        arm, task_id = trial_id.split("-", 1)
+        identities[trial_id] = _current_trial_identity(
+            task_id, arm, questions[task_id], rubrics[task_id],
+            manifests_root, lanes_root,
+        )[0]
+        packet = dependency._packet(runs[(task_id, ARMS[arm])], questions[task_id])
+        candidate_sets[trial_id] = digest(canonical(packet["candidates"]))
+    receipt_root = run_root / "completed"
+    results_by_id = _load_current_completed(
+        receipt_root, identities, candidate_sets, lane_manifest
+    )
+    completed_ids = set(results_by_id)
+    for trial_id in DISPATCH:
+        require_resumable(run_root, trial_id, completed_ids)
+        if trial_id in completed_ids:
+            _require_accepted_trial(results_by_id[trial_id])
+    ledger = LiveJevBudget(run_root, plan["call_authorization"]["planned_calls"])
+    for trial_id in DISPATCH:
+        if trial_id in completed_ids:
+            continue
         arm, task_id = trial_id.split("-", 1)
         question = questions[task_id]
         result = run_trial(
@@ -777,16 +865,10 @@ def run_successor(
             grader_lane=lane_manifest[(trial_id, "grader")],
             ledger=ledger, evaluate=evaluate, execution=execution,
         )
-        results.append(result)
-        coverage = result["attempts"][-1]["coverage"]
-        if (
-            result["terminal_reason"] in {
-                "measurement_error", "deadline_exceeded", "callback_timeout"
-            }
-            or not coverage["model_calls"]
-            or not coverage["context_deliveries"]
-        ):
-            raise SuccessorError("successor_systemic_trial_failure")
+        save_completed_trial(receipt_root, result)
+        results_by_id[trial_id] = result
+        _require_accepted_trial(result)
+    results = [results_by_id[trial_id] for trial_id in DISPATCH]
     return {
         "schema_version": "velgraphing-v4-luna-successor-result-v1",
         "preflight": frozen,

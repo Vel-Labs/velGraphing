@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -118,6 +119,7 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertNotIn("arm", questions["D-01"])
         self.assertNotIn("jev", questions["D-01"])
         self.assertNotIn("diagnostic_facts", grader)
+        self.assertFalse(mod.REQUIRE_ANSWER_EVIDENCE_CITATION)
 
     def test_plan_pairs_arms_and_caps_only_effectful_jev_calls(self) -> None:
         plan = mod.load_plan(expected_live_authorized=True)
@@ -125,12 +127,12 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertEqual([row["trial_id"] for row in rows], list(mod.DISPATCH))
         self.assertEqual(sum(row["call_disposition"] == "planned" for row in rows), 8)
         self.assertEqual(plan["call_authorization"]["planned_calls"], 8)
-        self.assertEqual(plan["call_authorization"]["completed_prior_calls"], 7)
-        self.assertEqual(plan["call_authorization"]["aggregate_authorized_calls"], 15)
-        self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.038535168)
-        self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.08257536)
-        self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.91742464)
-        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r4")
+        self.assertEqual(plan["call_authorization"]["completed_prior_calls"], 11)
+        self.assertEqual(plan["call_authorization"]["aggregate_authorized_calls"], 19)
+        self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.060555264)
+        self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.104595456)
+        self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.895404544)
+        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r5")
         self.assertLessEqual(plan["call_authorization"]["planned_calls"], 8)
         by_task = {}
         for row in rows:
@@ -219,7 +221,63 @@ class LunaSuccessorTests(unittest.TestCase):
         with self.assertRaisesRegex(mod.SuccessorError, "successor_selection_invalid"):
             mod._selection("S-01", "A", run, lane, question, None)
 
-    def test_controller_dispatches_all_sixteen_trials_in_frozen_order(self) -> None:
+    def test_completed_trials_persist_with_current_lane_bindings(self) -> None:
+        lanes = {
+            (entry["trial_id"], entry["role"]): entry for entry in lane_entries()
+        }
+        identities = {trial_id: {"trial_id": trial_id} for trial_id in mod.DISPATCH}
+        candidate_sets = {trial_id: "d" * 64 for trial_id in mod.DISPATCH}
+        trial_id = mod.DISPATCH[0]
+        result = {
+            "schema_version": "velgraphing-time-to-correct-v1",
+            "terminal_reason": "passed",
+            "identity": identities[trial_id],
+            "attempts": [{
+                "coverage": {"model_calls": True, "context_deliveries": True},
+                "bindings": {"candidate_set_sha256": candidate_sets[trial_id]},
+                "answer_boundary": {
+                    "execution_identity": mod._lane_execution_identity(
+                        lanes[(trial_id, "answer")]
+                    ),
+                },
+                "grader_boundary": {
+                    "execution_identity": mod._lane_execution_identity(
+                        lanes[(trial_id, "grader")]
+                    ),
+                },
+            }],
+        }
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            receipt_root = root / "completed"
+            mod.save_completed_trial(receipt_root, result)
+            loaded = mod._load_current_completed(
+                receipt_root, identities, candidate_sets, lanes
+            )
+            self.assertEqual(set(loaded), {trial_id})
+            conflict = {**result, "terminal_reason": "repair_budget_exhausted"}
+            with self.assertRaisesRegex(
+                mod.MeasurementError, "completed_trial_receipt_conflict"
+            ):
+                mod.save_completed_trial(receipt_root, conflict)
+            wrong_root = root / "wrong"
+            wrong = json.loads(json.dumps(result))
+            wrong["attempts"][0]["bindings"]["candidate_set_sha256"] = "e" * 64
+            mod.save_completed_trial(wrong_root, wrong)
+            with self.assertRaisesRegex(
+                mod.SuccessorError, "successor_completed_trial_conflict"
+            ):
+                mod._load_current_completed(
+                    wrong_root, identities, candidate_sets, lanes
+                )
+            incomplete = mod.DISPATCH[1]
+            (root / "trials" / incomplete).mkdir(parents=True)
+            with self.assertRaisesRegex(
+                mod.MeasurementError, "incomplete_trial_requires_parent_audit"
+            ):
+                mod.require_resumable(root, incomplete, set(loaded))
+
+    def test_controller_skips_completed_trials_and_keeps_frozen_order(self) -> None:
         plan = json.loads(mod.PLAN_PATH.read_text(encoding="utf-8"))
         questions, _ = mod.load_questions()
         rubrics, _ = mod.load_rubrics()
@@ -237,6 +295,7 @@ class LunaSuccessorTests(unittest.TestCase):
         lanes = {
             (entry["trial_id"], entry["role"]): entry for entry in lane_entries()
         }
+        completed = {trial_id: result for trial_id in mod.DISPATCH[:2]}
         with (
             mock.patch.object(mod, "preflight", return_value={
                 "arm_preflight": plan["arm_preflight"],
@@ -245,6 +304,16 @@ class LunaSuccessorTests(unittest.TestCase):
             mock.patch.object(mod, "load_questions", return_value=(questions, "a" * 64)),
             mock.patch.object(mod, "load_rubrics", return_value=(rubrics, "b" * 64)),
             mock.patch.object(mod.preview, "_load_inputs", return_value=(artifact, questions)),
+            mock.patch.object(mod.dependency, "_packet", return_value={"candidates": []}),
+            mock.patch.object(
+                mod, "_current_trial_identity",
+                side_effect=lambda task, arm, *_: (
+                    {"trial_id": f"{arm}-{task}"}, Path("lane"), "c" * 64
+                ),
+            ),
+            mock.patch.object(mod, "_load_current_completed", return_value=completed),
+            mock.patch.object(mod, "require_resumable") as require_resumable,
+            mock.patch.object(mod, "save_completed_trial") as save_completed,
             mock.patch.object(mod, "run_trial", return_value=result) as run_trial,
         ):
             output = mod.run_successor(
@@ -255,8 +324,10 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertEqual(len(output["results"]), 16)
         self.assertEqual(
             [f"{call.args[1]}-{call.args[0]}" for call in run_trial.call_args_list],
-            list(mod.DISPATCH),
+            list(mod.DISPATCH[2:]),
         )
+        self.assertEqual(save_completed.call_count, 14)
+        self.assertEqual(require_resumable.call_count, 16)
         self.assertTrue(all(
             call.kwargs["ledger"].cap == 8 for call in run_trial.call_args_list
         ))

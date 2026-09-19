@@ -293,6 +293,7 @@ def run_process_trial(
     grader_response_contract: Mapping[str, Any] | None = None,
     answer_execution_identity: Mapping[str, str] | None = None,
     grader_execution_identity: Mapping[str, str] | None = None,
+    require_answer_evidence_citation: bool = True,
 ) -> dict[str, Any]:
     """Run a trial through frozen answer and grader subprocess boundaries."""
     answer_command = list(_argv(answer_argv))
@@ -306,6 +307,8 @@ def run_process_trial(
     if (answer_response_contract is not None and type(answer_response_contract) is not dict
             or grader_response_contract is not None and type(grader_response_contract) is not dict):
         raise MeasurementError("invalid_response_contract")
+    if type(require_answer_evidence_citation) is not bool:
+        raise MeasurementError("invalid_citation_policy")
     answer_identity = _execution_identity(answer_execution_identity, "answer")
     grader_identity = _execution_identity(grader_execution_identity, "grader")
     answer_contract = _identified_contract(answer_response_contract, answer_identity)
@@ -338,7 +341,7 @@ def run_process_trial(
             allowed = {row.get("id") for row in prepared.get("evidence", [])
                        if type(row) is dict and type(row.get("id")) is str}
             cited = re.findall(r"\[([A-Za-z0-9_-]+)\]", output["answer_text"])
-            if not cited:
+            if require_answer_evidence_citation and not cited:
                 raise MeasurementError("answer_evidence_citation_missing")
             if any(candidate_id not in allowed for candidate_id in cited):
                 raise MeasurementError("answer_evidence_citation_invalid")
