@@ -45,6 +45,16 @@ DEPENDENCY_PREVIEWS = (
     ("D-01", "B", "direct"),
     ("D-01", "D", "typed_graph"),
 )
+LUNA_SUCCESSOR_PREVIEWS = tuple(
+    (task, arm, "direct" if arm in {"A", "B"} else "typed_graph")
+    for task, arms in (
+        ("S-01", "ABDC"),
+        ("D-01", "BCAD"),
+        ("L-01", "CDBA"),
+        ("M-02", "DACB"),
+    )
+    for arm in arms
+)
 PREVIEWS = PRODUCTION_PREVIEWS
 DEPENDENCY_STUDY = "velgraphing-v4-thealgorithms-dependency-behavior-canary-v1"
 DEPENDENCY_CANDIDATE_SHA256 = (
@@ -98,6 +108,17 @@ def _study(study_id: str) -> dict[str, Any]:
             ),
             "candidate_sha256": DEPENDENCY_CANDIDATE_SHA256,
             "selector_commit": DEPENDENCY_SELECTOR_COMMIT,
+            "candidate_count_cap": 64,
+            "candidate_byte_cap": 32_768,
+        }
+    if study_id == evaluator.LUNA_SUCCESSOR_STUDY:
+        return {
+            "previews": LUNA_SUCCESSOR_PREVIEWS,
+            "questions": evaluator.LUNA_SUCCESSOR_QUESTIONS,
+            "tasks": set(evaluator.LUNA_SUCCESSOR_QUESTIONS),
+            "registry_sha256": evaluator.LUNA_SUCCESSOR_QUESTION_REGISTRY_SHA256,
+            "candidate_sha256": None,
+            "selector_commit": None,
             "candidate_count_cap": 64,
             "candidate_byte_cap": 32_768,
         }
@@ -815,7 +836,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--study-id",
         required=True,
-        choices=(evaluator.PRODUCTION_STUDY, DEPENDENCY_STUDY),
+        choices=(
+            evaluator.PRODUCTION_STUDY,
+            DEPENDENCY_STUDY,
+            evaluator.LUNA_SUCCESSOR_STUDY,
+        ),
     )
     parser.add_argument("--expected-candidates-sha256", required=True)
     parser.add_argument("--questions", type=Path, required=True)

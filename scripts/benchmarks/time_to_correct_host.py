@@ -245,6 +245,7 @@ def run_process_trial(
     answer_timeout_s: float,
     grader_timeout_s: float,
     grader_context: Mapping[str, Any] | None = None,
+    grader_model: str | None = None,
     answer_response_contract: Mapping[str, Any] | None = None,
     grader_response_contract: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -255,6 +256,8 @@ def run_process_trial(
     grader_timeout = _timeout(grader_timeout_s)
     if grader_context is not None and type(grader_context) is not dict:
         raise MeasurementError("invalid_grader_context")
+    if grader_model is not None and (type(grader_model) is not str or not grader_model):
+        raise MeasurementError("invalid_grader_model")
     if (answer_response_contract is not None and type(answer_response_contract) is not dict
             or grader_response_contract is not None and type(grader_response_contract) is not dict):
         raise MeasurementError("invalid_response_contract")
@@ -310,7 +313,15 @@ def run_process_trial(
             raise MeasurementError("invalid_grader_output")
         if type(output["model_calls_complete"]) is not bool:
             raise MeasurementError("invalid_grader_output")
-        _record_usage(t, "grader", output["usage"], attempt, "unknown-grader")
+        if (
+            grader_model is not None
+            and output["usage"] is not None
+            and output["usage"].get("model") != grader_model
+        ):
+            raise MeasurementError("grader_model_mismatch")
+        _record_usage(
+            t, "grader", output["usage"], attempt, grader_model or "unknown-grader"
+        )
         answer_boundary = t._attempt().get("answer_boundary", {})
         t.coverage(
             source_operations=bool(t._attempt()["coverage"]["source_operations"]),

@@ -55,6 +55,7 @@ THEALGORITHMS_IMPORT_CANARY_STUDY = "velgraphing-v4-thealgorithms-import-canary-
 THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY = (
     "velgraphing-v4-thealgorithms-dependency-behavior-canary-v1"
 )
+LUNA_SUCCESSOR_STUDY = "velgraphing-v4-luna-four-task-successor-v1"
 ROUTES = (
     "direct",
     "tag_index",
@@ -96,6 +97,11 @@ STUDY_CANDIDATE_CONTROLS = {
         CANDIDATE_UNIT_BYTE_BUDGET,
     ),
     THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY: (
+        HIGH_RECALL_CANDIDATE_LIMIT,
+        HIGH_RECALL_AGGREGATE_BYTE_BUDGET,
+        CANDIDATE_UNIT_BYTE_BUDGET,
+    ),
+    LUNA_SUCCESSOR_STUDY: (
         HIGH_RECALL_CANDIDATE_LIMIT,
         HIGH_RECALL_AGGREGATE_BYTE_BUDGET,
         CANDIDATE_UNIT_BYTE_BUDGET,
@@ -711,6 +717,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             RELATIONAL_CANARY_STUDY,
             THEALGORITHMS_IMPORT_CANARY_STUDY,
             THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY,
+            LUNA_SUCCESSOR_STUDY,
         ),
         default=PRODUCTION_STUDY,
     )

@@ -100,7 +100,7 @@ class HostBoundaryTests(unittest.TestCase):
 
     def run_host(self, answer_code=ANSWER_CODE, *, grader_code=GRADER_CODE,
                  answer_timeout_s=2, wall_limit_ns=5_000_000_000,
-                 prepared=None, grader_context=None):
+                 prepared=None, grader_context=None, grader_model=None):
         trial = Trial(identity(), Budget(0, wall_limit_ns), execution="fixture")
         return run_process_trial(
             trial,
@@ -111,6 +111,7 @@ class HostBoundaryTests(unittest.TestCase):
             answer_timeout_s=answer_timeout_s,
             grader_timeout_s=2,
             grader_context=grader_context,
+            grader_model=grader_model,
         )
 
     def test_real_answer_and_independent_grader_subprocesses(self):
@@ -204,6 +205,11 @@ if "response_contract" in payload:''')
         self.assertFalse(result["usage_complete"])
         self.assertIsNone(result["total_input_tokens"])
         self.assertIsNone(result["all_attempt_cost_usd"])
+
+    def test_pinned_grader_model_rejects_substitution(self):
+        result = self.run_host(grader_model="different-grader")
+        self.assertEqual(result["terminal_reason"], "measurement_error")
+        self.assertEqual(result["attempts"][0]["failure_reason"], "grader_model_mismatch")
 
     def test_process_error_does_not_expose_stderr(self):
         result = self.run_host("import sys; sys.stderr.write('secret-value'); raise SystemExit(2)")

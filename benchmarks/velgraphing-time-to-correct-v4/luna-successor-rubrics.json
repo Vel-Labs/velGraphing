@@ -1,0 +1,106 @@
+{
+  "schema_version": "velgraphing-v4-luna-successor-rubrics-v1",
+  "governance_rule": "Every required fact maps to an explicit prompt ask. Incidental facts are diagnostic only.",
+  "tasks": {
+    "S-01": {
+      "rubric_version": "velgraphing-s01-answer-rubric-v2",
+      "asks": [
+        {"id": "input_effect", "text": "State what happens to the input list."},
+        {"id": "result", "text": "State the returned list."},
+        {"id": "partition", "text": "Explain one recursive partition."},
+        {"id": "base_case", "text": "Include base-case behavior."}
+      ],
+      "required_facts": [
+        {"ask_id": "base_case", "fact": "The base case returns the collection when its length is less than two."},
+        {"ask_id": "input_effect", "fact": "The implementation removes the randomly selected pivot with pop, so the supplied input list is mutated."},
+        {"ask_id": "partition", "fact": "The implementation builds lesser with items less than or equal to the pivot and greater with items above the pivot."},
+        {"ask_id": "result", "fact": "The recursive result for [3, 1, 2] is [1, 2, 3]."}
+      ],
+      "critical_facts": [
+        "The implementation removes the randomly selected pivot with pop, so the supplied input list is mutated.",
+        "The recursive result for [3, 1, 2] is [1, 2, 3]."
+      ],
+      "diagnostic_facts": [],
+      "acceptable_spans": ["sorts/quick_sort.py:16-43"]
+    },
+    "D-01": {
+      "rubric_version": "velgraphing-d01-answer-rubric-v2",
+      "asks": [
+        {"id": "identity", "text": "Identify the imported dependency immediately after merge_sort."},
+        {"id": "ordering", "text": "Explain how the target implementation orders values."},
+        {"id": "duplicates", "text": "Explain duplicate handling."}
+      ],
+      "required_facts": [
+        {"ask_id": "identity", "fact": "The imported implementation is quick_sort."},
+        {"ask_id": "ordering", "fact": "quick_sort removes a randomly selected pivot, partitions remaining values into lesser values at or below the pivot and greater values above the pivot, and recursively returns lesser plus pivot plus greater in ascending order."},
+        {"ask_id": "duplicates", "fact": "Duplicate values are preserved because values equal to the pivot enter the lesser partition while the removed pivot is reinserted once."}
+      ],
+      "critical_facts": [
+        "The imported implementation is quick_sort.",
+        "quick_sort removes a randomly selected pivot, partitions remaining values into lesser values at or below the pivot and greater values above the pivot, and recursively returns lesser plus pivot plus greater in ascending order.",
+        "Duplicate values are preserved because values equal to the pivot enter the lesser partition while the removed pivot is reinserted once."
+      ],
+      "diagnostic_facts": [
+        "The base case returns the collection unchanged when it has fewer than two items."
+      ],
+      "acceptable_spans": [
+        "sorts/benchmark_sorts.py dependency import after merge_sort",
+        "sorts/quick_sort.py quick_sort implementation"
+      ]
+    },
+    "L-01": {
+      "rubric_version": "velgraphing-l01-answer-rubric-v2",
+      "asks": [
+        {"id": "traffic", "text": "Connect the stated traffic assumptions to the primary scaling problem."},
+        {"id": "cache", "text": "Connect the stated cache assumptions to the primary scaling problem."},
+        {"id": "vertical_horizontal", "text": "Connect vertical-versus-horizontal scaling guidance."},
+        {"id": "stateless", "text": "Connect stateless-service guidance."}
+      ],
+      "required_facts": [
+        {"ask_id": "traffic", "fact": "The URL shortener case study states a 100:1 redirect-to-create ratio and says the read path is hotter than the storage path."},
+        {"ask_id": "cache", "fact": "The case study recommends layered caches and says the mapping is immutable once created."},
+        {"ask_id": "vertical_horizontal", "fact": "The scalability chapter distinguishes vertical scaling from horizontal scaling and says horizontal scaling requires tolerance for concurrency, partial failure, and distributed state."},
+        {"ask_id": "stateless", "fact": "The scalability chapter defines a stateless service as holding no per-client information between requests and says any replica can handle any request."}
+      ],
+      "critical_facts": [
+        "The URL shortener case study states a 100:1 redirect-to-create ratio and says the read path is hotter than the storage path.",
+        "The scalability chapter defines a stateless service as holding no per-client information between requests and says any replica can handle any request."
+      ],
+      "diagnostic_facts": [
+        "The case study states that batch-allocated IDs and buffered Kafka decouple write coordination and analytics from the redirect path."
+      ],
+      "acceptable_spans": [
+        "content/hld/part-8-case-studies/00-url-shortener.md:31-52",
+        "content/hld/part-8-case-studies/00-url-shortener.md:78-90",
+        "content/hld/part-1-core-fundamentals/00-scalability.md:25-33",
+        "content/hld/part-1-core-fundamentals/00-scalability.md:48-52",
+        "content/hld/part-1-core-fundamentals/00-scalability.md:80-82"
+      ]
+    },
+    "M-02": {
+      "rubric_version": "velgraphing-m02-answer-rubric-v2",
+      "asks": [
+        {"id": "baseline", "text": "Explain baseline process requirements versus implementation details."},
+        {"id": "documentation", "text": "Give a documented process-documentation choice."},
+        {"id": "training", "text": "Give a documented training choice."},
+        {"id": "flexibility", "text": "State whether the choices are mandatory or flexible."}
+      ],
+      "required_facts": [
+        {"ask_id": "baseline", "fact": "The FAQ says ISO/IEC 5230 defines what and why rather than how or when and treats playbooks as separate implementation reference material."},
+        {"ask_id": "documentation", "fact": "The small-company playbook gives a possible automated CI/CD process record as one documentation choice."},
+        {"ask_id": "training", "fact": "The small-company playbook documents different training approaches as implementation choices."},
+        {"ask_id": "flexibility", "fact": "The playbook examples are reference and inspiration, not mandatory prescriptive instructions."}
+      ],
+      "critical_facts": [
+        "The FAQ says ISO/IEC 5230 defines what and why rather than how or when and treats playbooks as separate implementation reference material.",
+        "The playbook examples are reference and inspiration, not mandatory prescriptive instructions."
+      ],
+      "diagnostic_facts": [],
+      "acceptable_spans": [
+        "OpenChain-Adoption-Guides/Adoption-PlayBooks-ISO-IEC-5230-(OpenChain 2.1)/en/Small-Company/OpenChain PlayBook - Small Company.md:7-38",
+        "OpenChain-Adoption-Guides/Adoption-PlayBooks-ISO-IEC-5230-(OpenChain 2.1)/en/Small-Company/OpenChain PlayBook - Small Company.md:129-145",
+        "OpenChain-Processes-and-FAQ/faq.md:104-108"
+      ]
+    }
+  }
+}
