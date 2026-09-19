@@ -1,10 +1,10 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: fresh_oracle_blind_candidate_freeze
+proof_boundary: gate2_retrieval_only_parent_review
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: parent_acceptance_before_answer_or_grader_lanes
+current_gate: parent_review_gate2_pass_positive_graph_value_false
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
 exact_blocker: null
 next_milestone: T040
