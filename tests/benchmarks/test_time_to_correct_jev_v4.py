@@ -255,6 +255,7 @@ class JevPreviewTests(unittest.TestCase):
         })
         self.assertEqual(plan["max_jev_calls"], 4)
         self.assertFalse(plan["live_authorized"])
+        self.assertEqual(plan["provider_calls_made"], 0)
         self.assertFalse(plan["promotion_eligible"])
         self.assertEqual(plan["gate_3_disposition"], "exploratory_only_no_promotion")
         self.assertEqual(plan["blocking_gates"], ["fresh_operator_approval"])
