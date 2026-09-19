@@ -1,12 +1,12 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_offline_source_semantics_repair_complete
+proof_boundary: t030_offline_source_semantics_repair_parent_accepted
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: parent_review_of_offline_repair_before_any_live_run
+current_gate: exact_private_jev_observation_recovery_or_new_call_authority
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
-exact_blocker: offline_repair_not_yet_accepted_or_answer_validated
+exact_blocker: private_d01_jev_observation_envelope_not_retained
 next_milestone: T030
 provider:
   name: typesafe_jev
@@ -34,8 +34,12 @@ tasks:
   T040: pending
   T050: pending
   T999: pending
-accepted_by: null
+accepted_by: parent
 independent_audit:
   status: pass
-  candidate_commit: cd238e253b37111a6654fdde49d906b9af4b54bf
+  candidate_commit: dc0fbcd4397e997645de49d831a8c6608f2f3df2
+  package_file_count: 87
+  package_candidate_sha256: 48b65ed3ba9d83e63b724ce2afb395f2fbda156d29adb1b9a194bd9c6564d941
+  npm_test_passed: 513
+  npm_test_expected_skipped: 1
 updated_at: 2026-09-19

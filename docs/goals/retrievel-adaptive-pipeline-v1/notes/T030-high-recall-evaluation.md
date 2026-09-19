@@ -5,7 +5,8 @@ Date: 2026-09-19
 Status: the frozen high-recall candidate artifact has one independently labeled,
 post-hoc span-overlap evaluation. The private D-01 four-arm canary is complete.
 All four correctness grades failed. T030 remains active for retrieval and
-context redesign. No promotion claim is supported.
+context redesign. The Parent accepted the bounded offline source-semantics
+repair. No answer-validation or promotion claim is supported.
 
 ## Bound Inputs
 
@@ -76,8 +77,8 @@ value, Jev value, token reduction, speed, promotion, or product acceptance.
 - The evaluator did not independently revalidate candidate source bytes.
 - The evaluator does not prove prior oracle isolation by itself.
 - The private relational canary completed but failed correctness in every arm.
-- T030 remains active for Parent review. No T040 work is authorized by this
-  receipt.
+- T030 remains active for answer validation. No T040 work is authorized by
+  this receipt.
 
 ## Private D-01 Canary Closure
 
@@ -126,7 +127,59 @@ Validation:
 
 This is retrieval and context-composition proof only. It does not prove answer
 correctness, performance, provider value, promotion, or product acceptance.
-T030 remains active for Parent review. No live rerun or T040 work is authorized.
+T030 remains active for answer validation. No live rerun or T040 work is
+authorized.
+
+## Parent Acceptance And Independent Audit
+
+The Parent accepted candidate commit
+`dc0fbcd4397e997645de49d831a8c6608f2f3df2` for the bounded offline repair.
+The strict detached audit passed with a clean checkout. It confirmed:
+
+- Two-pass projector idempotence.
+- Source and package parity for 87 files.
+- Package candidate SHA-256:
+  `48b65ed3ba9d83e63b724ce2afb395f2fbda156d29adb1b9a194bd9c6564d941`.
+- Exact `npm test`: 513 passed and 1 expected skip.
+
+This acceptance covers only the offline code, package, retrieval, and source
+semantics. It does not accept an answer, provider result, speed result, or T030
+completion.
+
+## Private Observation Replay Gate
+
+The sealed D-01 run retains enough identity data to check the prior Jev inputs.
+The B and D request hashes, candidate-set hashes, source snapshot, query, source
+sets, and model agree with the frozen preview and tracked plan. The frozen
+preview SHA-256 is
+`ac771f605821c720e9a8d6d3e31de56bee6309c0258f1336de4662465ee4c761`.
+The sealed private result SHA-256 remains
+`bd03bd9944c55c142b1fc00773f1253f79dd4442213c3ab2b31c098b94313286`.
+
+Exact replay is not available. The sealed run has no complete canonical
+`velgraphing-jev-observation-v1` envelope. Call receipts and the selected result
+prefix do not reconstruct the full ordered observation or prove its complete
+source-set and query binding. The replay check therefore failed closed.
+
+No provider, network, credential, answer, grader, or model lane ran during this
+check. No fresh A/B/C/D confirmation or speed claim was produced.
+
+The next authorized path is:
+
+1. Recover the original full private D observation envelope, if it still exists
+   in the authorized private source.
+2. Validate its schema, status, mode, authority, sufficiency, source
+   revalidation, baseline order, required IDs, full order, candidate set, query,
+   source set, request, and model against the frozen preview and plan.
+3. If the envelope cannot be recovered, obtain separate Parent authority for
+   one new exact Jev call. This receipt grants no such authority.
+4. Only after the observation passes validation, create a fresh ignored run
+   root and fresh host-native answer and grader lanes for A/B/C/D. Keep treatment
+   hidden from those lanes. Make no elapsed-speed claim because scheduling is
+   not controlled.
+
+No replay harness was added. The missing input, not missing code, is the current
+blocker.
 
 ## Files Changed
 
