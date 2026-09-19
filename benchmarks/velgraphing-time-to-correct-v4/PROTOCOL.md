@@ -1,6 +1,6 @@
 # Time-to-correct v4: qualification protocol, not an executed benchmark
 
-Status: **draft, blocked on Gates 1–3 and a registered v4 runner**.
+Status: **Gates 1 and 2 passed; Gate 3 is exploratory-only with no promotion; the exact canary is approval-ready but live is not authorized, and fresh operator approval remains required**.
 Source candidate: `6931f0ffa72bd27f79f5515bd669404dbc4667d0`.
 No v4 result is asserted. No live call is authorized by this document.
 
