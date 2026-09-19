@@ -17,7 +17,13 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Iterable, Mapping, Sequence
 
-from .jev import MAX_CANDIDATES, MAX_EXCERPT_BYTES, MAX_EXCERPTS_BYTES, canonical as jev_canonical
+from .jev import (
+    MAX_CANDIDATES,
+    MAX_EXCERPT_BYTES,
+    MAX_EXCERPTS_BYTES,
+    JevError,
+    canonical as jev_canonical,
+)
 from .models import Graph, GraphRecord, Sensitivity, TaskSpec, is_authenticated_eligible
 from .routing_v4 import SourceReaderV4, SourceSnapshotV4, _read_verified_source_bytes
 from .selection import AssistResult, ContextSpan, assist
@@ -492,6 +498,8 @@ def ranked_candidates_from_retrieval(
                 evidence.record_id, evidence.source_path, evidence.source_sha256,
                 evidence.byte_start, evidence.byte_end, required=True,
             )
+        except JevError as error:
+            raise ValueError("required_candidate_jev_incompatible") from error
         except ValueError as error:
             if str(error) == "required_candidate_budget_exceeded":
                 raise
@@ -570,6 +578,10 @@ def ranked_candidates_from_retrieval(
                     hit.record_id, hit.source_path, source.sha256, start, end,
                     required=False,
                 )
+            except JevError as error:
+                if str(error) == "unsupported_source_type":
+                    continue
+                raise ValueError("retrieval_candidate_jev_incompatible") from error
             except ValueError as error:
                 raise ValueError("retrieval_candidate_custody_mismatch") from error
             if candidate.candidate_id in seen_primary:
@@ -657,6 +669,10 @@ def ranked_candidates_from_retrieval(
                 coordinate.source_sha256, start, end, required=False,
                 parent_id=parent.candidate_id,
             )
+        except JevError as error:
+            if str(error) == "unsupported_source_type":
+                continue
+            raise ValueError("relationship_candidate_jev_incompatible") from error
         except ValueError as error:
             raise ValueError("relationship_support_custody_mismatch") from error
         if candidate.candidate_id not in primary_ids:

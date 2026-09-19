@@ -271,6 +271,44 @@ class Pr9RetrievalHelperTests(unittest.TestCase):
             sources["src/later.py"],
         )
 
+    def test_jev_incompatible_optional_source_is_skipped(self):
+        sources = {
+            "LICENSE": b"alpha license text\n",
+            "src/alpha.py": b"def alpha():\n    return 1\n",
+        }
+        records = []
+        for path, raw in sources.items():
+            digest = hashlib.sha256(raw).hexdigest()
+            records.append(GraphRecord(
+                f"repo:{path}", "source", path, raw.decode(),
+                Provenance(path, digest, "bytes", True),
+                TrustClass.VERIFIED_SOURCE, Sensitivity.PUBLIC, Freshness.CURRENT,
+                Admission.VERIFIER, True,
+            ))
+        snapshot = SourceSnapshotV4(tuple(
+            SourceIdentityV4(path, len(raw), hashlib.sha256(raw).hexdigest())
+            for path, raw in sorted(sources.items())
+        ))
+
+        class MapReader:
+            def read_bytes(self, path): return sources[path]
+            def is_symlink(self, path): return False
+
+        retrieval = RetrievalResult(
+            "direct", "fixture", (
+                RetrievalHit("repo:LICENSE", "LICENSE", 2, ("exact",), ("alpha",), 0),
+                RetrievalHit("repo:src/alpha.py", "src/alpha.py", 1, ("exact",), ("alpha",), 0),
+            ), (), "", 0, 100.0, (), (), False,
+        )
+        candidates = ranked_candidates_from_retrieval(
+            Graph(tuple(records)), TaskSpec("jev-compatible", ("alpha",)),
+            snapshot, MapReader(), retrieval, **BUDGET,
+        )
+        self.assertEqual(
+            tuple(item.source_path for item in candidates),
+            ("src/alpha.py",),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
