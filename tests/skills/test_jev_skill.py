@@ -24,6 +24,19 @@ class JevSkillTests(unittest.TestCase):
         self.assertEqual((ROOT / "packages/core/jev.py").read_bytes(),
                          (PLUGIN / "runtime/core/jev.py").read_bytes())
 
+    def test_portable_runtime_exports_ranked_context_planner(self):
+        env = dict(os.environ)
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        env["PYTHONPATH"] = "runtime"
+        run = subprocess.run(
+            [sys.executable, "-c", "import core; assert callable(core.plan_ranked_context)"],
+            cwd=PLUGIN,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(run.returncode, 0, run.stderr)
+
     def test_skill_links_and_no_machine_paths(self):
         text = (SKILL / "SKILL.md").read_text()
         for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):

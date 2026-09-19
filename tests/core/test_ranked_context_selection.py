@@ -9,14 +9,17 @@ from packages.core import (
     Admission,
     Freshness,
     Graph,
+    GraphEdge,
     GraphRecord,
     Provenance,
     RankedContextCandidate,
     Sensitivity,
+    SourceCoordinate,
     SourceIdentityV4,
     SourceSnapshotV4,
     TaskSpec,
     TrustClass,
+    plan_ranked_context,
     select_ranked_context,
 )
 from packages.core import jev
@@ -141,6 +144,50 @@ def fixture() -> tuple[
     return graph, snapshot, SourceReader({path: raw}), candidates
 
 
+def graph_with_relationship_edge(
+    graph: Graph,
+    snapshot: SourceSnapshotV4,
+    reader: SourceReader,
+    parent: RankedContextCandidate,
+    relationship: RankedContextCandidate,
+) -> Graph:
+    raw = reader.sources[parent.source_path]
+    records = tuple(
+        replace(record, content=raw.decode("utf-8")) for record in graph.records
+    )
+
+    def coordinate(candidate: RankedContextCandidate) -> SourceCoordinate:
+        return SourceCoordinate(
+            snapshot.snapshot_sha256,
+            candidate.source_path,
+            candidate.source_sha256,
+            candidate.byte_start,
+            candidate.byte_end,
+            1 + raw[:candidate.byte_start].count(b"\n"),
+            1 + raw[:candidate.byte_end - 1].count(b"\n"),
+            "span",
+            "reference",
+            candidate.candidate_id,
+        )
+
+    edge = GraphEdge(
+        "edge-c1-c2",
+        parent.record_id,
+        relationship.record_id,
+        "references",
+        1.0,
+        Provenance(parent.source_path, parent.source_sha256, "relationship", True),
+        TrustClass.VERIFIED_SOURCE,
+        Sensitivity.PUBLIC,
+        Freshness.CURRENT,
+        Admission.VERIFIER,
+        True,
+        source_coordinate=coordinate(parent),
+        target_coordinate=coordinate(relationship),
+    )
+    return Graph(records, (edge,))
+
+
 def observation(
     candidates: tuple[RankedContextCandidate, ...],
     order: tuple[str, ...],
@@ -182,6 +229,8 @@ def select(
     candidates: tuple[RankedContextCandidate, ...],
     observed: object = None,
     *,
+    jev_enabled: bool = False,
+    jev_observation_qualified: bool = False,
     fallback_source_paths: tuple[str, ...] = (),
 ):
     return select_ranked_context(
@@ -193,6 +242,8 @@ def select(
         candidates=candidates,
         approved_request_sha256=APPROVED,
         jev_observation=observed,
+        jev_enabled=jev_enabled,
+        jev_observation_qualified=jev_observation_qualified,
         fallback_source_paths=fallback_source_paths,
     )
 
@@ -218,7 +269,10 @@ class RankedContextSelectionTests(unittest.TestCase):
     def tight_fixture(self):
         graph, snapshot, reader, candidates = fixture()
         one_optional = select(graph, spec(), snapshot, reader, candidates[:2])
-        tight = replace(spec(), byte_budget=one_optional.projection.serialized_byte_count)
+        tight = replace(
+            spec(),
+            byte_budget=one_optional.projection.serialized_byte_count + 128,
+        )
         return graph, snapshot, reader, candidates, tight
 
     def test_valid_rerank_changes_optional_inclusion_and_keeps_required_slot(self) -> None:
@@ -231,12 +285,16 @@ class RankedContextSelectionTests(unittest.TestCase):
             reader,
             candidates,
             observation(candidates, ("c0", "c2", "c1"), snapshot),
+            jev_enabled=True,
+            jev_observation_qualified=True,
         )
 
         self.assertEqual(baseline.order_source, "baseline")
         self.assertEqual(baseline.projection.included_optional_candidate_ids, ("c1",))
         self.assertEqual(reranked.order_source, "reranked")
         self.assertTrue(reranked.jev_source_revalidated)
+        self.assertEqual(reranked.jev_decision.reason, "jev_rerank_applied")
+        self.assertTrue(reranked.jev_decision.jev_observation_applied)
         self.assertEqual(reranked.projection.included_optional_candidate_ids, ("c2",))
         self.assertEqual(baseline.projection.selected_candidate_ids[0], "c0")
         self.assertEqual(reranked.projection.selected_candidate_ids[0], "c0")
@@ -245,6 +303,40 @@ class RankedContextSelectionTests(unittest.TestCase):
             APPROVED,
         )
         self.assertLessEqual(reranked.projection.serialized_byte_count, tight.byte_budget)
+
+    def test_provider_binding_overhead_never_counts_as_jev_selection_effect(self) -> None:
+        graph, snapshot, reader, candidates = fixture()
+        same = observation(candidates, ("c0", "c1", "c2"), snapshot)
+        changed = observation(candidates, ("c0", "c2", "c1"), snapshot)
+
+        for budget, expected in (
+            (922, ("c0",)),
+            (923, ("c0", "c1")),
+            (924, ("c0", "c1")),
+        ):
+            with self.subTest(budget=budget):
+                task = replace(spec(), byte_budget=budget)
+                baseline = select(
+                    graph, task, snapshot, reader, candidates, jev_enabled=True
+                )
+                for observed in (same, changed):
+                    result = select(
+                        graph,
+                        task,
+                        snapshot,
+                        reader,
+                        candidates,
+                        observed,
+                        jev_enabled=True,
+                        jev_observation_qualified=True,
+                    )
+                    self.assertEqual(baseline.projection.selected_candidate_ids, expected)
+                    self.assertEqual(result.projection.selected_candidate_ids, expected)
+                    self.assertEqual(result.order_source, "baseline")
+                    self.assertFalse(result.jev_decision.jev_observation_applied)
+                    self.assertFalse(
+                        result.jev_decision.jev_call_could_affect_selection
+                    )
 
     def test_malformed_forged_incomplete_or_hash_mismatched_observation_uses_baseline(self) -> None:
         graph, snapshot, reader, candidates, tight = self.tight_fixture()
@@ -272,6 +364,202 @@ class RankedContextSelectionTests(unittest.TestCase):
                 self.assertEqual(
                     result.projection.included_optional_candidate_ids, ("c1",)
                 )
+
+    def test_jev_decision_bypasses_or_requests_from_verified_budget_effect(self) -> None:
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
+        disabled = select(graph, tight, snapshot, reader, candidates)
+        request = select(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            candidates,
+            jev_enabled=True,
+        )
+        all_fit = select(
+            graph,
+            spec(),
+            snapshot,
+            reader,
+            candidates,
+            jev_enabled=True,
+        )
+        relationship = replace(
+            candidates[2], relationship_parent_candidate_id="c1"
+        )
+        relationship_only = select(
+            graph,
+            spec(),
+            snapshot,
+            reader,
+            (candidates[0], candidates[1], relationship),
+            jev_enabled=True,
+        )
+
+        self.assertEqual(disabled.jev_decision.reason, "jev_disabled")
+        self.assertEqual(request.jev_decision.reason, "jev_observation_missing")
+        self.assertTrue(request.jev_decision.jev_call_could_affect_selection)
+        self.assertEqual(request.jev_decision.baseline_selected_candidate_count, 2)
+        self.assertEqual(request.jev_decision.baseline_omitted_candidate_count, 1)
+        self.assertEqual(request.jev_decision.baseline_selected_excerpt_bytes, 20)
+        self.assertEqual(request.jev_decision.baseline_omitted_excerpt_bytes, 10)
+        self.assertEqual(all_fit.jev_decision.reason, "all_optional_candidates_fit")
+        self.assertFalse(all_fit.jev_decision.jev_call_could_affect_selection)
+        self.assertTrue(relationship_only.jev_decision.relationship_candidate_signal)
+        self.assertFalse(
+            relationship_only.jev_decision.jev_call_could_affect_selection
+        )
+        telemetry = request.jev_decision.to_json()
+        self.assertNotIn(QUERY, telemetry)
+        self.assertNotIn("src/", telemetry)
+        self.assertEqual(
+            json.loads(telemetry)["schema_version"],
+            "graph-ranked-context-jev-decision-v1",
+        )
+
+    def test_product_planner_prefers_only_source_witnessed_graph_additions(self) -> None:
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
+        relationship = replace(
+            candidates[2],
+            candidate_id="relationship-c2",
+            relationship_parent_candidate_id="c1",
+        )
+        graph_candidates = (*candidates, relationship)
+        verified_graph = graph_with_relationship_edge(
+            graph, snapshot, reader, candidates[1], relationship
+        )
+        direct = plan_ranked_context(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            direct_candidates=candidates,
+            graph_candidates=candidates,
+            jev_enabled=True,
+        )
+        fabricated = plan_ranked_context(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            direct_candidates=candidates,
+            graph_candidates=graph_candidates,
+            jev_enabled=True,
+        )
+        planned = plan_ranked_context(
+            verified_graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            direct_candidates=candidates,
+            graph_candidates=graph_candidates,
+            jev_enabled=True,
+        )
+        changed_required = plan_ranked_context(
+            verified_graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            direct_candidates=candidates,
+            graph_candidates=(
+                replace(candidates[0], record_id="record-c1"),
+                *graph_candidates[1:],
+            ),
+            jev_enabled=True,
+        )
+        all_fit = plan_ranked_context(
+            verified_graph,
+            spec(),
+            snapshot,
+            reader,
+            query=QUERY,
+            direct_candidates=candidates,
+            graph_candidates=graph_candidates,
+            jev_enabled=True,
+        )
+
+        self.assertEqual(direct.route, "direct")
+        self.assertEqual(fabricated.route, "direct")
+        self.assertEqual(planned.route, "graph")
+        self.assertEqual(changed_required.route, "direct")
+        self.assertIsNone(planned.baseline.approved_request_sha256)
+        baseline_payload = json.loads(planned.baseline.projection.content)
+        self.assertNotIn("approved_request_sha256", baseline_payload)
+        self.assertEqual(
+            baseline_payload["schema_version"],
+            "graph-ranked-context-baseline-v1",
+        )
+        self.assertTrue(
+            planned.baseline.jev_decision.jev_call_could_affect_selection
+        )
+        self.assertEqual(
+            planned.baseline.jev_decision.reason, "jev_observation_missing"
+        )
+        self.assertEqual(all_fit.baseline.jev_decision.reason, "all_optional_candidates_fit")
+        self.assertFalse(
+            all_fit.baseline.jev_decision.jev_call_could_affect_selection
+        )
+        telemetry = planned.to_json()
+        self.assertNotIn(QUERY, telemetry)
+        self.assertNotIn("src/", telemetry)
+        self.assertEqual(
+            json.loads(telemetry)["schema_version"],
+            "graph-ranked-context-plan-v1",
+        )
+
+    def test_unqualified_or_invalid_jev_observation_retains_baseline(self) -> None:
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
+        valid = observation(candidates, ("c0", "c2", "c1"), snapshot)
+        unqualified = select(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            candidates,
+            valid,
+            jev_enabled=True,
+        )
+        invalid = select(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            candidates,
+            {**valid, "source_revalidated": False},
+            jev_enabled=True,
+            jev_observation_qualified=True,
+        )
+        unbound = select_ranked_context(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            candidates=candidates,
+            jev_observation=valid,
+            jev_enabled=True,
+            jev_observation_qualified=True,
+        )
+
+        for result, reason in (
+            (unqualified, "jev_observation_not_qualified"),
+            (invalid, "jev_observation_invalid"),
+            (unbound, "jev_observation_invalid"),
+        ):
+            self.assertEqual(result.order_source, "baseline")
+            self.assertEqual(
+                result.projection.included_optional_candidate_ids, ("c1",)
+            )
+            self.assertEqual(result.jev_decision.reason, reason)
+            self.assertFalse(result.jev_decision.jev_observation_applied)
+            self.assertNotIn(
+                "approved_request_sha256",
+                json.loads(result.projection.content),
+            )
 
     def test_stale_digest_range_and_non_utf8_source_defer_without_source_content(self) -> None:
         graph, snapshot, reader, candidates = fixture()
@@ -576,6 +864,25 @@ class RankedContextSelectionTests(unittest.TestCase):
             select_ranked_context(
                 graph, spec(), snapshot, reader, query=QUERY, candidates=candidates,
                 approved_request_sha256="invalid", jev_observation=None,
+            )
+        baseline = select_ranked_context(
+            graph,
+            spec(),
+            snapshot,
+            reader,
+            query=QUERY,
+            candidates=candidates,
+        )
+        self.assertIsNone(baseline.approved_request_sha256)
+        with self.assertRaises(TypeError):
+            select_ranked_context(
+                graph,
+                spec(),
+                snapshot,
+                reader,
+                query=QUERY,
+                candidates=candidates,
+                jev_enabled=1,
             )
 
 

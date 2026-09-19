@@ -79,6 +79,8 @@ from .selection import (
     ContextProjection,
     ContextSpan,
     RankedContextCandidate,
+    RankedContextJevDecision,
+    RankedContextPlan,
     RankedContextProjection,
     RankedContextResult,
     SelectionResult,
@@ -87,6 +89,7 @@ from .selection import (
     select,
     select_context,
     select_documents,
+    plan_ranked_context,
     select_ranked_context,
 )
 from .serialization import SerializedProjection, serialize_projection
@@ -101,6 +104,8 @@ __all__ = [
     "ContextProjection",
     "ContextSpan",
     "RankedContextCandidate",
+    "RankedContextJevDecision",
+    "RankedContextPlan",
     "RankedContextProjection",
     "RankedContextResult",
     "ExportPolicy",
@@ -183,6 +188,7 @@ __all__ = [
     "select",
     "select_context",
     "select_documents",
+    "plan_ranked_context",
     "select_ranked_context",
     "serialize_projection",
     "navigate_v4",

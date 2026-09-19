@@ -1,12 +1,12 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
 proof_boundary: local_implementation
-milestones_complete: 0
+milestones_complete: 1
 milestones_total: 5
-current_milestone: T010
-current_gate: integrated_product_seam
+current_milestone: T020
+current_gate: installed_live_canary
 exact_blocker: null
-next_milestone: T020
+next_milestone: T030
 provider:
   name: typesafe_jev
   model: jev-1.13.0
@@ -15,8 +15,8 @@ provider:
   observed_cost_usd: 0.00
   calls_made: 0
 tasks:
-  T010: active
-  T020: pending
+  T010: complete
+  T020: active
   T030: pending
   T040: pending
   T050: pending

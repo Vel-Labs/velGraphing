@@ -599,7 +599,7 @@ def validate_preview(
             selection["route"] != "ranked"
             or selection["order_source"] != "baseline"
             or selection["candidate_set_sha256"] != prepared["candidate_set_sha256"]
-            or selection["approved_request_sha256"] != prepared["request_sha256"]
+            or selection["approved_request_sha256"] is not None
             or selection["jev_source_revalidated"] is not False
             or selection["source_revalidated"] is not True
             or projection["fail_closed"] is not False
@@ -623,7 +623,7 @@ def validate_preview(
         except evaluator.EvaluationError as error:
             raise PreviewError("invalid_baseline_projection_content") from error
         _exact(payload, {
-            "approved_request_sha256", "candidate_set_sha256", "fail_closed",
+            "candidate_set_sha256", "fail_closed",
             "included_optional_candidate_ids", "order_source", "query_sha256",
             "reason", "required_candidate_ids", "schema_version",
             "selected_candidate_ids", "source_snapshot_sha256", "spans", "task_id",
@@ -644,12 +644,11 @@ def validate_preview(
         if (
             projection["content"]
             != json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            or payload["approved_request_sha256"] != prepared["request_sha256"]
             or payload["candidate_set_sha256"] != prepared["candidate_set_sha256"]
             or payload["query_sha256"] != prepared["query_sha256"]
             or payload["source_snapshot_sha256"] != record["source_snapshot_sha256"]
             or payload["task_id"] != f"{task_id}-{arm}"
-            or payload["schema_version"] != "graph-ranked-context-v1"
+            or payload["schema_version"] != "graph-ranked-context-baseline-v1"
             or payload["order_source"] != "baseline"
             or payload["selected_candidate_ids"] != selected_ids
             or payload["required_candidate_ids"] != required_ids
