@@ -1,10 +1,10 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: candidate_unit_fixture_proof
+proof_boundary: fresh_oracle_blind_candidate_freeze
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: fresh_offline_candidate_freeze_before_public_corpus_study
+current_gate: parent_acceptance_before_answer_or_grader_lanes
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
 exact_blocker: null
 next_milestone: T040
