@@ -370,3 +370,15 @@ the existing Homebrew Python.
 
 The next gate is a new controller execution; the failed launch is not a consumed
 D-01 provider call.
+
+The second controller launch used the repaired absolute executable and completed
+A preparation with 757 source operations. The answer lane wrote a canonical
+response, but cited short alias `[c3]` instead of one of the exact 64-character
+evidence IDs. The host rejected the response before grader dispatch. No result
+or Jev ledger was written, and no D-01 Jev provider call ran. The failed run
+root `retrievel-d01-v1` remains preserved.
+
+The D-01 answer instruction now requires each exact evidence ID as shown,
+enclosed in brackets. A fresh private successor root
+`retrievel-d01-v1-run2` contains only canonical answer and grader argv files.
+The next gate is successor lane dispatch followed by a new controller execution.

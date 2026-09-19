@@ -37,6 +37,7 @@ import json, sys
 request = json.load(sys.stdin)
 if set(request) != {"schema_version", "question", "instructions", "evidence", "response_contract"}: raise SystemExit(7)
 if any(key in json.dumps(request) for key in ("arm", "route", "jev_status", "request_sha256", "score", "relationship_parent")): raise SystemExit(8)
+if request["instructions"] != ["Cite each supporting evidence ID exactly as shown, enclosed in brackets."]: raise SystemExit(9)
 candidate = request["evidence"][0]["id"]
 result = {"schema_version":"velgraphing-answer-output-v1","answer_text":f"fixture [{candidate}]","usage":None,"model_calls_complete":True,"context_deliveries_complete":True}
 sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":")))

@@ -383,7 +383,9 @@ def _answer_evidence(question: str, selection: Any) -> dict[str, Any]:
     return {
         "schema_version": "velgraphing-answer-evidence-v3",
         "question": question,
-        "citation_instruction": "Cite supporting evidence IDs as [cN].",
+        "citation_instruction": (
+            "Cite each supporting evidence ID exactly as shown, enclosed in brackets."
+        ),
         "evidence": [
             {
                 "id": span["candidate_id"],
