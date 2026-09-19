@@ -269,6 +269,77 @@ the hard provider cap at four. A no-op request is skipped and its quota is not
 reassigned. No live provider, answer or grader execution is performed by these
 files.
 
+### Final repository validation receipt
+
+Candidate `e3af84719b87896d56640d8210c0f426f7b760bf` was checked in the fresh
+detached `$VALIDATION_WORKTREE`. `$VENV_PYTHON` was the existing project virtual
+environment's Python executable. The six suite commands below are the exact
+sequence in `package.json`'s `npm test` script.
+
+Commands:
+
+```text
+cd "$VALIDATION_WORKTREE"
+PYTHONDONTWRITEBYTECODE=1 "$VENV_PYTHON" scripts/package/project_portable_plugin.py
+git status --porcelain=v1 --untracked-files=all
+PYTHONDONTWRITEBYTECODE=1 "$VENV_PYTHON" scripts/package/project_portable_plugin.py
+git status --porcelain=v1 --untracked-files=all
+PYTHONDONTWRITEBYTECODE=1 "$VENV_PYTHON" scripts/package/verify_source_package_parity.py
+PYTHONDONTWRITEBYTECODE=1 "$VENV_PYTHON" -m unittest discover -s tests/scaffold
+PYTHONDONTWRITEBYTECODE=1 "$VENV_PYTHON" -m unittest discover -s tests/core
+PYTHONDONTWRITEBYTECODE=1 "$VENV_PYTHON" -m unittest discover -s tests/adapters
+PYTHONDONTWRITEBYTECODE=1 "$VENV_PYTHON" -m unittest discover -s tests/skills
+PYTHONDONTWRITEBYTECODE=1 "$VENV_PYTHON" -m unittest discover -s tests/benchmarks
+PYTHONDONTWRITEBYTECODE=1 "$VENV_PYTHON" -m unittest discover -s tests/parity
+```
+
+Results: both projector passes exited zero and left the worktree clean. Package
+parity returned `{"candidate_sha256":"0e17875d87498c04016df2c8de28d3d8dc3a4ee61e7fbec60c0826bfb0bcf4d1","files":87}`.
+The six suites ran 11, 249, 18, 34, 128 and 10 tests. Total: 450 run,
+449 passed, one expected skip in `tests/benchmarks`, and zero failures or errors.
+The final `git status --short` output was empty. This receipt covers repository
+validation only. It does not authorize a live call or qualify Gate 3 promotion.
+
+Structural binding candidate `f806ee83885a9c6917992c91fd70e6a56229c67b`
+was checked in a separate fresh detached worktree. JSON validation passed, all
+six focused Jev-v4 preview and canary-plan tests passed, `git diff --check`
+passed, and package parity returned the same 87-file candidate SHA-256
+`0e17875d87498c04016df2c8de28d3d8dc3a4ee61e7fbec60c0826bfb0bcf4d1`.
+The worktree remained clean. This protocol-only receipt does not invalidate the
+product, package, or structural checks because no runtime-consumed file changed.
+
+This receipt supersedes the pre-successor Gate 1 and Gate 2 status in
+`docs/reviews/velgraphing-pr9-frontier-audit-2026-09-18/report.md`. It does not
+rewrite that historical PR9 audit.
+
+Gate 1 passed on the final validated candidate. The source-bound relationship
+implementation is commits `f98d38b808bf983cde29c9e5f846c31a9b0e2fc0`,
+`e6bfa4d916cc1a916e824f8bdef85f6d220c6c29`, and
+`f16aa09949ddfec5c264556706c6c476ff4a70dd`. The full-suite pass includes the
+source-coordinate, ambiguous/unsupported relation, package-valid import,
+allowlist, stale-source, and authenticated-record fixtures. It also includes
+`test_typed_routes_keep_primary_seeds_and_only_enabled_adds_support`, which
+holds seeds constant and proves that disabling edges removes relationship
+support, and `test_zero_edge_fixture_keeps_all_typed_candidates_identical`.
+
+Gate 2 passed at `k=12` and a 24,576-byte shortlist budget. The frozen labels
+SHA-256 is `37a2050454c0359eefbe47e3d9420df4b11318a01aae40921610e65b63ef8ca2`.
+The candidate artifact SHA-256 is
+`d147df356e72aa6588d0840ea32940b6db5d5dae975acf2b218e3d4cfc697ae9`.
+The source-free retrieval result SHA-256 is
+`7e0cd1b9e9582f4e087992fa8f7c40450454c0aa0373ea475bab97b048fa83a5`.
+Its decision is `pass`. S-01 is the only task with a positive edge-enabled
+critical and acceptable overlap-recall delta, both `1.0`. C-01, C-02, L-01,
+M-01, and M-02 each have delta `0.0`. This limited result does not establish a
+general graph advantage.
+
+The preview artifact and four request hashes are frozen above. Its artifact
+SHA-256 is `0005d6c26523ab2da431eb5172f89f1aa077ce28d4c1b55ca1a10cd6ab71d6a9`.
+The retained v3 result seal is
+`916c5e766b9152df5dac21b3cf3fec0116002dfee8d4f6c68eec9885bf94fd96`.
+Remaining risks are unchanged: Gate 3 is exploratory only, usefulness and
+promotion are not qualified, and fresh operator approval is still required.
+
 ## Held-out confirmation
 
 Register at least two untouched questions in each of five strata: cross-file code
