@@ -568,7 +568,7 @@ does not change the separate public-results permission boundary.
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
 
-## R4 Protocol Boundary and Resumable R5 Restart (Current)
+## R4 Protocol Boundary and Resumable R5 Restart (R5 Attempt, Superseded by R6)
 
 R4 completed eight trials and four R4 Jev calls. It then stopped fail-closed at
 C-L-01 because an identity-correct answer omitted evidence citations. The
@@ -628,6 +628,67 @@ does not change the separate public-results permission boundary.
 - `scripts/benchmarks/time_to_correct_host.py`
 - `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
 - `tests/benchmarks/test_time_to_correct_host.py`
+- `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
+
+## R5 Transport Encoding Failure and R6 Restart (Current)
+
+R5 stopped after A-S-01. The grader produced semantically valid JSON whose
+nested `execution_identity` keys were not in canonical order. Strict handoff
+transport rejected the response as `response_invalid`. A-S-01 was persisted as
+`measurement_error`, no R5 Jev call occurred, and no result was written. The
+ignored R5 run root remains unchanged and is excluded transport-encoding
+evidence. It is not product or provider-quality evidence.
+
+The shared handoff `respond` command now has an explicit `--normalize-json`
+option. The option reads at most 1 MiB from stdin or from a regular, no-follow
+draft file inside the selected lane. It rejects invalid UTF-8, invalid JSON,
+non-object JSON, duplicate keys, non-finite numbers, and oversized input or
+canonical output. It then serializes with the existing `canonical()` function
+and publishes through the existing `write_response` path. Without the option,
+`respond` still requires already-canonical bytes. Host schema, execution
+identity, citation authority, source, and package checks are unchanged.
+
+R6 retains the R5 completed-trial persistence, resumability, and
+missing-citation grading behavior. It changes only the fresh private run root
+to `$CHECKOUT/.velgraphing-local/retrievel-t030-luna-successor-r6`. The plan
+keeps `11` prior calls, eight planned calls, `19` aggregate calls, zero retries,
+and zero R6 provider calls. The prior, incremental, aggregate, and remaining
+authorization envelopes remain USD `0.060555264`, USD `0.044040192`, USD
+`0.104595456`, and USD `0.895404544`. The R6 plan SHA-256 is
+`93a62286e76df28804550248a9052e91500373ca398ea0cd937c6a363a6ff43d`.
+
+After Parent creates and validates a fresh 32-entry R6 lane manifest, the exact
+controller command is:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python scripts/benchmarks/time_to_correct_luna_successor_v4.py run --candidates /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-ranked-candidates-a14e1de.json --questions /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/luna-successor-questions.json --rubrics /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/luna-successor-rubrics.json --manifests-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests --lanes-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4 --preview /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-jev-preview-a14e1de.json --run-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r6 --lane-manifest /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r6/lane-manifest.json --output /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r6/result.json
+```
+
+For the A-S-01 grader lane, the exact normalized publish command is:
+
+```sh
+/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python scripts/benchmarks/time_to_correct_handoff.py respond --run-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r6 --trial-id A-S-01 --attempt 0 --lane grader --response-file /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r6/trials/A-S-01/attempt-0/grader/draft-response.json --normalize-json
+```
+
+Focused handoff, host, and successor checks passed `50` tests. The mapped
+handoff, host, successor, persistence, calibration, retrieval, Jev, and
+selector consumers passed `233` tests. Authorization-aware source-bound
+preflight retained `11` prior calls, eight planned R6 calls, `19` aggregate
+calls, zero R6 provider calls, and the frozen lane contract hash. JSON, YAML,
+plan-identity, and diff structure checks passed.
+
+No lane, thread, credential, network, Jev, provider, model, benchmark, push, or
+pull-request action ran while preparing R6. Private execution authorization
+does not change the separate public-results permission boundary.
+
+### R6 Files Changed
+
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json`
+- `scripts/benchmarks/time_to_correct_handoff.py`
+- `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
+- `tests/benchmarks/test_time_to_correct_calibration.py`
 - `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`

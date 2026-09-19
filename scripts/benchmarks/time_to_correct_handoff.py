@@ -127,7 +127,7 @@ def _file_name(value: str) -> str:
     return value
 
 
-def read_canonical_at(directory: int, name: str) -> tuple[bytes, dict[str, Any]]:
+def read_bounded_regular_at(directory: int, name: str) -> bytes:
     name = _file_name(name)
     try:
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
@@ -152,10 +152,45 @@ def read_canonical_at(directory: int, name: str) -> tuple[bytes, dict[str, Any]]
                                  item.st_mtime_ns, item.st_ctime_ns, item.st_nlink)
         if size > MAX_BYTES or identity(before) != identity(after):
             raise HandoffError("handoff_file_invalid")
-        raw = b"".join(chunks)
-        return raw, decode(raw)
+        return b"".join(chunks)
     finally:
         os.close(descriptor)
+
+
+def read_canonical_at(directory: int, name: str) -> tuple[bytes, dict[str, Any]]:
+    raw = read_bounded_regular_at(directory, name)
+    return raw, decode(raw)
+
+
+def normalize_json_object(raw: bytes) -> bytes:
+    if len(raw) > MAX_BYTES:
+        raise HandoffError("handoff_file_invalid")
+
+    def object_value(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError
+            value[key] = item
+        return value
+
+    def reject_constant(_: str) -> None:
+        raise ValueError
+
+    try:
+        value = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=object_value,
+            parse_constant=reject_constant,
+        )
+        if type(value) is not dict:
+            raise ValueError
+        normalized = canonical(value)
+    except (UnicodeError, json.JSONDecodeError, RecursionError, TypeError, ValueError):
+        raise HandoffError("invalid_json_object") from None
+    if len(normalized) > MAX_BYTES:
+        raise HandoffError("invalid_json_object")
+    return normalized
 
 
 def read_lane(root: Path, trial_id: str, attempt: int, lane: str,
@@ -369,6 +404,7 @@ def parser() -> argparse.ArgumentParser:
             command.add_argument("--wait-seconds", type=float, required=True)
         else:
             command.add_argument("--response-file")
+            command.add_argument("--normalize-json", action="store_true")
     return result
 
 
@@ -390,11 +426,24 @@ def main(argv: list[str] | None = None) -> int:
                 source = Path(args.response_file)
                 if source.parent != directory or source.name == "response.json":
                     raise HandoffError("response_draft_path_invalid")
-                raw = read_lane(root, args.trial_id, args.attempt, args.lane, source.name)[0]
+                if args.normalize_json:
+                    lane = _open_lane(
+                        root, args.trial_id, args.attempt, args.lane, create=False
+                    )
+                    try:
+                        raw = read_bounded_regular_at(lane, source.name)
+                    finally:
+                        os.close(lane)
+                else:
+                    raw = read_lane(
+                        root, args.trial_id, args.attempt, args.lane, source.name
+                    )[0]
             else:
                 raw = sys.stdin.buffer.read(MAX_BYTES + 1)
             if len(raw) > MAX_BYTES:
                 raise HandoffError("handoff_file_invalid")
+            if args.normalize_json:
+                raw = normalize_json_object(raw)
             write_response(root, args.trial_id, args.attempt, args.lane, raw)
             sys.stdout.buffer.write(canonical({"status": "response_written", "sha256": digest(raw)}))
         else:

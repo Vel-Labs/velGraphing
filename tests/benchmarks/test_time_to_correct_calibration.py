@@ -24,7 +24,12 @@ from time_to_correct_calibration import (HANDOFF_PATH, LiveJevBudget, bind_contr
                                          summarize_calibration, trial_identity,
                                          validate_live_authority, verify_lane,
                                          V3_CANDIDATE_POLICY, V3_MEASUREMENT_CONTRACT)
-from time_to_correct_handoff import read_canonical
+from time_to_correct_handoff import (
+    HandoffError,
+    MAX_BYTES,
+    normalize_json_object,
+    read_canonical,
+)
 from time_to_correct_host import (ANSWER_RESPONSE_CONTRACT, GRADER_RESPONSE_CONTRACT,
                                   run_process_trial)
 from time_to_correct_jev import evaluate_live
@@ -225,6 +230,59 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual((completed.returncode, completed.stderr), (0, b""))
         self.assertEqual(published, response)
         self.assertEqual(draft_value["answer"], "published")
+
+    def test_response_normalization_canonicalizes_nested_keys_from_stdin_and_draft(self):
+        raw = (
+            b'{"schema_version":"fixture-response-v1","execution_identity":'
+            b'{"thread_id":"thread-1","trial_id":"A-S-01","role":"grader",'
+            b'"reasoning":"medium","model":"gpt-5.6-luna"}}'
+        )
+        expected = canonical(json.loads(raw))
+        with tempfile.TemporaryDirectory(dir=self.local_root) as temporary:
+            root = Path(temporary) / "run"
+            for source in ("stdin", "draft"):
+                trial_id = f"normalize-{source}"
+                lane = root / "trials" / trial_id / "attempt-0" / "grader"
+                lane.mkdir(parents=True)
+                command = [
+                    sys.executable, str(HANDOFF_PATH), "respond",
+                    "--run-root", str(root), "--trial-id", trial_id,
+                    "--attempt", "0", "--lane", "grader", "--normalize-json",
+                ]
+                input_raw = raw
+                if source == "draft":
+                    draft = lane / "draft-response.json"
+                    draft.write_bytes(raw)
+                    command.extend(["--response-file", str(draft)])
+                    input_raw = None
+                completed = subprocess.run(
+                    command, cwd=ROOT, env={}, input=input_raw,
+                    capture_output=True, check=False,
+                )
+                self.assertEqual((completed.returncode, completed.stderr), (0, b""))
+                self.assertEqual((lane / "response.json").read_bytes(), expected)
+
+    def test_response_cli_strict_default_rejects_noncanonical_nested_keys(self):
+        raw = b'{"z":0,"execution_identity":{"thread_id":"t","model":"m"}}'
+        with tempfile.TemporaryDirectory(dir=self.local_root) as temporary:
+            root = Path(temporary) / "run"
+            lane = root / "trials/strict/attempt-0/grader"
+            lane.mkdir(parents=True)
+            completed = subprocess.run(
+                [sys.executable, str(HANDOFF_PATH), "respond", "--run-root", str(root),
+                 "--trial-id", "strict", "--attempt", "0", "--lane", "grader"],
+                cwd=ROOT, env={}, input=raw, capture_output=True, check=False,
+            )
+            published = (lane / "response.json").exists()
+        self.assertEqual(completed.returncode, 3)
+        self.assertIn(b"invalid_canonical_json", completed.stderr)
+        self.assertFalse(published)
+
+    def test_response_normalization_rejects_unsafe_json(self):
+        for raw in (b"[]", b"{", b'{"value":NaN}', b'{"value":1e400}', b"{" + b" " * MAX_BYTES):
+            with self.subTest(raw=raw[:24]):
+                with self.assertRaises(HandoffError):
+                    normalize_json_object(raw)
 
     def test_handoff_rejects_symlinked_trial_directory(self):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:

@@ -1,10 +1,10 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_luna_successor_r4_protocol_failure_r5_live_authorized_no_execution
+proof_boundary: t030_luna_successor_r5_transport_failure_r6_live_authorized_no_execution
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: r5_live_lane_preparation
+current_gate: r6_live_lane_preparation
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
 candidate_identity:
   repair_parent_commit: 3d4a979eae1db6a3d682caec1249c5e67d7bfbe4
@@ -17,9 +17,10 @@ candidate_identity:
   luna_successor_exact_candidate_audit_commit: 57ff3e4d7446761336ceb10193598796d96cf993
   r3_live_authorization_commit: a7348ae352d52dc6d04b77e3a710a2e41845848a
   r4_restart_commit: 48aaced64da8e81852fe08535ca136e0e7788c8d
-  final_luna_successor: direct_child_with_subject_fix_benchmark_prepare_resumable_r5_restart
+  r5_restart_commit: b2a09112698b12f8cac2819b15f3945c4b8cdd6d
+  final_luna_successor: direct_child_with_subject_fix_benchmark_normalize_handoff_for_r6
   final_sha_record: parent_handoff_and_git_history
-exact_blocker: r5_lane_manifest_and_32_luna_threads_not_created
+exact_blocker: r6_lane_manifest_and_32_luna_threads_not_created
 next_milestone: T030
 provider:
   name: typesafe_jev
@@ -36,7 +37,7 @@ provider:
   successor_incremental_authorization_usd: 0.044040192
   authorization_envelope_usd: 0.104595456
   authorization_remaining_usd: 0.895404544
-  budget_status: r5_live_authorized_lane_preparation_pending
+  budget_status: r6_live_authorized_lane_preparation_pending
   cost_telemetry: unavailable
   actual_usage_boundary: ignored_local_only
   public_results_boundary: separate_provider_permission_required
@@ -46,15 +47,18 @@ provider:
   non_provider_attempt_total: 1
   last_private_result_sha256: b40d84af3b05d43adcb7bf70130762e8e644f87a1c401cb1bc0b633bbbd11a37
   last_private_result_seal_sha256: 313038939aab0fe2882335d97520a48892e8cbcff166fbcebf3ec47656ad63c8
-  last_failure_class: r4_missing_citation_host_boundary_excluded
+  last_failure_class: r5_noncanonical_response_transport_excluded
   successor_candidate_sha256: 9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61
   successor_preview_sha256: 8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9
   successor_lane_manifest_contract_sha256: 46e2e18a102b376cee5df40e7ba205c305a415a37e4e025addc39dc73319b4be
-  successor_run_root: .velgraphing-local/retrievel-t030-luna-successor-r5
+  successor_run_root: .velgraphing-local/retrievel-t030-luna-successor-r6
   r3_evidence_status: excluded_infrastructure_failure_no_result
   r3_completed_successor_jev_calls: 1
   r4_evidence_status: excluded_protocol_harness_boundary_no_result
   r4_completed_successor_jev_calls: 4
+  r5_evidence_status: excluded_transport_encoding_failure_no_result
+  r5_completed_successor_jev_calls: 0
+  r5_persisted_transport_failures: 1
 tasks:
   T010: complete
   T020: complete
