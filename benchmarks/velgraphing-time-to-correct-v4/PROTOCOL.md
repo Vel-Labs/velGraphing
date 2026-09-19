@@ -87,6 +87,33 @@ evaluator requires identical values across every route and rejects values above
 the TypeSafe hard limits. `seed_limit` remains the retrieval-node limit. It is
 not a candidate-pool budget.
 
+## Registered T030 successor freezes
+
+The historical six-task production study and its candidate artifact remain
+unchanged. Two new oracle-blind study identities use the same bound-v2 schema:
+
+- `velgraphing-v4-six-task-high-recall-v1` uses the existing tracked six-task
+  question registry. Every route binds a preselection ceiling of 64 candidates,
+  32,768 aggregate excerpt bytes, and 4,096 bytes per candidate. This is a
+  high-recall pool. It does not increase the later 16,384-byte serialized answer
+  selection budget.
+- `velgraphing-v4-relational-canary-v1` uses the tracked registry at
+  `relational-canary-questions.json`. Its only task is `R-01` on the Engineering
+  Handbook with prompt `What belongs in content/dsa/editorials versus
+  content/dsa/patterns?`. The registry SHA-256 is
+  `14e6ded1ecc1248109db9c1bda7c432278fdb5427e1c0f402850bc370594ccc3`.
+  The prompt does not contain the target heading identifier. The generator
+  requires the unique source-derived `links_to_heading` edge from
+  `README.md` bytes 6504-6542 to `STYLE_GUIDE.md` bytes 13402-13425. Only the
+  edge-enabled typed route may emit its optional relationship candidate.
+
+The evaluator accepts these identities only with their exact question hashes,
+five-route matrices, controls, source snapshots, and typed-primary invariants.
+The canary also requires one edge, one typed relationship candidate, no
+relationship candidates in the four controls, and source and target candidate
+ranges that contain the registered coordinates. Unit fixtures test behavior but
+do not register benchmark authority.
+
 The generator accepts one new regular-file output directly under the benchmark
 `.inputs` directory. It rejects path traversal, symlinks, other destinations,
 non-ignored destinations, and overwrite. It requires a clean selector checkout

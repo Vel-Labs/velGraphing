@@ -45,11 +45,11 @@ _IMPORT = re.compile(
 
 _STOPWORDS = frozenset(
     {
-        "about", "after", "also", "and", "are", "before", "can", "could",
+        "about", "after", "also", "and", "are", "as", "before", "can", "could",
         "describe", "does", "each", "explain", "for", "from", "have", "how",
-        "identify", "into", "its", "may", "must", "of", "on", "or", "our",
+        "identify", "in", "into", "it", "its", "may", "must", "of", "on", "or", "our",
         "should", "that", "the", "their", "then", "these", "this", "through",
-        "to", "what", "when", "where", "which", "with", "would", "you",
+        "to", "using", "what", "when", "where", "which", "with", "would", "you",
     }
 )
 _GENERIC = frozenset({"code", "config", "data", "file", "graph", "module", "policy", "project", "repo", "source", "system"})
@@ -1200,6 +1200,12 @@ def compile_prompt(
         canonical = _canonical(raw)
         if canonical and canonical not in _STOPWORDS and _looks_identifier(raw):
             lexical_candidates.append(PromptFacet(FacetKind.IDENTIFIER, canonical, 10, True))
+        if canonical and canonical not in _STOPWORDS and (_looks_identifier(raw) or "-" in raw):
+            lexical_candidates.extend(
+                PromptFacet(FacetKind.IDENTIFIER, part, 9)
+                for part in sorted(_identifier_parts(raw))
+                if part != canonical and part not in _STOPWORDS
+            )
     for word in content_words:
         if word not in _GENERIC:
             lexical_candidates.append(PromptFacet(FacetKind.ENTITY, word, 6))
@@ -1221,10 +1227,30 @@ def compile_prompt(
         elif canonical:
             rejected.append(canonical)
 
+    balanced_lexical: list[PromptFacet] = []
+    clause_candidates: list[list[PromptFacet]] = []
+    for clause in _prompt_clauses(prompt, vocabulary):
+        clause_values = set(_words(clause))
+        for raw in _TOKEN.findall(clause):
+            clause_values.update(_identifier_parts(raw))
+        clause_candidates.append([
+            facet for facet in lexical_candidates
+            if facet.value in vocabulary and facet.value in clause_values
+        ])
+    for offset in range(max(map(len, clause_candidates), default=0)):
+        balanced_lexical.extend(
+            candidates[offset]
+            for candidates in clause_candidates
+            if offset < len(candidates)
+        )
+
     facets: list[PromptFacet] = []
     seen: set[tuple[FacetKind, str]] = set()
     required = [facet for facet in lexical_candidates if facet.required]
-    lexical = [facet for facet in lexical_candidates if not facet.required]
+    lexical = [
+        facet for facet in [*balanced_lexical, *lexical_candidates]
+        if not facet.required
+    ]
     typed = sorted(
         typed_candidates,
         key=lambda item: (-item.required, -item.weight, item.kind.value, item.value),
@@ -1287,7 +1313,10 @@ def graph_find(
         minimum_coverage_percent=minimum_coverage_percent,
         parallel=parallel,
     )
-    if proof_obligations is None and result.reason == "prompt_facets_insufficient":
+    short_prompt = len([word for word in _words(prompt) if word not in _STOPWORDS]) < 3
+    if proof_obligations is None and (
+        result.reason == "prompt_facets_insufficient" or short_prompt
+    ):
         obligations = compile_proof_obligations(prompt, graph, index, snapshot, reader)
         facets = compile_prompt(
             prompt,
@@ -1949,7 +1978,11 @@ def _channel_scores(
     for tags in tags_by_record.values():
         document_frequency.update({tag.value for tag in tags})
     record_count = max(1, len(tags_by_record))
-    facet_map = {facet.value: facet for facet in facets.facets}
+    facet_map: dict[str, PromptFacet] = {}
+    for facet in facets.facets:
+        current = facet_map.get(facet.value)
+        if current is None or facet.weight > current.weight:
+            facet_map[facet.value] = facet
 
     if channel == "graph":
         relation_facets = {facet.value for facet in facets.facets if facet.kind is FacetKind.RELATION}

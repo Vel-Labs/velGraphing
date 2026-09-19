@@ -309,6 +309,59 @@ class RetrievalEvaluationTests(unittest.TestCase):
                 (40,),
             )
 
+    def test_registered_relational_canary_is_source_bound_and_edge_isolated(self):
+        sources = [
+            {"path": path, "source_sha256": SHA, "byte_length": 20_000}
+            for path in ("README.md", "STYLE_GUIDE.md")
+        ]
+        snapshot = SourceSnapshotV4(tuple(
+            SourceIdentityV4(row["path"], row["byte_length"], row["source_sha256"])
+            for row in sources
+        )).snapshot_sha256
+        parent = candidate("README.md", 5661, 7331)
+        support = candidate(
+            "STYLE_GUIDE.md", 13399, 15879, parent=parent["id"]
+        )
+        template = {
+            "task_id": "R-01",
+            "corpus": "engineering-handbook",
+            "prompt_sha256": mod.RELATIONAL_CANARY_QUESTIONS["R-01"][1],
+            "source_snapshot_sha256": snapshot,
+            "sources": sources,
+            "metrics": dict.fromkeys((
+                "source_operations", "cold_ns", "warm_ns", "retrieval_ns",
+                "expansion_ns", "fallback_ns", "source_failures", "authority_failures",
+            )),
+        }
+        runs = []
+        for route in sorted(mod.ROUTES):
+            typed = route.startswith("typed_graph")
+            row = copy.deepcopy(template)
+            row["route"] = route
+            row["candidates"] = (
+                [parent, support] if route == "typed_graph" else [parent]
+            )
+            row["controls"] = {
+                "seed_record_ids": ["repo:README.md"],
+                "seed_limit": 12,
+                "candidate_limit": 12,
+                "candidate_aggregate_byte_budget": 24_576,
+                "candidate_unit_byte_budget": 4096,
+                "derived_edge_count": 1 if typed else 0,
+                "active_edge_count": 1 if route in {"typed_graph", "typed_graph_no_expansion"} else 0,
+                "source_bound_expansion": typed,
+                "expand_one_hop": route in {"typed_graph", "typed_graph_no_edges"},
+            }
+            runs.append(row)
+        artifact = {
+            "schema_version": mod.CANDIDATE_SCHEMA_VERSION,
+            "study_id": mod.RELATIONAL_CANARY_STUDY,
+            "selector_commit": "1" * 40,
+            "question_registry_sha256": mod.RELATIONAL_CANARY_QUESTION_REGISTRY_SHA256,
+            "runs": runs,
+        }
+        mod.validate_candidates(artifact)
+
     def test_malformed_route_types_fail_with_schema_error(self):
         for route in (None, [], 3, "invented_route"):
             artifact, labels = fixture()
@@ -424,6 +477,16 @@ class RetrievalEvaluationTests(unittest.TestCase):
                 run["prompt_sha256"] = "0" * 64
         with self.assertRaisesRegex(mod.EvaluationError, "production_question_binding_mismatch"):
             mod.validate_candidates(changed)
+
+        high_recall = copy.deepcopy(artifact)
+        high_recall["study_id"] = mod.HIGH_RECALL_STUDY
+        for run in high_recall["runs"]:
+            run["controls"].update(
+                candidate_limit=64,
+                candidate_aggregate_byte_budget=32_768,
+                candidate_unit_byte_budget=4096,
+            )
+        mod.validate_candidates(high_recall)
 
     def test_gate_2_rejects_unknown_regression_or_failures_and_requires_edge_gain(self):
         def rows(direct=0.5, typed=0.5, no_edges=0.5, failures=0):

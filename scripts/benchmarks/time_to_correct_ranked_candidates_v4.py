@@ -49,6 +49,8 @@ from packages.core import (  # noqa: E402
 
 SCHEMA_VERSION = "velgraphing-ranked-candidates-v4-bound-v2"
 PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
+HIGH_RECALL_STUDY = "velgraphing-v4-six-task-high-recall-v1"
+RELATIONAL_CANARY_STUDY = "velgraphing-v4-relational-canary-v1"
 ROUTES = (
     "direct",
     "tag_index",
@@ -66,6 +68,39 @@ RETRIEVAL_NODE_LIMIT = 12
 CANDIDATE_LIMIT = 12
 CANDIDATE_AGGREGATE_BYTE_BUDGET = 24_576
 CANDIDATE_UNIT_BYTE_BUDGET = 4096
+HIGH_RECALL_CANDIDATE_LIMIT = 64
+HIGH_RECALL_AGGREGATE_BYTE_BUDGET = 32_768
+STUDY_CANDIDATE_CONTROLS = {
+    PRODUCTION_STUDY: (
+        CANDIDATE_LIMIT,
+        CANDIDATE_AGGREGATE_BYTE_BUDGET,
+        CANDIDATE_UNIT_BYTE_BUDGET,
+    ),
+    HIGH_RECALL_STUDY: (
+        HIGH_RECALL_CANDIDATE_LIMIT,
+        HIGH_RECALL_AGGREGATE_BYTE_BUDGET,
+        CANDIDATE_UNIT_BYTE_BUDGET,
+    ),
+    RELATIONAL_CANARY_STUDY: (
+        CANDIDATE_LIMIT,
+        CANDIDATE_AGGREGATE_BYTE_BUDGET,
+        CANDIDATE_UNIT_BYTE_BUDGET,
+    ),
+    "unit-fixture": (
+        CANDIDATE_LIMIT,
+        CANDIDATE_AGGREGATE_BYTE_BUDGET,
+        CANDIDATE_UNIT_BYTE_BUDGET,
+    ),
+}
+RELATIONAL_CANARY_EDGE = {
+    "source_path": "README.md",
+    "source_start": 6504,
+    "source_end": 6542,
+    "target_path": "STYLE_GUIDE.md",
+    "target_start": 13402,
+    "target_end": 13425,
+    "relation": "links_to_heading",
+}
 OUTPUT_ROOT = ROOT / "benchmarks/velgraphing-time-to-correct-v4/.inputs"
 
 
@@ -272,13 +307,16 @@ def _controls(
     active_edge_count: int,
     source_bound_expansion: bool,
     expand_one_hop: bool,
+    candidate_limit: int,
+    candidate_aggregate_byte_budget: int,
+    candidate_unit_byte_budget: int,
 ) -> dict[str, object]:
     return {
         "seed_record_ids": list(seed_record_ids),
         "seed_limit": RETRIEVAL_NODE_LIMIT,
-        "candidate_limit": CANDIDATE_LIMIT,
-        "candidate_aggregate_byte_budget": CANDIDATE_AGGREGATE_BYTE_BUDGET,
-        "candidate_unit_byte_budget": CANDIDATE_UNIT_BYTE_BUDGET,
+        "candidate_limit": candidate_limit,
+        "candidate_aggregate_byte_budget": candidate_aggregate_byte_budget,
+        "candidate_unit_byte_budget": candidate_unit_byte_budget,
         "derived_edge_count": derived_edge_count,
         "active_edge_count": active_edge_count,
         "source_bound_expansion": source_bound_expansion,
@@ -310,6 +348,9 @@ def _route_run(
     active_edge_count: int,
     source_bound_expansion: bool,
     expand_one_hop: bool,
+    candidate_limit: int = CANDIDATE_LIMIT,
+    candidate_aggregate_byte_budget: int = CANDIDATE_AGGREGATE_BYTE_BUDGET,
+    candidate_unit_byte_budget: int = CANDIDATE_UNIT_BYTE_BUDGET,
 ) -> tuple[dict[str, object], int]:
     counting = CountingReader(reader)
     started = time.monotonic_ns()
@@ -331,9 +372,9 @@ def _route_run(
         raise GenerationError("retrieval_failed_closed")
     candidates = ranked_candidates_from_retrieval(
         graph, task, snapshot, counting, result,
-        maximum_candidates=CANDIDATE_LIMIT,
-        maximum_candidate_bytes=CANDIDATE_AGGREGATE_BYTE_BUDGET,
-        maximum_unit_bytes=CANDIDATE_UNIT_BYTE_BUDGET,
+        maximum_candidates=candidate_limit,
+        maximum_candidate_bytes=candidate_aggregate_byte_budget,
+        maximum_unit_bytes=candidate_unit_byte_budget,
     )
     elapsed = time.monotonic_ns() - started
     if not candidates:
@@ -354,6 +395,9 @@ def _route_run(
                 active_edge_count,
                 source_bound_expansion,
                 expand_one_hop,
+                candidate_limit,
+                candidate_aggregate_byte_budget,
+                candidate_unit_byte_budget,
             ),
             "metrics": _metrics(counting.operations, elapsed),
         },
@@ -390,6 +434,12 @@ def generate(
     study_id: str = PRODUCTION_STUDY,
 ) -> tuple[dict[str, object], dict[str, dict[str, int]]]:
     questions, question_registry_sha256 = _questions(questions_path)
+    try:
+        candidate_limit, candidate_aggregate_byte_budget, candidate_unit_byte_budget = (
+            STUDY_CANDIDATE_CONTROLS[study_id]
+        )
+    except KeyError as error:
+        raise GenerationError("unknown_study") from error
     prepared: dict[str, tuple[Any, Any, Any, Any, int]] = {}
     for corpus in dict.fromkeys(row["corpus"] for row in questions):
         manifest = _manifest(manifests_root / CORPUS_MANIFESTS[corpus])
@@ -410,6 +460,25 @@ def generate(
             len(typed_graph.edges),
         )
 
+    if study_id == RELATIONAL_CANARY_STUDY:
+        if set(prepared) != {"engineering-handbook"}:
+            raise GenerationError("relational_canary_corpus_mismatch")
+        typed_graph = prepared["engineering-handbook"][3]
+        matching_edges = [
+            edge for edge in typed_graph.edges
+            if edge.relation == RELATIONAL_CANARY_EDGE["relation"]
+            and edge.source_coordinate is not None
+            and edge.target_coordinate is not None
+            and edge.source_coordinate.source_path == RELATIONAL_CANARY_EDGE["source_path"]
+            and edge.source_coordinate.byte_start == RELATIONAL_CANARY_EDGE["source_start"]
+            and edge.source_coordinate.byte_end == RELATIONAL_CANARY_EDGE["source_end"]
+            and edge.target_coordinate.source_path == RELATIONAL_CANARY_EDGE["target_path"]
+            and edge.target_coordinate.byte_start == RELATIONAL_CANARY_EDGE["target_start"]
+            and edge.target_coordinate.byte_end == RELATIONAL_CANARY_EDGE["target_end"]
+        ]
+        if len(matching_edges) != 1:
+            raise GenerationError("relational_canary_edge_mismatch")
+
     runs: list[dict[str, object]] = []
     summary = {
         route: {"candidates": 0, "supports": 0, "derived_edges": 0,
@@ -428,7 +497,7 @@ def generate(
                 )
             ),
             node_budget=RETRIEVAL_NODE_LIMIT,
-            byte_budget=CANDIDATE_AGGREGATE_BYTE_BUDGET,
+            byte_budget=candidate_aggregate_byte_budget,
             allowed_sensitivities=(Sensitivity.PUBLIC, Sensitivity.INTERNAL),
         )
         index = build_repository_tag_index(plain_graph, snapshot, reader)
@@ -445,30 +514,45 @@ def generate(
                 task, "direct", plain_graph, snapshot, reader, index, facets,
                 derived_edge_count=0, active_edge_count=0,
                 source_bound_expansion=False, expand_one_hop=False,
+                candidate_limit=candidate_limit,
+                candidate_aggregate_byte_budget=candidate_aggregate_byte_budget,
+                candidate_unit_byte_budget=candidate_unit_byte_budget,
             ),
             _route_run(
                 task, "tag_index", plain_graph, snapshot, reader, index, facets,
                 derived_edge_count=0,
                 active_edge_count=0,
                 source_bound_expansion=False, expand_one_hop=False,
+                candidate_limit=candidate_limit,
+                candidate_aggregate_byte_budget=candidate_aggregate_byte_budget,
+                candidate_unit_byte_budget=candidate_unit_byte_budget,
             ),
             _route_run(
                 task, "typed_graph", typed_graph, snapshot, reader, index, facets,
                 derived_edge_count=edge_count,
                 active_edge_count=edge_count,
                 source_bound_expansion=True, expand_one_hop=True,
+                candidate_limit=candidate_limit,
+                candidate_aggregate_byte_budget=candidate_aggregate_byte_budget,
+                candidate_unit_byte_budget=candidate_unit_byte_budget,
             ),
             _route_run(
                 task, "typed_graph_no_edges", no_edges, snapshot, reader, index, facets,
                 derived_edge_count=edge_count,
                 active_edge_count=0,
                 source_bound_expansion=True, expand_one_hop=True,
+                candidate_limit=candidate_limit,
+                candidate_aggregate_byte_budget=candidate_aggregate_byte_budget,
+                candidate_unit_byte_budget=candidate_unit_byte_budget,
             ),
             _route_run(
                 task, "typed_graph_no_expansion", typed_graph, snapshot, reader, index, facets,
                 derived_edge_count=edge_count,
                 active_edge_count=edge_count,
                 source_bound_expansion=True, expand_one_hop=False,
+                candidate_limit=candidate_limit,
+                candidate_aggregate_byte_budget=candidate_aggregate_byte_budget,
+                candidate_unit_byte_budget=candidate_unit_byte_budget,
             ),
         ]
         for run, support_count in route_rows:
@@ -566,6 +650,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--manifests-root", type=Path, required=True)
     parser.add_argument("--lanes-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--study-id",
+        choices=(PRODUCTION_STUDY, HIGH_RECALL_STUDY, RELATIONAL_CANARY_STUDY),
+        default=PRODUCTION_STUDY,
+    )
     arguments = parser.parse_args(argv)
     try:
         output = _output_path(arguments.output)
@@ -575,6 +664,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.manifests_root,
             arguments.lanes_root,
             commit,
+            study_id=arguments.study_id,
         )
         output_sha256, _ = write_artifact(output, artifact)
         if _git(ROOT, "status", "--porcelain=v1", "--untracked-files=all"):

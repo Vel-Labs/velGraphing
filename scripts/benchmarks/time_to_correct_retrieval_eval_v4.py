@@ -24,6 +24,8 @@ CANDIDATE_SCHEMA_VERSION = "velgraphing-ranked-candidates-v4-bound-v2"
 ROUTES = {"direct", "tag_index", "typed_graph", "typed_graph_no_edges",
           "typed_graph_no_expansion"}
 PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
+HIGH_RECALL_STUDY = "velgraphing-v4-six-task-high-recall-v1"
+RELATIONAL_CANARY_STUDY = "velgraphing-v4-relational-canary-v1"
 FIXTURE_STUDY = "unit-fixture"
 PRODUCTION_TASKS = {"C-01", "C-02", "S-01", "L-01", "M-01", "M-02"}
 PRODUCTION_QUESTION_REGISTRY_SHA256 = "61fe0831ab45e2ef9b6280ea6d4089f376f226d2c3d42e32d09ddd3f502be1c4"
@@ -35,6 +37,32 @@ PRODUCTION_QUESTIONS = {
     "M-01": ("openchain-reference-material", "95e96ddb909cd372c0edbaa774d55aa85edea303c0d9c0aa5b51f06b75a40577"),
     "M-02": ("openchain-reference-material", "5142447b64f06e938216998638b638e60bd135f8a5efe6ed208d137617306572"),
 }
+RELATIONAL_CANARY_QUESTION_REGISTRY_SHA256 = "14e6ded1ecc1248109db9c1bda7c432278fdb5427e1c0f402850bc370594ccc3"
+RELATIONAL_CANARY_QUESTIONS = {
+    "R-01": (
+        "engineering-handbook",
+        "0b60999b95ad4e6377a2d337535dec3a0e40ae48da6d44ef8064860f46515b22",
+    ),
+}
+REGISTERED_STUDIES = {
+    PRODUCTION_STUDY: (
+        PRODUCTION_QUESTION_REGISTRY_SHA256,
+        PRODUCTION_QUESTIONS,
+        (12, 24_576, 4096),
+    ),
+    HIGH_RECALL_STUDY: (
+        PRODUCTION_QUESTION_REGISTRY_SHA256,
+        PRODUCTION_QUESTIONS,
+        (64, 32_768, 4096),
+    ),
+    RELATIONAL_CANARY_STUDY: (
+        RELATIONAL_CANARY_QUESTION_REGISTRY_SHA256,
+        RELATIONAL_CANARY_QUESTIONS,
+        (12, 24_576, 4096),
+    ),
+}
+RELATIONAL_CANARY_SOURCE = ("README.md", 6504, 6542)
+RELATIONAL_CANARY_TARGET = ("STYLE_GUIDE.md", 13402, 13425)
 CONTROL_KEYS = {"seed_record_ids", "seed_limit", "candidate_limit",
                 "candidate_aggregate_byte_budget", "candidate_unit_byte_budget",
                 "derived_edge_count", "active_edge_count", "source_bound_expansion",
@@ -187,7 +215,7 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
     exact_keys(value, {"schema_version", "study_id", "selector_commit",
                        "question_registry_sha256", "runs"})
     if (value["schema_version"] != CANDIDATE_SCHEMA_VERSION
-            or value["study_id"] not in {FIXTURE_STUDY, PRODUCTION_STUDY}
+            or value["study_id"] not in {FIXTURE_STUDY, *REGISTERED_STUDIES}
             or type(value["selector_commit"]) is not str
             or not COMMIT.fullmatch(value["selector_commit"])
             or type(value["question_registry_sha256"]) is not str
@@ -326,21 +354,67 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
                 ]
                 if enabled_primary != control[:len(enabled_primary)]:
                     raise EvaluationError("typed_primary_candidate_mismatch")
-    if value["study_id"] == PRODUCTION_STUDY:
-        expected = {(task, route) for task in PRODUCTION_TASKS for route in ROUTES}
-        if keys != expected or len(value["runs"]) != 30:
+    if value["study_id"] in REGISTERED_STUDIES:
+        registry_sha256, questions, controls = REGISTERED_STUDIES[value["study_id"]]
+        expected = {(task, route) for task in questions for route in ROUTES}
+        if keys != expected or len(value["runs"]) != len(expected):
             raise EvaluationError("production_run_matrix_mismatch")
-        if value["question_registry_sha256"] != PRODUCTION_QUESTION_REGISTRY_SHA256:
+        if value["question_registry_sha256"] != registry_sha256:
             raise EvaluationError("production_question_registry_mismatch")
         for run in value["runs"]:
             if ((run["corpus"], run["prompt_sha256"])
-                    != PRODUCTION_QUESTIONS[run["task_id"]]):
+                    != questions[run["task_id"]]):
                 raise EvaluationError("production_question_binding_mismatch")
             if (run["controls"]["seed_limit"] != 12
-                    or run["controls"]["candidate_limit"] != 12
-                    or run["controls"]["candidate_aggregate_byte_budget"] != 24_576
-                    or run["controls"]["candidate_unit_byte_budget"] != 4096):
+                    or (
+                        run["controls"]["candidate_limit"],
+                        run["controls"]["candidate_aggregate_byte_budget"],
+                        run["controls"]["candidate_unit_byte_budget"],
+                    ) != controls):
                 raise EvaluationError("production_control_mismatch")
+    if value["study_id"] == RELATIONAL_CANARY_STUDY:
+        runs = {run["route"]: run for run in value["runs"]}
+        control = runs["direct"]["candidates"]
+        if any(
+            runs[route]["candidates"] != control
+            for route in ("tag_index", "typed_graph_no_edges", "typed_graph_no_expansion")
+        ):
+            raise EvaluationError("relational_canary_control_mismatch")
+        if any(
+            run["controls"]["derived_edge_count"] != 1
+            for route, run in runs.items()
+            if route.startswith("typed_graph")
+        ):
+            raise EvaluationError("relational_canary_edge_mismatch")
+        relationships = [
+            candidate for candidate in runs["typed_graph"]["candidates"]
+            if candidate["relationship_parent_candidate_id"] is not None
+        ]
+        if len(relationships) != 1:
+            raise EvaluationError("relational_canary_support_mismatch")
+        support = relationships[0]
+        target_path, target_start, target_end = RELATIONAL_CANARY_TARGET
+        if (
+            support["path"] != target_path
+            or support["byte_start"] > target_start
+            or support["byte_end"] < target_end
+        ):
+            raise EvaluationError("relational_canary_target_mismatch")
+        parent = next(
+            (
+                candidate for candidate in runs["typed_graph"]["candidates"]
+                if candidate["id"] == support["relationship_parent_candidate_id"]
+            ),
+            None,
+        )
+        source_path, source_start, source_end = RELATIONAL_CANARY_SOURCE
+        if (
+            parent is None
+            or parent["path"] != source_path
+            or parent["byte_start"] > source_start
+            or parent["byte_end"] < source_end
+        ):
+            raise EvaluationError("relational_canary_source_mismatch")
     return value
 
 

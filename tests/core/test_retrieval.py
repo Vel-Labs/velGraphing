@@ -4,6 +4,7 @@ from dataclasses import replace
 import hashlib
 import unittest
 
+import packages.core.retrieval as retrieval_module
 from packages.core import (
     Admission,
     AuthorityClass,
@@ -561,6 +562,74 @@ class TagIndexTests(unittest.TestCase):
             (FacetKind.SEMANTIC, "token"),
             {(facet.kind, facet.value) for facet in facets.facets},
         )
+
+    def test_prompt_identifiers_decompose_hyphens_and_underscores(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = compile_prompt("Trace refresh_token token-expiry behavior", index)
+        identifiers = {
+            facet.value for facet in facets.facets
+            if facet.kind is FacetKind.IDENTIFIER
+        }
+        self.assertTrue(
+            {"refresh-token", "refresh", "token", "expiry"} <= identifiers
+        )
+        token_expiry = next(
+            facet for facet in facets.facets if facet.value == "token-expiry"
+        )
+        self.assertFalse(token_expiry.required)
+
+    def test_prompt_excludes_common_generic_words(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = compile_prompt(
+            "Trace token as configuration in runtime using it with expiry evidence",
+            index,
+        )
+        self.assertTrue(
+            {"as", "in", "it", "using"}.isdisjoint(
+                facet.value for facet in facets.facets
+            )
+        )
+
+    def test_late_evidence_clause_retains_repository_vocabulary(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = compile_prompt(
+            "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima "
+            "mango november oscar papa; token expiry configuration",
+            index,
+        )
+        identities = {(facet.kind, facet.value) for facet in facets.facets}
+        self.assertIn((FacetKind.ENTITY, "token"), identities)
+        self.assertIn((FacetKind.ENTITY, "expiry"), identities)
+
+    def test_channel_scoring_uses_strongest_same_value_facet(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        fillers = tuple(
+            PromptFacet(FacetKind.ENTITY, f"absent-{offset}", 1)
+            for offset in range(6)
+        )
+        strongest = PromptFacetSet(
+            "a" * 64,
+            (PromptFacet(FacetKind.ENTITY, "token", 9), *fillers),
+        )
+        duplicated = PromptFacetSet(
+            "b" * 64,
+            (
+                PromptFacet(FacetKind.ENTITY, "token", 9),
+                *fillers,
+                PromptFacet(FacetKind.SEMANTIC, "token", 2),
+            ),
+        )
+        expected, _ = retrieval_module._channel_scores(
+            "sparse", graph, index.by_record(), strongest, (Sensitivity.PUBLIC,)
+        )
+        actual, _ = retrieval_module._channel_scores(
+            "sparse", graph, index.by_record(), duplicated, (Sensitivity.PUBLIC,)
+        )
+        self.assertEqual(actual, expected)
 
     def test_short_or_generic_prompt_is_insufficient_without_padding(self) -> None:
         graph, snapshot, reader = fixture()

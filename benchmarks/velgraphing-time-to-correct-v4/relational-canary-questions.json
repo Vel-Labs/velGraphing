@@ -1,0 +1,10 @@
+{
+  "schema_version": "velgraphing-corpus-pilot-questions-v1",
+  "questions": [
+    {
+      "id": "R-01",
+      "corpus": "engineering-handbook",
+      "prompt": "What belongs in content/dsa/editorials versus content/dsa/patterns?"
+    }
+  ]
+}

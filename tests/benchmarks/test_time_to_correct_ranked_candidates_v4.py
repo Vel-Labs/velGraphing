@@ -32,11 +32,17 @@ def git(root: Path, *arguments: str) -> str:
 
 
 class Fixture:
-    def __init__(self, sources: dict[str, bytes], prompt: str) -> None:
+    def __init__(
+        self,
+        sources: dict[str, bytes],
+        prompt: str,
+        *,
+        corpus: str = "cpython",
+    ) -> None:
         self.temporary = tempfile.TemporaryDirectory(dir=ROOT)
         self.root = Path(self.temporary.name)
         self.lanes = self.root / "lanes"
-        self.lane = self.lanes / "cpython"
+        self.lane = self.lanes / corpus
         self.lane.mkdir(parents=True)
         git(self.lane, "init", "-q")
         git(self.lane, "config", "user.email", "test@example.invalid")
@@ -66,7 +72,7 @@ class Fixture:
         }
         self.manifests = self.root / "manifests"
         self.manifests.mkdir()
-        (self.manifests / "cpython.json").write_text(
+        (self.manifests / mod.CORPUS_MANIFESTS[corpus]).write_text(
             json.dumps(self.manifest), encoding="utf-8"
         )
         self.questions = self.root / "questions.json"
@@ -74,7 +80,7 @@ class Fixture:
             json.dumps(
                 {
                     "schema_version": "velgraphing-corpus-pilot-questions-v1",
-                    "questions": [{"id": "fixture", "corpus": "cpython", "prompt": prompt}],
+                    "questions": [{"id": "fixture", "corpus": corpus, "prompt": prompt}],
                 }
             ),
             encoding="utf-8",
@@ -85,18 +91,90 @@ class Fixture:
 
 
 class RankedCandidateTests(unittest.TestCase):
+    def test_registered_study_controls_and_canary_registry_are_exact(self) -> None:
+        questions_path = (
+            ROOT
+            / "benchmarks/velgraphing-time-to-correct-v4/relational-canary-questions.json"
+        )
+        rows, registry_sha256 = mod._questions(questions_path)
+        self.assertEqual(
+            mod.STUDY_CANDIDATE_CONTROLS[mod.HIGH_RECALL_STUDY],
+            (64, 32_768, 4096),
+        )
+        self.assertEqual(
+            registry_sha256,
+            mod.candidate_evaluator.RELATIONAL_CANARY_QUESTION_REGISTRY_SHA256,
+        )
+        self.assertEqual(
+            rows,
+            [{
+                "id": "R-01",
+                "corpus": "engineering-handbook",
+                "prompt": "What belongs in content/dsa/editorials versus content/dsa/patterns?",
+            }],
+        )
+
+    def test_relational_canary_prompt_isolated_by_typed_expansion(self) -> None:
+        sources = {
+            f"noise-{index:02d}.md": (
+                b"# DSA editorial patterns\ncontent dsa editorials patterns\n"
+            )
+            for index in range(12)
+        }
+        sources.update(
+            {
+                "README.md": (
+                    b"# Repository areas\n"
+                    b"What belongs in content/dsa/editorials versus content/dsa/patterns?\n"
+                    b"[Style details](STYLE_GUIDE.md#dsa-specific-deviations)\n"
+                ),
+                "STYLE_GUIDE.md": (
+                    b"# Style guide\n\n"
+                    b"## DSA-specific deviations\n"
+                    b"Use the documented chapter structure.\n"
+                ),
+            }
+        )
+        fixture = Fixture(
+            sources,
+            "What belongs in content/dsa/editorials versus content/dsa/patterns?",
+            corpus="engineering-handbook",
+        )
+        try:
+            artifact, _ = mod.generate(
+                fixture.questions, fixture.manifests, fixture.lanes, "1" * 40,
+                study_id="unit-fixture",
+            )
+        finally:
+            fixture.close()
+        runs = {run["route"]: run for run in artifact["runs"]}
+        control = runs["direct"]["candidates"]
+        self.assertEqual(runs["tag_index"]["candidates"], control)
+        self.assertEqual(runs["typed_graph_no_edges"]["candidates"], control)
+        self.assertEqual(runs["typed_graph_no_expansion"]["candidates"], control)
+        relationships = [
+            candidate for candidate in runs["typed_graph"]["candidates"]
+            if candidate["relationship_parent_candidate_id"] is not None
+        ]
+        self.assertEqual(len(relationships), 1)
+        typed_primary = [
+            candidate for candidate in runs["typed_graph"]["candidates"]
+            if candidate["relationship_parent_candidate_id"] is None
+        ]
+        self.assertEqual(typed_primary, control[:len(typed_primary)])
+
     def test_typed_routes_keep_primary_seeds_and_only_enabled_adds_support(self) -> None:
         fixture = Fixture(
             {
                 "src/caller.py": (
-                    b"from src.helper import helper as call_helper_import\n\n"
+                    b"from src.helper import helper as call_dependency_import\n\n"
                     b"def call_helper():\n    return call_helper_import()\n"
                 ),
                 "src/helper.py": b"def helper():\n    return 1\n",
                 "README.md": b"# Index\n[install guide](docs/guide.md#install)\n",
                 "docs/guide.md": b"# Install\nUse call_helper.\n",
             },
-            "find call_helper_import caller Index README",
+            "find call_dependency_import caller Index README",
         )
         try:
             artifact, _ = mod.generate(
