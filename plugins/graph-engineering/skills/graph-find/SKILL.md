@@ -24,7 +24,9 @@ proof obligations, fallback paths, or byte budgets. Ambiguous and unbound
 relations remain unresolved. Here, unchanged seed ranking means that
 edge-enabled, edge-disabled, and expansion-disabled runs inside source-bound
 mode use the same exact, sparse, and wiki seed route. Enabling source-bound mode
-does not preserve the legacy graph-channel route. `route: graph`
+does not preserve the legacy graph-channel route. In source-bound mode,
+`expand_one_hop: false` suppresses relationship support; it does not restore
+legacy graph scoring or legacy one-hop mutation. `route: graph`
 means the verified graph evidence met the retrieval threshold. `route: defer`
 means the evidence is incomplete; use the listed fallback paths with a direct
 source read. `fail_closed: true` means an authentication or custody boundary

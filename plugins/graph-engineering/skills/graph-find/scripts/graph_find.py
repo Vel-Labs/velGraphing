@@ -561,7 +561,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             snapshot,
             reader,
             semantic_candidates=tuple(arguments.semantic_candidate),
-            expand_one_hop=False,
+            expand_one_hop=True,
             source_bound_expansion=True,
             maximum_results=arguments.maximum_results,
         )

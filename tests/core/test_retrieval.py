@@ -245,11 +245,38 @@ class SourceBoundExpansionTests(unittest.TestCase):
         baseline = retrieve(
             *arguments, channels=("exact", "sparse", "wiki"), expand_one_hop=False
         )
-        expanded = retrieve(*arguments, source_bound_expansion=True)
-        self.assertEqual(baseline, replace(expanded, relationship_supports=()))
-        self.assertEqual(len(expanded.relationship_supports), 1)
-        self.assertEqual(expanded.relationship_supports[0].edge_id, "edge:bound")
-        self.assertEqual(expanded.relationship_supports[0].target_record_id, "repo:src/helper.py")
+        enabled = retrieve(*arguments, source_bound_expansion=True, expand_one_hop=True)
+        edge_disabled_graph = Graph(plain_graph.records)
+        edge_disabled_index = build_repository_tag_index(edge_disabled_graph, snapshot, reader)
+        edge_disabled = retrieve(
+            edge_disabled_graph,
+            task(),
+            edge_disabled_index,
+            obligated_facets(obligation),
+            snapshot,
+            reader,
+            source_bound_expansion=True,
+            expand_one_hop=True,
+        )
+        no_expansion = retrieve(
+            *arguments, source_bound_expansion=True, expand_one_hop=False
+        )
+        primary_fields = (
+            "route", "reason", "hits", "evidence", "spans", "context", "context_bytes",
+            "facet_coverage_percent", "channel_rankings", "recommended_fallback_paths",
+            "fail_closed", "covered_obligation_ids", "unresolved_obligation_ids",
+            "unresolved_critical_obligation_ids", "remaining_byte_budget",
+        )
+        for result in (enabled, edge_disabled, no_expansion):
+            self.assertEqual(
+                tuple(getattr(result, field) for field in primary_fields),
+                tuple(getattr(baseline, field) for field in primary_fields),
+            )
+        self.assertEqual(len(enabled.relationship_supports), 1)
+        self.assertEqual(enabled.relationship_supports[0].edge_id, "edge:bound")
+        self.assertEqual(enabled.relationship_supports[0].target_record_id, "repo:src/helper.py")
+        self.assertEqual(edge_disabled.relationship_supports, ())
+        self.assertEqual(no_expansion.relationship_supports, ())
         with self.assertRaisesRegex(TypeError, "must be bool"):
             retrieve(*arguments, source_bound_expansion=1)  # type: ignore[arg-type]
 

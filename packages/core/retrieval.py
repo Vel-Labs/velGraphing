@@ -1244,7 +1244,7 @@ def retrieve(
         if obligation_map[obligation_id].critical
     ))
     relationship_supports: tuple[RelationshipSupport, ...] = ()
-    if source_bound_expansion:
+    if source_bound_expansion and expand_one_hop:
         support_by_seed = {}
         selected_seeds = {hit.record_id for hit in hits if hit.hop == 0}
         for edge in sorted(graph.edges, key=lambda item: (item.source_id, item.relation, item.edge_id)):
