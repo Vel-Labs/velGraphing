@@ -349,8 +349,12 @@ D-01 observed-source and acceptance repair:
 The dependency-behavior result proves positive isolated edge retrieval for this
 registered question. It does not prove semantic answer correctness, time, token,
 Jev usefulness, promotion, release readiness, or product acceptance. T030
-remains active. The exact next gate is Parent review of the green D-01 controller
-preflight and an explicit tracked `live_authorized: true` plan update with exact
-answer and grader lane commands. No historical PR9 candidate, request hash,
-four-call plan, current non-authorizing two-call plan, or approval-readiness
-record grants authority for a live call.
+remains active. Independent audit issued strict PASS at
+`cd238e253b37111a6654fdde49d906b9af4b54bf`. Parent then authorized live
+enablement preparation. The tracked plan now has `live_authorized: true`, while
+`provider_calls_executed` remains `0` and goal `calls_made` remains `1`. Exact
+answer and grader argv files are prepared only in the ignored private run root.
+No lane, controller, provider, answer, or grader process ran during preparation.
+The exact next gate is lane dispatch followed by controller execution. No
+historical PR9 artifact or prior approval-readiness record authorizes a
+different call or public result.

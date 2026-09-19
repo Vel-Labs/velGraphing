@@ -195,9 +195,9 @@ class DependencyControllerTests(unittest.TestCase):
                 execution="fixture",
             )
 
-    def test_plan_is_exact_and_non_authorizing(self) -> None:
-        plan = mod.validate_plan()
-        self.assertFalse(plan["live_authorized"])
+    def test_plan_is_exact_and_live_authorized(self) -> None:
+        plan = mod.validate_plan(expected_live_authorized=True)
+        self.assertTrue(plan["live_authorized"])
         self.assertEqual(plan["limits"]["maximum_jev_calls"], 2)
         self.assertEqual(plan["limits"]["retries"], 0)
         self.assertEqual(plan["answer_rubric_sha256"], mod.digest(mod.canonical(mod.RUBRIC)))
@@ -249,7 +249,11 @@ class DependencyControllerTests(unittest.TestCase):
                 grader_argv=[sys.executable, "-c", GRADER_CODE],
                 cwd=self.root, ledger=ledger,
             )
-        with self.assertRaisesRegex(mod.ControllerError, "dependency_live_not_authorized"):
+        with mock.patch.object(
+            mod,
+            "validate_plan",
+            side_effect=mod.ControllerError("dependency_plan_mismatch"),
+        ), self.assertRaisesRegex(mod.ControllerError, "dependency_live_not_authorized"):
             mod.run_arm(
                 "A", "a" * 40, "d" * 64, self.question, self.run, self.regenerate,
                 answer_argv=[sys.executable, "-c", ANSWER_CODE],
@@ -261,7 +265,7 @@ class DependencyControllerTests(unittest.TestCase):
         with self.assertRaisesRegex(mod.MeasurementError, "jev_call_cap_exhausted"):
             ledger.reserve("extra-D-01", "c" * 64)
 
-    def test_run_command_cannot_execute_while_plan_is_off(self) -> None:
+    def test_run_command_requires_complete_preconditions(self) -> None:
         inputs = []
         for name in ("candidates.json", "questions.json", "preview.json"):
             path = self.root / name

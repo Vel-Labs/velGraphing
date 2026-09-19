@@ -283,7 +283,7 @@ class JevPreviewTests(unittest.TestCase):
         self.assertEqual(receipt["preview_artifact_sha256"], plan["preview_artifact_sha256"])
         self.assertEqual(plan["candidate_artifact_sha256"], "d147df356e72aa6588d0840ea32940b6db5d5dae975acf2b218e3d4cfc697ae9")
 
-    def test_dependency_plan_is_source_free_and_offline(self) -> None:
+    def test_dependency_plan_is_source_free_and_live_authorized(self) -> None:
         plan = json.loads(
             (ROOT / "benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json")
             .read_text(encoding="utf-8")
@@ -317,7 +317,7 @@ class JevPreviewTests(unittest.TestCase):
             "retries": 0,
         })
         self.assertEqual(plan["provider_calls_executed"], 0)
-        self.assertFalse(plan["live_authorized"])
+        self.assertTrue(plan["live_authorized"])
         self.assertEqual(set(plan["request_sha256"]), {"B", "D"})
 
     def test_valid_synthetic_observation_changes_d_membership_and_keeps_required(self) -> None:
