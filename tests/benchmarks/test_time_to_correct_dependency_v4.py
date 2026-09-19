@@ -296,6 +296,20 @@ class DependencyControllerTests(unittest.TestCase):
             with self.assertRaisesRegex(mod.ControllerError, "dependency_run_root_invalid"):
                 mod._validated_run_root(public)
 
+        with tempfile.TemporaryDirectory(dir=self.root) as raw:
+            sandbox = Path(raw)
+            checkout = sandbox / "checkout"
+            outside = sandbox / "outside"
+            checkout.mkdir(mode=0o700)
+            outside.mkdir(mode=0o700)
+            run = outside / "run"
+            run.mkdir(mode=0o700)
+            (checkout / ".velgraphing-local").symlink_to(outside, target_is_directory=True)
+            with mock.patch.object(mod, "ROOT", checkout), self.assertRaisesRegex(
+                mod.ControllerError, "dependency_run_root_invalid"
+            ):
+                mod._validated_run_root(checkout / ".velgraphing-local" / "run")
+
     def test_actual_source_read_bypasses_fail_coverage(self) -> None:
         def run(regenerate, arm="A", evaluator=None):
             root = self.root / f"bypass-{arm}-{run.calls}"

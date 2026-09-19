@@ -717,17 +717,29 @@ def _argv_map(path: Path, root: Path) -> dict[str, list[str]]:
 
 
 def _validated_run_root(path: Path) -> Path:
-    root = validate_run_root(str(path.resolve(strict=True)))
-    local = (ROOT / ".velgraphing-local").resolve(strict=True)
-    metadata = root.lstat()
+    local = ROOT / ".velgraphing-local"
+    try:
+        local_metadata = local.lstat()
+        root_metadata = path.lstat()
+    except OSError:
+        raise ControllerError("dependency_run_root_invalid") from None
     if (
-        root.parent != local
-        or root.is_symlink()
-        or not stat.S_ISDIR(metadata.st_mode)
-        or stat.S_IMODE(metadata.st_mode) & 0o077
+        not path.is_absolute()
+        or path.parent != local
+        or stat.S_ISLNK(local_metadata.st_mode)
+        or not stat.S_ISDIR(local_metadata.st_mode)
+        or stat.S_IMODE(local_metadata.st_mode) & 0o077
+        or stat.S_ISLNK(root_metadata.st_mode)
+        or not stat.S_ISDIR(root_metadata.st_mode)
+        or stat.S_IMODE(root_metadata.st_mode) & 0o077
+        or path.resolve(strict=True) != path
     ):
         raise ControllerError("dependency_run_root_invalid")
-    return root
+    try:
+        generator._git(ROOT, "check-ignore", "-q", "--", ".velgraphing-local")
+        return validate_run_root(str(path))
+    except (OSError, ValueError, generator.GenerationError, HandoffError):
+        raise ControllerError("dependency_run_root_invalid") from None
 
 
 def _add_inputs(parser: argparse.ArgumentParser) -> None:
