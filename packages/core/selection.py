@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+from typing import Any
+
+from .jev import PACKET_VERSION, canonical as jev_canonical, sha256 as jev_sha256, validate_packet
 
 from .models import (
     Freshness,
@@ -141,6 +144,443 @@ class AssistObservation:
 
     def to_json(self) -> str:
         return _canonical_json(self.to_dict())
+
+
+@dataclass(frozen=True)
+class RankedContextCandidate:
+    candidate_id: str
+    source_path: str
+    source_sha256: str
+    byte_start: int
+    byte_end: int
+    required: bool
+
+    def __post_init__(self) -> None:
+        validate_packet({
+            "schema_version": PACKET_VERSION,
+            "query": "candidate validation",
+            "candidates": [self._packet_value()],
+        })
+
+    def _packet_value(self) -> dict[str, object]:
+        return {
+            "id": self.candidate_id,
+            "path": self.source_path,
+            "source_sha256": self.source_sha256,
+            "byte_start": self.byte_start,
+            "byte_end": self.byte_end,
+            "required": self.required,
+        }
+
+
+@dataclass(frozen=True)
+class RankedContextProjection:
+    content: str
+    serialized_byte_count: int
+    excerpt_byte_count: int
+    selected_candidate_ids: tuple[str, ...]
+    required_candidate_ids: tuple[str, ...]
+    included_optional_candidate_ids: tuple[str, ...]
+    fail_closed: bool
+    reason: str
+
+
+@dataclass(frozen=True)
+class RankedContextResult:
+    route: str
+    reason: str
+    order_source: str
+    candidate_set_sha256: str
+    approved_request_sha256: str
+    jev_source_revalidated: bool
+    source_revalidated: bool
+    projection: RankedContextProjection
+
+
+def select_ranked_context(
+    task: TaskSpec,
+    snapshot: SourceSnapshotV4,
+    reader: SourceReaderV4,
+    *,
+    query: str,
+    candidates: tuple[RankedContextCandidate, ...],
+    approved_request_sha256: str,
+    jev_observation: Any,
+    fallback_graph: Graph | None = None,
+    fallback_source_paths: tuple[str, ...] = (),
+) -> RankedContextResult:
+    """Select verified source spans from an immutable candidate shortlist."""
+
+    if type(task) is not TaskSpec:
+        raise TypeError("task must be an exact TaskSpec")
+    if type(snapshot) is not SourceSnapshotV4:
+        raise TypeError("snapshot must be an exact SourceSnapshotV4")
+    if type(candidates) is not tuple or any(
+        type(candidate) is not RankedContextCandidate for candidate in candidates
+    ):
+        raise TypeError("candidates must be a tuple of exact RankedContextCandidate values")
+    if type(approved_request_sha256) is not str or not _valid_digest(
+        approved_request_sha256
+    ):
+        raise ValueError("approved_request_sha256 must be a full lowercase SHA-256")
+    if fallback_graph is not None and type(fallback_graph) is not Graph:
+        raise TypeError("fallback_graph must be an exact Graph or None")
+    if type(fallback_source_paths) is not tuple or any(
+        type(path) is not str for path in fallback_source_paths
+    ):
+        raise TypeError("fallback_source_paths must be a tuple of strings")
+
+    packet = validate_packet({
+        "schema_version": PACKET_VERSION,
+        "query": query,
+        "candidates": [candidate._packet_value() for candidate in candidates],
+    })
+    baseline_order = tuple(candidate["id"] for candidate in packet["candidates"])
+    required_ids = tuple(
+        candidate["id"] for candidate in packet["candidates"] if candidate["required"]
+    )
+    candidate_set_sha256 = jev_sha256(jev_canonical(packet["candidates"]))
+    query_sha256 = jev_sha256(packet["query"].encode("utf-8"))
+    snapshot_sources = {source.path: source for source in snapshot.sources}
+    selected_sources: dict[str, SourceIdentityV4] = {}
+    for candidate in candidates:
+        source = snapshot_sources.get(candidate.source_path)
+        if source is None or source.sha256 != candidate.source_sha256:
+            return _ranked_defer(
+                task, candidate_set_sha256, approved_request_sha256, required_ids,
+                "candidate_source_identity_mismatch",
+            )
+        selected_sources[source.path] = source
+    subset = SourceSnapshotV4(tuple(selected_sources[path] for path in sorted(selected_sources)))
+    try:
+        source_bytes = _read_verified_source_bytes(subset, reader)
+    except (KeyError, OSError, TypeError, ValueError):
+        return _ranked_defer(
+            task, candidate_set_sha256, approved_request_sha256, required_ids,
+            "candidate_source_unavailable",
+        )
+
+    spans: dict[str, dict[str, object]] = {}
+    for candidate in candidates:
+        raw = source_bytes[candidate.source_path]
+        if candidate.byte_end > len(raw):
+            return _ranked_defer(
+                task, candidate_set_sha256, approved_request_sha256, required_ids,
+                "candidate_range_invalid",
+            )
+        excerpt = raw[candidate.byte_start:candidate.byte_end]
+        try:
+            content = excerpt.decode("utf-8")
+        except UnicodeDecodeError:
+            return _ranked_defer(
+                task, candidate_set_sha256, approved_request_sha256, required_ids,
+                "candidate_excerpt_not_utf8",
+            )
+        if content.encode("utf-8") != excerpt:
+            return _ranked_defer(
+                task, candidate_set_sha256, approved_request_sha256, required_ids,
+                "candidate_excerpt_not_utf8",
+            )
+        spans[candidate.candidate_id] = {
+            "byte_end": candidate.byte_end,
+            "byte_start": candidate.byte_start,
+            "candidate_id": candidate.candidate_id,
+            "content": content,
+            "source_path": candidate.source_path,
+            "source_sha256": candidate.source_sha256,
+        }
+
+    source_set_sha256 = jev_sha256(jev_canonical([
+        {"path": path, "sha256": selected_sources[path].sha256}
+        for path in sorted(selected_sources)
+    ]))
+    jev_order = _controlled_jev_order(
+        jev_observation,
+        baseline_order,
+        required_ids,
+        candidate_set_sha256,
+        query_sha256,
+        source_set_sha256,
+        approved_request_sha256,
+    )
+    effective_order = jev_order or baseline_order
+    order_source = "reranked" if jev_order is not None else "baseline"
+    required_set = set(required_ids)
+    required_order = tuple(
+        candidate_id for candidate_id in effective_order if candidate_id in required_set
+    )
+    payload = _ranked_payload(
+        task,
+        snapshot,
+        candidate_set_sha256,
+        query_sha256,
+        approved_request_sha256,
+        order_source,
+        required_order,
+        required_ids,
+        (),
+        spans,
+    )
+    if _payload_byte_count(payload) > task.byte_budget:
+        return _ranked_required_fallback(
+            task,
+            snapshot,
+            reader,
+            candidates,
+            required_ids,
+            candidate_set_sha256,
+            approved_request_sha256,
+            fallback_graph,
+            fallback_source_paths,
+        )
+
+    accepted_optional: list[str] = []
+    selected = set(required_ids)
+    for candidate_id in effective_order:
+        if candidate_id in required_set:
+            continue
+        proposed = selected | {candidate_id}
+        selected_order = tuple(item for item in effective_order if item in proposed)
+        optional_order = tuple(item for item in selected_order if item not in required_set)
+        candidate_payload = _ranked_payload(
+            task,
+            snapshot,
+            candidate_set_sha256,
+            query_sha256,
+            approved_request_sha256,
+            order_source,
+            selected_order,
+            required_ids,
+            optional_order,
+            spans,
+        )
+        if _payload_byte_count(candidate_payload) <= task.byte_budget:
+            accepted_optional.append(candidate_id)
+            selected.add(candidate_id)
+            payload = candidate_payload
+
+    selected_order = tuple(item for item in effective_order if item in selected)
+    return RankedContextResult(
+        route="ranked",
+        reason="verified_ranked_context_selected",
+        order_source=order_source,
+        candidate_set_sha256=candidate_set_sha256,
+        approved_request_sha256=approved_request_sha256,
+        jev_source_revalidated=jev_order is not None,
+        source_revalidated=True,
+        projection=_ranked_projection(
+            payload,
+            selected_order,
+            required_ids,
+            tuple(accepted_optional),
+        ),
+    )
+
+
+def _valid_digest(value: object) -> bool:
+    return (
+        type(value) is str
+        and len(value) == _SHA256_LENGTH
+        and not any(character not in "0123456789abcdef" for character in value)
+    )
+
+
+def _controlled_jev_order(
+    observation: Any,
+    baseline_order: tuple[str, ...],
+    required_ids: tuple[str, ...],
+    candidate_set_sha256: str,
+    query_sha256: str,
+    source_set_sha256: str,
+    approved_request_sha256: str,
+) -> tuple[str, ...] | None:
+    if type(observation) is not dict:
+        return None
+    if (
+        observation.get("schema_version") != "velgraphing-jev-observation-v1"
+        or observation.get("status") != "reranked"
+        or observation.get("mode") != "rerank"
+        or observation.get("authority_bearing") is not False
+        or observation.get("sufficient") is not False
+        or observation.get("source_revalidated") is not True
+        or observation.get("baseline_order") != list(baseline_order)
+        or observation.get("required_ids") != list(required_ids)
+        or observation.get("candidate_set_sha256") != candidate_set_sha256
+        or observation.get("query_sha256") != query_sha256
+        or observation.get("source_set_sha256") != source_set_sha256
+        or observation.get("request_sha256") != approved_request_sha256
+    ):
+        return None
+    order = observation.get("order")
+    if (
+        type(order) is not list
+        or any(type(candidate_id) is not str for candidate_id in order)
+        or len(order) != len(baseline_order)
+        or len(set(order)) != len(order)
+        or set(order) != set(baseline_order)
+    ):
+        return None
+    required = set(required_ids)
+    if any(
+        candidate_id in required and order[index] != candidate_id
+        for index, candidate_id in enumerate(baseline_order)
+    ):
+        return None
+    return tuple(order)
+
+
+def _ranked_payload(
+    task: TaskSpec,
+    snapshot: SourceSnapshotV4,
+    candidate_set_sha256: str,
+    query_sha256: str,
+    approved_request_sha256: str,
+    order_source: str,
+    selected_ids: tuple[str, ...],
+    required_ids: tuple[str, ...],
+    optional_ids: tuple[str, ...],
+    spans: dict[str, dict[str, object]],
+) -> dict[str, object]:
+    return {
+        "approved_request_sha256": approved_request_sha256,
+        "candidate_set_sha256": candidate_set_sha256,
+        "fail_closed": False,
+        "included_optional_candidate_ids": list(optional_ids),
+        "order_source": order_source,
+        "query_sha256": query_sha256,
+        "reason": "verified_ranked_context_selected",
+        "required_candidate_ids": list(required_ids),
+        "schema_version": "graph-ranked-context-v1",
+        "selected_candidate_ids": list(selected_ids),
+        "source_snapshot_sha256": snapshot.snapshot_sha256,
+        "spans": [spans[candidate_id] for candidate_id in selected_ids],
+        "task_id": task.task_id,
+    }
+
+
+def _ranked_projection(
+    payload: dict[str, object],
+    selected_ids: tuple[str, ...],
+    required_ids: tuple[str, ...],
+    optional_ids: tuple[str, ...],
+) -> RankedContextProjection:
+    content = _canonical_json(payload)
+    spans = payload.get("spans", [])
+    excerpt_bytes = sum(
+        span["byte_end"] - span["byte_start"] for span in spans  # type: ignore[index,operator]
+    )
+    return RankedContextProjection(
+        content=content,
+        serialized_byte_count=len(content.encode("utf-8")),
+        excerpt_byte_count=excerpt_bytes,
+        selected_candidate_ids=selected_ids,
+        required_candidate_ids=required_ids,
+        included_optional_candidate_ids=optional_ids,
+        fail_closed=bool(payload["fail_closed"]),
+        reason=str(payload["reason"]),
+    )
+
+
+def _ranked_defer(
+    task: TaskSpec,
+    candidate_set_sha256: str,
+    approved_request_sha256: str,
+    required_ids: tuple[str, ...],
+    reason: str,
+    *,
+    source_revalidated: bool = False,
+) -> RankedContextResult:
+    payload = {
+        "fail_closed": True,
+        "reason": reason,
+        "schema_version": "graph-ranked-context-v1",
+        "spans": [],
+    }
+    content = _canonical_json(payload)
+    if len(content.encode("utf-8")) > task.byte_budget:
+        content = ""
+    projection = RankedContextProjection(
+        content=content,
+        serialized_byte_count=len(content.encode("utf-8")),
+        excerpt_byte_count=0,
+        selected_candidate_ids=(),
+        required_candidate_ids=required_ids,
+        included_optional_candidate_ids=(),
+        fail_closed=True,
+        reason=reason,
+    )
+    return RankedContextResult(
+        route="defer",
+        reason=reason,
+        order_source="baseline",
+        candidate_set_sha256=candidate_set_sha256,
+        approved_request_sha256=approved_request_sha256,
+        jev_source_revalidated=False,
+        source_revalidated=source_revalidated,
+        projection=projection,
+    )
+
+
+def _ranked_required_fallback(
+    task: TaskSpec,
+    snapshot: SourceSnapshotV4,
+    reader: SourceReaderV4,
+    candidates: tuple[RankedContextCandidate, ...],
+    required_ids: tuple[str, ...],
+    candidate_set_sha256: str,
+    approved_request_sha256: str,
+    fallback_graph: Graph | None,
+    fallback_source_paths: tuple[str, ...],
+) -> RankedContextResult:
+    required_paths = tuple(sorted({
+        candidate.source_path for candidate in candidates if candidate.required
+    }))
+    if (
+        fallback_graph is None
+        or not required_paths
+        or not _valid_required_source_paths(fallback_source_paths)
+        or not set(required_paths).issubset(fallback_source_paths)
+    ):
+        return _ranked_defer(
+            task, candidate_set_sha256, approved_request_sha256, required_ids,
+            "required_context_exceeds_byte_budget", source_revalidated=True,
+        )
+    direct = assist(
+        fallback_graph,
+        task,
+        snapshot,
+        reader,
+        required_source_paths=required_paths,
+        fallback_source_paths=fallback_source_paths,
+        required_escalation=True,
+    )
+    if direct.route != "direct" or direct.projection.fail_closed:
+        return _ranked_defer(
+            task, candidate_set_sha256, approved_request_sha256, required_ids,
+            "required_context_fallback_unavailable", source_revalidated=True,
+        )
+    payload = json.loads(direct.projection.content)
+    excerpt_bytes = sum(document["byte_count"] for document in payload["documents"])
+    projection = RankedContextProjection(
+        content=direct.projection.content,
+        serialized_byte_count=direct.projection.byte_count,
+        excerpt_byte_count=excerpt_bytes,
+        selected_candidate_ids=(),
+        required_candidate_ids=required_ids,
+        included_optional_candidate_ids=(),
+        fail_closed=False,
+        reason=direct.projection.reason,
+    )
+    return RankedContextResult(
+        route="direct",
+        reason="required_context_direct_fallback",
+        order_source="direct",
+        candidate_set_sha256=candidate_set_sha256,
+        approved_request_sha256=approved_request_sha256,
+        jev_source_revalidated=False,
+        source_revalidated=True,
+        projection=projection,
+    )
 
 
 def assist(
