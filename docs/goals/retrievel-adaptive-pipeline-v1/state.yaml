@@ -1,10 +1,10 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_luna_successor_offline_frozen_no_execution
+proof_boundary: t030_luna_successor_blind_review_repaired_no_execution
 milestones_complete: 2
 milestones_total: 5
 current_milestone: T030
-current_gate: parent_and_blind_rubric_review
+current_gate: parent_exact_candidate_audit
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
 candidate_identity:
   repair_parent_commit: 3d4a979eae1db6a3d682caec1249c5e67d7bfbe4
@@ -12,9 +12,10 @@ candidate_identity:
   recovery_commit: afaf40ec8b444e5f7ce3a71b29eb2c0d863c69fc
   private_v2_seal_commit: 0b10598830496ab13addb54f77fc978490206868
   luna_successor_implementation_commit: 717f378103f692586647ded6d45fe7c699ba77d5
-  final_luna_successor: direct_child_with_subject_chore_benchmark_freeze_luna_successor
+  luna_successor_rubric_repair_commit: a14e1de9cdc93047b4ace523b594cd9f468d0c42
+  final_luna_successor: direct_child_with_subject_chore_benchmark_refreeze_luna_successor
   final_sha_record: parent_handoff_and_git_history
-exact_blocker: parent_and_blind_rubric_review_pending
+exact_blocker: parent_exact_candidate_audit_pending
 next_milestone: T030
 provider:
   name: typesafe_jev
@@ -40,9 +41,9 @@ provider:
   last_private_result_sha256: b40d84af3b05d43adcb7bf70130762e8e644f87a1c401cb1bc0b633bbbd11a37
   last_private_result_seal_sha256: 313038939aab0fe2882335d97520a48892e8cbcff166fbcebf3ec47656ad63c8
   last_failure_class: frozen_acceptance_not_passed
-  successor_candidate_sha256: a3b39fea1d189d92e1dd1751e16f64642147383310fa23c41bb8c69449f4ec30
-  successor_preview_sha256: c1c77f0eeb155fdc8ebfde0a407f8f63658313ee36722908660fef1512457d7a
-  successor_run_root: .velgraphing-local/retrievel-t030-luna-successor-v1
+  successor_candidate_sha256: 9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61
+  successor_preview_sha256: 8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9
+  successor_run_root: .velgraphing-local/retrievel-t030-luna-successor-r2
 tasks:
   T010: complete
   T020: complete
@@ -59,6 +60,6 @@ independent_audit:
   npm_test_passed: 513
   npm_test_expected_skipped: 1
 successor_review:
-  parent: pending
-  blind_rubric: pending
+  parent: pending_exact_candidate_audit
+  blind_rubric: repaired
 updated_at: 2026-09-19

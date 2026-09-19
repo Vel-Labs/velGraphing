@@ -132,7 +132,9 @@ class LunaSuccessorTests(unittest.TestCase):
         plan = json.loads(mod.PLAN_PATH.read_text(encoding="utf-8"))
         self.assertFalse(plan["live_authorized"])
         self.assertEqual(plan["provider_calls_executed"], 0)
-        self.assertEqual(plan["status"], "offline_frozen_parent_and_blind_review_pending")
+        self.assertEqual(
+            plan["status"], "offline_frozen_parent_exact_candidate_audit_pending"
+        )
         self.assertNotIn("excerpt", json.dumps(plan))
         self.assertEqual(plan["models"]["answer"], "gpt-5.6-luna")
         self.assertEqual(plan["models"]["grader"], "gpt-5.6-luna")

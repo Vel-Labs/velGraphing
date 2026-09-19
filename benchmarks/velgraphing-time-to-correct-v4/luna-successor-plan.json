@@ -1,24 +1,24 @@
 {
   "schema_version": "velgraphing-v4-luna-successor-plan-v1",
   "study_id": "velgraphing-v4-luna-four-task-successor-v1",
-  "status": "offline_frozen_parent_and_blind_review_pending",
+  "status": "offline_frozen_parent_exact_candidate_audit_pending",
   "candidate_artifact": {
-    "path": ".inputs/t030-luna-successor-ranked-candidates-717f378.json",
-    "sha256": "a3b39fea1d189d92e1dd1751e16f64642147383310fa23c41bb8c69449f4ec30",
-    "selector_commit": "717f378103f692586647ded6d45fe7c699ba77d5"
+    "path": ".inputs/t030-luna-successor-ranked-candidates-a14e1de.json",
+    "sha256": "9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61",
+    "selector_commit": "a14e1de9cdc93047b4ace523b594cd9f468d0c42"
   },
   "preview_artifact": {
-    "path": ".inputs/t030-luna-successor-jev-preview-717f378.json",
-    "sha256": "c1c77f0eeb155fdc8ebfde0a407f8f63658313ee36722908660fef1512457d7a",
-    "adapter_commit": "717f378103f692586647ded6d45fe7c699ba77d5"
+    "path": ".inputs/t030-luna-successor-jev-preview-a14e1de.json",
+    "sha256": "8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9",
+    "adapter_commit": "a14e1de9cdc93047b4ace523b594cd9f468d0c42"
   },
   "question_registry": {
     "path": "luna-successor-questions.json",
-    "sha256": "3524233a83084a4aacc475eb8678ebb735f6de45fc55ed9795b557302bf702ef"
+    "sha256": "61bae17c65b3c6bae59563dabe9d59dc1b0fa801dd44fe1034a34e21c368d4af"
   },
   "rubric_manifest": {
     "path": "luna-successor-rubrics.json",
-    "sha256": "9cd4e4c191f2fb1932103f11a544e14f5bdabf83c8271a88bc49f4bcd1a43299",
+    "sha256": "e1e9665d7136a260ee63f8db46bb833675f396777f9c2dd1c1fff4b50d8b6094",
     "governance_rule": "Every required fact maps to an explicit prompt ask. Incidental facts are diagnostic only."
   },
   "source_snapshots": {
@@ -67,10 +67,10 @@
     {"trial_id":"D-L-01","task_id":"L-01","arm":"D","route":"typed_graph","pool_sha256":"66359cdcb5680f6f9c4294599ea0b7dc2016a367be98d733a3a42ace5ce830c8","request_sha256":"c5f0cd3e8ca288cf5dd46b357a712af40d64e4ec89235ee8b6553aa08c29e301","jev_call_could_affect_selection":true,"call_disposition":"planned"},
     {"trial_id":"B-L-01","task_id":"L-01","arm":"B","route":"direct","pool_sha256":"66359cdcb5680f6f9c4294599ea0b7dc2016a367be98d733a3a42ace5ce830c8","request_sha256":"c5f0cd3e8ca288cf5dd46b357a712af40d64e4ec89235ee8b6553aa08c29e301","jev_call_could_affect_selection":true,"call_disposition":"planned"},
     {"trial_id":"A-L-01","task_id":"L-01","arm":"A","route":"direct","pool_sha256":"66359cdcb5680f6f9c4294599ea0b7dc2016a367be98d733a3a42ace5ce830c8","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"D-M-02","task_id":"M-02","arm":"D","route":"typed_graph","pool_sha256":"06c83cc1167d56860b715407f1e8ae58189e75fae1815741ce60c39e88d4641b","request_sha256":"59cb890e7effd95d8c1da0e057afcd7e1368f2926d3a68243ae8202fba8afbf3","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"A-M-02","task_id":"M-02","arm":"A","route":"direct","pool_sha256":"06c83cc1167d56860b715407f1e8ae58189e75fae1815741ce60c39e88d4641b","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"C-M-02","task_id":"M-02","arm":"C","route":"typed_graph","pool_sha256":"06c83cc1167d56860b715407f1e8ae58189e75fae1815741ce60c39e88d4641b","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"B-M-02","task_id":"M-02","arm":"B","route":"direct","pool_sha256":"06c83cc1167d56860b715407f1e8ae58189e75fae1815741ce60c39e88d4641b","request_sha256":"59cb890e7effd95d8c1da0e057afcd7e1368f2926d3a68243ae8202fba8afbf3","jev_call_could_affect_selection":true,"call_disposition":"planned"}
+    {"trial_id":"D-M-02","task_id":"M-02","arm":"D","route":"typed_graph","pool_sha256":"033efd9549308eb02ccc3cdd64172239e3779019b6abcae5be3ff57428b00521","request_sha256":"87761a05e2f750763a81790531224f7930f9ad62905288e29eb45f30bc737f15","jev_call_could_affect_selection":true,"call_disposition":"planned"},
+    {"trial_id":"A-M-02","task_id":"M-02","arm":"A","route":"direct","pool_sha256":"033efd9549308eb02ccc3cdd64172239e3779019b6abcae5be3ff57428b00521","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"C-M-02","task_id":"M-02","arm":"C","route":"typed_graph","pool_sha256":"033efd9549308eb02ccc3cdd64172239e3779019b6abcae5be3ff57428b00521","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"B-M-02","task_id":"M-02","arm":"B","route":"direct","pool_sha256":"033efd9549308eb02ccc3cdd64172239e3779019b6abcae5be3ff57428b00521","request_sha256":"87761a05e2f750763a81790531224f7930f9ad62905288e29eb45f30bc737f15","jev_call_could_affect_selection":true,"call_disposition":"planned"}
   ],
   "stop_rules": [
     "stop_before_provider_if_live_authorized_is_not_true",
@@ -95,7 +95,7 @@
     "aggregate_authorization_envelope_usd": 0.077070336,
     "authorization_remaining_usd": 0.922929664
   },
-  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-v1",
+  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r2",
   "live_authorized": false,
   "provider_calls_executed": 0
 }

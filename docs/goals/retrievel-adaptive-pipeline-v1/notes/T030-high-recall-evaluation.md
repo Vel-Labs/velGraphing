@@ -272,6 +272,56 @@ not remove or modify the retained private artifacts.
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
 
+## Luna Successor Blind-Review Repair
+
+The blind review returned `REVISE`. This repair resolves each finding without
+running the study. S-01 now asks for a source citation and requires
+`sorts/quick_sort.py`. It states that `quick_sort` removes a randomly selected
+pivot from the input list and that the final mutated list contents are not
+deterministic. L-01 now requires citations to both named chapters and separates
+case-study assumptions from scalability guidance. M-02 now asks for one
+process-documentation choice and one training choice, requires both named
+sources, and scores the documented reference slides or LFC193/LFC194 courses.
+D-01 is unchanged.
+
+The repaired freeze binds:
+
+- rubric repair commit
+  `a14e1de9cdc93047b4ace523b594cd9f468d0c42`;
+- ignored candidate SHA-256
+  `9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61`;
+- ignored preview SHA-256
+  `8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9`;
+- canonical question registry SHA-256
+  `61bae17c65b3c6bae59563dabe9d59dc1b0fa801dd44fe1034a34e21c368d4af`;
+- canonical rubric manifest SHA-256
+  `e1e9665d7136a260ee63f8db46bb833675f396777f9c2dd1c1fff4b50d8b6094`;
+- source-free plan SHA-256
+  `f0a52844278b3746f37a8c96c65766ca45504f8ed71e0d83af94259a1728ee09`;
+- r2 offline preflight receipt SHA-256
+  `7e9c94381f85f23f7081a058f0c130fb77f431a05cfa5afb8fa05b43f010a815`.
+
+The final offline preflight regenerated all source-bound inputs and passed. The
+M-02 pool and request hashes changed. The other task bindings remained stable.
+All B/D selections can still change membership, so eight Jev calls remain
+planned. The focused controller checks passed `9` tests. The mapped benchmark,
+host, calibration, Jev, and selector suite passed `186` tests. No provider,
+model, credential, network, push, or pull-request action ran.
+
+T030 remains active. The blind-review findings are repaired. Parent exact
+candidate audit is the current gate.
+
+### Blind-Review Repair Files Changed
+
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-questions.json`
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-rubrics.json`
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json`
+- `scripts/benchmarks/time_to_correct_retrieval_eval_v4.py`
+- `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
+- `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
+
 ## Files Changed
 
 - `packages/core/selection.py`

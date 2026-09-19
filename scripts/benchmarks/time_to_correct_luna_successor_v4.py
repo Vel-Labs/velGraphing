@@ -52,7 +52,7 @@ PROVIDER_TIMEOUT_SECONDS = 10
 ANSWER_TIMEOUT_SECONDS = 180
 GRADER_TIMEOUT_SECONDS = 120
 TRIAL_WALL_LIMIT_SECONDS = 600
-RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-v1"
+RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r2"
 QUESTIONS_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/luna-successor-questions.json"
 RUBRICS_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/luna-successor-rubrics.json"
 PLAN_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json"
@@ -212,21 +212,21 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
         }
         or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v1"
         or plan["study_id"] != STUDY_ID
-        or plan["status"] != "offline_frozen_parent_and_blind_review_pending"
+        or plan["status"] != "offline_frozen_parent_exact_candidate_audit_pending"
         or plan["run_root"] != RUN_ROOT
         or plan["live_authorized"] is not expected_live_authorized
         or plan["provider_calls_executed"] != 0
         or plan["dispatch_order"] != list(DISPATCH)
         or plan["source_snapshots"] != SNAPSHOTS
         or candidate != {
-            "path": ".inputs/t030-luna-successor-ranked-candidates-717f378.json",
-            "sha256": "a3b39fea1d189d92e1dd1751e16f64642147383310fa23c41bb8c69449f4ec30",
-            "selector_commit": "717f378103f692586647ded6d45fe7c699ba77d5",
+            "path": ".inputs/t030-luna-successor-ranked-candidates-a14e1de.json",
+            "sha256": "9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61",
+            "selector_commit": "a14e1de9cdc93047b4ace523b594cd9f468d0c42",
         }
         or preview_artifact != {
-            "path": ".inputs/t030-luna-successor-jev-preview-717f378.json",
-            "sha256": "c1c77f0eeb155fdc8ebfde0a407f8f63658313ee36722908660fef1512457d7a",
-            "adapter_commit": "717f378103f692586647ded6d45fe7c699ba77d5",
+            "path": ".inputs/t030-luna-successor-jev-preview-a14e1de.json",
+            "sha256": "8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9",
+            "adapter_commit": "a14e1de9cdc93047b4ace523b594cd9f468d0c42",
         }
         or questions != {
             "path": "luna-successor-questions.json",
@@ -234,7 +234,7 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
         }
         or rubric != {
             "path": "luna-successor-rubrics.json",
-            "sha256": "9cd4e4c191f2fb1932103f11a544e14f5bdabf83c8271a88bc49f4bcd1a43299",
+            "sha256": "e1e9665d7136a260ee63f8db46bb833675f396777f9c2dd1c1fff4b50d8b6094",
             "governance_rule": GOVERNANCE_RULE,
         }
         or plan["stop_rules"] != STOP_RULES
