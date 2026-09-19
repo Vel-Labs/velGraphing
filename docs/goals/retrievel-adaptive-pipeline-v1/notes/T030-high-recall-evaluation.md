@@ -287,3 +287,85 @@ not remove or modify the retained private artifacts.
 - `tests/benchmarks/test_time_to_correct_jev_v4.py`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+
+## Luna Four-Task Successor Freeze
+
+T030 now has a new study identity:
+`velgraphing-v4-luna-four-task-successor-v1`. It does not rescore or replace any
+prior question, rubric, result, or model comparison. The four tasks are S-01
+exact lookup, D-01 relational retrieval, L-01 synthesis, and M-02 heterogeneous
+documents. Each task has Direct/off, Direct/Jev, Graph/off, and Graph/Jev arms.
+The answer and independent grader identities are both `gpt-5.6-luna` at medium
+reasoning. Absolute model performance is not comparable with the prior Sol
+study.
+
+The successor rubric manifest enforces one benchmark-only rule: every required
+fact maps to an explicit prompt ask. Incidental facts remain diagnostic. D-01
+requires the imported `quick_sort` identity, accurate ascending pivot and
+partition behavior, recursive recombination, and duplicate preservation. Its
+base case is diagnostic. L-01 no longer scores batch-allocated IDs or buffered
+Kafka as required. S-01 and M-02 passed the same explicit-ask mapping check.
+
+The source-free plan is
+`benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json`, SHA-256
+`15b73de20c36f54e4b82d713a9310204b0ce22354128082e59bff404dcbfed06`.
+It binds:
+
+- selector and preview adapter commit
+  `717f378103f692586647ded6d45fe7c699ba77d5`;
+- ignored candidate SHA-256
+  `a3b39fea1d189d92e1dd1751e16f64642147383310fa23c41bb8c69449f4ec30`;
+- ignored 16-arm preview SHA-256
+  `c1c77f0eeb155fdc8ebfde0a407f8f63658313ee36722908660fef1512457d7a`;
+- question registry SHA-256
+  `3524233a83084a4aacc475eb8678ebb735f6de45fc55ed9795b557302bf702ef`;
+- rubric manifest SHA-256
+  `9cd4e4c191f2fb1932103f11a544e14f5bdabf83c8271a88bc49f4bcd1a43299`;
+- all three source snapshot hashes, the balanced 16-trial dispatch order, exact
+  per-arm pool and request hashes, limits, and stop rules.
+
+Offline regeneration reproduced every frozen source-bound candidate, control,
+snapshot, and pair identity. Retrieval timing is measured output and is not a
+candidate identity field. The offline preview contains all 16 arms. Every B/D
+request can change final answer membership, so all eight B/D calls remain
+planned. A/C stay treatment-off. No call was eligible for the no-effect skip.
+The goal authorization is now 14 calls: six complete and eight planned. The
+aggregate worst-case envelope is USD `0.077070336`, leaving USD `0.922929664`
+under the existing USD 1 cap. These are authorization bounds, not observed
+cost.
+
+The fresh ignored run root is
+`$CHECKOUT/.velgraphing-local/retrievel-t030-luna-successor-v1`. Its offline
+preflight receipt SHA-256 is
+`845da0d220df9ac78b6b3f31be5e89226b2f37a66ea7d97ec0d1f758c1088d18`.
+The controller can execute all 16 trials through the existing answer and grader
+handoff boundaries and records the existing TTC phases. It rejects answer or
+grader model substitutions when host usage identifies the model. The tracked
+plan remains `live_authorized=false`; T030 remains active at Parent and blind
+rubric review.
+
+The final offline preflight passed after using the retained v4 materialized
+public-corpus lane. It regenerated 20 route/task candidate records, validated
+16 arm previews, verified paired pools, revalidated source snapshots, enforced
+required-evidence preservation, and recorded eight planned Jev calls with zero
+retries. The focused controller and host checks passed `17` tests. The mapped
+host, generator, preview, legacy controller, calibration, Jev, and selector
+consumers passed `185` tests. The full repository suite was not run because the
+change is confined to benchmark registration and execution seams; the mapped
+suite exercises each changed shared caller. No provider, Luna, answer, grader,
+credential, network, push, or pull-request action ran.
+
+### Luna Successor Files
+
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-questions.json`
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-rubrics.json`
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json`
+- `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
+- `scripts/benchmarks/time_to_correct_ranked_candidates_v4.py`
+- `scripts/benchmarks/time_to_correct_retrieval_eval_v4.py`
+- `scripts/benchmarks/time_to_correct_jev_v4.py`
+- `scripts/benchmarks/time_to_correct_host.py`
+- `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
+- `tests/benchmarks/test_time_to_correct_host.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`

@@ -64,6 +64,29 @@ SNAPSHOTS = {
 GOVERNANCE_RULE = (
     "Every required fact maps to an explicit prompt ask. Incidental facts are diagnostic only."
 )
+STOP_RULES = [
+    "stop_before_provider_if_live_authorized_is_not_true",
+    "stop_on_candidate_question_rubric_snapshot_or_preview_hash_mismatch",
+    "skip_jev_when_offline_preflight_cannot_change_final_membership",
+    "stop_on_required_evidence_loss_or_source_revalidation_failure",
+    "stop_on_provider_retry_or_call_cap_exhaustion",
+    "stop_on_answer_or_grader_model_mismatch",
+    "stop_on_lane_state_change",
+    "stop_after_any_systemic_trial_failure",
+]
+CALL_AUTHORIZATION = {
+    "maximum_cost_usd": 1.0,
+    "completed_prior_calls": 6,
+    "planned_calls": 8,
+    "aggregate_authorized_calls": 14,
+    "price_usd_per_million_input_tokens": 0.042,
+    "request_bytes_per_call_max": REQUEST_BYTES,
+    "per_call_worst_case_usd": 0.005505024,
+    "prior_authorization_envelope_usd": 0.033030144,
+    "incremental_authorization_envelope_usd": 0.044040192,
+    "aggregate_authorization_envelope_usd": 0.077070336,
+    "authorization_remaining_usd": 0.922929664,
+}
 
 
 class SuccessorError(MeasurementError):
@@ -81,7 +104,7 @@ def _read_json(path: Path, reason: str) -> dict[str, Any]:
 
 
 def _semantic_sha256(value: object) -> str:
-    return digest(canonical(value))
+    return digest(generator._canonical(value))
 
 
 def load_questions(path: Path = QUESTIONS_PATH) -> tuple[dict[str, dict[str, str]], str]:
@@ -174,6 +197,11 @@ def grader_rubric(rubric: Mapping[str, Any]) -> dict[str, list[str]]:
 
 def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False) -> dict[str, Any]:
     plan = _read_json(path, "successor_plan_invalid")
+    candidate = plan.get("candidate_artifact")
+    preview_artifact = plan.get("preview_artifact")
+    questions = plan.get("question_registry")
+    rubric = plan.get("rubric_manifest")
+    call_authorization = plan.get("call_authorization")
     if (
         set(plan) != {
             "schema_version", "study_id", "status", "candidate_artifact",
@@ -190,6 +218,27 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
         or plan["provider_calls_executed"] != 0
         or plan["dispatch_order"] != list(DISPATCH)
         or plan["source_snapshots"] != SNAPSHOTS
+        or candidate != {
+            "path": ".inputs/t030-luna-successor-ranked-candidates-717f378.json",
+            "sha256": "a3b39fea1d189d92e1dd1751e16f64642147383310fa23c41bb8c69449f4ec30",
+            "selector_commit": "717f378103f692586647ded6d45fe7c699ba77d5",
+        }
+        or preview_artifact != {
+            "path": ".inputs/t030-luna-successor-jev-preview-717f378.json",
+            "sha256": "c1c77f0eeb155fdc8ebfde0a407f8f63658313ee36722908660fef1512457d7a",
+            "adapter_commit": "717f378103f692586647ded6d45fe7c699ba77d5",
+        }
+        or questions != {
+            "path": "luna-successor-questions.json",
+            "sha256": evaluator.LUNA_SUCCESSOR_QUESTION_REGISTRY_SHA256,
+        }
+        or rubric != {
+            "path": "luna-successor-rubrics.json",
+            "sha256": "9cd4e4c191f2fb1932103f11a544e14f5bdabf83c8271a88bc49f4bcd1a43299",
+            "governance_rule": GOVERNANCE_RULE,
+        }
+        or plan["stop_rules"] != STOP_RULES
+        or call_authorization != CALL_AUTHORIZATION
         or plan["models"] != {
             "answer": ANSWER_MODEL,
             "grader": GRADER_MODEL,
@@ -205,7 +254,7 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
             "request_bytes": REQUEST_BYTES,
             "answer_calls": 16,
             "grader_calls": 16,
-            "maximum_jev_calls": plan["call_authorization"].get("planned_calls"),
+            "maximum_jev_calls": CALL_AUTHORIZATION["planned_calls"],
             "retries": 0,
             "provider_timeout_seconds": PROVIDER_TIMEOUT_SECONDS,
             "answer_timeout_seconds": ANSWER_TIMEOUT_SECONDS,
@@ -341,10 +390,6 @@ def _selection(
     return result
 
 
-def _artifact_bytes(value: object) -> bytes:
-    return generator._canonical(value)
-
-
 def preflight(
     candidates_path: Path,
     questions_path: Path,
@@ -367,7 +412,22 @@ def preflight(
         questions_path, manifests_root, lanes_root,
         artifact["selector_commit"], study_id=STUDY_ID,
     )
-    if candidate_raw != _artifact_bytes(regenerated):
+    frozen_runs = {
+        (run["task_id"], run["route"]): _frozen_fields(run)
+        for run in artifact["runs"]
+    }
+    regenerated_runs = {
+        (run["task_id"], run["route"]): _frozen_fields(run)
+        for run in regenerated["runs"]
+    }
+    if (
+        regenerated["schema_version"] != artifact["schema_version"]
+        or regenerated["study_id"] != artifact["study_id"]
+        or regenerated["selector_commit"] != artifact["selector_commit"]
+        or regenerated["question_registry_sha256"]
+        != artifact["question_registry_sha256"]
+        or regenerated_runs != frozen_runs
+    ):
         raise SuccessorError("successor_candidate_regeneration_mismatch")
     preview_value = json.loads(preview_raw)
     preview.validate_preview(
@@ -582,7 +642,7 @@ def run_trial(
         current.coverage(source_operations=True)
         return payload
 
-    return run_process_trial(
+    result = run_process_trial(
         trial, prepare, answer_argv=answer_argv, grader_argv=grader_argv,
         cwd=ROOT, answer_timeout_s=ANSWER_TIMEOUT_SECONDS,
         grader_timeout_s=GRADER_TIMEOUT_SECONDS,
@@ -590,6 +650,11 @@ def run_trial(
         answer_response_contract=ANSWER_RESPONSE_CONTRACT,
         grader_response_contract=GRADER_RESPONSE_CONTRACT,
     )
+    if dependency.lane_state_sha256(
+        lane_root, SNAPSHOTS[question["corpus"]]
+    ) != restricted_state:
+        raise SuccessorError("successor_lane_changed_during_trial")
+    return result
 
 
 def _argv_map(path: Path, root: Path) -> dict[str, list[str]]:
