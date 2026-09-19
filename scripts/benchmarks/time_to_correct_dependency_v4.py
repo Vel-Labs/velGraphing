@@ -24,6 +24,9 @@ from time_to_correct_calibration import LiveJevBudget
 from time_to_correct_handoff import (
     HandoffError,
     atomic_write,
+    atomic_write_at,
+    open_contained_directory,
+    read_canonical_at,
     run_root as validate_run_root,
 )
 from time_to_correct_host import (
@@ -75,6 +78,11 @@ SELECTOR_COMMIT = "79adf45e8ff245c7e90701ea172d8de269228f83"
 SNAPSHOT_SHA256 = "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
 RESTRICTED_STATE_SHA256 = "ea86c846cf76908cca63090dccb6db497e4bc98ab5c20cd208b675109462f39d"
 PRIVATE_RESULT_SHA256 = "bd03bd9944c55c142b1fc00773f1253f79dd4442213c3ab2b31c098b94313286"
+REPAIRED_CANDIDATE_COMMIT = "dc0fbcd4397e997645de49d831a8c6608f2f3df2"
+PACKAGE_CANDIDATE_SHA256 = "48b65ed3ba9d83e63b724ce2afb395f2fbda156d29adb1b9a194bd9c6564d941"
+ANSWER_CONTRACT_SHA256 = "e3226c60087d52a8b51b5bfe8a722e16c294264685c749be5e706454c57d6ddb"
+GRADER_CONTRACT_SHA256 = "58b94d44ee16b7abd9afd234d5d57b3d96fd864798d414d65b725b9ef2c64ebb"
+SUCCESSOR_RUN_ROOT = ".velgraphing-local/retrievel-d01-confirmation-v1"
 PLAN_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/dependency-behavior-canary-plan.json"
 RUBRIC = {
     "required_facts": [
@@ -165,6 +173,96 @@ def _read_json(path: Path, reason: str) -> dict[str, Any]:
     return value
 
 
+def _validate_preserved_observation(
+    value: Mapping[str, Any],
+    prepared: Mapping[str, Any],
+    packet: Mapping[str, Any],
+) -> dict[str, Any]:
+    baseline = [row["id"] for row in packet["candidates"]]
+    required = [row["id"] for row in packet["candidates"] if row["required"]]
+    order = value.get("order") if type(value) is dict else None
+    scores = value.get("scores") if type(value) is dict else None
+    usage = value.get("usage") if type(value) is dict else None
+    if (
+        type(value) is not dict
+        or set(value) != {
+            "schema_version", "mode", "status", "reason", "execution",
+            "authority_bearing", "sufficient", "baseline_order", "order",
+            "suggested_order", "required_ids", "scores", "attempted_calls",
+            "usage", "replayed_usage", "resolved_model", "requested_model",
+            "source_revalidated", "elapsed_ms", "request_sha256",
+            "source_set_sha256", "request_bytes", "source_bytes_verified",
+            "candidate_set_sha256", "query_sha256", "rubric_version",
+        }
+        or value.get("schema_version") != "velgraphing-jev-observation-v1"
+        or value.get("mode") != "rerank"
+        or value.get("status") != "reranked"
+        or value.get("reason") != "advisory_only"
+        or value.get("execution") not in {"live", "injected_transport"}
+        or value.get("authority_bearing") is not False
+        or value.get("sufficient") is not False
+        or value.get("source_revalidated") is not True
+        or value.get("attempted_calls") != 1
+        or value.get("replayed_usage") is not None
+        or value.get("requested_model") != MODEL
+        or value.get("resolved_model") != MODEL
+        or value.get("baseline_order") != baseline
+        or value.get("required_ids") != required
+        or value.get("suggested_order") != value.get("order")
+        or value.get("candidate_set_sha256") != prepared["candidate_set_sha256"]
+        or value.get("query_sha256") != prepared["query_sha256"]
+        or value.get("source_set_sha256") != prepared["source_set_sha256"]
+        or value.get("request_sha256") != prepared["request_sha256"]
+        or value.get("request_bytes") != prepared["request_bytes"]
+        or value.get("source_bytes_verified") != 2 * prepared["source_bytes_verified"]
+        or value.get("rubric_version") != jev.RUBRIC_VERSION
+        or type(order) is not list
+        or len(order) != len(baseline)
+        or len(set(order)) != len(order)
+        or set(order) != set(baseline)
+        or type(usage) is not dict
+        or set(usage) != {"input_tokens", "output_tokens"}
+        or any(type(usage[key]) is not int or usage[key] < 0 for key in usage)
+        or type(scores) is not list
+        or len(scores) != len(baseline)
+        or [row.get("id") for row in scores if type(row) is dict] != baseline
+        or any(
+            set(row) != {
+                "id", "score", "probabilities", "distribution_confidence",
+            }
+            for row in scores
+        )
+    ):
+        raise ControllerError("dependency_replay_observation_invalid")
+    return dict(value)
+
+
+def _persist_observation(ledger: LiveJevBudget, arm: str, value: Mapping[str, Any]) -> None:
+    directory = open_contained_directory(
+        ledger.root.parent, ("jev-observations",), create=True
+    )
+    try:
+        atomic_write_at(directory, f"{arm}.json", canonical(value))
+    finally:
+        os.close(directory)
+
+
+def _load_preserved_observations(root: Path) -> dict[str, dict[str, Any]]:
+    root = _validated_run_root(root)
+    directory = open_contained_directory(root, ("jev-observations",), create=False)
+    try:
+        if set(os.listdir(directory)) != {"B.json", "D.json"}:
+            raise ControllerError("dependency_replay_observations_incomplete")
+        return {
+            arm: read_canonical_at(directory, f"{arm}.json")[1]
+            for arm in sorted(JEV_ARMS)
+        }
+    except HandoffError:
+        raise ControllerError("dependency_replay_observations_invalid") from None
+    finally:
+        os.close(directory)
+
+
 def validate_plan(
     path: Path = PLAN_PATH,
     *,
@@ -175,7 +273,9 @@ def validate_plan(
     requests = plan.get("request_sha256")
     pools = plan.get("pool_sha256")
     if (
-        plan.get("study_id") != STUDY_ID
+        plan.get("schema_version")
+        != "velgraphing-v4-dependency-behavior-canary-plan-v3"
+        or plan.get("study_id") != STUDY_ID
         or plan.get("task_id") != TASK_ID
         or plan.get("candidate_artifact_sha256") != CANDIDATE_SHA256
         or plan.get("candidate_selector_commit") != SELECTOR_COMMIT
@@ -189,6 +289,19 @@ def validate_plan(
         or plan.get("grader_reasoning") != REASONING
         or plan.get("answer_rubric_sha256") != RUBRIC_SHA256
         or digest(canonical(RUBRIC)) != RUBRIC_SHA256
+        or plan.get("repaired_candidate_commit") != REPAIRED_CANDIDATE_COMMIT
+        or plan.get("package_candidate_sha256") != PACKAGE_CANDIDATE_SHA256
+        or plan.get("answer_response_contract_sha256") != ANSWER_CONTRACT_SHA256
+        or digest(canonical(ANSWER_RESPONSE_CONTRACT)) != ANSWER_CONTRACT_SHA256
+        or plan.get("grader_response_contract_sha256") != GRADER_CONTRACT_SHA256
+        or digest(canonical(GRADER_RESPONSE_CONTRACT)) != GRADER_CONTRACT_SHA256
+        or plan.get("successor_run_root") != SUCCESSOR_RUN_ROOT
+        or plan.get("maximum_cost_usd") != 1.0
+        or plan.get("aggregate_authorized_call_total") != 5
+        or plan.get("aggregate_completed_call_total") != 3
+        or plan.get("aggregate_authorization_envelope_usd") != 0.02752512
+        or plan.get("successor_incremental_authorization_usd") != 0.011010048
+        or plan.get("successor_jev_calls_authorized") != MAX_JEV_CALLS
         or type(limits) is not dict
         or limits.get("candidate_count") != 64
         or limits.get("candidate_aggregate_bytes") != 32_768
@@ -204,6 +317,7 @@ def validate_plan(
         or plan.get("private_result_sha256") != PRIVATE_RESULT_SHA256
         or plan.get("live_authorized") is not expected_live_authorized
         or plan.get("provider_calls_executed") != 2
+        or plan.get("successor_provider_calls_executed") != 0
     ):
         raise ControllerError("dependency_plan_mismatch")
     return plan
@@ -521,6 +635,7 @@ def run_arm(
     cwd: Path,
     ledger: LiveJevBudget,
     evaluate: Callable[..., Mapping[str, Any]] = jev.evaluate,
+    replay_observation: Mapping[str, Any] | None = None,
     live_authorized: bool = False,
     execution: str = "observed",
 ) -> dict[str, Any]:
@@ -547,6 +662,7 @@ def run_arm(
         packet = _packet(run, question)
         current.bind(candidate_set_sha256=digest(canonical(packet["candidates"])))
         observation = None
+        jev_execution = "off"
         if arm in JEV_ARMS:
             audit = lane.get("source_audit")
             if type(audit) is not SourceReadAudit:
@@ -557,41 +673,67 @@ def run_arm(
             if prepared["request_bytes"] > REQUEST_BYTES:
                 raise ControllerError("dependency_request_budget_exceeded")
             current.bind(request_sha256=prepared["request_sha256"])
-            receipt, _ = ledger.reserve(
-                current.identity["trial_id"], prepared["request_sha256"]
-            )
-            with current.phase("provider"):
-                with _observe_jev_reads(audit):
-                    observation = evaluate(
-                        packet,
-                        lane["lane"],
-                        mode="rerank",
-                        allow_network=True,
-                        approved_request_sha256=prepared["request_sha256"],
-                        model=MODEL,
-                        timeout_s=10,
+            if replay_observation is not None:
+                current.not_applicable("provider")
+                with current.phase("response_validation"):
+                    observation = _validate_preserved_observation(
+                        replay_observation, prepared, packet
                     )
-            ledger.complete(receipt, observation)
-            usage = observation.get("usage")
-            with current.phase("response_validation"):
-                if observation.get("attempted_calls") not in {0, 1}:
-                    raise ControllerError("dependency_retry_detected")
-            if observation.get("status") == "fallback":
-                with current.phase("fallback"):
-                    observation = None
-            else:
+                    with _observe_jev_reads(audit):
+                        refreshed = jev.prepare(packet, lane["lane"], MODEL)
+                    if refreshed["request_sha256"] != prepared["request_sha256"]:
+                        raise ControllerError("dependency_replay_source_changed")
                 current.not_applicable("fallback")
-            current.usage(
-                f"jev-{arm}",
-                "jev",
-                provenance="provider_reported" if usage is not None else "unavailable",
-                input_tokens=usage.get("input_tokens") if usage is not None else None,
-                output_tokens=usage.get("output_tokens") if usage is not None else None,
-                cached_input_tokens=None,
-                reasoning_output_tokens=None,
-                cost_usd=None,
-                model=MODEL,
-            )
+                jev_execution = "replay"
+            else:
+                receipt, _ = ledger.reserve(
+                    current.identity["trial_id"], prepared["request_sha256"]
+                )
+                with current.phase("provider"):
+                    with _observe_jev_reads(audit):
+                        observation = evaluate(
+                            packet,
+                            lane["lane"],
+                            mode="rerank",
+                            allow_network=True,
+                            approved_request_sha256=prepared["request_sha256"],
+                            model=MODEL,
+                            timeout_s=10,
+                        )
+                ledger.complete(receipt, observation)
+                usage = observation.get("usage")
+                with current.phase("response_validation"):
+                    if observation.get("attempted_calls") not in {0, 1}:
+                        raise ControllerError("dependency_retry_detected")
+                if observation.get("status") == "fallback":
+                    with current.phase("fallback"):
+                        observation = None
+                else:
+                    current.not_applicable("fallback")
+                    observation = _validate_preserved_observation(
+                        observation, prepared, packet
+                    )
+                    _persist_observation(ledger, arm, observation)
+                    jev_execution = "live"
+                current.usage(
+                    f"jev-{arm}",
+                    "jev",
+                    provenance=(
+                        "provider_reported" if usage is not None else "unavailable"
+                    ),
+                    input_tokens=(
+                        usage.get("input_tokens") if usage is not None else None
+                    ),
+                    output_tokens=(
+                        usage.get("output_tokens") if usage is not None else None
+                    ),
+                    cached_input_tokens=None,
+                    reasoning_output_tokens=None,
+                    cost_usd=None,
+                    model=MODEL,
+                )
+            if observation is not None:
+                current._attempt()["jev_observation"] = observation
         else:
             current.not_applicable(
                 "jev_preparation", "provider", "response_validation", "fallback",
@@ -606,6 +748,7 @@ def run_arm(
             "selected_candidate_ids": list(selected.projection.selected_candidate_ids),
             "required_candidate_ids": list(selected.projection.required_candidate_ids),
             "order_source": selected.order_source,
+            "jev_execution": jev_execution,
             "source_operation_count": len(current._attempt()["source_operations"]),
         }
         audit = lane.get("source_audit")
@@ -643,6 +786,7 @@ def run_four_arm(
     grader_argv: Mapping[str, list[str]],
     live_authorized: bool = False,
     evaluate: Callable[..., Mapping[str, Any]] = jev.evaluate,
+    jev_observations: Mapping[str, Mapping[str, Any]] | None = None,
     execution: str = "observed",
 ) -> dict[str, Any]:
     if execution == "observed":
@@ -661,6 +805,8 @@ def run_four_arm(
         raise ControllerError("dependency_live_not_authorized")
     if set(answer_argv) != set(ARMS) or set(grader_argv) != set(ARMS):
         raise ControllerError("dependency_lane_commands_mismatch")
+    if jev_observations is not None and set(jev_observations) != JEV_ARMS:
+        raise ControllerError("dependency_replay_observations_incomplete")
     artifact, questions = preview._load_inputs(
         candidates_path, CANDIDATE_SHA256, questions_path, STUDY_ID
     )
@@ -688,6 +834,9 @@ def run_four_arm(
             cwd=ROOT,
             ledger=ledger,
             evaluate=evaluate,
+            replay_observation=(
+                jev_observations.get(arm) if jev_observations is not None else None
+            ),
             live_authorized=live_authorized,
             execution=execution,
         ))
@@ -704,6 +853,9 @@ def run_four_arm(
         "controller_preflight": {
             "elapsed_ns": preflight_elapsed_ns,
             "ttc_allocation": "separate_not_in_arm_ttc",
+            "jev_execution": (
+                "replay" if jev_observations is not None else "live"
+            ),
         },
         "results": results,
     }
@@ -787,6 +939,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_parser.add_argument("--run-root", type=Path, required=True)
     run_parser.add_argument("--answer-argv-json", type=Path, required=True)
     run_parser.add_argument("--grader-argv-json", type=Path, required=True)
+    run_parser.add_argument("--replay-observations-root", type=Path)
     run_parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args(argv)
     try:
@@ -798,11 +951,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             arguments.preview.resolve(strict=True),
         )
         if arguments.command == "preflight":
-            result = preflight(*inputs)
+            result = preflight(*inputs, expected_live_authorized=True)
             print(canonical(result).decode("utf-8"))
             return 0
         validate_plan(expected_live_authorized=True)
         root = _validated_run_root(arguments.run_root)
+        replay_observations = None
+        if arguments.replay_observations_root is not None:
+            replay_root = arguments.replay_observations_root.resolve(strict=True)
+            if replay_root == root:
+                raise ControllerError("dependency_replay_root_not_fresh")
+            replay_observations = _load_preserved_observations(replay_root)
+        elif root != (ROOT / SUCCESSOR_RUN_ROOT).resolve():
+            raise ControllerError("dependency_run_root_plan_mismatch")
         output = arguments.output
         if (
             not output.is_absolute()
@@ -818,6 +979,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             answer_argv=_argv_map(arguments.answer_argv_json, root),
             grader_argv=_argv_map(arguments.grader_argv_json, root),
             live_authorized=True,
+            jev_observations=replay_observations,
         )
         atomic_write(output, canonical(result))
         print(canonical({

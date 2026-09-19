@@ -201,10 +201,14 @@ class DependencyControllerTests(unittest.TestCase):
                 execution="fixture",
             )
 
-    def test_plan_is_exact_and_closed(self) -> None:
-        plan = mod.validate_plan()
-        self.assertFalse(plan["live_authorized"])
+    def test_successor_plan_is_exact_and_authorized(self) -> None:
+        plan = mod.validate_plan(expected_live_authorized=True)
+        self.assertTrue(plan["live_authorized"])
         self.assertEqual(plan["provider_calls_executed"], 2)
+        self.assertEqual(plan["successor_provider_calls_executed"], 0)
+        self.assertEqual(plan["repaired_candidate_commit"], mod.REPAIRED_CANDIDATE_COMMIT)
+        self.assertEqual(plan["package_candidate_sha256"], mod.PACKAGE_CANDIDATE_SHA256)
+        self.assertEqual(plan["successor_run_root"], mod.SUCCESSOR_RUN_ROOT)
         self.assertEqual(plan["private_result_sha256"], mod.PRIVATE_RESULT_SHA256)
         self.assertEqual(plan["limits"]["maximum_jev_calls"], 2)
         self.assertEqual(plan["limits"]["retries"], 0)
@@ -564,6 +568,66 @@ class DependencyControllerTests(unittest.TestCase):
         receipts = list((run_root / "jev-calls").glob("*.json"))
         self.assertEqual(len(receipts), 2)
         self.assertTrue(all(row["budget"]["max_repairs"] == 0 for row in result["results"]))
+        with mock.patch.object(mod, "_validated_run_root", return_value=run_root):
+            observations = mod._load_preserved_observations(run_root)
+        self.assertEqual(set(observations), {"B", "D"})
+
+        replay_root = self.root / "four-arm-replay"
+        replay_root.mkdir(mode=0o700)
+        calls.clear()
+        with patches[0], patches[1], patches[2], patches[3], mock.patch.object(
+            mod, "regenerate_pool", side_effect=regenerate
+        ), patches[5]:
+            replay = mod.run_four_arm(
+                self.root / "candidates.json",
+                self.root / "questions.json",
+                self.root,
+                self.root,
+                self.root / "preview.json",
+                replay_root,
+                answer_argv=commands,
+                grader_argv=graders,
+                live_authorized=True,
+                evaluate=lambda *args, **kwargs: self.fail("provider called"),
+                jev_observations=observations,
+                execution="fixture",
+            )
+        self.assertEqual(replay["controller_preflight"]["jev_execution"], "replay")
+        self.assertFalse((replay_root / "jev-calls").exists())
+        self.assertEqual(
+            [
+                row["attempts"][0]["candidate_observation"]["jev_execution"]
+                for row in replay["results"]
+            ],
+            ["off", "replay", "off", "replay"],
+        )
+
+        invalid_observations = copy.deepcopy(observations)
+        invalid_observations["B"]["request_sha256"] = "0" * 64
+        invalid_root = self.root / "four-arm-invalid-replay"
+        invalid_root.mkdir(mode=0o700)
+        calls.clear()
+        with patches[0], patches[1], patches[2], patches[3], mock.patch.object(
+            mod, "regenerate_pool", side_effect=regenerate
+        ), patches[5], self.assertRaisesRegex(
+            mod.ControllerError, "dependency_systemic_trial_failure"
+        ):
+            mod.run_four_arm(
+                self.root / "candidates.json",
+                self.root / "questions.json",
+                self.root,
+                self.root,
+                self.root / "preview.json",
+                invalid_root,
+                answer_argv=commands,
+                grader_argv=graders,
+                live_authorized=True,
+                evaluate=lambda *args, **kwargs: self.fail("provider called"),
+                jev_observations=invalid_observations,
+                execution="fixture",
+            )
+        self.assertEqual(calls, ["direct", "direct"])
+        self.assertFalse((invalid_root / "jev-calls").exists())
 
         failed_root = self.root / "four-arm-failure"
         failed_root.mkdir(mode=0o700)

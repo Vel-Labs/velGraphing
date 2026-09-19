@@ -172,14 +172,71 @@ The next authorized path is:
    revalidation, baseline order, required IDs, full order, candidate set, query,
    source set, request, and model against the frozen preview and plan.
 3. If the envelope cannot be recovered, obtain separate Parent authority for
-   one new exact Jev call. This receipt grants no such authority.
+   a new exact Jev call.
 4. Only after the observation passes validation, create a fresh ignored run
    root and fresh host-native answer and grader lanes for A/B/C/D. Keep treatment
    hidden from those lanes. Make no elapsed-speed claim because scheduling is
    not controlled.
 
-No replay harness was added. The missing input, not missing code, is the current
-blocker.
+The original run remains non-replayable because its complete observations were
+not retained.
+
+## Successor Live Confirmation Plan
+
+The Parent authorized one new private B call and one new private D call. The
+aggregate TypeSafe allowance remains USD 1.00. Both calls use model
+`jev-1.13.0`, the same frozen public D-01 source, zero retries, and the accepted
+repair candidate
+`dc0fbcd4397e997645de49d831a8c6608f2f3df2`.
+
+The successor bindings are:
+
+- B request SHA-256:
+  `b63f730ae2e2290a3ab964c170c851c205b6ba28f1df53b9679ea25009a14277`.
+- D request SHA-256:
+  `ae0bde087faf70dd31d77f6887f5975d98bbe52996e37eb41c98f1ef7b4e47c3`.
+- Maximum request size per call: `131072` bytes.
+- Source snapshot SHA-256:
+  `5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09`.
+- Jev rubric: `evidence-usefulness-v1`.
+- Answer contract SHA-256:
+  `e3226c60087d52a8b51b5bfe8a722e16c294264685c749be5e706454c57d6ddb`.
+- Grader contract SHA-256:
+  `58b94d44ee16b7abd9afd234d5d57b3d96fd864798d414d65b725b9ef2c64ebb`.
+- Maximum new Jev calls: `2`. Retries: `0`.
+
+The tracked aggregate authorization is now five calls: three complete and two
+planned. The new incremental worst-case envelope is USD `0.011010048`. The
+aggregate worst-case envelope is USD `0.027525120`. The remaining allowance is
+USD `0.972474880`. These values use the tracked price and conservative
+request-byte rule. They are authorization bounds, not observed cost.
+
+The fresh ignored run root is:
+
+`/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-d01-confirmation-v1`
+
+Its canonical answer and grader argv maps are prepared. The Parent must create
+eight fresh host-native lanes: four answer lanes and four grader lanes, one of
+each for A, B, C, and D. The answer lanes must not receive the rubric, arm,
+route, Jev treatment, score, request, provider, or controller identity. The
+grader lanes receive only the answer and frozen rubric.
+
+The exact one-line controller command is:
+
+```text
+PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python scripts/benchmarks/time_to_correct_dependency_v4.py run --candidates /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-thealgorithms-dependency-behavior-canary-79adf45.json --questions /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/thealgorithms-dependency-behavior-canary-questions.json --manifests-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests --lanes-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4 --preview /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-dependency-behavior-jev-preview-51e2dc7.json --run-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-d01-confirmation-v1 --answer-argv-json /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-d01-confirmation-v1/answer-argv.json --grader-argv-json /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-d01-confirmation-v1/grader-argv.json --output /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-d01-confirmation-v1/result.json
+```
+
+The controller now retains each successful complete source-free provider
+observation immediately under `jev-observations/B.json` or
+`jev-observations/D.json`. A future run can use
+`--replay-observations-root` only with a complete B/D pair. The controller
+validates exact request, candidate set, query, source set, model, rubric, order,
+required IDs, source revalidation, and response shape before replay. Replay
+makes no provider call.
+
+No provider, credential, network, answer, grader, or model lane ran during this
+preparation. Provider-comparative details remain private. T030 remains active.
 
 ## Files Changed
 
