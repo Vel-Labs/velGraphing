@@ -1,0 +1,10 @@
+{
+  "schema_version": "velgraphing-corpus-pilot-questions-v1",
+  "questions": [
+    {
+      "id": "I-01",
+      "corpus": "thealgorithms-python",
+      "prompt": "How does the benchmark_sorts module prepare timing cases?"
+    }
+  ]
+}

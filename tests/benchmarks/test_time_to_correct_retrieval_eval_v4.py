@@ -362,6 +362,71 @@ class RetrievalEvaluationTests(unittest.TestCase):
         }
         mod.validate_candidates(artifact)
 
+    def test_registered_thealgorithms_import_canary_is_exact(self):
+        parent = candidate("sorts/benchmark_sorts.py", 1000, 2000)
+        noise = [
+            candidate(f"noise-{index:02d}.md", 0, 600)
+            for index in range(26)
+        ]
+        noise.append(candidate("noise-26.md", 0, 1263))
+        control = [parent, *noise]
+        support = candidate(
+            "sorts/quick_sort.py", 253, 1299, parent=parent["id"]
+        )
+        source_lengths = {
+            candidate_row["path"]: max(2000, candidate_row["byte_end"])
+            for candidate_row in [*control, support]
+        }
+        sources = [
+            {"path": path, "source_sha256": SHA, "byte_length": source_lengths[path]}
+            for path in sorted(source_lengths)
+        ]
+        snapshot = SourceSnapshotV4(tuple(
+            SourceIdentityV4(row["path"], row["byte_length"], row["source_sha256"])
+            for row in sources
+        )).snapshot_sha256
+        template = {
+            "task_id": "I-01",
+            "corpus": "thealgorithms-python",
+            "prompt_sha256": mod.THEALGORITHMS_IMPORT_CANARY_QUESTIONS["I-01"][1],
+            "source_snapshot_sha256": snapshot,
+            "sources": sources,
+            "metrics": dict.fromkeys((
+                "source_operations", "cold_ns", "warm_ns", "retrieval_ns",
+                "expansion_ns", "fallback_ns", "source_failures", "authority_failures",
+            )),
+        }
+        runs = []
+        for route in sorted(mod.ROUTES):
+            typed = route.startswith("typed_graph")
+            row = copy.deepcopy(template)
+            row["route"] = route
+            row["candidates"] = (
+                [*control, support] if route == "typed_graph" else copy.deepcopy(control)
+            )
+            row["controls"] = {
+                "seed_record_ids": ["repo:sorts/benchmark_sorts.py"],
+                "seed_limit": 12,
+                "candidate_limit": 64,
+                "candidate_aggregate_byte_budget": 32_768,
+                "candidate_unit_byte_budget": 4096,
+                "derived_edge_count": 16 if typed else 0,
+                "active_edge_count": 16 if route in {"typed_graph", "typed_graph_no_expansion"} else 0,
+                "source_bound_expansion": typed,
+                "expand_one_hop": route in {"typed_graph", "typed_graph_no_edges"},
+            }
+            runs.append(row)
+        artifact = {
+            "schema_version": mod.CANDIDATE_SCHEMA_VERSION,
+            "study_id": mod.THEALGORITHMS_IMPORT_CANARY_STUDY,
+            "selector_commit": "1" * 40,
+            "question_registry_sha256": (
+                mod.THEALGORITHMS_IMPORT_CANARY_QUESTION_REGISTRY_SHA256
+            ),
+            "runs": runs,
+        }
+        mod.validate_candidates(artifact)
+
     def test_malformed_route_types_fail_with_schema_error(self):
         for route in (None, [], 3, "invented_route"):
             artifact, labels = fixture()

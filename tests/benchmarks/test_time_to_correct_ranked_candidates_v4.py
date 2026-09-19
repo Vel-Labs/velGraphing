@@ -114,6 +114,29 @@ class RankedCandidateTests(unittest.TestCase):
             }],
         )
 
+        import_questions = (
+            ROOT
+            / "benchmarks/velgraphing-time-to-correct-v4/thealgorithms-import-canary-questions.json"
+        )
+        import_rows, import_registry_sha256 = mod._questions(import_questions)
+        self.assertEqual(
+            mod.STUDY_CANDIDATE_CONTROLS[mod.THEALGORITHMS_IMPORT_CANARY_STUDY],
+            (64, 32_768, 4096),
+        )
+        self.assertEqual(
+            import_registry_sha256,
+            mod.candidate_evaluator.THEALGORITHMS_IMPORT_CANARY_QUESTION_REGISTRY_SHA256,
+        )
+        self.assertEqual(
+            import_rows,
+            [{
+                "id": "I-01",
+                "corpus": "thealgorithms-python",
+                "prompt": "How does the benchmark_sorts module prepare timing cases?",
+            }],
+        )
+        self.assertNotIn("quick_sort", import_rows[0]["prompt"])
+
     def test_relational_canary_prompt_isolated_by_typed_expansion(self) -> None:
         sources = {
             f"noise-{index:02d}.md": (

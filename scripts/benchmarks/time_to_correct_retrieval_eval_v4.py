@@ -26,6 +26,7 @@ ROUTES = {"direct", "tag_index", "typed_graph", "typed_graph_no_edges",
 PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
 HIGH_RECALL_STUDY = "velgraphing-v4-six-task-high-recall-v1"
 RELATIONAL_CANARY_STUDY = "velgraphing-v4-relational-canary-v1"
+THEALGORITHMS_IMPORT_CANARY_STUDY = "velgraphing-v4-thealgorithms-import-canary-v1"
 FIXTURE_STUDY = "unit-fixture"
 PRODUCTION_TASKS = {"C-01", "C-02", "S-01", "L-01", "M-01", "M-02"}
 PRODUCTION_QUESTION_REGISTRY_SHA256 = "61fe0831ab45e2ef9b6280ea6d4089f376f226d2c3d42e32d09ddd3f502be1c4"
@@ -44,6 +45,13 @@ RELATIONAL_CANARY_QUESTIONS = {
         "0b60999b95ad4e6377a2d337535dec3a0e40ae48da6d44ef8064860f46515b22",
     ),
 }
+THEALGORITHMS_IMPORT_CANARY_QUESTION_REGISTRY_SHA256 = "f5ed4f7a2f5cda04ff55c91cb5226ea4e81cf763eb3c48418adb82a6eb5eba95"
+THEALGORITHMS_IMPORT_CANARY_QUESTIONS = {
+    "I-01": (
+        "thealgorithms-python",
+        "aa04023625c4eeab028cf841f6ceda62ec9ee553fd3b0111ac6929a42d7c078c",
+    ),
+}
 REGISTERED_STUDIES = {
     PRODUCTION_STUDY: (
         PRODUCTION_QUESTION_REGISTRY_SHA256,
@@ -60,9 +68,16 @@ REGISTERED_STUDIES = {
         RELATIONAL_CANARY_QUESTIONS,
         (12, 24_576, 4096),
     ),
+    THEALGORITHMS_IMPORT_CANARY_STUDY: (
+        THEALGORITHMS_IMPORT_CANARY_QUESTION_REGISTRY_SHA256,
+        THEALGORITHMS_IMPORT_CANARY_QUESTIONS,
+        (64, 32_768, 4096),
+    ),
 }
 RELATIONAL_CANARY_SOURCE = ("README.md", 6504, 6542)
 RELATIONAL_CANARY_TARGET = ("STYLE_GUIDE.md", 13402, 13425)
+THEALGORITHMS_IMPORT_CANARY_SOURCE = ("sorts/benchmark_sorts.py", 1246, 1256)
+THEALGORITHMS_IMPORT_CANARY_TARGET = ("sorts/quick_sort.py", 253, 1296)
 CONTROL_KEYS = {"seed_record_ids", "seed_limit", "candidate_limit",
                 "candidate_aggregate_byte_budget", "candidate_unit_byte_budget",
                 "derived_edge_count", "active_edge_count", "source_bound_expansion",
@@ -415,6 +430,66 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
             or parent["byte_end"] < source_end
         ):
             raise EvaluationError("relational_canary_source_mismatch")
+    if value["study_id"] == THEALGORITHMS_IMPORT_CANARY_STUDY:
+        runs = {run["route"]: run for run in value["runs"]}
+        control = runs["direct"]["candidates"]
+        if any(
+            runs[route]["candidates"] != control
+            for route in ("tag_index", "typed_graph_no_edges", "typed_graph_no_expansion")
+        ):
+            raise EvaluationError("thealgorithms_import_canary_control_mismatch")
+        if len(control) != 28 or sum(
+            candidate["byte_end"] - candidate["byte_start"] for candidate in control
+        ) != 17_863:
+            raise EvaluationError("thealgorithms_import_canary_control_count_mismatch")
+        if any(
+            run["controls"]["derived_edge_count"] != 16
+            for route, run in runs.items()
+            if route.startswith("typed_graph")
+        ):
+            raise EvaluationError("thealgorithms_import_canary_edge_mismatch")
+        typed = runs["typed_graph"]["candidates"]
+        typed_primary = [
+            candidate for candidate in typed
+            if candidate["relationship_parent_candidate_id"] is None
+        ]
+        relationships = [
+            candidate for candidate in typed
+            if candidate["relationship_parent_candidate_id"] is not None
+        ]
+        if (
+            typed_primary != control
+            or len(typed) != 29
+            or sum(candidate["byte_end"] - candidate["byte_start"] for candidate in typed)
+            != 18_909
+            or len(relationships) != 1
+        ):
+            raise EvaluationError("thealgorithms_import_canary_support_mismatch")
+        target_path, target_start, target_end = THEALGORITHMS_IMPORT_CANARY_TARGET
+        if any(candidate["path"] == target_path for candidate in typed_primary):
+            raise EvaluationError("thealgorithms_import_canary_target_is_primary")
+        support = relationships[0]
+        if (
+            support["path"] != target_path
+            or support["byte_start"] > target_start
+            or support["byte_end"] < target_end
+        ):
+            raise EvaluationError("thealgorithms_import_canary_target_mismatch")
+        parent = next(
+            (
+                candidate for candidate in typed
+                if candidate["id"] == support["relationship_parent_candidate_id"]
+            ),
+            None,
+        )
+        source_path, source_start, source_end = THEALGORITHMS_IMPORT_CANARY_SOURCE
+        if (
+            parent is None
+            or parent["path"] != source_path
+            or parent["byte_start"] > source_start
+            or parent["byte_end"] < source_end
+        ):
+            raise EvaluationError("thealgorithms_import_canary_source_mismatch")
     return value
 
 

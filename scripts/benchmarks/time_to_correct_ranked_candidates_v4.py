@@ -51,6 +51,7 @@ SCHEMA_VERSION = "velgraphing-ranked-candidates-v4-bound-v2"
 PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
 HIGH_RECALL_STUDY = "velgraphing-v4-six-task-high-recall-v1"
 RELATIONAL_CANARY_STUDY = "velgraphing-v4-relational-canary-v1"
+THEALGORITHMS_IMPORT_CANARY_STUDY = "velgraphing-v4-thealgorithms-import-canary-v1"
 ROUTES = (
     "direct",
     "tag_index",
@@ -86,6 +87,11 @@ STUDY_CANDIDATE_CONTROLS = {
         CANDIDATE_AGGREGATE_BYTE_BUDGET,
         CANDIDATE_UNIT_BYTE_BUDGET,
     ),
+    THEALGORITHMS_IMPORT_CANARY_STUDY: (
+        HIGH_RECALL_CANDIDATE_LIMIT,
+        HIGH_RECALL_AGGREGATE_BYTE_BUDGET,
+        CANDIDATE_UNIT_BYTE_BUDGET,
+    ),
     "unit-fixture": (
         CANDIDATE_LIMIT,
         CANDIDATE_AGGREGATE_BYTE_BUDGET,
@@ -100,6 +106,18 @@ RELATIONAL_CANARY_EDGE = {
     "target_start": 13402,
     "target_end": 13425,
     "relation": "links_to_heading",
+}
+THEALGORITHMS_IMPORT_CANARY_EDGE = {
+    "source_id": "repo:sorts/benchmark_sorts.py",
+    "source_path": "sorts/benchmark_sorts.py",
+    "source_start": 1246,
+    "source_end": 1256,
+    "target_id": "repo:sorts/quick_sort.py",
+    "target_path": "sorts/quick_sort.py",
+    "target_start": 253,
+    "target_end": 1296,
+    "relation": "imports",
+    "derived_edge_count": 16,
 }
 OUTPUT_ROOT = ROOT / "benchmarks/velgraphing-time-to-correct-v4/.inputs"
 
@@ -478,6 +496,28 @@ def generate(
         ]
         if len(matching_edges) != 1:
             raise GenerationError("relational_canary_edge_mismatch")
+    if study_id == THEALGORITHMS_IMPORT_CANARY_STUDY:
+        if set(prepared) != {"thealgorithms-python"}:
+            raise GenerationError("thealgorithms_import_canary_corpus_mismatch")
+        typed_graph = prepared["thealgorithms-python"][3]
+        if len(typed_graph.edges) != THEALGORITHMS_IMPORT_CANARY_EDGE["derived_edge_count"]:
+            raise GenerationError("thealgorithms_import_canary_edge_count_mismatch")
+        matching_edges = [
+            edge for edge in typed_graph.edges
+            if edge.source_id == THEALGORITHMS_IMPORT_CANARY_EDGE["source_id"]
+            and edge.target_id == THEALGORITHMS_IMPORT_CANARY_EDGE["target_id"]
+            and edge.relation == THEALGORITHMS_IMPORT_CANARY_EDGE["relation"]
+            and edge.source_coordinate is not None
+            and edge.target_coordinate is not None
+            and edge.source_coordinate.source_path == THEALGORITHMS_IMPORT_CANARY_EDGE["source_path"]
+            and edge.source_coordinate.byte_start == THEALGORITHMS_IMPORT_CANARY_EDGE["source_start"]
+            and edge.source_coordinate.byte_end == THEALGORITHMS_IMPORT_CANARY_EDGE["source_end"]
+            and edge.target_coordinate.source_path == THEALGORITHMS_IMPORT_CANARY_EDGE["target_path"]
+            and edge.target_coordinate.byte_start == THEALGORITHMS_IMPORT_CANARY_EDGE["target_start"]
+            and edge.target_coordinate.byte_end == THEALGORITHMS_IMPORT_CANARY_EDGE["target_end"]
+        ]
+        if len(matching_edges) != 1:
+            raise GenerationError("thealgorithms_import_canary_edge_mismatch")
 
     runs: list[dict[str, object]] = []
     summary = {
@@ -652,7 +692,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--study-id",
-        choices=(PRODUCTION_STUDY, HIGH_RECALL_STUDY, RELATIONAL_CANARY_STUDY),
+        choices=(
+            PRODUCTION_STUDY,
+            HIGH_RECALL_STUDY,
+            RELATIONAL_CANARY_STUDY,
+            THEALGORITHMS_IMPORT_CANARY_STUDY,
+        ),
         default=PRODUCTION_STUDY,
     )
     arguments = parser.parse_args(argv)
