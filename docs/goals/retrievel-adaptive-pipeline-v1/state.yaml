@@ -1,0 +1,25 @@
+goal: retrievel-adaptive-pipeline-v1
+status: active
+proof_boundary: local_implementation
+milestones_complete: 0
+milestones_total: 5
+current_milestone: T010
+current_gate: integrated_product_seam
+exact_blocker: null
+next_milestone: T020
+provider:
+  name: typesafe_jev
+  model: jev-1.13.0
+  public_source_only: true
+  maximum_cost_usd: 1.00
+  observed_cost_usd: 0.00
+  calls_made: 0
+tasks:
+  T010: active
+  T020: pending
+  T030: pending
+  T040: pending
+  T050: pending
+  T999: pending
+accepted_by: null
+updated_at: 2026-09-19
