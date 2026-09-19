@@ -475,7 +475,7 @@ T030 remains active. Parent exact-candidate reaudit is the current gate.
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
 
-## Luna Successor Live Authorization (R4, Current)
+## Luna Successor Live Authorization (R3, Superseded by Clean R4 Restart)
 
 Parent accepted the exact Luna successor candidate at commit
 `57ff3e4d7446761336ceb10193598796d96cf993`. The independent Luna audit result
@@ -509,7 +509,58 @@ and source-bound preflight accepted `live_authorized=true`, retained eight
 planned Jev calls, and reported zero provider calls. JSON, YAML, and diff
 structure checks passed.
 
-### R4 Files Changed
+### R3 Authorization Files Changed
+
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json`
+- `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
+- `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
+
+## R3 Infrastructure Failure and Clean R4 Restart (Current)
+
+The R3 live run stopped fail-closed. A-S-01 completed. B-S-01 then returned an
+incorrect `execution_identity.thread_id` after one Jev call completed. The
+controller reported `successor_systemic_trial_failure` and wrote no result.
+Parent classified this as a harness or operational lane-identity defect. It is
+not product or provider-quality evidence.
+
+The ignored R3 run root is preserved as excluded infrastructure-failure
+evidence. R4 does not overwrite, reuse, replay, or retry its B-S-01 Jev call.
+R4 starts in the fresh private run root
+`$CHECKOUT/.velgraphing-local/retrievel-t030-luna-successor-r4`. The frozen
+candidate, question, rubric, preview, dispatch, retrieval, selection, and lane
+identity contract are unchanged. The R4 plan remains `live_authorized=true`,
+records zero R4 provider calls, plans all eight R4 Jev calls, and permits zero
+retries within R4.
+
+The cumulative authorization ledger now records seven completed prior Jev
+calls and eight planned R4 calls. The aggregate authorized count is `15`. At
+USD `0.005505024` per worst-case call, the prior envelope is USD `0.038535168`,
+the R4 incremental envelope remains USD `0.044040192`, the aggregate envelope
+is USD `0.08257536`, and USD `0.91742464` remains under the USD 1 cap. These
+values are authorization bounds, not observed cost.
+
+The R4 tracked plan SHA-256 is
+`a7953a1b37fdbf0afdfc257f86b0dfa00206c2c242d3775966256481a86763a9`.
+After Parent creates and validates a fresh 32-entry R4 lane manifest, the exact
+controller command is:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python scripts/benchmarks/time_to_correct_luna_successor_v4.py run --candidates /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-ranked-candidates-a14e1de.json --questions /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/luna-successor-questions.json --rubrics /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/luna-successor-rubrics.json --manifests-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests --lanes-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4 --preview /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-jev-preview-a14e1de.json --run-root /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r4 --lane-manifest /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r4/lane-manifest.json --output /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-adaptive-pipeline/.velgraphing-local/retrievel-t030-luna-successor-r4/result.json
+```
+
+R4 validation passed `10` focused tests. The authorization-aware source-bound
+preflight retained the lane contract hash, eight planned calls, and zero R4
+provider calls. A canonical comparison excluding only `call_authorization` and
+`run_root` matched the accepted R3 plan. JSON, YAML, and diff structure checks
+passed.
+
+No lane, thread, credential, network, Jev, provider, model, benchmark, push, or
+pull-request action ran while preparing R4. Private execution authorization
+does not change the separate public-results permission boundary.
+
+### Clean R4 Restart Files Changed
 
 - `benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json`
 - `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
