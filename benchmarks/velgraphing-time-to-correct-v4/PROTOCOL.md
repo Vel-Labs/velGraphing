@@ -52,6 +52,20 @@ whole source-bound relationship target after its parent seed has retained
 primary evidence. The generator emits no source bodies and makes no provider,
 answer-model, grader, or scoring call. Its output belongs under an ignored
 `.inputs` path and binds the clean selector commit.
+
+The frozen artifact uses the incompatible
+`velgraphing-ranked-candidates-v4-bound-v1` schema. Each candidate has exactly
+`id`, `path`, `source_sha256`, `byte_start`, `byte_end`, `required`,
+`record_id`, and `relationship_parent_candidate_id`. The candidate ID remains
+coordinate-derived. The artifact hash binds the record and relationship
+metadata. Each primary candidate names the exact authenticated source record
+for its path and digest and has a null parent. Only a `typed_graph`
+relationship target can have a parent. It names the retained earlier primary
+candidate ID, uses `RelationshipSupport.target_record_id`, and is optional.
+The generator rejects missing or mismatched Graph records before it writes the
+artifact. The evaluator rejects the old schema, extra fields, inconsistent
+record bindings, and self, missing, late, required, or chained relationship
+targets before it reads labels. It does not read source bodies.
 The artifact also binds the canonical committed question-registry digest. Each
 run records its corpus and prompt digest, but never the prompt text. The
 evaluator requires the exact registered six-task mapping. It reconstructs each

@@ -20,6 +20,7 @@ from typing import Any, Mapping, Sequence
 from packages.core.routing_v4 import SourceIdentityV4, SourceSnapshotV4
 
 VERSION = "velgraphing-retrieval-eval-v4"
+CANDIDATE_SCHEMA_VERSION = "velgraphing-ranked-candidates-v4-bound-v1"
 ROUTES = {"direct", "tag_index", "typed_graph", "typed_graph_no_edges",
           "typed_graph_no_expansion"}
 PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
@@ -166,11 +167,25 @@ def reject_oracle_fields(value: Any) -> None:
             reject_oracle_fields(item)
 
 
+def candidate_id(row: Mapping[str, Any]) -> str:
+    identity = {
+        "path": row["path"],
+        "source_sha256": row["source_sha256"],
+        "byte_start": row["byte_start"],
+        "byte_end": row["byte_end"],
+    }
+    raw = (
+        json.dumps(identity, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        + "\n"
+    ).encode("utf-8")
+    return f"candidate:{hashlib.sha256(raw).hexdigest()}"
+
+
 def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
     reject_oracle_fields(value)
     exact_keys(value, {"schema_version", "study_id", "selector_commit",
                        "question_registry_sha256", "runs"})
-    if (value["schema_version"] != "velgraphing-ranked-candidates-v4"
+    if (value["schema_version"] != CANDIDATE_SCHEMA_VERSION
             or value["study_id"] not in {FIXTURE_STUDY, PRODUCTION_STUDY}
             or type(value["selector_commit"]) is not str
             or not COMMIT.fullmatch(value["selector_commit"])
@@ -220,13 +235,35 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
         if run["route"] in {"direct", "tag_index"} and controls["derived_edge_count"]:
             raise EvaluationError("route_control_mismatch")
         ids = set()
+        candidates_by_id = {}
+        record_bindings = {}
         for candidate in run["candidates"]:
-            exact_keys(candidate, {"id", "path", "source_sha256", "byte_start", "byte_end", "required"})
+            exact_keys(candidate, {
+                "id", "path", "source_sha256", "byte_start", "byte_end", "required",
+                "record_id", "relationship_parent_candidate_id",
+            })
             if (type(candidate["id"]) is not str or not candidate["id"]
-                    or candidate["id"] in ids or type(candidate["required"]) is not bool):
+                    or candidate["id"] in ids or type(candidate["required"]) is not bool
+                    or type(candidate["record_id"]) is not str or not candidate["record_id"]):
                 raise EvaluationError("invalid_candidate_identity")
-            ids.add(candidate["id"])
             validate_span(candidate, sources)
+            if candidate["id"] != candidate_id(candidate):
+                raise EvaluationError("invalid_candidate_identity")
+            if candidate["record_id"] != f"repo:{candidate['path']}":
+                raise EvaluationError("invalid_candidate_record_binding")
+            binding = candidate["path"], candidate["source_sha256"]
+            prior_binding = record_bindings.setdefault(candidate["record_id"], binding)
+            if prior_binding != binding:
+                raise EvaluationError("invalid_candidate_record_binding")
+            parent = candidate["relationship_parent_candidate_id"]
+            if parent is not None:
+                if (run["route"] != "typed_graph" or type(parent) is not str or not parent
+                        or candidate["required"] or parent == candidate["id"]
+                        or parent not in candidates_by_id
+                        or candidates_by_id[parent]["relationship_parent_candidate_id"] is not None):
+                    raise EvaluationError("invalid_relationship_candidate")
+            ids.add(candidate["id"])
+            candidates_by_id[candidate["id"]] = candidate
         if (len(run["candidates"]) > controls["seed_limit"]
                 or sum(item["byte_end"] - item["byte_start"] for item in run["candidates"])
                 > controls["shortlist_byte_budget"]):
@@ -260,6 +297,19 @@ def validate_candidates(value: dict[str, Any]) -> dict[str, Any]:
                 raise EvaluationError("typed_seed_mismatch")
             if len(typed_edges) != 1:
                 raise EvaluationError("typed_edge_count_mismatch")
+            by_route = {run["route"]: run for run in typed}
+            if set(by_route) == {
+                "typed_graph", "typed_graph_no_edges", "typed_graph_no_expansion"
+            }:
+                control = by_route["typed_graph_no_edges"]["candidates"]
+                if control != by_route["typed_graph_no_expansion"]["candidates"]:
+                    raise EvaluationError("typed_primary_candidate_mismatch")
+                enabled_primary = [
+                    candidate for candidate in by_route["typed_graph"]["candidates"]
+                    if candidate["relationship_parent_candidate_id"] is None
+                ]
+                if enabled_primary != control[:len(enabled_primary)]:
+                    raise EvaluationError("typed_primary_candidate_mismatch")
     if value["study_id"] == PRODUCTION_STUDY:
         expected = {(task, route) for task in PRODUCTION_TASKS for route in ROUTES}
         if keys != expected or len(value["runs"]) != 30:

@@ -100,6 +100,10 @@ class RankedCandidateTests(unittest.TestCase):
                 fixture.questions, fixture.manifests, fixture.lanes, "1" * 40,
                 study_id="unit-fixture",
             )
+            graph, _, _, _ = mod.scan_lane(
+                fixture.lane, fixture.manifest, derive_edges=True
+            )
+            records = graph.record_map()
         finally:
             fixture.close()
         runs = {run["route"]: run for run in artifact["runs"]}
@@ -126,6 +130,35 @@ class RankedCandidateTests(unittest.TestCase):
         typed_primary = [item for item in typed["candidates"] if item["id"] in primary_ids]
         self.assertEqual(typed_primary, no_expansion["candidates"][: len(typed_primary)])
         self.assertGreater(len(typed["candidates"]), len(typed_primary))
+        positions = {item["id"]: index for index, item in enumerate(typed["candidates"])}
+        relationships = [
+            item for item in typed["candidates"]
+            if item["relationship_parent_candidate_id"] is not None
+        ]
+        self.assertTrue(relationships)
+        for item in typed["candidates"]:
+            self.assertEqual(item["record_id"], f"repo:{item['path']}")
+            record = records[item["record_id"]]
+            self.assertEqual(record.provenance.path, item["path"])
+            self.assertEqual(record.provenance.sha256, item["source_sha256"])
+            parent = item["relationship_parent_candidate_id"]
+            if parent is not None:
+                self.assertFalse(item["required"])
+                self.assertLess(positions[parent], positions[item["id"]])
+                self.assertIsNone(
+                    typed["candidates"][positions[parent]][
+                        "relationship_parent_candidate_id"
+                    ]
+                )
+        for route in ("direct", "tag_index", "typed_graph_no_edges", "typed_graph_no_expansion"):
+            self.assertTrue(all(
+                item["relationship_parent_candidate_id"] is None
+                for item in runs[route]["candidates"]
+            ))
+        before = hashlib.sha256(mod._canonical(artifact)).hexdigest()
+        changed = copy.deepcopy(artifact)
+        changed["runs"][0]["candidates"][0]["record_id"] = "repo:changed"
+        self.assertNotEqual(before, hashlib.sha256(mod._canonical(changed)).hexdigest())
         encoded = json.dumps(artifact, sort_keys=True)
         for forbidden in ("return helper()", "Use call_helper.", "acceptable_spans", "critical_facts"):
             self.assertNotIn(forbidden, encoded)
@@ -178,6 +211,8 @@ class RankedCandidateTests(unittest.TestCase):
             return {
                 "id": identity, "path": "source.py", "source_sha256": "a" * 64,
                 "byte_start": start, "byte_end": end, "required": False,
+                "record_id": "repo:source.py",
+                "relationship_parent_candidate_id": None,
             }
 
         overflow_rows = [
@@ -226,11 +261,29 @@ class RankedCandidateTests(unittest.TestCase):
 
             raw = fixture.lane.joinpath("source.py").read_bytes()
             digest = hashlib.sha256(raw).hexdigest()
+            graph, _, _, _ = mod.scan_lane(
+                fixture.lane, fixture.manifest, derive_edges=False
+            )
+            records = graph.record_map()
             with self.assertRaisesRegex(mod.GenerationError, "candidate_range_invalid"):
-                mod._candidate("source.py", digest, 0, len(raw) + 1, {"source.py": raw})
+                mod._candidate(
+                    "source.py", digest, 0, len(raw) + 1, {"source.py": raw},
+                    records, "repo:source.py",
+                )
             position = raw.index(b"\xc3\xa9")
             with self.assertRaisesRegex(mod.GenerationError, "candidate_utf8_invalid"):
-                mod._candidate("source.py", digest, position + 1, position + 2, {"source.py": raw})
+                mod._candidate(
+                    "source.py", digest, position + 1, position + 2,
+                    {"source.py": raw}, records, "repo:source.py",
+                )
+            for record_id in ("missing", "repo:other.py"):
+                with self.subTest(record_id=record_id), self.assertRaisesRegex(
+                    mod.GenerationError, "candidate_record_mismatch"
+                ):
+                    mod._candidate(
+                        "source.py", digest, 0, 1, {"source.py": raw}, records,
+                        record_id,
+                    )
         finally:
             fixture.close()
 

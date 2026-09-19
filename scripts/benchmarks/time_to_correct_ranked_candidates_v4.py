@@ -34,11 +34,17 @@ if EVALUATOR_SPEC is None or EVALUATOR_SPEC.loader is None:
 candidate_evaluator = importlib.util.module_from_spec(EVALUATOR_SPEC)
 EVALUATOR_SPEC.loader.exec_module(candidate_evaluator)
 
-from packages.core import Graph, Sensitivity, TaskSpec, graph_find  # noqa: E402
+from packages.core import (  # noqa: E402
+    Graph,
+    Sensitivity,
+    TaskSpec,
+    graph_find,
+    is_authenticated_eligible,
+)
 from packages.core.retrieval import _GENERIC, _STOPWORDS, _line_window  # noqa: E402
 
 
-SCHEMA_VERSION = "velgraphing-ranked-candidates-v4"
+SCHEMA_VERSION = "velgraphing-ranked-candidates-v4-bound-v1"
 PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
 ROUTES = (
     "direct",
@@ -237,8 +243,11 @@ def _candidate(
     byte_start: int,
     byte_end: int,
     sources: Mapping[str, bytes],
+    records: Mapping[str, Any],
+    record_id: str,
     *,
     required: bool = False,
+    relationship_parent_candidate_id: str | None = None,
 ) -> dict[str, object]:
     if path not in sources or _digest(sources[path]) != source_sha256:
         raise GenerationError("candidate_source_mismatch")
@@ -255,6 +264,20 @@ def _candidate(
         raise GenerationError("candidate_utf8_invalid") from error
     if excerpt.encode("utf-8") != raw[byte_start:byte_end]:
         raise GenerationError("candidate_utf8_invalid")
+    record = records.get(record_id)
+    if (
+        record is None
+        or record.provenance.path != path
+        or record.provenance.sha256 != source_sha256
+        or not is_authenticated_eligible(record, (Sensitivity.INTERNAL,))
+    ):
+        raise GenerationError("candidate_record_mismatch")
+    if relationship_parent_candidate_id is not None and (
+        type(relationship_parent_candidate_id) is not str
+        or not relationship_parent_candidate_id
+        or required
+    ):
+        raise GenerationError("invalid_relationship_candidate")
     identity = {
         "path": path,
         "source_sha256": source_sha256,
@@ -265,6 +288,8 @@ def _candidate(
         "id": f"candidate:{_digest(_canonical(identity))}",
         **identity,
         "required": required,
+        "record_id": record_id,
+        "relationship_parent_candidate_id": relationship_parent_candidate_id,
     }
 
 
@@ -324,7 +349,11 @@ def _retain_with_supports(
             and len(retained) < SEED_LIMIT
         ):
             supported_seeds.add(record_id)
-            if append(supports[record_id]):
+            relationship = {
+                **supports[record_id],
+                "relationship_parent_candidate_id": row["id"],
+            }
+            if append(relationship):
                 support_count += 1
     return retained, support_count
 
@@ -414,6 +443,7 @@ def _direct_run(
     seed_ids: list[str] = []
     sources = reader.sources
     source_hashes = {source.path: source.sha256 for source in snapshot.sources}
+    records = graph.record_map()
     for _, path, anchors in scored[:SEED_LIMIT]:
         record_id = f"repo:{path}"
         seed_ids.append(record_id)
@@ -427,7 +457,13 @@ def _direct_run(
             rows.append(
                 (
                     _candidate(
-                        path, source_hashes[path], window_start, window_end, sources
+                        path,
+                        source_hashes[path],
+                        window_start,
+                        window_end,
+                        sources,
+                        records,
+                        record_id,
                     ),
                     record_id,
                 )
@@ -487,6 +523,7 @@ def _graph_run(
     if result.fail_closed:
         raise GenerationError("retrieval_failed_closed")
     sources = reader.sources
+    records = graph.record_map()
     primary: list[tuple[dict[str, object], str]] = []
     for item in result.evidence:
         primary.append(
@@ -497,6 +534,8 @@ def _graph_run(
                     item.byte_start,
                     item.byte_end,
                     sources,
+                    records,
+                    item.record_id,
                 ),
                 item.record_id,
             )
@@ -511,6 +550,8 @@ def _graph_run(
                 coordinate.byte_start,
                 coordinate.byte_end,
                 sources,
+                records,
+                support.target_record_id,
             )
         candidates, support_count = _retain_with_supports(primary, support_rows)
     else:

@@ -21,19 +21,35 @@ def encoded(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
 
+def candidate(path, start, end, *, required=False, parent=None):
+    row = {
+        "path": path,
+        "source_sha256": SHA,
+        "byte_start": start,
+        "byte_end": end,
+        "required": required,
+        "record_id": f"repo:{path}",
+        "relationship_parent_candidate_id": parent,
+    }
+    row["id"] = mod.candidate_id(row)
+    return row
+
+
 def fixture():
     sources = [{"path": path, "source_sha256": SHA, "byte_length": 100} for path in ("a.md", "b.md")]
     snapshot = SourceSnapshotV4(tuple(
         SourceIdentityV4(row["path"], row["byte_length"], row["source_sha256"])
         for row in sources
     )).snapshot_sha256
-    candidates = [{"id": "c0", "path": "a.md", "source_sha256": SHA, "byte_start": 0, "byte_end": 20, "required": False},
-                  {"id": "c1", "path": "b.md", "source_sha256": SHA, "byte_start": 40, "byte_end": 60, "required": True}]
+    candidates = [
+        candidate("a.md", 0, 20),
+        candidate("b.md", 40, 60, required=True),
+    ]
     controls = {"seed_record_ids": ["repo:a.md"], "seed_limit": 2,
                 "shortlist_byte_budget": 40, "derived_edge_count": 0,
                 "active_edge_count": 0,
                 "source_bound_expansion": False, "expand_one_hop": False}
-    artifact = {"schema_version": "velgraphing-ranked-candidates-v4", "study_id": "unit-fixture",
+    artifact = {"schema_version": mod.CANDIDATE_SCHEMA_VERSION, "study_id": "unit-fixture",
                 "selector_commit": "1"*40, "question_registry_sha256": "2"*64,
                 "runs": [{"task_id": "fixture", "corpus": "fixture-corpus",
                           "prompt_sha256": "3"*64, "route": "direct", "source_snapshot_sha256": snapshot,
@@ -50,6 +66,33 @@ def fixture():
 def run(artifact, labels, k=(2,), budgets=(40,)):
     raw = encoded(artifact)
     return mod.evaluate(raw, hashlib.sha256(raw).hexdigest(), encoded(labels), k, budgets)
+
+
+def typed_fixture():
+    artifact, labels = fixture()
+    template = artifact["runs"][0]
+    primary = template["candidates"]
+    relationship = candidate(
+        "b.md", 60, 80, parent=primary[0]["id"]
+    )
+    runs = []
+    for route, candidates in (
+        ("typed_graph", [primary[0], relationship]),
+        ("typed_graph_no_edges", primary),
+        ("typed_graph_no_expansion", primary),
+    ):
+        row = copy.deepcopy(template)
+        row["route"] = route
+        row["candidates"] = copy.deepcopy(candidates)
+        row["controls"].update(
+            derived_edge_count=1,
+            active_edge_count=0 if route == "typed_graph_no_edges" else 1,
+            source_bound_expansion=True,
+            expand_one_hop=route != "typed_graph_no_expansion",
+        )
+        runs.append(row)
+    artifact["runs"] = runs
+    return artifact, labels
 
 
 class RetrievalEvaluationTests(unittest.TestCase):
@@ -72,7 +115,10 @@ class RetrievalEvaluationTests(unittest.TestCase):
         self.assertEqual(result["candidate_count"], 1)
         self.assertEqual(result["excerpt_bytes"], 20)
         self.assertEqual(result["acceptable_span_group_overlap_recall"], 0)
-        self.assertEqual(result["missing_required_ids_in_diagnostic_prefix"], ["c1"])
+        self.assertEqual(
+            result["missing_required_ids_in_diagnostic_prefix"],
+            [artifact["runs"][0]["candidates"][1]["id"]],
+        )
 
     def test_overlap_is_not_complete_span_or_semantic_support(self):
         artifact, labels = fixture()
@@ -127,6 +173,119 @@ class RetrievalEvaluationTests(unittest.TestCase):
             with self.subTest(key=key, value=value), self.assertRaises(mod.EvaluationError):
                 run(artifact, labels)
 
+    def test_bound_schema_and_relationship_metadata_are_strict(self):
+        artifact, labels = fixture()
+        old = copy.deepcopy(artifact)
+        old["schema_version"] = "velgraphing-ranked-candidates-v4"
+        with self.assertRaisesRegex(mod.EvaluationError, "invalid_candidate_artifact"):
+            mod.validate_candidates(old)
+
+        for mutate in (
+            lambda row: row.update(extra=None),
+            lambda row: row.pop("record_id"),
+            lambda row: row.update(record_id="repo:other.md"),
+        ):
+            changed = copy.deepcopy(artifact)
+            mutate(changed["runs"][0]["candidates"][0])
+            with self.subTest(mutate=mutate), self.assertRaises(mod.EvaluationError):
+                mod.validate_candidates(changed)
+
+        primary = artifact["runs"][0]["candidates"][0]
+        relationship = candidate(
+            "b.md", 60, 80, parent=primary["id"]
+        )
+        typed = copy.deepcopy(artifact)
+        typed["runs"][0]["route"] = "typed_graph"
+        typed["runs"][0]["controls"].update(
+            derived_edge_count=1,
+            active_edge_count=1,
+            source_bound_expansion=True,
+            expand_one_hop=True,
+            seed_limit=3,
+            shortlist_byte_budget=60,
+        )
+        typed["runs"][0]["candidates"].append(relationship)
+        mod.validate_candidates(copy.deepcopy(typed))
+
+        invalid_rows = []
+        required = copy.deepcopy(relationship); required["required"] = True
+        invalid_rows.append(required)
+        missing = copy.deepcopy(relationship); missing["relationship_parent_candidate_id"] = "missing"
+        invalid_rows.append(missing)
+        self_parent = copy.deepcopy(relationship); self_parent["relationship_parent_candidate_id"] = relationship["id"]
+        invalid_rows.append(self_parent)
+        for invalid in invalid_rows:
+            changed = copy.deepcopy(typed)
+            changed["runs"][0]["candidates"][-1] = invalid
+            raw = encoded(changed)
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(
+                mod.EvaluationError, "invalid_relationship_candidate"
+            ):
+                mod.evaluate(
+                    raw,
+                    hashlib.sha256(raw).hexdigest(),
+                    b"labels were not read",
+                    (3,),
+                    (60,),
+                )
+
+        non_typed = copy.deepcopy(artifact)
+        non_typed["runs"][0]["candidates"][1]["required"] = False
+        non_typed["runs"][0]["candidates"][1][
+            "relationship_parent_candidate_id"
+        ] = primary["id"]
+        raw = encoded(non_typed)
+        with self.assertRaisesRegex(mod.EvaluationError, "invalid_relationship_candidate"):
+            mod.evaluate(
+                raw,
+                hashlib.sha256(raw).hexdigest(),
+                b"labels were not read",
+                (2,),
+                (40,),
+            )
+
+        late = copy.deepcopy(typed)
+        late["runs"][0]["candidates"] = [relationship, primary]
+        late["runs"][0]["candidates"][0]["relationship_parent_candidate_id"] = primary["id"]
+        with self.assertRaisesRegex(mod.EvaluationError, "invalid_relationship_candidate"):
+            mod.validate_candidates(late)
+
+        chained = copy.deepcopy(typed)
+        child = candidate("a.md", 20, 40, parent=relationship["id"])
+        chained["runs"][0]["candidates"].append(child)
+        chained["runs"][0]["controls"].update(seed_limit=4, shortlist_byte_budget=80)
+        with self.assertRaisesRegex(mod.EvaluationError, "invalid_relationship_candidate"):
+            mod.validate_candidates(chained)
+
+    def test_typed_primary_candidates_are_invariant_before_labels(self):
+        artifact, _ = typed_fixture()
+        mod.validate_candidates(copy.deepcopy(artifact))
+        enabled = artifact["runs"][0]["candidates"]
+        control = artifact["runs"][1]["candidates"]
+        self.assertEqual(len(enabled), len(control))
+        self.assertIsNotNone(enabled[1]["relationship_parent_candidate_id"])
+        self.assertEqual(enabled[0], control[0])
+
+        changed = copy.deepcopy(artifact)
+        no_edges = next(
+            row for row in changed["runs"] if row["route"] == "typed_graph_no_edges"
+        )
+        no_edges["candidates"][0]["byte_start"] = 1
+        no_edges["candidates"][0]["id"] = mod.candidate_id(
+            no_edges["candidates"][0]
+        )
+        raw = encoded(changed)
+        with self.assertRaisesRegex(
+            mod.EvaluationError, "typed_primary_candidate_mismatch"
+        ):
+            mod.evaluate(
+                raw,
+                hashlib.sha256(raw).hexdigest(),
+                b"labels were not read",
+                (2,),
+                (40,),
+            )
+
     def test_malformed_route_types_fail_with_schema_error(self):
         for route in (None, [], 3, "invented_route"):
             artifact, labels = fixture()
@@ -156,11 +315,13 @@ class RetrievalEvaluationTests(unittest.TestCase):
 
     def test_redundancy_counts_union_not_number_of_files(self):
         artifact, labels = fixture()
-        candidate = copy.deepcopy(artifact["runs"][0]["candidates"][0]); candidate["id"] = "c2"
-        artifact["runs"][0]["candidates"].append(candidate)
+        duplicate = copy.deepcopy(artifact["runs"][0]["candidates"][0])
+        duplicate["byte_start"], duplicate["byte_end"] = 10, 30
+        duplicate["id"] = mod.candidate_id(duplicate)
+        artifact["runs"][0]["candidates"].append(duplicate)
         artifact["runs"][0]["controls"].update(seed_limit=3, shortlist_byte_budget=60)
         result = run(artifact, labels, k=(3,), budgets=(60,))["results"][0]
-        self.assertAlmostEqual(result["repeated_range_byte_fraction"], 1/3)
+        self.assertAlmostEqual(result["repeated_range_byte_fraction"], 1/6)
         self.assertEqual(result["unique_paths"], 2)
 
     def test_symlink_input_is_rejected(self):
