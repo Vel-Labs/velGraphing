@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import sys
 import unittest
 from unittest import mock
 
@@ -16,6 +17,19 @@ SPEC = importlib.util.spec_from_file_location(
 )
 mod = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(mod)
+
+
+def lane_entries():
+    command = [sys.executable, "-c", "pass"]
+    return [{
+        "trial_id": trial_id,
+        "role": role,
+        "thread_id": f"thread-{role}-{trial_id}",
+        "model": "gpt-5.6-luna",
+        "reasoning": "medium",
+        "argv": command,
+        "argv_sha256": mod.digest(mod.canonical(command)),
+    } for trial_id in mod.DISPATCH for role in mod.LANE_ROLES]
 
 
 class LunaSuccessorTests(unittest.TestCase):
@@ -133,11 +147,38 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertFalse(plan["live_authorized"])
         self.assertEqual(plan["provider_calls_executed"], 0)
         self.assertEqual(
-            plan["status"], "offline_frozen_parent_exact_candidate_audit_pending"
+            plan["status"], "offline_frozen_parent_exact_candidate_reaudit_pending"
         )
         self.assertNotIn("excerpt", json.dumps(plan))
         self.assertEqual(plan["models"]["answer"], "gpt-5.6-luna")
         self.assertEqual(plan["models"]["grader"], "gpt-5.6-luna")
+        self.assertEqual(plan["lane_manifest_contract"], mod.LANE_MANIFEST_CONTRACT)
+
+    def test_lane_manifest_requires_complete_unique_hashed_lanes(self) -> None:
+        entries = lane_entries()
+        lanes = mod._validate_lane_entries(entries)
+        self.assertEqual(len(lanes), 32)
+        self.assertEqual(
+            set(lanes),
+            {(trial_id, role) for trial_id in mod.DISPATCH for role in mod.LANE_ROLES},
+        )
+        invalid = {
+            "missing": entries[:-1],
+            "extra": [*entries, dict(entries[0])],
+            "thread_reuse": [
+                entries[0], {**entries[1], "thread_id": entries[0]["thread_id"]},
+                *entries[2:],
+            ],
+            "model": [{**entries[0], "model": "gpt-5.6-sol"}, *entries[1:]],
+            "reasoning": [{**entries[0], "reasoning": "high"}, *entries[1:]],
+            "argv_hash": [{**entries[0], "argv_sha256": "0" * 64}, *entries[1:]],
+        }
+        for label, value in invalid.items():
+            with self.subTest(label=label):
+                with self.assertRaisesRegex(
+                    mod.SuccessorError, "successor_lane_manifest_invalid"
+                ):
+                    mod._validate_lane_entries(value)
 
     def test_selection_revalidates_source_and_preserves_required_evidence(self) -> None:
         from tests.core.test_ranked_context_selection import fixture
@@ -187,7 +228,9 @@ class LunaSuccessorTests(unittest.TestCase):
                 "context_deliveries": True,
             }}],
         }
-        commands = {trial_id: ["worker"] for trial_id in mod.DISPATCH}
+        lanes = {
+            (entry["trial_id"], entry["role"]): entry for entry in lane_entries()
+        }
         with (
             mock.patch.object(mod, "preflight", return_value={
                 "arm_preflight": plan["arm_preflight"],
@@ -201,7 +244,7 @@ class LunaSuccessorTests(unittest.TestCase):
             output = mod.run_successor(
                 Path("candidates"), Path("questions"), Path("rubrics"),
                 Path("manifests"), Path("lanes"), Path("preview"), Path("run"),
-                answer_argv=commands, grader_argv=commands,
+                lane_manifest=lanes,
             )
         self.assertEqual(len(output["results"]), 16)
         self.assertEqual(
@@ -210,6 +253,11 @@ class LunaSuccessorTests(unittest.TestCase):
         )
         self.assertTrue(all(
             call.kwargs["ledger"].cap == 8 for call in run_trial.call_args_list
+        ))
+        self.assertTrue(all(
+            call.kwargs["answer_lane"]["role"] == "answer"
+            and call.kwargs["grader_lane"]["role"] == "grader"
+            for call in run_trial.call_args_list
         ))
 
 

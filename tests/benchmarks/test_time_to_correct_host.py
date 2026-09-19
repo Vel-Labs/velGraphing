@@ -7,7 +7,11 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts/benchmarks"))
 from time_to_correct import Budget, MeasurementError, Trial, digest
-from time_to_correct_host import run_process_trial
+from time_to_correct_host import (
+    ANSWER_RESPONSE_CONTRACT,
+    GRADER_RESPONSE_CONTRACT,
+    run_process_trial,
+)
 
 
 def identity():
@@ -92,6 +96,36 @@ sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":"), ensur
 '''
 
 
+def identified_code(role, identity=None):
+    result = ({
+        "answer_text": "strict answer",
+        "context_deliveries_complete": True,
+        "model_calls_complete": True,
+        "schema_version": "velgraphing-answer-output-v1",
+        "usage": None,
+    } if role == "answer" else {
+        "critical_facts_exact": True,
+        "grader_id": "strict-grader",
+        "model_calls_complete": True,
+        "required_fact_maximum": 1,
+        "required_fact_score": 1,
+        "schema_version": "velgraphing-grader-output-v1",
+        "unsupported_material_claims": 0,
+        "usage": None,
+    })
+    if identity is not None:
+        result["execution_identity"] = identity
+    return (
+        "import json,sys\n"
+        "payload=json.load(sys.stdin)\n"
+        "contract=payload.get('response_contract',{})\n"
+        "assert 'execution_identity' in contract.get('json_schema',{}).get('required',[])\n"
+        f"result={result!r}\n"
+        "sys.stdout.write(json.dumps(result,sort_keys=True,separators=(',',':'),"
+        "ensure_ascii=True,allow_nan=False))\n"
+    )
+
+
 class HostBoundaryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -100,7 +134,9 @@ class HostBoundaryTests(unittest.TestCase):
 
     def run_host(self, answer_code=ANSWER_CODE, *, grader_code=GRADER_CODE,
                  answer_timeout_s=2, wall_limit_ns=5_000_000_000,
-                 prepared=None, grader_context=None, grader_model=None):
+                 prepared=None, grader_context=None, grader_model=None,
+                 answer_execution_identity=None, grader_execution_identity=None,
+                 strict_contracts=False):
         trial = Trial(identity(), Budget(0, wall_limit_ns), execution="fixture")
         return run_process_trial(
             trial,
@@ -112,6 +148,10 @@ class HostBoundaryTests(unittest.TestCase):
             grader_timeout_s=2,
             grader_context=grader_context,
             grader_model=grader_model,
+            answer_response_contract=(ANSWER_RESPONSE_CONTRACT if strict_contracts else None),
+            grader_response_contract=(GRADER_RESPONSE_CONTRACT if strict_contracts else None),
+            answer_execution_identity=answer_execution_identity,
+            grader_execution_identity=grader_execution_identity,
         )
 
     def test_real_answer_and_independent_grader_subprocesses(self):
@@ -210,6 +250,91 @@ if "response_contract" in payload:''')
         result = self.run_host(grader_model="different-grader")
         self.assertEqual(result["terminal_reason"], "measurement_error")
         self.assertEqual(result["attempts"][0]["failure_reason"], "grader_model_mismatch")
+
+    def test_strict_identity_accepts_null_usage_without_inventing_telemetry(self):
+        answer_identity = {
+            "model": "fixture-model", "reasoning": "none", "role": "answer",
+            "trial_id": "trial1", "thread_id": "answer-thread",
+        }
+        grader_identity = {
+            "model": "fixture-grader", "reasoning": "none", "role": "grader",
+            "trial_id": "trial1", "thread_id": "grader-thread",
+        }
+        result = self.run_host(
+            identified_code("answer", answer_identity),
+            grader_code=identified_code("grader", grader_identity),
+            grader_model="fixture-grader",
+            answer_execution_identity=answer_identity,
+            grader_execution_identity=grader_identity,
+            strict_contracts=True,
+        )
+        self.assertEqual(result["terminal_reason"], "passed")
+        self.assertIsNone(result["total_input_tokens"])
+        self.assertIsNone(result["total_output_tokens"])
+        self.assertIsNone(result["all_attempt_cost_usd"])
+        self.assertTrue(all(
+            row["provenance"] == "unavailable"
+            for row in result["attempts"][0]["model_calls"]
+        ))
+        self.assertEqual(
+            result["attempts"][0]["answer_boundary"]["execution_identity"],
+            answer_identity,
+        )
+        self.assertEqual(
+            result["attempts"][0]["grader_boundary"]["execution_identity"],
+            grader_identity,
+        )
+
+    def test_strict_answer_identity_rejects_absent_or_substituted_fields(self):
+        expected = {
+            "model": "fixture-model", "reasoning": "none", "role": "answer",
+            "trial_id": "trial1", "thread_id": "answer-thread",
+        }
+        grader_identity = {
+            "model": "fixture-grader", "reasoning": "none", "role": "grader",
+            "trial_id": "trial1", "thread_id": "grader-thread",
+        }
+        cases = [("absent", None)]
+        for field, value in (
+            ("model", "substitute-model"), ("reasoning", "high"),
+            ("role", "grader"), ("trial_id", "other-trial"),
+            ("thread_id", "other-thread"),
+        ):
+            cases.append((field, {**expected, field: value}))
+        for label, observed in cases:
+            with self.subTest(label=label):
+                result = self.run_host(
+                    identified_code("answer", observed),
+                    grader_code=identified_code("grader", grader_identity),
+                    grader_model="fixture-grader",
+                    answer_execution_identity=expected,
+                    grader_execution_identity=grader_identity,
+                    strict_contracts=True,
+                )
+                self.assertEqual(result["terminal_reason"], "measurement_error")
+
+    def test_strict_grader_identity_rejects_absence_or_substitution(self):
+        answer_identity = {
+            "model": "fixture-model", "reasoning": "none", "role": "answer",
+            "trial_id": "trial1", "thread_id": "answer-thread",
+        }
+        expected = {
+            "model": "fixture-grader", "reasoning": "none", "role": "grader",
+            "trial_id": "trial1", "thread_id": "grader-thread",
+        }
+        for label, observed in (
+            ("absent", None), ("wrong_role", {**expected, "role": "answer"}),
+        ):
+            with self.subTest(label=label):
+                result = self.run_host(
+                    identified_code("answer", answer_identity),
+                    grader_code=identified_code("grader", observed),
+                    grader_model="fixture-grader",
+                    answer_execution_identity=answer_identity,
+                    grader_execution_identity=expected,
+                    strict_contracts=True,
+                )
+                self.assertEqual(result["terminal_reason"], "measurement_error")
 
     def test_process_error_does_not_expose_stderr(self):
         result = self.run_host("import sys; sys.stderr.write('secret-value'); raise SystemExit(2)")

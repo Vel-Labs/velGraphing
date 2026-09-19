@@ -272,7 +272,7 @@ not remove or modify the retained private artifacts.
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
 
-## Luna Successor Blind-Review Repair
+## Luna Successor Blind-Review Repair (R2, Superseded by R3 Plan)
 
 The blind review returned `REVISE`. This repair resolves each finding without
 running the study. S-01 now asks for a source citation and requires
@@ -338,7 +338,12 @@ candidate audit is the current gate.
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 
-## Luna Four-Task Successor Freeze
+## HISTORICAL/SUPERSEDED: Initial Luna Four-Task Successor Freeze (R1)
+
+This retained block records the initial R1 freeze. Its hashes, run root, and
+review gate are not active. The R2 blind-review section above records the
+rubric correction. The R3 lane-identity section below records the active
+offline freeze.
 
 T030 now has a new study identity:
 `velgraphing-v4-luna-four-task-successor-v1`. It does not rescore or replace any
@@ -417,5 +422,55 @@ credential, network, push, or pull-request action ran.
 - `scripts/benchmarks/time_to_correct_host.py`
 - `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
 - `tests/benchmarks/test_time_to_correct_host.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
+
+## Luna Successor Lane Identity Repair (R3, Current)
+
+The exact-candidate audit found that null usage did not prove the Luna/medium
+lane. R3 fixes the host boundary without changing sealed historical response
+contracts. The successor run command now requires one canonical, source-free
+lane manifest. It must contain exactly 32 entries: one answer lane and one
+grader lane for each frozen trial. Every entry binds the trial, role, unique
+Codex thread, `gpt-5.6-luna`, medium reasoning, canonical argv, and argv hash.
+Missing or extra entries, thread reuse, wrong lane identity, and argv hash
+drift fail before trial acceptance. Parent will create and bind the actual
+threads in this manifest. No thread exists yet.
+
+The successor adds `execution_identity` to each answer and grader output
+contract. The host requires exact model, reasoning, role, trial, and thread
+identity even when usage is null. Null usage remains unavailable telemetry.
+The host does not invent token counts or cost. Legacy controllers keep their
+existing output shapes because strict identity is opt-in at the host boundary.
+
+The active R3 freeze binds:
+
+- candidate SHA-256
+  `9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61`;
+- preview SHA-256
+  `8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9`;
+- lane manifest contract SHA-256
+  `46e2e18a102b376cee5df40e7ba205c305a415a37e4e025addc39dc73319b4be`;
+- source-free plan SHA-256
+  `c9ea95114d6da4cbc36c7c19f6d4d625a1b3122a6542c22e0881ce82076141f8`;
+- r3 offline preflight receipt SHA-256
+  `08a8583a1945c851473303e466fec9884f04a101c596994501007f4f63e4d3f1`.
+
+The offline preflight regenerated the frozen source-bound inputs and passed.
+It retained eight planned Jev calls and made zero provider calls. The focused
+host and successor checks passed `22` tests. The mapped benchmark, host,
+calibration, Jev, and selector suite passed `190` tests. JSON and YAML
+structure checks and `git diff --check` passed. No provider, model, credential,
+network, thread, push, or pull-request action ran.
+
+T030 remains active. Parent exact-candidate reaudit is the current gate.
+
+### R3 Files Changed
+
+- `benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json`
+- `scripts/benchmarks/time_to_correct_host.py`
+- `scripts/benchmarks/time_to_correct_luna_successor_v4.py`
+- `tests/benchmarks/test_time_to_correct_host.py`
+- `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`

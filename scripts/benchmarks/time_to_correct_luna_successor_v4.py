@@ -52,7 +52,22 @@ PROVIDER_TIMEOUT_SECONDS = 10
 ANSWER_TIMEOUT_SECONDS = 180
 GRADER_TIMEOUT_SECONDS = 120
 TRIAL_WALL_LIMIT_SECONDS = 600
-RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r2"
+RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r3"
+LANE_ROLES = ("answer", "grader")
+LANE_MANIFEST_SCHEMA = "velgraphing-v4-luna-lane-manifest-v1"
+LANE_ENTRY_FIELDS = (
+    "trial_id", "role", "thread_id", "model", "reasoning", "argv", "argv_sha256",
+)
+LANE_MANIFEST_CONTRACT = {
+    "schema_version": LANE_MANIFEST_SCHEMA,
+    "entry_count": len(DISPATCH) * len(LANE_ROLES),
+    "roles": list(LANE_ROLES),
+    "required_identity_fields": list(LANE_ENTRY_FIELDS),
+    "model": ANSWER_MODEL,
+    "reasoning": REASONING,
+    "thread_reuse": "forbidden",
+    "argv_identity": "sha256_of_canonical_argv",
+}
 QUESTIONS_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/luna-successor-questions.json"
 RUBRICS_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/luna-successor-rubrics.json"
 PLAN_PATH = ROOT / "benchmarks/velgraphing-time-to-correct-v4/luna-successor-plan.json"
@@ -71,6 +86,7 @@ STOP_RULES = [
     "stop_on_required_evidence_loss_or_source_revalidation_failure",
     "stop_on_provider_retry_or_call_cap_exhaustion",
     "stop_on_answer_or_grader_model_mismatch",
+    "stop_on_lane_manifest_or_execution_identity_mismatch",
     "stop_on_lane_state_change",
     "stop_after_any_systemic_trial_failure",
 ]
@@ -208,16 +224,17 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
             "preview_artifact", "question_registry", "rubric_manifest",
             "source_snapshots", "models", "limits", "dispatch_order",
             "arm_preflight", "stop_rules", "call_authorization", "run_root",
-            "live_authorized", "provider_calls_executed",
+            "live_authorized", "provider_calls_executed", "lane_manifest_contract",
         }
-        or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v1"
+        or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v2"
         or plan["study_id"] != STUDY_ID
-        or plan["status"] != "offline_frozen_parent_exact_candidate_audit_pending"
+        or plan["status"] != "offline_frozen_parent_exact_candidate_reaudit_pending"
         or plan["run_root"] != RUN_ROOT
         or plan["live_authorized"] is not expected_live_authorized
         or plan["provider_calls_executed"] != 0
         or plan["dispatch_order"] != list(DISPATCH)
         or plan["source_snapshots"] != SNAPSHOTS
+        or plan["lane_manifest_contract"] != LANE_MANIFEST_CONTRACT
         or candidate != {
             "path": ".inputs/t030-luna-successor-ranked-candidates-a14e1de.json",
             "sha256": "9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61",
@@ -495,6 +512,7 @@ def preflight(
         "planned_jev_calls": planned_calls,
         "provider_calls_executed": 0,
         "live_authorized": expected_live_authorized,
+        "lane_manifest_contract_sha256": digest(canonical(LANE_MANIFEST_CONTRACT)),
         "arm_preflight": observed,
     }
 
@@ -545,8 +563,8 @@ def run_trial(
     lanes_root: Path,
     call_disposition: str,
     *,
-    answer_argv: list[str],
-    grader_argv: list[str],
+    answer_lane: Mapping[str, Any],
+    grader_lane: Mapping[str, Any],
     ledger: LiveJevBudget,
     evaluate: Callable[..., Mapping[str, Any]] = jev.evaluate,
     execution: str = "observed",
@@ -643,12 +661,14 @@ def run_trial(
         return payload
 
     result = run_process_trial(
-        trial, prepare, answer_argv=answer_argv, grader_argv=grader_argv,
+        trial, prepare, answer_argv=answer_lane["argv"], grader_argv=grader_lane["argv"],
         cwd=ROOT, answer_timeout_s=ANSWER_TIMEOUT_SECONDS,
         grader_timeout_s=GRADER_TIMEOUT_SECONDS,
         grader_context=grader_rubric(rubric), grader_model=GRADER_MODEL,
         answer_response_contract=ANSWER_RESPONSE_CONTRACT,
         grader_response_contract=GRADER_RESPONSE_CONTRACT,
+        answer_execution_identity=_lane_execution_identity(answer_lane),
+        grader_execution_identity=_lane_execution_identity(grader_lane),
     )
     if dependency.lane_state_sha256(
         lane_root, SNAPSHOTS[question["corpus"]]
@@ -657,23 +677,54 @@ def run_trial(
     return result
 
 
-def _argv_map(path: Path, root: Path) -> dict[str, list[str]]:
-    if not path.is_absolute() or path.parent != root or path.is_symlink():
-        raise SuccessorError("successor_lane_commands_invalid")
-    value = _read_json(path, "successor_lane_commands_invalid")
-    if path.read_bytes() != canonical(value) or set(value) != set(DISPATCH):
-        raise SuccessorError("successor_lane_commands_invalid")
-    for trial_id, command in value.items():
+def _lane_execution_identity(entry: Mapping[str, Any]) -> dict[str, str]:
+    return {key: entry[key] for key in ("model", "reasoning", "role", "trial_id", "thread_id")}
+
+
+def _validate_lane_entries(value: Any) -> dict[tuple[str, str], dict[str, Any]]:
+    if type(value) is not list or len(value) != LANE_MANIFEST_CONTRACT["entry_count"]:
+        raise SuccessorError("successor_lane_manifest_invalid")
+    expected = {(trial_id, role) for trial_id in DISPATCH for role in LANE_ROLES}
+    entries: dict[tuple[str, str], dict[str, Any]] = {}
+    threads: set[str] = set()
+    for entry in value:
+        if type(entry) is not dict or set(entry) != set(LANE_ENTRY_FIELDS):
+            raise SuccessorError("successor_lane_manifest_invalid")
+        trial_id = entry["trial_id"]
+        role = entry["role"]
+        thread_id = entry["thread_id"]
+        command = entry["argv"]
         if (
-            type(command) is not list or not command
+            (trial_id, role) not in expected
+            or type(thread_id) is not str or not thread_id or thread_id in threads
+            or entry["model"] != ANSWER_MODEL or entry["reasoning"] != REASONING
+            or type(command) is not list or not command
             or not all(type(argument) is str and argument for argument in command)
             or not Path(command[0]).is_absolute()
             or not Path(command[0]).is_file()
             or not os.access(command[0], os.X_OK)
-            or trial_id not in DISPATCH
+            or entry["argv_sha256"] != digest(canonical(command))
+            or (trial_id, role) in entries
         ):
-            raise SuccessorError("successor_lane_commands_invalid")
-    return value
+            raise SuccessorError("successor_lane_manifest_invalid")
+        entries[(trial_id, role)] = entry
+        threads.add(thread_id)
+    if set(entries) != expected:
+        raise SuccessorError("successor_lane_manifest_invalid")
+    return entries
+
+
+def _lane_manifest(path: Path, root: Path) -> dict[tuple[str, str], dict[str, Any]]:
+    if not path.is_absolute() or path.parent != root or path.is_symlink():
+        raise SuccessorError("successor_lane_manifest_invalid")
+    value = _read_json(path, "successor_lane_manifest_invalid")
+    if (
+        path.read_bytes() != canonical(value)
+        or set(value) != {"schema_version", "entries"}
+        or value["schema_version"] != LANE_MANIFEST_SCHEMA
+    ):
+        raise SuccessorError("successor_lane_manifest_invalid")
+    return _validate_lane_entries(value["entries"])
 
 
 def _validated_run_root(path: Path) -> Path:
@@ -692,8 +743,7 @@ def run_successor(
     preview_path: Path,
     run_root: Path,
     *,
-    answer_argv: Mapping[str, list[str]],
-    grader_argv: Mapping[str, list[str]],
+    lane_manifest: Mapping[tuple[str, str], Mapping[str, Any]],
     evaluate: Callable[..., Mapping[str, Any]] = jev.evaluate,
     execution: str = "observed",
 ) -> dict[str, Any]:
@@ -711,8 +761,10 @@ def run_successor(
     )
     runs = {(row["task_id"], row["route"]): row for row in artifact["runs"]}
     dispositions = {row["trial_id"]: row["call_disposition"] for row in frozen["arm_preflight"]}
-    if set(answer_argv) != set(DISPATCH) or set(grader_argv) != set(DISPATCH):
-        raise SuccessorError("successor_lane_commands_invalid")
+    validated_lanes = _validate_lane_entries(list(lane_manifest.values()))
+    if set(lane_manifest) != set(validated_lanes):
+        raise SuccessorError("successor_lane_manifest_invalid")
+    lane_manifest = validated_lanes
     ledger = LiveJevBudget(run_root, plan["call_authorization"]["planned_calls"])
     results = []
     for trial_id in DISPATCH:
@@ -721,7 +773,8 @@ def run_successor(
         result = run_trial(
             task_id, arm, question, rubrics[task_id], runs[(task_id, ARMS[arm])],
             manifests_root, lanes_root, dispositions[trial_id],
-            answer_argv=answer_argv[trial_id], grader_argv=grader_argv[trial_id],
+            answer_lane=lane_manifest[(trial_id, "answer")],
+            grader_lane=lane_manifest[(trial_id, "grader")],
             ledger=ledger, evaluate=evaluate, execution=execution,
         )
         results.append(result)
@@ -762,8 +815,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_parser = commands.add_parser("run")
     _add_inputs(run_parser)
     run_parser.add_argument("--run-root", type=Path, required=True)
-    run_parser.add_argument("--answer-argv-json", type=Path, required=True)
-    run_parser.add_argument("--grader-argv-json", type=Path, required=True)
+    run_parser.add_argument("--lane-manifest", type=Path, required=True)
     run_parser.add_argument("--output", type=Path, required=True)
     arguments = parser.parse_args(argv)
     try:
@@ -787,8 +839,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise SuccessorError("successor_output_invalid")
         result = run_successor(
             *inputs, root,
-            answer_argv=_argv_map(arguments.answer_argv_json, root),
-            grader_argv=_argv_map(arguments.grader_argv_json, root),
+            lane_manifest=_lane_manifest(arguments.lane_manifest, root),
         )
         atomic_write(output, canonical(result))
         print(canonical({

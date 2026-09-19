@@ -1,7 +1,7 @@
 {
-  "schema_version": "velgraphing-v4-luna-successor-plan-v1",
+  "schema_version": "velgraphing-v4-luna-successor-plan-v2",
   "study_id": "velgraphing-v4-luna-four-task-successor-v1",
-  "status": "offline_frozen_parent_exact_candidate_audit_pending",
+  "status": "offline_frozen_parent_exact_candidate_reaudit_pending",
   "candidate_artifact": {
     "path": ".inputs/t030-luna-successor-ranked-candidates-a14e1de.json",
     "sha256": "9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61",
@@ -32,6 +32,18 @@
     "reasoning": "medium",
     "jev": "jev-1.13.0",
     "jev_rubric_version": "evidence-usefulness-v1"
+  },
+  "lane_manifest_contract": {
+    "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
+    "entry_count": 32,
+    "roles": ["answer", "grader"],
+    "required_identity_fields": [
+      "trial_id", "role", "thread_id", "model", "reasoning", "argv", "argv_sha256"
+    ],
+    "model": "gpt-5.6-luna",
+    "reasoning": "medium",
+    "thread_reuse": "forbidden",
+    "argv_identity": "sha256_of_canonical_argv"
   },
   "limits": {
     "candidate_count": 64,
@@ -79,6 +91,7 @@
     "stop_on_required_evidence_loss_or_source_revalidation_failure",
     "stop_on_provider_retry_or_call_cap_exhaustion",
     "stop_on_answer_or_grader_model_mismatch",
+    "stop_on_lane_manifest_or_execution_identity_mismatch",
     "stop_on_lane_state_change",
     "stop_after_any_systemic_trial_failure"
   ],
@@ -95,7 +108,7 @@
     "aggregate_authorization_envelope_usd": 0.077070336,
     "authorization_remaining_usd": 0.922929664
   },
-  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r2",
+  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r3",
   "live_authorized": false,
   "provider_calls_executed": 0
 }
