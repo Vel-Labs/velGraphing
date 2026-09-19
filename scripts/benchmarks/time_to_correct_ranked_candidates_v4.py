@@ -52,6 +52,9 @@ PRODUCTION_STUDY = "velgraphing-v4-six-task-production"
 HIGH_RECALL_STUDY = "velgraphing-v4-six-task-high-recall-v1"
 RELATIONAL_CANARY_STUDY = "velgraphing-v4-relational-canary-v1"
 THEALGORITHMS_IMPORT_CANARY_STUDY = "velgraphing-v4-thealgorithms-import-canary-v1"
+THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY = (
+    "velgraphing-v4-thealgorithms-dependency-behavior-canary-v1"
+)
 ROUTES = (
     "direct",
     "tag_index",
@@ -88,6 +91,11 @@ STUDY_CANDIDATE_CONTROLS = {
         CANDIDATE_UNIT_BYTE_BUDGET,
     ),
     THEALGORITHMS_IMPORT_CANARY_STUDY: (
+        HIGH_RECALL_CANDIDATE_LIMIT,
+        HIGH_RECALL_AGGREGATE_BYTE_BUDGET,
+        CANDIDATE_UNIT_BYTE_BUDGET,
+    ),
+    THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY: (
         HIGH_RECALL_CANDIDATE_LIMIT,
         HIGH_RECALL_AGGREGATE_BYTE_BUDGET,
         CANDIDATE_UNIT_BYTE_BUDGET,
@@ -496,7 +504,10 @@ def generate(
         ]
         if len(matching_edges) != 1:
             raise GenerationError("relational_canary_edge_mismatch")
-    if study_id == THEALGORITHMS_IMPORT_CANARY_STUDY:
+    if study_id in {
+        THEALGORITHMS_IMPORT_CANARY_STUDY,
+        THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY,
+    }:
         if set(prepared) != {"thealgorithms-python"}:
             raise GenerationError("thealgorithms_import_canary_corpus_mismatch")
         typed_graph = prepared["thealgorithms-python"][3]
@@ -697,6 +708,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             HIGH_RECALL_STUDY,
             RELATIONAL_CANARY_STUDY,
             THEALGORITHMS_IMPORT_CANARY_STUDY,
+            THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY,
         ),
         default=PRODUCTION_STUDY,
     )

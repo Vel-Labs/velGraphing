@@ -96,6 +96,85 @@ def typed_fixture():
     return artifact, labels
 
 
+def registered_thealgorithms_canary(study):
+    parent = candidate("sorts/benchmark_sorts.py", 1000, 2000)
+    support = candidate(
+        "sorts/quick_sort.py", 253, 1299, parent=parent["id"]
+    )
+    if study == mod.THEALGORITHMS_IMPORT_CANARY_STUDY:
+        control = [parent, *[
+            candidate(f"noise-{index:02d}.md", 0, 600)
+            for index in range(26)
+        ], candidate("noise-26.md", 0, 1263)]
+        typed_candidates = [*control, support]
+        task = "I-01"
+        prompt_sha256 = mod.THEALGORITHMS_IMPORT_CANARY_QUESTIONS[task][1]
+        registry_sha256 = mod.THEALGORITHMS_IMPORT_CANARY_QUESTION_REGISTRY_SHA256
+    else:
+        control = [parent, *[
+            candidate(f"noise-{index:02d}.md", 0, 450)
+            for index in range(60)
+        ], candidate("noise-60.md", 0, 925),
+            candidate("noise-61.md", 0, 65),
+            candidate("noise-62.md", 0, 65)]
+        typed_candidates = [parent, support, *control[1:-1]]
+        task = "D-01"
+        prompt_sha256 = mod.THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_QUESTIONS[task][1]
+        registry_sha256 = (
+            mod.THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_QUESTION_REGISTRY_SHA256
+        )
+    source_lengths = {
+        row["path"]: max(2000, row["byte_end"])
+        for row in [*control, support]
+    }
+    sources = [
+        {"path": path, "source_sha256": SHA, "byte_length": source_lengths[path]}
+        for path in sorted(source_lengths)
+    ]
+    snapshot = SourceSnapshotV4(tuple(
+        SourceIdentityV4(row["path"], row["byte_length"], row["source_sha256"])
+        for row in sources
+    )).snapshot_sha256
+    template = {
+        "task_id": task,
+        "corpus": "thealgorithms-python",
+        "prompt_sha256": prompt_sha256,
+        "source_snapshot_sha256": snapshot,
+        "sources": sources,
+        "metrics": dict.fromkeys((
+            "source_operations", "cold_ns", "warm_ns", "retrieval_ns",
+            "expansion_ns", "fallback_ns", "source_failures", "authority_failures",
+        )),
+    }
+    runs = []
+    for route in sorted(mod.ROUTES):
+        typed = route.startswith("typed_graph")
+        row = copy.deepcopy(template)
+        row["route"] = route
+        row["candidates"] = copy.deepcopy(
+            typed_candidates if route == "typed_graph" else control
+        )
+        row["controls"] = {
+            "seed_record_ids": ["repo:sorts/benchmark_sorts.py"],
+            "seed_limit": 12,
+            "candidate_limit": 64,
+            "candidate_aggregate_byte_budget": 32_768,
+            "candidate_unit_byte_budget": 4096,
+            "derived_edge_count": 16 if typed else 0,
+            "active_edge_count": 16 if route in {"typed_graph", "typed_graph_no_expansion"} else 0,
+            "source_bound_expansion": typed,
+            "expand_one_hop": route in {"typed_graph", "typed_graph_no_edges"},
+        }
+        runs.append(row)
+    return {
+        "schema_version": mod.CANDIDATE_SCHEMA_VERSION,
+        "study_id": study,
+        "selector_commit": "1" * 40,
+        "question_registry_sha256": registry_sha256,
+        "runs": runs,
+    }
+
+
 class RetrievalEvaluationTests(unittest.TestCase):
     def test_exact_path_and_range_support_at_second_rank(self):
         result = run(*fixture())["results"][0]
@@ -363,69 +442,119 @@ class RetrievalEvaluationTests(unittest.TestCase):
         mod.validate_candidates(artifact)
 
     def test_registered_thealgorithms_import_canary_is_exact(self):
-        parent = candidate("sorts/benchmark_sorts.py", 1000, 2000)
-        noise = [
-            candidate(f"noise-{index:02d}.md", 0, 600)
-            for index in range(26)
-        ]
-        noise.append(candidate("noise-26.md", 0, 1263))
-        control = [parent, *noise]
-        support = candidate(
-            "sorts/quick_sort.py", 253, 1299, parent=parent["id"]
-        )
-        source_lengths = {
-            candidate_row["path"]: max(2000, candidate_row["byte_end"])
-            for candidate_row in [*control, support]
-        }
-        sources = [
-            {"path": path, "source_sha256": SHA, "byte_length": source_lengths[path]}
-            for path in sorted(source_lengths)
-        ]
-        snapshot = SourceSnapshotV4(tuple(
-            SourceIdentityV4(row["path"], row["byte_length"], row["source_sha256"])
-            for row in sources
-        )).snapshot_sha256
-        template = {
-            "task_id": "I-01",
-            "corpus": "thealgorithms-python",
-            "prompt_sha256": mod.THEALGORITHMS_IMPORT_CANARY_QUESTIONS["I-01"][1],
-            "source_snapshot_sha256": snapshot,
-            "sources": sources,
-            "metrics": dict.fromkeys((
-                "source_operations", "cold_ns", "warm_ns", "retrieval_ns",
-                "expansion_ns", "fallback_ns", "source_failures", "authority_failures",
-            )),
-        }
-        runs = []
-        for route in sorted(mod.ROUTES):
-            typed = route.startswith("typed_graph")
-            row = copy.deepcopy(template)
-            row["route"] = route
-            row["candidates"] = (
-                [*control, support] if route == "typed_graph" else copy.deepcopy(control)
-            )
-            row["controls"] = {
-                "seed_record_ids": ["repo:sorts/benchmark_sorts.py"],
-                "seed_limit": 12,
-                "candidate_limit": 64,
-                "candidate_aggregate_byte_budget": 32_768,
-                "candidate_unit_byte_budget": 4096,
-                "derived_edge_count": 16 if typed else 0,
-                "active_edge_count": 16 if route in {"typed_graph", "typed_graph_no_expansion"} else 0,
-                "source_bound_expansion": typed,
-                "expand_one_hop": route in {"typed_graph", "typed_graph_no_edges"},
-            }
-            runs.append(row)
-        artifact = {
-            "schema_version": mod.CANDIDATE_SCHEMA_VERSION,
-            "study_id": mod.THEALGORITHMS_IMPORT_CANARY_STUDY,
-            "selector_commit": "1" * 40,
-            "question_registry_sha256": (
-                mod.THEALGORITHMS_IMPORT_CANARY_QUESTION_REGISTRY_SHA256
+        for study in (
+            mod.THEALGORITHMS_IMPORT_CANARY_STUDY,
+            mod.THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY,
+        ):
+            with self.subTest(study=study):
+                mod.validate_candidates(registered_thealgorithms_canary(study))
+
+    def test_registered_thealgorithms_canary_guards_reject_mutations(self):
+        for study, prefix in (
+            (mod.THEALGORITHMS_IMPORT_CANARY_STUDY, "thealgorithms_import_canary"),
+            (
+                mod.THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY,
+                "thealgorithms_dependency_canary",
             ),
-            "runs": runs,
-        }
-        mod.validate_candidates(artifact)
+        ):
+            artifact = registered_thealgorithms_canary(study)
+            changed = copy.deepcopy(artifact)
+            for run in changed["runs"]:
+                if run["route"].startswith("typed_graph"):
+                    run["controls"]["derived_edge_count"] = 15
+                    if run["route"] != "typed_graph_no_edges":
+                        run["controls"]["active_edge_count"] = 15
+            with self.subTest(study=study, mutation="edge_count"), self.assertRaisesRegex(
+                mod.EvaluationError, f"{prefix}_edge_mismatch"
+            ):
+                mod.validate_candidates(changed)
+
+            changed = copy.deepcopy(artifact)
+            tag = next(run for run in changed["runs"] if run["route"] == "tag_index")
+            tag["candidates"][-2:] = reversed(tag["candidates"][-2:])
+            with self.subTest(study=study, mutation="control_identity"), self.assertRaisesRegex(
+                mod.EvaluationError, f"{prefix}_control_mismatch"
+            ):
+                mod.validate_candidates(changed)
+
+            changed = copy.deepcopy(artifact)
+            for run in changed["runs"]:
+                old_parent = run["candidates"][0]
+                old_id = old_parent["id"]
+                old_parent.update(
+                    path="sorts/quick_sort.py",
+                    record_id="repo:sorts/quick_sort.py",
+                )
+                old_parent["id"] = mod.candidate_id(old_parent)
+                for row in run["candidates"]:
+                    if row["relationship_parent_candidate_id"] == old_id:
+                        row["relationship_parent_candidate_id"] = old_parent["id"]
+            with self.subTest(study=study, mutation="target_primary"), self.assertRaisesRegex(
+                mod.EvaluationError, f"{prefix}_target_is_primary"
+            ):
+                mod.validate_candidates(changed)
+
+            changed = copy.deepcopy(artifact)
+            for run in changed["runs"]:
+                old_parent = run["candidates"][0]
+                old_id = old_parent["id"]
+                old_parent.update(byte_start=0, byte_end=1000)
+                old_parent["id"] = mod.candidate_id(old_parent)
+                for row in run["candidates"]:
+                    if row["relationship_parent_candidate_id"] == old_id:
+                        row["relationship_parent_candidate_id"] = old_parent["id"]
+            with self.subTest(study=study, mutation="parent_coordinate"), self.assertRaisesRegex(
+                mod.EvaluationError, f"{prefix}_source_mismatch"
+            ):
+                mod.validate_candidates(changed)
+
+            changed = copy.deepcopy(artifact)
+            typed = next(run for run in changed["runs"] if run["route"] == "typed_graph")
+            child = next(
+                row for row in typed["candidates"]
+                if row["relationship_parent_candidate_id"] is not None
+            )
+            child.update(byte_start=0, byte_end=1046)
+            child["id"] = mod.candidate_id(child)
+            with self.subTest(study=study, mutation="child_coordinate"), self.assertRaisesRegex(
+                mod.EvaluationError, f"{prefix}_target_mismatch"
+            ):
+                mod.validate_candidates(changed)
+
+        artifact = registered_thealgorithms_canary(
+            mod.THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY
+        )
+        changed = copy.deepcopy(artifact)
+        typed = next(run for run in changed["runs"] if run["route"] == "typed_graph")
+        relationship = next(
+            row for row in typed["candidates"]
+            if row["relationship_parent_candidate_id"] is not None
+        )
+        direct = next(run for run in changed["runs"] if run["route"] == "direct")
+        typed["candidates"] = [
+            direct["candidates"][0], relationship,
+            *direct["candidates"][1:-2], direct["candidates"][-1],
+        ]
+        with self.assertRaisesRegex(mod.EvaluationError, "typed_primary_candidate_mismatch"):
+            mod.validate_candidates(changed)
+
+        changed = copy.deepcopy(artifact)
+        for run in changed["runs"]:
+            if run["route"] != "typed_graph":
+                run["candidates"][-1]["required"] = True
+        with self.assertRaisesRegex(
+            mod.EvaluationError, "thealgorithms_dependency_canary_displacement_mismatch"
+        ):
+            mod.validate_candidates(changed)
+
+        changed = copy.deepcopy(artifact)
+        for run in changed["runs"]:
+            if run["route"] != "typed_graph":
+                run["candidates"].pop()
+        with self.assertRaisesRegex(
+            mod.EvaluationError, "thealgorithms_dependency_canary_control_count_mismatch"
+        ):
+            mod.validate_candidates(changed)
 
     def test_malformed_route_types_fail_with_schema_error(self):
         for route in (None, [], 3, "invented_route"):

@@ -137,6 +137,37 @@ class RankedCandidateTests(unittest.TestCase):
         )
         self.assertNotIn("quick_sort", import_rows[0]["prompt"])
 
+        dependency_questions = (
+            ROOT
+            / "benchmarks/velgraphing-time-to-correct-v4/thealgorithms-dependency-behavior-canary-questions.json"
+        )
+        dependency_rows, dependency_registry_sha256 = mod._questions(
+            dependency_questions
+        )
+        self.assertEqual(
+            mod.STUDY_CANDIDATE_CONTROLS[
+                mod.THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_STUDY
+            ],
+            (64, 32_768, 4096),
+        )
+        self.assertEqual(
+            dependency_registry_sha256,
+            mod.candidate_evaluator.THEALGORITHMS_DEPENDENCY_BEHAVIOR_CANARY_QUESTION_REGISTRY_SHA256,
+        )
+        self.assertEqual(
+            dependency_rows,
+            [{
+                "id": "D-01",
+                "corpus": "thealgorithms-python",
+                "prompt": (
+                    "In sorts/benchmark_sorts.py, follow the imported dependency "
+                    "immediately after merge_sort and explain how that target "
+                    "implementation orders values, including duplicate handling."
+                ),
+            }],
+        )
+        self.assertNotIn("quick_sort", dependency_rows[0]["prompt"])
+
     def test_relational_canary_prompt_isolated_by_typed_expansion(self) -> None:
         sources = {
             f"noise-{index:02d}.md": (

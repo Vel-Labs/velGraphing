@@ -90,7 +90,7 @@ not a candidate-pool budget.
 ## Registered T030 successor freezes
 
 The historical six-task production study and its candidate artifact remain
-unchanged. Three successor oracle-blind study identities use the same bound-v2
+unchanged. Four successor oracle-blind study identities use the same bound-v2
 schema:
 
 - `velgraphing-v4-six-task-high-recall-v1` uses the existing tracked six-task
@@ -118,15 +118,29 @@ schema:
   edges and the unique source-bound `imports` edge from
   `repo:sorts/benchmark_sorts.py` bytes 1246-1256 to
   `repo:sorts/quick_sort.py` bytes 253-1296. Every route binds 64 candidates,
-  32,768 aggregate excerpt bytes, and 4,096 bytes per candidate.
+  32,768 aggregate excerpt bytes, and 4,096 bytes per candidate. Its independent
+  post-freeze span labels gave every route identical acceptable and critical
+  overlap. It is retained as mechanics-only evidence and rejected for positive
+  graph value.
+- `velgraphing-v4-thealgorithms-dependency-behavior-canary-v1` uses the tracked
+  registry at `thealgorithms-dependency-behavior-canary-questions.json`. Its
+  only task is `D-01` on the frozen TheAlgorithms snapshot. The registry
+  SHA-256 is
+  `a6006da0d7b2787a7fbb17e6f5a3f54d5a6409b170962c86e28f44b5bfa47897`.
+  The prompt identifies the dependency by its import position after
+  `merge_sort`; it does not name `quick_sort`. The generator requires the same
+  16 derived edges and exact source-bound `imports` edge. Every route binds 64
+  candidates, 32,768 aggregate excerpt bytes, and 4,096 bytes per candidate.
 
 The evaluator accepts these identities only with their exact question hashes,
 five-route matrices, controls, source snapshots, and typed-primary invariants.
-The active import canary requires 16 derived edges, one typed relationship
-candidate, no relationship candidates in the four controls, exact control
-candidate identity, and source and target candidate ranges that contain the
-registered coordinates. Unit fixtures test behavior but do not register
-benchmark authority.
+The active dependency-behavior canary requires 16 derived edges, one typed
+relationship candidate, no relationship candidates in the four controls,
+exact control candidate identity, and source and target candidate ranges that
+contain the registered coordinates. The typed route may displace exactly one
+optional control candidate when its relationship child fills the 64-candidate
+ceiling. It must preserve every required candidate. Unit fixtures test behavior
+but do not register benchmark authority.
 
 The generator accepts one new regular-file output directly under the benchmark
 `.inputs` directory. It rejects path traversal, symlinks, other destinations,

@@ -1,0 +1,10 @@
+{
+  "schema_version": "velgraphing-corpus-pilot-questions-v1",
+  "questions": [
+    {
+      "id": "D-01",
+      "corpus": "thealgorithms-python",
+      "prompt": "In sorts/benchmark_sorts.py, follow the imported dependency immediately after merge_sort and explain how that target implementation orders values, including duplicate handling."
+    }
+  ]
+}
