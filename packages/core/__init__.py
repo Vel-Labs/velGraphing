@@ -29,6 +29,7 @@ from .retrieval import (
     RepositoryTag,
     RepositoryFileCard,
     RepositoryTagIndex,
+    RelationshipSupport,
     RetrievalHit,
     RetrievalResult,
     SourcePreview,
@@ -71,7 +72,7 @@ from .routing_v4 import (
 from .navigation_v4 import NavigationItem, NavigationResult, NavigationV4, navigate_v4
 from .navigation_v5 import NavigationBudget, NavigationCost, NavigationStep, NavigationV5, NavigationV5Result, navigate_v5
 from .javascript_coordinates import JavaScriptCoordinateProvider
-from .source_coordinates import source_snapshot
+from .source_coordinates import SourceCoordinate, source_snapshot
 from .selection import (
     AssistObservation,
     AssistResult,
@@ -124,6 +125,7 @@ __all__ = [
     "RepositoryTag",
     "RepositoryFileCard",
     "RepositoryTagIndex",
+    "RelationshipSupport",
     "RetrievalHit",
     "RetrievalResult",
     "SourcePreview",
@@ -135,6 +137,7 @@ __all__ = [
     "Sensitivity",
     "SerializedProjection",
     "SourceIdentityV4",
+    "SourceCoordinate",
     "SourceReaderV4",
     "SourceSnapshotV4",
     "NavigationItem",

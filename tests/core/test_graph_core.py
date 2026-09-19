@@ -21,6 +21,7 @@ from packages.core import (
     RetentionClass,
     RetentionState,
     Sensitivity,
+    SourceCoordinate,
     SourceIdentityV4,
     SourceSnapshotV4,
     TaskSpec,
@@ -171,6 +172,47 @@ class ModelTests(unittest.TestCase):
             Graph((record("R1"),), (edge("E1", "R1", "missing"),))
         with self.assertRaises(ValueError):
             Graph((record("R1"), record("R1")))
+
+    def test_bound_edge_coordinates_are_exact_and_legacy_serialization_is_unchanged(self) -> None:
+        raw = b"graph contract"
+        digest = hashlib.sha256(raw).hexdigest()
+        source = record(
+            "R1", raw.decode(), provenance=Provenance("source.py", digest, "bytes", True)
+        )
+        target = record(
+            "R2", raw.decode(), provenance=Provenance("target.py", digest, "bytes", True)
+        )
+        source_coordinate = SourceCoordinate(
+            "b" * 64, "source.py", digest, 0, len(raw), 1, 1,
+            "python_import", "import", "graph",
+        )
+        target_coordinate = replace(
+            source_coordinate,
+            source_path="target.py",
+            entity_kind="python_declaration",
+            occurrence_role="definition",
+        )
+        bound = edge(
+            "E1", "R1", "R2",
+            provenance=source.provenance,
+            source_coordinate=source_coordinate,
+            target_coordinate=target_coordinate,
+        )
+        Graph((source, target), (bound,))
+        self.assertEqual(bound.to_dict()["source_coordinate"]["schema_version"], "source-coordinate-v1")
+        self.assertNotIn("source_coordinate", edge("legacy", "R1", "R2").to_dict())
+        with self.assertRaisesRegex(ValueError, "bind both"):
+            Graph((source, target), (replace(bound, target_coordinate=None),))
+        with self.assertRaisesRegex(ValueError, "path disagrees"):
+            Graph((source, target), (replace(bound, source_coordinate=replace(source_coordinate, source_path="target.py")),))
+        with self.assertRaisesRegex(ValueError, "cross source snapshots"):
+            Graph((source, target), (replace(bound, target_coordinate=replace(target_coordinate, snapshot_sha256="c" * 64)),))
+        with self.assertRaisesRegex(ValueError, "digest disagrees"):
+            Graph((source, target), (replace(bound, target_coordinate=replace(target_coordinate, source_sha256="c" * 64)),))
+        with self.assertRaisesRegex(ValueError, "does not match endpoint bytes"):
+            Graph((source, target), (replace(bound, target_coordinate=replace(target_coordinate, byte_end=len(raw) + 1)),))
+        with self.assertRaisesRegex(ValueError, "lines do not match"):
+            Graph((source, target), (replace(bound, target_coordinate=replace(target_coordinate, line_start=2, line_end=2)),))
 
     def test_every_authentication_gate_is_required(self) -> None:
         base = record("R1")

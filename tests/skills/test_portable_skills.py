@@ -394,6 +394,119 @@ class PortableSkillTests(unittest.TestCase):
             {item["source_path"] for item in second["hits"]},
         )
 
+    def test_graph_find_returns_only_uniquely_resolved_source_bound_support(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-edges-") as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "docs").mkdir()
+            (root / "src" / "caller.py").write_text(
+                "from src.helper import helper\n\ndef call_helper():\n    return helper()\n",
+                encoding="utf-8",
+            )
+            (root / "src" / "helper.py").write_text(
+                "def helper():\n    return 1\n", encoding="utf-8"
+            )
+            (root / "README.md").write_text(
+                "# Start\nSee the [install guide](docs/guide.md#install).\n",
+                encoding="utf-8",
+            )
+            (root / "docs" / "guide.md").write_text(
+                "# Install\nUse call_helper.\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find call_helper install guide",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        supports = payload["relationship_supports"]
+        self.assertEqual({item["relation"] for item in supports}, {"imports", "links_to_heading"})
+        self.assertEqual(payload["scan"]["edges_derived"], 2)
+        self.assertTrue(all(item["source_coordinate"]["schema_version"] == "source-coordinate-v1" for item in supports))
+        self.assertNotIn("return helper()", result.stdout)
+
+    def test_graph_find_leaves_ambiguous_relations_unresolved(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-ambiguous-") as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "src" / "caller.py").write_text(
+                "from src.helper import helper\n", encoding="utf-8"
+            )
+            (root / "src" / "helper.py").write_text(
+                "def helper():\n    return 1\n\ndef helper():\n    return 2\n",
+                encoding="utf-8",
+            )
+            (root / "README.md").write_text(
+                "# Topic\n# Topic\n[topic](README.md#topic)\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [sys.executable, str(script), "--root", str(root), "--prompt", "find helper topic"],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["scan"]["edges_derived"], 0)
+        self.assertEqual(payload["relationship_supports"], [])
+
+    def test_graph_find_rejects_unsupported_imports_and_markdown_links(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-rejected-edges-") as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "docs").mkdir()
+            (root / "src" / "caller.py").write_text(
+                "import src.helper\nfrom src.helper import *\nfrom missing import helper\n",
+                encoding="utf-8",
+            )
+            (root / "src" / "helper.py").write_text(
+                "def helper():\n    return 1\n", encoding="utf-8"
+            )
+            (root / "README.md").write_text(
+                "# Topic\n"
+                "[external](https://example.com/page#topic)\n"
+                "[alias](docs/../README.md#topic)\n"
+                "[fragment](#topic)\n"
+                "[missing target](docs/missing.md#topic)\n"
+                "[missing fragment](docs/guide.md)\n",
+                encoding="utf-8",
+            )
+            (root / "docs" / "guide.md").write_text("# Topic\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [sys.executable, str(script), "--root", str(root), "--prompt", "find helper topic"],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["scan"]["edges_derived"], 0)
+        self.assertEqual(payload["relationship_supports"], [])
+
     def test_graph_find_subprocess_rejects_alias_and_byte_caps(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
         with tempfile.TemporaryDirectory(prefix="graph-find-unsafe-") as raw:

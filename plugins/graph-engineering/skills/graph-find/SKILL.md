@@ -7,15 +7,21 @@ description: Find bounded, source-verified repository pointers for a prompt. Ret
 
 Run `scripts/graph_find.py` with an explicit absolute Git repository root and a
 prompt. The adapter reads only Git-tracked, regular UTF-8 files. It builds the
-verified `Graph` and `SourceSnapshotV4` in memory, then invokes the existing
-`graph_find` seam. It does not write, call a network or provider, persist an
-index, or return source bodies.
+verified `Graph` and `SourceSnapshotV4` in memory. It derives only uniquely
+resolved Python `from module import name` edges and relative Markdown links to
+headings. It then invokes the existing `graph_find` seam. It does not write,
+call a network or provider, persist an index, or return source bodies.
 
 ```sh
 python3 -B scripts/graph_find.py --root /path/to/repository --prompt "find token refresh"
 ```
 
-The JSON result contains ranked hits and exact source pointers. `route: graph`
+The JSON result contains ranked hits, exact source pointers, and optional
+`relationship_supports`. Each relationship support contains source and target
+coordinates for one verified `imports` or `links_to_heading` edge. It is
+navigation metadata only. It does not change seed ranking, evidence, context,
+proof obligations, fallback paths, or byte budgets. Ambiguous and unbound
+relations remain unresolved. `route: graph`
 means the verified graph evidence met the retrieval threshold. `route: defer`
 means the evidence is incomplete; use the listed fallback paths with a direct
 source read. `fail_closed: true` means an authentication or custody boundary

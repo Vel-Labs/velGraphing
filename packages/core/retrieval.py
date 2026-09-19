@@ -20,6 +20,7 @@ from typing import Iterable, Mapping, Sequence
 from .models import Graph, GraphRecord, Sensitivity, TaskSpec, is_authenticated_eligible
 from .routing_v4 import SourceReaderV4, SourceSnapshotV4, _read_verified_source_bytes
 from .selection import AssistResult, ContextSpan, assist
+from .source_coordinates import SourceCoordinate
 
 
 _TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9_-]{1,63}")
@@ -56,7 +57,7 @@ _ALLOWED_RELATIONS = frozenset(
         "dispatches_audits", "documents", "documents_audit_role", "documents_panel_surface",
         "documents_runtime_role", "emits_overlay_classes", "implements", "implements_documented_heuristic",
         "imports", "injects_content_script", "injects_overlay_styles", "loads_controller",
-        "loads_stylesheet", "notifies_panel", "owns", "packages", "packages_documentation",
+        "links_to_heading", "loads_stylesheet", "notifies_panel", "owns", "packages", "packages_documentation",
         "packages_manifest", "packages_source_tree", "persists_audit_for_panel", "produces",
         "publishes_section_selection", "reads", "requires_authority", "routes", "specifies_scoring_reference",
         "supports", "tested_by", "tests", "uses", "writes",
@@ -356,6 +357,28 @@ class RetrievalHit:
 
 
 @dataclass(frozen=True)
+class RelationshipSupport:
+    """One verified edge pointer associated with a selected seed."""
+
+    edge_id: str
+    relation: str
+    seed_record_id: str
+    target_record_id: str
+    source_coordinate: SourceCoordinate
+    target_coordinate: SourceCoordinate
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "edge_id": self.edge_id,
+            "relation": self.relation,
+            "seed_record_id": self.seed_record_id,
+            "target_record_id": self.target_record_id,
+            "source_coordinate": self.source_coordinate.to_dict(),
+            "target_coordinate": self.target_coordinate.to_dict(),
+        }
+
+
+@dataclass(frozen=True)
 class RetrievalResult:
     route: str
     reason: str
@@ -372,6 +395,7 @@ class RetrievalResult:
     unresolved_obligation_ids: tuple[str, ...] = ()
     unresolved_critical_obligation_ids: tuple[str, ...] = ()
     remaining_byte_budget: int = 0
+    relationship_supports: tuple[RelationshipSupport, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -391,6 +415,7 @@ class GraphFindResult:
     unresolved_obligation_ids: tuple[str, ...] = ()
     unresolved_critical_obligation_ids: tuple[str, ...] = ()
     remaining_byte_budget: int = 0
+    relationship_supports: tuple[RelationshipSupport, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         """Serialize only ranked hits, exact pointers, and routing metadata."""
@@ -409,6 +434,7 @@ class GraphFindResult:
             "unresolved_obligation_ids": list(self.unresolved_obligation_ids),
             "unresolved_critical_obligation_ids": list(self.unresolved_critical_obligation_ids),
             "remaining_byte_budget": self.remaining_byte_budget,
+            "relationship_supports": [item.to_dict() for item in self.relationship_supports],
             "score_meaning": (
                 "deterministic_ranking_diagnostic_not_probability_authority_or_answer_confidence"
             ),
@@ -908,6 +934,7 @@ def graph_find(
     proof_obligations: Sequence[ProofObligation] | None = None,
     channels: Sequence[str] = _CHANNEL_ORDER,
     expand_one_hop: bool = True,
+    source_bound_expansion: bool = False,
     maximum_results: int = 6,
     minimum_coverage_percent: float = 60.0,
     parallel: bool = True,
@@ -932,6 +959,7 @@ def graph_find(
         reader,
         channels=channels,
         expand_one_hop=expand_one_hop,
+        source_bound_expansion=source_bound_expansion,
         maximum_results=maximum_results,
         minimum_coverage_percent=minimum_coverage_percent,
         parallel=parallel,
@@ -953,6 +981,7 @@ def graph_find(
             reader,
             channels=channels,
             expand_one_hop=expand_one_hop,
+            source_bound_expansion=source_bound_expansion,
             maximum_results=maximum_results,
             minimum_coverage_percent=minimum_coverage_percent,
             parallel=parallel,
@@ -971,6 +1000,7 @@ def graph_find(
         unresolved_obligation_ids=result.unresolved_obligation_ids,
         unresolved_critical_obligation_ids=result.unresolved_critical_obligation_ids,
         remaining_byte_budget=result.remaining_byte_budget,
+        relationship_supports=result.relationship_supports,
     )
 
 
@@ -984,6 +1014,7 @@ def retrieve(
     *,
     channels: Sequence[str] = _CHANNEL_ORDER,
     expand_one_hop: bool = True,
+    source_bound_expansion: bool = False,
     maximum_results: int = 6,
     minimum_coverage_percent: float = 60.0,
     parallel: bool = True,
@@ -991,8 +1022,14 @@ def retrieve(
     """Retrieve a deterministic, bounded, source-verified evidence packet."""
 
     requested_channels = tuple(dict.fromkeys(channels))
+    if type(source_bound_expansion) is not bool:
+        raise TypeError("source_bound_expansion must be bool")
     if not requested_channels or any(channel not in _CHANNEL_ORDER for channel in requested_channels):
         raise ValueError("retrieval channels must use the closed channel vocabulary")
+    if source_bound_expansion:
+        requested_channels = tuple(channel for channel in requested_channels if channel != "graph")
+        if not requested_channels:
+            raise ValueError("source-bound expansion requires a source ranking channel")
     if type(maximum_results) is not int or not 1 <= maximum_results <= task.node_budget:
         raise ValueError("maximum_results must fit the task node budget")
     if not math.isfinite(minimum_coverage_percent) or not 0 <= minimum_coverage_percent <= 100:
@@ -1115,10 +1152,11 @@ def retrieve(
         record_id
         for record_id, _ in sorted(fused.items(), key=lambda item: (-item[1], item[0]))
     ]
-    seed_limit = max(1, maximum_results - 2) if expand_one_hop else maximum_results
+    legacy_expand = expand_one_hop and not source_bound_expansion
+    seed_limit = max(1, maximum_results - 2) if legacy_expand else maximum_results
     base = base_order[:seed_limit]
     expanded_from: dict[str, str] = {}
-    if expand_one_hop:
+    if legacy_expand:
         for edge in sorted(graph.edges, key=lambda item: (item.relation, item.edge_id)):
             if edge.relation not in _ALLOWED_RELATIONS:
                 continue
@@ -1205,6 +1243,34 @@ def retrieve(
         for obligation_id in unresolved_obligations
         if obligation_map[obligation_id].critical
     ))
+    relationship_supports: tuple[RelationshipSupport, ...] = ()
+    if source_bound_expansion:
+        support_by_seed = {}
+        selected_seeds = {hit.record_id for hit in hits if hit.hop == 0}
+        for edge in sorted(graph.edges, key=lambda item: (item.source_id, item.relation, item.edge_id)):
+            if edge.source_id not in selected_seeds or edge.source_id in support_by_seed:
+                continue
+            if edge.relation not in _ALLOWED_RELATIONS or not is_authenticated_eligible(
+                edge, task.allowed_sensitivities
+            ):
+                continue
+            if edge.source_coordinate is None or edge.target_coordinate is None:
+                continue
+            if edge.source_coordinate.snapshot_sha256 != snapshot.snapshot_sha256:
+                continue
+            if not is_authenticated_eligible(
+                record_map[edge.target_id], task.allowed_sensitivities
+            ):
+                continue
+            support_by_seed[edge.source_id] = RelationshipSupport(
+                edge.edge_id,
+                edge.relation,
+                edge.source_id,
+                edge.target_id,
+                edge.source_coordinate,
+                edge.target_coordinate,
+            )
+        relationship_supports = tuple(support_by_seed[key] for key in sorted(support_by_seed))
     return RetrievalResult(
         route="graph" if sufficient else "defer",
         reason="verified_tag_context_selected" if sufficient else "tag_context_insufficient",
@@ -1221,6 +1287,7 @@ def retrieve(
         unresolved_obligation_ids=unresolved_obligations,
         unresolved_critical_obligation_ids=unresolved_critical,
         remaining_byte_budget=max(0, task.byte_budget - len(context.encode("utf-8"))),
+        relationship_supports=relationship_supports,
     )
 
 

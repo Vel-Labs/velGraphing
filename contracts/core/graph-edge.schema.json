@@ -34,6 +34,8 @@
     "admission": {"enum": ["none", "policy", "verifier"]},
     "eligible": {"type": "boolean"},
     "agent_generated": {"type": "boolean"},
-    "export_allowed": {"type": "boolean"}
+    "export_allowed": {"type": "boolean"},
+    "source_coordinate": {"$ref": "source-coordinate-v1.schema.json"},
+    "target_coordinate": {"$ref": "source-coordinate-v1.schema.json"}
   }
 }

@@ -1,6 +1,6 @@
 # Time-to-correct v4: qualification protocol, not an executed benchmark
 
-Status: **draft, blocked on executable checkout, typed-route implementation, and Gates 1–3**.
+Status: **draft, blocked on Gates 1–3 and a registered v4 runner**.
 Source candidate: `6931f0ffa72bd27f79f5515bd669404dbc4667d0`.
 No v4 result is asserted. No live call is authorized by this document.
 
@@ -12,9 +12,15 @@ experiment. A patched core must never be run under the original v3 candidate
 identity. Record a new commit, source-package manifest, source snapshots, rubric
 identity, candidate artifact and exact request hashes.
 
-The first implemented slice in this handoff repairs two source-window/tag-cap
-helpers and supplies a post-hoc evaluator. It does **not** implement typed-edge
-extraction, an adaptive selector, or the live v4 runner.
+The implemented local slice repairs two source-window/tag-cap helpers, supplies
+a post-hoc evaluator, and adds a bounded source-bound edge seam. The public
+scanner derives only uniquely resolved Python `from module import name` and
+relative Markdown heading-link edges. The core exposes at most one verified
+`RelationshipSupport` per selected seed. This metadata does not change ranking,
+evidence, context, obligations, fallback paths, or budgets. Ambiguous or unbound
+relations do not produce support. This slice does **not** implement an adaptive
+selector or the live v4 runner. It has no benchmark result and no promotion
+claim.
 
 ## Retrieval-only development run
 

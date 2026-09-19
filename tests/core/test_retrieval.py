@@ -18,6 +18,7 @@ from packages.core import (
     ProofObligation,
     Provenance,
     Sensitivity,
+    SourceCoordinate,
     SourceIdentityV4,
     SourceSnapshotV4,
     compose_navigation_context,
@@ -179,6 +180,86 @@ def obligated_facets(*obligations: ProofObligation, count: int = 8) -> PromptFac
         tuple(PromptFacet(FacetKind.ENTITY, f"facet-{index}", 1) for index in range(count)),
         proof_obligations=obligations,
     )
+
+
+class SourceBoundExpansionTests(unittest.TestCase):
+    def test_bound_support_is_metadata_only_and_unbound_edges_do_not_support(self) -> None:
+        sources = {
+            "src/caller.py": b"from src.helper import helper\n\ndef call_helper():\n    return helper()\n",
+            "src/helper.py": b"def helper():\n    return 1\n",
+        }
+        plain_graph, snapshot, reader = multi_source_fixture(sources)
+        records = plain_graph.record_map()
+        source_raw = sources["src/caller.py"]
+        target_raw = sources["src/helper.py"]
+        source_start = source_raw.index(b"helper")
+        target_start = target_raw.index(b"def helper")
+        source_coordinate = SourceCoordinate(
+            snapshot.snapshot_sha256,
+            "src/caller.py",
+            hashlib.sha256(source_raw).hexdigest(),
+            source_start,
+            source_start + len(b"helper"),
+            1,
+            1,
+            "python_import",
+            "import",
+            "helper",
+        )
+        target_coordinate = SourceCoordinate(
+            snapshot.snapshot_sha256,
+            "src/helper.py",
+            hashlib.sha256(target_raw).hexdigest(),
+            target_start,
+            len(target_raw),
+            1,
+            2,
+            "python_declaration",
+            "definition",
+            "helper",
+        )
+        bound = GraphEdge(
+            "edge:bound",
+            "repo:src/caller.py",
+            "repo:src/helper.py",
+            "imports",
+            1.0,
+            records["repo:src/caller.py"].provenance,
+            TrustClass.VERIFIED_SOURCE,
+            Sensitivity.PUBLIC,
+            Freshness.CURRENT,
+            Admission.VERIFIER,
+            True,
+            source_coordinate=source_coordinate,
+            target_coordinate=target_coordinate,
+        )
+        graph = Graph(plain_graph.records, (bound, replace(bound, edge_id="edge:second")))
+        index = build_repository_tag_index(graph, snapshot, reader)
+        obligation = ProofObligation(
+            "caller", AuthorityClass.RUNTIME,
+            source_hints=("src/caller.py",), anchor_hints=("call-helper",),
+        )
+        arguments = (
+            graph, task(), index, obligated_facets(obligation), snapshot, reader,
+        )
+        baseline = retrieve(
+            *arguments, channels=("exact", "sparse", "wiki"), expand_one_hop=False
+        )
+        expanded = retrieve(*arguments, source_bound_expansion=True)
+        self.assertEqual(baseline, replace(expanded, relationship_supports=()))
+        self.assertEqual(len(expanded.relationship_supports), 1)
+        self.assertEqual(expanded.relationship_supports[0].edge_id, "edge:bound")
+        self.assertEqual(expanded.relationship_supports[0].target_record_id, "repo:src/helper.py")
+        with self.assertRaisesRegex(TypeError, "must be bool"):
+            retrieve(*arguments, source_bound_expansion=1)  # type: ignore[arg-type]
+
+        unbound = Graph(plain_graph.records, (replace(bound, source_coordinate=None, target_coordinate=None),))
+        unbound_index = build_repository_tag_index(unbound, snapshot, reader)
+        result = retrieve(
+            unbound, task(), unbound_index, obligated_facets(obligation), snapshot, reader,
+            expand_one_hop=False, source_bound_expansion=True,
+        )
+        self.assertEqual(result.relationship_supports, ())
 
 
 class ProofObligationCompilerTests(unittest.TestCase):
