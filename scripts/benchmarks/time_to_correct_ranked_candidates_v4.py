@@ -13,7 +13,7 @@ import stat
 import subprocess
 import sys
 import time
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -253,6 +253,7 @@ def scan_lane(
     manifest: Mapping[str, Any],
     *,
     derive_edges: bool,
+    source_observer: Callable[[str, bytes], None] | None = None,
 ) -> tuple[Any, Any, Any, dict[str, object]]:
     if not lane.is_absolute() or lane.resolve(strict=True) != lane or lane.is_symlink():
         raise GenerationError("lane_root_invalid")
@@ -267,6 +268,7 @@ def scan_lane(
         max(1, max(source["byte_length"] for source in manifest["sources"])),
         max(1, manifest["source_bytes"]),
         derive_edges=derive_edges,
+        source_observer=source_observer,
     )
     if (
         not metadata["scan_complete"]

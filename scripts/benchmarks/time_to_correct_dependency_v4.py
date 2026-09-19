@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Mapping, Sequence
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 import importlib.util
 import json
 from pathlib import Path
+import stat
 import sys
+import time
 from typing import Any
 
 
@@ -94,23 +96,60 @@ class ControllerError(MeasurementError):
     pass
 
 
-class AuditedReader:
-    def __init__(self, reader: Any, trial: Trial | None) -> None:
-        self.reader = reader
+class SourceReadAudit:
+    def __init__(self, trial: Trial, scanner_expected: int) -> None:
         self.trial = trial
-        self.operations = 0
+        self.scanner_expected = scanner_expected
+        self.counts = {"scanner": 0, "selection": 0, "jev": 0}
+
+    def record(self, kind: str, path: str, raw: bytes) -> None:
+        if kind not in self.counts or type(path) is not str or type(raw) is not bytes:
+            raise ControllerError("dependency_source_observer_invalid")
+        operation = self.counts[kind]
+        self.trial.source(
+            digest(raw), 0, len(raw), operation_id=f"{kind}-{operation}"
+        )
+        self.counts[kind] += 1
+
+    def complete(self, packet: Mapping[str, Any], *, require_jev: bool) -> bool:
+        unique_sources = len({row["path"] for row in packet["candidates"]})
+        minimum_jev = unique_sources * 2 if require_jev else 0
+        return (
+            self.counts["scanner"] == self.scanner_expected
+            and self.counts["selection"] > 0
+            and self.counts["jev"] >= minimum_jev
+        )
+
+
+class AuditedReader:
+    def __init__(self, reader: Any, audit: SourceReadAudit) -> None:
+        self.reader = reader
+        self.audit = audit
 
     def read_bytes(self, path: str) -> bytes:
         raw = self.reader.read_bytes(path)
-        if self.trial is not None:
-            self.trial.source(
-                digest(raw), 0, len(raw), operation_id=f"runtime-{self.operations}"
-            )
-        self.operations += 1
+        self.audit.record("selection", path, raw)
         return raw
 
     def is_symlink(self, path: str) -> bool:
         return self.reader.is_symlink(path)
+
+
+@contextmanager
+def _observe_jev_reads(audit: SourceReadAudit):
+    original = jev._read_source
+
+    def observed(root: Path, relative: str, max_bytes: int = jev.MAX_FILE_BYTES) -> bytes:
+        raw = original(root, relative, max_bytes)
+        audit.record("jev", relative, raw)
+        return raw
+
+    # ponytail: this controller is serial; add a Jev observer parameter before concurrent trials.
+    jev._read_source = observed
+    try:
+        yield
+    finally:
+        jev._read_source = original
 
 
 def _read_json(path: Path, reason: str) -> dict[str, Any]:
@@ -186,41 +225,6 @@ def lane_state_sha256(lane: Path, snapshot_sha256: str) -> str:
     return digest(canonical(state))
 
 
-def _record_snapshot_reads(
-    trial: Trial | None,
-    sources: Sequence[Mapping[str, Any]],
-    prefix: str,
-) -> None:
-    if trial is None:
-        return
-    for index, source in enumerate(sources):
-        trial.source(
-            source["sha256"],
-            0,
-            source["byte_length"],
-            operation_id=f"{prefix}-{index}",
-        )
-
-
-def _record_packet_reads(
-    trial: Trial,
-    packet: Mapping[str, Any],
-    lane: Mapping[str, Any],
-    prefix: str,
-) -> None:
-    sources = {source.path: source for source in lane["snapshot"].sources}
-    for index, path in enumerate(dict.fromkeys(
-        candidate["path"] for candidate in packet["candidates"]
-    )):
-        source = sources[path]
-        trial.source(
-            source.sha256,
-            0,
-            source.byte_length,
-            operation_id=f"{prefix}-{index}",
-        )
-
-
 def regenerate_pool(
     route: str,
     question: Mapping[str, str],
@@ -233,22 +237,25 @@ def regenerate_pool(
     corpus = question["corpus"]
     manifest = generator._manifest(manifests_root / generator.CORPUS_MANIFESTS[corpus])
     lane_root = (lanes_root / corpus).resolve(strict=True)
+    audit = SourceReadAudit(trial, manifest["source_count"] * 2) if trial else None
+    observer = (
+        lambda path, raw: audit.record("scanner", path, raw)
+        if audit is not None else None
+    )
     with _phase(trial, "cold_graph_build"):
         plain_graph, plain_snapshot, plain_reader, _ = generator.scan_lane(
-            lane_root, manifest, derive_edges=False
+            lane_root, manifest, derive_edges=False, source_observer=observer
         )
         typed_graph, typed_snapshot, typed_reader, _ = generator.scan_lane(
-            lane_root, manifest, derive_edges=True
+            lane_root, manifest, derive_edges=True, source_observer=observer
         )
-        _record_snapshot_reads(trial, manifest["sources"], "scan-plain")
-        _record_snapshot_reads(trial, manifest["sources"], "scan-typed")
     if (
         plain_snapshot != typed_snapshot
         or plain_graph.records != typed_graph.records
         or plain_snapshot.snapshot_sha256 != SNAPSHOT_SHA256
     ):
         raise ControllerError("dependency_snapshot_drift")
-    audited_reader = AuditedReader(plain_reader, trial)
+    audited_reader = AuditedReader(plain_reader, audit) if audit is not None else plain_reader
     with _phase(trial, "candidate_discovery"):
         index = generator.build_repository_tag_index(
             plain_graph, plain_snapshot, audited_reader
@@ -303,7 +310,7 @@ def regenerate_pool(
         "restricted_state_sha256": lane_state_sha256(
             lane_root, plain_snapshot.snapshot_sha256
         ),
-        "source_reads_complete": trial is not None,
+        "source_audit": audit,
     }
 
 
@@ -526,9 +533,12 @@ def run_arm(
         current.bind(candidate_set_sha256=digest(canonical(packet["candidates"])))
         observation = None
         if arm in JEV_ARMS:
+            audit = lane.get("source_audit")
+            if type(audit) is not SourceReadAudit:
+                raise ControllerError("dependency_source_coverage_incomplete")
             with current.phase("jev_preparation"):
-                prepared = jev.prepare(packet, lane["lane"], MODEL)
-                _record_packet_reads(current, packet, lane, "jev-prepare")
+                with _observe_jev_reads(audit):
+                    prepared = jev.prepare(packet, lane["lane"], MODEL)
             if prepared["request_bytes"] > REQUEST_BYTES:
                 raise ControllerError("dependency_request_budget_exceeded")
             current.bind(request_sha256=prepared["request_sha256"])
@@ -536,20 +546,18 @@ def run_arm(
                 current.identity["trial_id"], prepared["request_sha256"]
             )
             with current.phase("provider"):
-                observation = evaluate(
-                    packet,
-                    lane["lane"],
-                    mode="rerank",
-                    allow_network=True,
-                    approved_request_sha256=prepared["request_sha256"],
-                    model=MODEL,
-                    timeout_s=10,
-                )
+                with _observe_jev_reads(audit):
+                    observation = evaluate(
+                        packet,
+                        lane["lane"],
+                        mode="rerank",
+                        allow_network=True,
+                        approved_request_sha256=prepared["request_sha256"],
+                        model=MODEL,
+                        timeout_s=10,
+                    )
             ledger.complete(receipt, observation)
             usage = observation.get("usage")
-            _record_packet_reads(current, packet, lane, "jev-evaluate-before")
-            if observation.get("source_revalidated") is True:
-                _record_packet_reads(current, packet, lane, "jev-evaluate-after")
             with current.phase("response_validation"):
                 if observation.get("attempted_calls") not in {0, 1}:
                     raise ControllerError("dependency_retry_detected")
@@ -585,7 +593,11 @@ def run_arm(
             "order_source": selected.order_source,
             "source_operation_count": len(current._attempt()["source_operations"]),
         }
-        if lane.get("source_reads_complete") is not True:
+        audit = lane.get("source_audit")
+        if (
+            type(audit) is not SourceReadAudit
+            or not audit.complete(packet, require_jev=arm in JEV_ARMS)
+        ):
             raise ControllerError("dependency_source_coverage_incomplete")
         current.coverage(source_operations=True)
         return payload
@@ -618,6 +630,9 @@ def run_four_arm(
     evaluate: Callable[..., Mapping[str, Any]] = jev.evaluate,
     execution: str = "observed",
 ) -> dict[str, Any]:
+    if execution == "observed":
+        run_root = _validated_run_root(run_root)
+    preflight_started = time.monotonic_ns()
     preflight_result = preflight(
         candidates_path,
         questions_path,
@@ -626,6 +641,7 @@ def run_four_arm(
         preview_path,
         expected_live_authorized=live_authorized,
     )
+    preflight_elapsed_ns = time.monotonic_ns() - preflight_started
     if live_authorized is not True:
         raise ControllerError("dependency_live_not_authorized")
     if set(answer_argv) != set(ARMS) or set(grader_argv) != set(ARMS):
@@ -662,13 +678,18 @@ def run_four_arm(
         ))
         if lane_state_sha256(lane_root, SNAPSHOT_SHA256) != restricted_state:
             raise ControllerError("dependency_lane_changed_during_run")
+        coverage = results[-1]["attempts"][-1]["coverage"]
         if results[-1]["terminal_reason"] in {
             "measurement_error", "deadline_exceeded", "callback_timeout"
-        }:
+        } or not coverage["model_calls"] or not coverage["context_deliveries"]:
             raise ControllerError("dependency_systemic_trial_failure")
     return {
         "schema_version": "velgraphing-d01-four-arm-result-v1",
         "preflight": preflight_result,
+        "controller_preflight": {
+            "elapsed_ns": preflight_elapsed_ns,
+            "ttc_allocation": "separate_not_in_arm_ttc",
+        },
         "results": results,
     }
 
@@ -693,6 +714,20 @@ def _argv_map(path: Path, root: Path) -> dict[str, list[str]]:
         ):
             raise ControllerError("dependency_lane_commands_invalid")
     return value
+
+
+def _validated_run_root(path: Path) -> Path:
+    root = validate_run_root(str(path.resolve(strict=True)))
+    local = (ROOT / ".velgraphing-local").resolve(strict=True)
+    metadata = root.lstat()
+    if (
+        root.parent != local
+        or root.is_symlink()
+        or not stat.S_ISDIR(metadata.st_mode)
+        or stat.S_IMODE(metadata.st_mode) & 0o077
+    ):
+        raise ControllerError("dependency_run_root_invalid")
+    return root
 
 
 def _add_inputs(parser: argparse.ArgumentParser) -> None:
@@ -728,7 +763,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(canonical(result).decode("utf-8"))
             return 0
         validate_plan(expected_live_authorized=True)
-        root = validate_run_root(str(arguments.run_root.resolve()))
+        root = _validated_run_root(arguments.run_root)
         output = arguments.output
         if (
             not output.is_absolute()

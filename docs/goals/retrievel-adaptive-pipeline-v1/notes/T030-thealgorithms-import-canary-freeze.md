@@ -210,21 +210,34 @@ That digest includes the commit, full index, porcelain status, untracked-path
 inventory, and selected source snapshot. It includes the pinned staged
 deletions and makes no clean-lane claim.
 
-Scanner, retrieval, selection, and Jev packet reads now create source-operation
-receipts. Source coverage becomes true only after the regeneration path reports
-complete source accounting. Source capture and source revalidation are observed
-phases. The execution entry point accepts canonical A/B/C/D argv JSON files only
-from the private ignored run root, invokes subprocess argv without a shell, and
-atomically creates one non-existing `result.json`. The tracked plan still has
-`live_authorized: false`, so the command stops before it reads lane commands or
-starts a provider, answer, or grader process.
+The scanner callback, selection reader, and Jev wrapper now record bytes from
+actual source reads. Metadata replay no longer counts as a source operation.
+Source coverage fails when any scanner, selection, or Jev read path bypasses its
+observer. Source capture and source revalidation remain observed phases. The
+four-arm controller stops successor arms when answer or grader model-call
+coverage is incomplete, or when answer context-delivery coverage is incomplete,
+even if the rubric grade passes.
 
-The focused controller, host, and preview tests passed `23/23`. The controller
-test invoked the complete A/B/C/D fixture path, confirmed paired pool identity,
-two Jev calls, zero repairs, ordered completion, and a stop before C/D after a
-systemic B contract failure. The real offline preflight matched both pool and
-request pairs, confirmed B/D selection sensitivity, and reported zero provider
-calls.
+The execution entry point accepts canonical A/B/C/D argv JSON files only from a
+private direct child of this checkout's ignored `.velgraphing-local` root. It
+invokes subprocess argv without a shell. It atomically creates `result.json` and
+writes up to two `jev-calls/*.json` ledger receipts under the same run root. The
+tracked plan still has `live_authorized: false`, so the command stops before it
+reads lane commands or starts a provider, answer, or grader process.
+
+Controller preflight elapsed time is recorded separately with
+`ttc_allocation: separate_not_in_arm_ttc`. Each Trial wall interval is all-in
+only for its arm after preflight. The two pinned Jev calls are far below the
+current listed-price $1 allowance. Cost telemetry remains null, so this supports
+no broad cost claim.
+
+The focused controller tests passed `9/9`. The scanner, host, and preview
+consumer tests passed `25/25`. The full four-arm fixture confirmed paired pool
+identity, two Jev calls, zero repairs, ordered completion, and a stop before C/D
+after either a systemic B failure or incomplete B coverage. The real offline
+preflight matched both pool and request pairs, confirmed B/D selection
+sensitivity, and reported zero provider calls. The full benchmark suite ran
+`170` tests: `169` passed and one expected test was skipped.
 
 ## Validation
 
@@ -311,6 +324,17 @@ D-01 controller acceptance repair:
 - `scripts/benchmarks/time_to_correct_dependency_v4.py`
 - `tests/benchmarks/test_time_to_correct_dependency_v4.py`
 - `tests/benchmarks/test_time_to_correct_jev_v4.py`
+- `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-thealgorithms-import-canary-freeze.md`
+- `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
+
+D-01 observed-source and acceptance repair:
+
+- `plugins/graph-engineering/skills/graph-find/scripts/graph_find.py`
+- `scripts/benchmarks/time_to_correct_ranked_candidates_v4.py`
+- `scripts/benchmarks/time_to_correct_dependency_v4.py`
+- `tests/benchmarks/test_time_to_correct_ranked_candidates_v4.py`
+- `tests/benchmarks/test_time_to_correct_dependency_v4.py`
+- `benchmarks/velgraphing-time-to-correct-v4/PROTOCOL.md`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-thealgorithms-import-canary-freeze.md`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 

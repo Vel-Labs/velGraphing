@@ -15,7 +15,7 @@ import re
 import stat
 import subprocess
 import sys
-from typing import Sequence
+from typing import Callable, Sequence
 from urllib.parse import unquote
 
 sys.dont_write_bytecode = True
@@ -445,6 +445,7 @@ def _scan(
     max_total_bytes: int,
     *,
     derive_edges: bool = True,
+    source_observer: Callable[[str, bytes], None] | None = None,
 ) -> tuple[Graph, SourceSnapshotV4, SnapshotReader, dict[str, object]]:
     _repository_root(root)
     paths = _git(root, "ls-files", "-z", "--cached").split(b"\x00")
@@ -473,6 +474,8 @@ def _scan(
         if total + len(data) > max_total_bytes:
             skipped.append({"path": relative.as_posix(), "reason": "max_total_bytes"})
             continue
+        if source_observer is not None:
+            source_observer(relative.as_posix(), data)
         total += len(data)
         sources[relative.as_posix()] = data
     if not sources:

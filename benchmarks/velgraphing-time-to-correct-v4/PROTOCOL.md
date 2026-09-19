@@ -194,9 +194,14 @@ allowlisted answer/grader subprocess boundary.
 The controller records cold graph construction, candidate discovery, retrieval
 including expansion, Jev preparation, provider execution, source revalidation,
 source capture, response validation, fallback, context composition, answer
-generation, and independent grading. Scanner, retrieval, selection, and Jev
-packet reads create source-operation receipts before source coverage is marked
-complete. The root trial interval remains the all-in wall clock. Returned
+generation, and independent grading. The scanner callback, selection reader,
+and Jev source-read wrapper create receipts from bytes returned by actual reads.
+Metadata replay does not count as an observed read. Missing scanner, selection,
+or Jev observations fail source coverage. An answer or grader with incomplete
+model-call coverage, or an answer with incomplete context-delivery coverage,
+stops successor arms even when its rubric grade passes. Each root trial interval
+is the all-in wall clock for that arm after controller preflight. Controller
+preflight time is recorded separately and is not part of per-arm TTC. Returned
 provider and model usage is retained. Unavailable tokens or cost stay null.
 Selected spans are normalized to the same treatment-free answer evidence schema
 for all four arms.
@@ -215,15 +220,19 @@ selected source snapshot. It binds the pinned staged deletions; it does not
 claim that the lane is clean.
 
 The `preflight` command performs only local source validation. The `run` command
-accepts canonical answer and grader argv JSON files under one private ignored
-run root, uses direct subprocess argv without a shell, and writes only a new
-`result.json` under that root by atomic replacement. It executes A, B, C, and D
-in order, uses one two-call ledger, and stops before the next arm after a
-systemic trial failure. Observed execution is fail-closed while
+accepts canonical answer and grader argv JSON files under a private direct child
+of this checkout's ignored `.velgraphing-local` root. It uses direct subprocess
+argv without a shell. It atomically creates `result.json` and writes up to two
+`jev-calls/*.json` reservation and completion receipts under that same run root.
+It executes A, B, C, and D in order and stops before the next arm after a
+systemic trial failure or incomplete model/context coverage. Observed execution
+is fail-closed while
 `live_authorized` is false. No provider, answer-model, or grader-model call ran.
 The remaining gate is Parent approval of an explicit tracked plan change to
 live authorization and the exact local answer and grader lane commands. This
-candidate is not a benchmark result.
+candidate is not a benchmark result. The two pinned Jev calls are far below the
+current listed-price $1 allowance, but run cost telemetry remains null. No broad
+cost or affordability claim is supported.
 
 ## Historical PR9 offline Jev preview freeze
 

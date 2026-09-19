@@ -393,6 +393,15 @@ class RankedCandidateTests(unittest.TestCase):
     def test_manifest_source_range_and_utf8_fail_closed(self) -> None:
         fixture = Fixture({"source.py": b"value = '\xc3\xa9'\n"}, "find value")
         try:
+            observed = []
+            mod.scan_lane(
+                fixture.lane,
+                fixture.manifest,
+                derive_edges=False,
+                source_observer=lambda path, raw: observed.append((path, raw)),
+            )
+            self.assertEqual(observed, [("source.py", b"value = '\xc3\xa9'\n")])
+
             manifest = copy.deepcopy(fixture.manifest)
             manifest["commit"] = "0" * 40
             with self.assertRaisesRegex(mod.GenerationError, "lane_commit_mismatch"):

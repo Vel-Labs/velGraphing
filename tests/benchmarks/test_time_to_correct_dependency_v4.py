@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from contextlib import redirect_stderr
+from contextlib import nullcontext, redirect_stderr
 from dataclasses import replace
 import importlib.util
 import io
@@ -38,7 +38,7 @@ request = json.load(sys.stdin)
 if set(request) != {"schema_version", "question", "instructions", "evidence", "response_contract"}: raise SystemExit(7)
 if any(key in json.dumps(request) for key in ("arm", "route", "jev_status", "request_sha256", "score", "relationship_parent")): raise SystemExit(8)
 candidate = request["evidence"][0]["id"]
-result = {"schema_version":"velgraphing-answer-output-v1","answer_text":f"fixture [{candidate}]","usage":None,"model_calls_complete":False,"context_deliveries_complete":True}
+result = {"schema_version":"velgraphing-answer-output-v1","answer_text":f"fixture [{candidate}]","usage":None,"model_calls_complete":True,"context_deliveries_complete":True}
 sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":")))
 '''
 
@@ -47,7 +47,7 @@ import json, sys
 request = json.load(sys.stdin)
 if set(request) != {"schema_version", "answer_text", "rubric", "response_contract"}: raise SystemExit(7)
 if set(request["rubric"]) != {"required_facts", "critical_facts", "acceptable_spans"}: raise SystemExit(8)
-result = {"schema_version":"velgraphing-grader-output-v1","required_fact_score":3,"required_fact_maximum":3,"critical_facts_exact":True,"unsupported_material_claims":0,"grader_id":"fixture-grader","usage":None,"model_calls_complete":False}
+result = {"schema_version":"velgraphing-grader-output-v1","required_fact_score":3,"required_fact_maximum":3,"critical_facts_exact":True,"unsupported_material_claims":0,"grader_id":"fixture-grader","usage":None,"model_calls_complete":True}
 sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":")))
 '''
 
@@ -113,20 +113,22 @@ class DependencyControllerTests(unittest.TestCase):
         }
 
     def regenerate(self, trial, route):
+        audit = mod.SourceReadAudit(trial, 2)
         with trial.phase("cold_graph_build"):
-            pass
+            for _ in range(2):
+                raw = self.lane["reader"].read_bytes(self.run["sources"][0]["path"])
+                audit.record("scanner", self.run["sources"][0]["path"], raw)
         with trial.phase("candidate_discovery"):
             pass
         with trial.phase("retrieval"):
-            trial.source(
-                self.run["sources"][0]["source_sha256"],
-                0,
-                self.run["sources"][0]["byte_length"],
-                operation_id="fixture-retrieval-0",
-            )
+            pass
         run = copy.deepcopy(self.run)
         run["route"] = route
-        return run, {**self.lane, "source_reads_complete": True}
+        return run, {
+            **self.lane,
+            "reader": mod.AuditedReader(self.lane["reader"], audit),
+            "source_audit": audit,
+        }
 
     @staticmethod
     def evaluator(packet, root, **kwargs):
@@ -282,6 +284,61 @@ class DependencyControllerTests(unittest.TestCase):
         self.assertEqual(status, 2)
         self.assertFalse(output.exists())
 
+    def test_run_root_is_checkout_local_and_private(self) -> None:
+        self.assertEqual(mod._validated_run_root(self.root), self.root)
+        foreign = self.root / ".velgraphing-local" / "run"
+        foreign.mkdir(parents=True, mode=0o700)
+        with self.assertRaisesRegex(mod.ControllerError, "dependency_run_root_invalid"):
+            mod._validated_run_root(foreign)
+        with tempfile.TemporaryDirectory(dir=self.root.parent) as raw:
+            public = Path(raw)
+            public.chmod(0o755)
+            with self.assertRaisesRegex(mod.ControllerError, "dependency_run_root_invalid"):
+                mod._validated_run_root(public)
+
+    def test_actual_source_read_bypasses_fail_coverage(self) -> None:
+        def run(regenerate, arm="A", evaluator=None):
+            root = self.root / f"bypass-{arm}-{run.calls}"
+            run.calls += 1
+            root.mkdir(mode=0o700)
+            return mod.run_arm(
+                arm, "a" * 40, "d" * 64, self.question,
+                {**self.run, "route": mod.ARMS[arm]}, regenerate,
+                answer_argv=[sys.executable, "-c", ANSWER_CODE],
+                grader_argv=[sys.executable, "-c", GRADER_CODE],
+                cwd=self.root, ledger=mod.LiveJevBudget(root, 2),
+                evaluate=evaluator or self.evaluator,
+                live_authorized=True, execution="fixture",
+            )
+        run.calls = 0
+
+        def scanner_bypass(trial, route):
+            frozen, lane = self.regenerate(trial, route)
+            lane["source_audit"].scanner_expected += 1
+            return frozen, lane
+
+        def selection_bypass(trial, route):
+            frozen, lane = self.regenerate(trial, route)
+            lane["reader"] = self.lane["reader"]
+            return frozen, lane
+
+        for regenerate in (scanner_bypass, selection_bypass):
+            with self.subTest(regenerate=regenerate.__name__):
+                result = run(regenerate)
+                self.assertEqual(result["terminal_reason"], "measurement_error")
+                self.assertEqual(
+                    result["attempts"][0]["failure_reason"],
+                    "dependency_source_coverage_incomplete",
+                )
+
+        with mock.patch.object(mod, "_observe_jev_reads", return_value=nullcontext()):
+            result = run(self.regenerate, arm="B")
+        self.assertEqual(result["terminal_reason"], "measurement_error")
+        self.assertEqual(
+            result["attempts"][0]["failure_reason"],
+            "dependency_source_coverage_incomplete",
+        )
+
     def test_run_four_arm_pairs_calls_and_stops_on_systemic_b_failure(self) -> None:
         run_root = self.root / "four-arm"
         run_root.mkdir(mode=0o700)
@@ -330,6 +387,11 @@ class DependencyControllerTests(unittest.TestCase):
             [row["identity"]["arm"] for row in result["results"]],
             ["A", "B", "C", "D"],
         )
+        self.assertEqual(
+            result["controller_preflight"]["ttc_allocation"],
+            "separate_not_in_arm_ttc",
+        )
+        self.assertGreaterEqual(result["controller_preflight"]["elapsed_ns"], 0)
         self.assertEqual(calls, ["direct", "direct", "typed_graph", "typed_graph"])
         self.assertEqual(
             result["results"][0]["attempts"][0]["candidate_observation"]["pool_sha256"],
@@ -371,6 +433,56 @@ class DependencyControllerTests(unittest.TestCase):
                 execution="fixture",
             )
         self.assertEqual(calls, ["direct", "direct"])
+
+        incomplete_cases = {
+            "answer-model": (
+                ANSWER_CODE.replace(
+                    '"model_calls_complete":True', '"model_calls_complete":False'
+                ),
+                GRADER_CODE,
+            ),
+            "answer-context": (
+                ANSWER_CODE.replace(
+                    '"context_deliveries_complete":True',
+                    '"context_deliveries_complete":False',
+                ),
+                GRADER_CODE,
+            ),
+            "grader-model": (
+                ANSWER_CODE,
+                GRADER_CODE.replace(
+                    '"model_calls_complete":True', '"model_calls_complete":False'
+                ),
+            ),
+        }
+        for name, (answer_code, grader_code) in incomplete_cases.items():
+            with self.subTest(coverage=name):
+                incomplete_root = self.root / f"four-arm-incomplete-{name}"
+                incomplete_root.mkdir(mode=0o700)
+                calls.clear()
+                incomplete_commands = dict(commands)
+                incomplete_graders = dict(graders)
+                incomplete_commands["B"] = [sys.executable, "-c", answer_code]
+                incomplete_graders["B"] = [sys.executable, "-c", grader_code]
+                with patches[0], patches[1], patches[2], patches[3], mock.patch.object(
+                    mod, "regenerate_pool", side_effect=regenerate
+                ), patches[5], self.assertRaisesRegex(
+                    mod.ControllerError, "dependency_systemic_trial_failure"
+                ):
+                    mod.run_four_arm(
+                        self.root / "candidates.json",
+                        self.root / "questions.json",
+                        self.root,
+                        self.root,
+                        self.root / "preview.json",
+                        incomplete_root,
+                        answer_argv=incomplete_commands,
+                        grader_argv=incomplete_graders,
+                        live_authorized=True,
+                        evaluate=self.evaluator,
+                        execution="fixture",
+                    )
+                self.assertEqual(calls, ["direct", "direct"])
 
 
 if __name__ == "__main__":
