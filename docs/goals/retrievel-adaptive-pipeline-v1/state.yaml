@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T091
+active_task: T100
 
 tasks:
   - id: T010
@@ -463,7 +463,7 @@ tasks:
   - id: T091
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: medium
     objective: "Add a bounded source-verified incoming relationship projection for change-impact prompts and make it usable by ranked-context selection."
     allowed_files:
@@ -488,11 +488,39 @@ tasks:
       - "The package needs a new projection store, CLI mode, model classifier, or relation inference."
       - "Incoming support cannot retain the original edge ID, exact endpoint coordinates, direction, and strongest sensitivity."
       - "Direct ranking, required evidence, source custody, or fallback semantics would change."
-    receipt: null
+    receipt:
+      result: done
+      changed_files:
+        - packages/core/retrieval.py
+        - packages/core/selection.py
+        - plugins/graph-engineering/skills/graph-find/SKILL.md
+        - plugins/graph-engineering/runtime/core/retrieval.py
+        - plugins/graph-engineering/runtime/core/selection.py
+        - plugins/graph-engineering/runtime/.projection-state.json
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - tests/core/test_retrieval.py
+        - tests/core/test_ranked_context_selection.py
+        - tests/skills/test_portable_skills.py
+      commands:
+        - cmd: "python -m unittest tests.core.test_retrieval tests.core.test_ranked_context_selection tests.skills.test_portable_skills -v"
+          status: pass
+        - cmd: "Run the same six repository suites with the repository root virtual environment"
+          status: pass
+        - cmd: "python3 scripts/package/project_portable_plugin.py twice"
+          status: pass
+        - cmd: "python3 scripts/package/verify_source_package_parity.py"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+        - cmd: "GitHub CI on Python 3.11 and 3.13"
+          status: pass
+      summary: "Accepted at 3a9c0f86a523990e4ebc8f51f624842f7363b1a6 and merged through PR #15 at 3bad9cbfa618e4a39789298a52a8d03d2afdb8f2. Change-impact retrieval now prefers one verified incoming relation per selected seed, retains original edge orientation and exact endpoint coordinates, and makes the related importer available only as optional ranked context. Independent audit found and the Worker repaired metadata-stripping and reverse-policy bypasses. Parent ran 127 focused and consumer tests, then all six repository suites: 515 tests passed with one known benchmark skip because the retained v4 CPython lane was unavailable. The npm wrapper itself could not run in the clean worktree because it hardcodes a missing worktree-local .venv, so Parent invoked its exact six suites with the repository root virtual environment. Package parity passed for 87 files at 4244298c1b0607283ccef2b95d3d1169490bef0906acc500389cd993138c1295."
+      evidence:
+        - "https://github.com/Vel-Labs/velGraphing/pull/15"
   - id: T100
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Run one bounded canary through the exact installed final graph-find and Jev path, with source and request bindings and aggregate dollar accounting."
     allowed_files:
@@ -546,14 +574,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch contains only the current GoalBuddy T071 acceptance and T080 activation update"
+  dirty_fingerprint: "custody branch contains only the current T091 acceptance and T100 activation update"
   last_verification:
     result: pass
-    task: T071
+    task: T091
     commands:
-      - "110 JavaScript-coordinate, retrieval, and portable-skill tests passed."
-      - "Package parity passed for 87 files at 510a0fa2aa24e9e9dfb4e3b20ab47d6fb5cb35cbb3295075d5ee4e6f2ce34ecc."
-      - "Independent Luna re-audit passed after the side-effect-import and uppercase-suffix repairs."
+      - "127 retrieval, ranked-selection, and portable-skill tests passed."
+      - "All six repository suites passed: 515 tests with one known unavailable-lane benchmark skip."
+      - "Package parity passed for 87 files at 4244298c1b0607283ccef2b95d3d1169490bef0906acc500389cd993138c1295."
+      - "Independent Luna re-audit passed after metadata-stripping and reverse-policy repairs."
       - "GitHub CI passed on Python 3.11 and 3.13."
 
 provider_budget:

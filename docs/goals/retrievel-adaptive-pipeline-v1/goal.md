@@ -18,6 +18,9 @@ retrieval program until evidence supports a separate package decision.
 - PR #14 merged the first additional language adapter. It supports one narrow
   JavaScript relation form: static relative named imports to unique direct
   named exports.
+- PR #15 merged the first bounded impact projection. Change-impact prompts can
+  surface one verified incoming importer per selected seed as optional ranked
+  context while direct evidence and fallback remain unchanged.
 - An independent design review rejected new connector nodes for the current
   path. Existing edge IDs and exact endpoint coordinates already provide
   deterministic interstitial identities. New cross-language identity types
