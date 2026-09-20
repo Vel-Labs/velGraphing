@@ -1,7 +1,7 @@
 {
   "schema_version": "velgraphing-v4-luna-successor-plan-v3",
   "study_id": "velgraphing-v4-luna-four-task-successor-v1",
-  "status": "live_authorized_lane_manifest_frozen",
+  "status": "frozen_lane_manifest_pending_live_authorization",
   "candidate_artifact": {
     "path": ".inputs/t030-luna-successor-ranked-candidates-2255d9e.json",
     "sha256": "be5c4449581d46dab3aecc3e00dd8966cf8478ccabb174b98bec4741cace88dc",
@@ -46,9 +46,9 @@
     "argv_identity": "sha256_of_canonical_argv"
   },
   "lane_manifest": {
-    "path": ".velgraphing-local/retrievel-t030-luna-successor-r13/lane-manifest.json",
-    "sha256": "0bcf78a7e811001d0a645c67ed834a468c1cdb91d422b2a126308781e59c0a9e",
-    "status": "frozen",
+    "path": ".velgraphing-local/retrievel-t030-luna-successor-r14/lane-manifest.json",
+    "sha256": null,
+    "status": "pending_host_lane_allocation",
     "entry_count": 32,
     "answer_lanes": 16,
     "grader_lanes": 16
@@ -73,13 +73,13 @@
       "--preview",
       "benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-jev-preview-2255d9e.json",
       "--run-root",
-      ".velgraphing-local/retrievel-t030-luna-successor-r13",
+      ".velgraphing-local/retrievel-t030-luna-successor-r14",
       "--lane-manifest",
-      ".velgraphing-local/retrievel-t030-luna-successor-r13/lane-manifest.json",
+      ".velgraphing-local/retrievel-t030-luna-successor-r14/lane-manifest.json",
       "--output",
-      ".velgraphing-local/retrievel-t030-luna-successor-r13/result.json"
+      ".velgraphing-local/retrievel-t030-luna-successor-r14/result.json"
     ],
-    "argv_sha256": "68b227c4421c7ed09c9c8e4f707688de32faccf396b673fe4f15d8246044699c"
+    "argv_sha256": "26ee2ac1774fb67244b214464f94a5db9ebddcef7afd0dd0b9a2a998de8b9f5e"
   },
   "telemetry_schema": {
     "result_schema_version": "velgraphing-v4-luna-successor-result-v1",
@@ -141,18 +141,18 @@
   ],
   "call_authorization": {
     "maximum_cost_usd": 1.0,
-    "completed_prior_calls": 34,
+    "completed_prior_calls": 36,
     "planned_calls": 8,
-    "aggregate_authorized_calls": 42,
+    "aggregate_authorized_calls": 44,
     "price_usd_per_million_input_tokens": 0.042,
     "request_bytes_per_call_max": 131072,
     "per_call_worst_case_usd": 0.005505024,
-    "prior_authorization_envelope_usd": 0.187170816,
+    "prior_authorization_envelope_usd": 0.198180864,
     "incremental_authorization_envelope_usd": 0.044040192,
-    "aggregate_authorization_envelope_usd": 0.231211008,
-    "authorization_remaining_usd": 0.768788992
+    "aggregate_authorization_envelope_usd": 0.242221056,
+    "authorization_remaining_usd": 0.757778944
   },
-  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r13",
-  "live_authorized": true,
+  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r14",
+  "live_authorized": false,
   "provider_calls_executed": 0
 }

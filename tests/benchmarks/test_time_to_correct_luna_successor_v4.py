@@ -127,12 +127,12 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertEqual([row["trial_id"] for row in rows], list(mod.DISPATCH))
         self.assertEqual(sum(row["call_disposition"] == "planned" for row in rows), 8)
         self.assertEqual(plan["call_authorization"]["planned_calls"], 8)
-        self.assertEqual(plan["call_authorization"]["completed_prior_calls"], 34)
-        self.assertEqual(plan["call_authorization"]["aggregate_authorized_calls"], 42)
-        self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.187170816)
-        self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.231211008)
-        self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.768788992)
-        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r13")
+        self.assertEqual(plan["call_authorization"]["completed_prior_calls"], 36)
+        self.assertEqual(plan["call_authorization"]["aggregate_authorized_calls"], 44)
+        self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.198180864)
+        self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.242221056)
+        self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.757778944)
+        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r14")
         self.assertLessEqual(plan["call_authorization"]["planned_calls"], 8)
         by_task = {}
         for row in rows:
@@ -152,28 +152,24 @@ class LunaSuccessorTests(unittest.TestCase):
             self.assertEqual(arms["A"]["pool_sha256"], arms["B"]["pool_sha256"])
             self.assertEqual(arms["C"]["pool_sha256"], arms["D"]["pool_sha256"])
 
-    def test_plan_is_source_free_and_live_manifest_is_frozen(self) -> None:
+    def test_plan_is_source_free_and_pending_fresh_host_lanes(self) -> None:
         plan = json.loads(mod.PLAN_PATH.read_text(encoding="utf-8"))
-        self.assertTrue(plan["live_authorized"])
+        self.assertFalse(plan["live_authorized"])
         self.assertEqual(plan["provider_calls_executed"], 0)
-        self.assertEqual(plan["status"], "live_authorized_lane_manifest_frozen")
+        self.assertEqual(
+            plan["status"], "frozen_lane_manifest_pending_live_authorization"
+        )
         self.assertNotIn("excerpt", json.dumps(plan))
         self.assertEqual(plan["models"]["answer"], "gpt-5.6-luna")
         self.assertEqual(plan["models"]["grader"], "gpt-5.6-luna")
         self.assertEqual(plan["lane_manifest_contract"], mod.LANE_MANIFEST_CONTRACT)
-        self.assertEqual(plan["lane_manifest"]["status"], "frozen")
-        self.assertEqual(len(plan["lane_manifest"]["sha256"]), 64)
+        self.assertEqual(plan["lane_manifest"], mod.LANE_MANIFEST_BINDING)
+        self.assertIsNone(plan["lane_manifest"]["sha256"])
         self.assertEqual(plan["controller"], mod.CONTROLLER)
         self.assertEqual(plan["telemetry_schema"], mod.TELEMETRY_SCHEMA)
-        plan["live_authorized"] = False
-        plan["status"] = "frozen_lane_manifest_pending_live_authorization"
-        plan["lane_manifest"] = dict(mod.LANE_MANIFEST_BINDING)
+        self.assertFalse(mod.load_plan(expected_live_authorized=False)["live_authorized"])
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "plan.json"
-            path.write_text(json.dumps(plan), encoding="utf-8")
-            self.assertFalse(
-                mod.load_plan(path, expected_live_authorized=False)["live_authorized"]
-            )
             plan["live_authorized"] = True
             plan["status"] = "live_authorized_lane_manifest_frozen"
             path.write_text(json.dumps(plan), encoding="utf-8")
