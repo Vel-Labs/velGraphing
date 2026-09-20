@@ -1,7 +1,7 @@
 {
   "schema_version": "velgraphing-v4-luna-successor-plan-v3",
   "study_id": "velgraphing-v4-luna-four-task-successor-v1",
-  "status": "frozen_lane_manifest_pending_live_authorization",
+  "status": "live_authorized_lane_manifest_frozen",
   "candidate_artifact": {
     "path": ".inputs/t030-luna-successor-ranked-candidates-2255d9e.json",
     "sha256": "be5c4449581d46dab3aecc3e00dd8966cf8478ccabb174b98bec4741cace88dc",
@@ -47,8 +47,8 @@
   },
   "lane_manifest": {
     "path": ".velgraphing-local/retrievel-t030-luna-successor-r13/lane-manifest.json",
-    "sha256": null,
-    "status": "pending_host_lane_allocation",
+    "sha256": "0bcf78a7e811001d0a645c67ed834a468c1cdb91d422b2a126308781e59c0a9e",
+    "status": "frozen",
     "entry_count": 32,
     "answer_lanes": 16,
     "grader_lanes": 16
@@ -153,6 +153,6 @@
     "authorization_remaining_usd": 0.768788992
   },
   "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r13",
-  "live_authorized": false,
+  "live_authorized": true,
   "provider_calls_executed": 0
 }
