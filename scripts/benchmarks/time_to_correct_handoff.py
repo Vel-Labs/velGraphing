@@ -17,7 +17,10 @@ from typing import Any
 
 MAX_BYTES = 1024 * 1024
 ID = re.compile(r"[A-Za-z0-9_.:@+-]{1,128}\Z")
+SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 LANES = {"preparation", "answer", "grader", "jev-approval"}
+COMPLETION_ATTESTATION = "completion-attestation.json"
+COMPLETION_ATTESTATION_SCHEMA = "velgraphing-lane-completion-attestation-v1"
 
 
 class HandoffError(ValueError):
@@ -127,7 +130,7 @@ def _file_name(value: str) -> str:
     return value
 
 
-def read_canonical_at(directory: int, name: str) -> tuple[bytes, dict[str, Any]]:
+def read_bounded_regular_at(directory: int, name: str) -> bytes:
     name = _file_name(name)
     try:
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
@@ -152,10 +155,198 @@ def read_canonical_at(directory: int, name: str) -> tuple[bytes, dict[str, Any]]
                                  item.st_mtime_ns, item.st_ctime_ns, item.st_nlink)
         if size > MAX_BYTES or identity(before) != identity(after):
             raise HandoffError("handoff_file_invalid")
-        raw = b"".join(chunks)
-        return raw, decode(raw)
+        return b"".join(chunks)
     finally:
         os.close(descriptor)
+
+
+def read_canonical_at(directory: int, name: str) -> tuple[bytes, dict[str, Any]]:
+    raw = read_bounded_regular_at(directory, name)
+    return raw, decode(raw)
+
+
+def normalize_json_object(raw: bytes) -> bytes:
+    if len(raw) > MAX_BYTES:
+        raise HandoffError("handoff_file_invalid")
+
+    def object_value(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError
+            value[key] = item
+        return value
+
+    def reject_constant(_: str) -> None:
+        raise ValueError
+
+    try:
+        value = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=object_value,
+            parse_constant=reject_constant,
+        )
+        if type(value) is not dict:
+            raise ValueError
+        normalized = canonical(value)
+    except (UnicodeError, json.JSONDecodeError, RecursionError, TypeError, ValueError):
+        raise HandoffError("invalid_json_object") from None
+    if len(normalized) > MAX_BYTES:
+        raise HandoffError("invalid_json_object")
+    return normalized
+
+
+def _execution_identity(
+    trial_id: str, lane: str, thread_id: str, model: str, reasoning: str
+) -> dict[str, str]:
+    return {
+        "trial_id": identifier(trial_id),
+        "role": identifier(lane),
+        "thread_id": identifier(thread_id),
+        "model": identifier(model),
+        "reasoning": identifier(reasoning),
+    }
+
+
+def bound_lane_identity(
+    root: Path, trial_id: str, lane: str, manifest_sha256: str
+) -> dict[str, str]:
+    raw, manifest = read_canonical(root / "lane-manifest.json")
+    entries = manifest.get("entries")
+    if (
+        not SHA256.fullmatch(manifest_sha256)
+        or digest(raw) != manifest_sha256
+        or manifest.get("schema_version") != "velgraphing-v4-luna-lane-manifest-v1"
+        or type(entries) is not list
+    ):
+        raise HandoffError("lane_manifest_identity_invalid")
+    matches = [
+        entry for entry in entries if type(entry) is dict
+        and entry.get("trial_id") == trial_id and entry.get("role") == lane
+    ]
+    if len(matches) != 1:
+        raise HandoffError("lane_manifest_identity_invalid")
+    entry = matches[0]
+    command = entry.get("argv")
+    if (
+        set(entry) != {
+            "trial_id", "role", "thread_id", "model", "reasoning", "argv",
+            "argv_sha256",
+        }
+        or type(command) is not list
+        or not command
+        or not all(type(argument) is str and argument for argument in command)
+        or entry.get("argv_sha256") != digest(canonical(command))
+    ):
+        raise HandoffError("lane_manifest_identity_invalid")
+    return _execution_identity(
+        trial_id, lane, entry["thread_id"], entry["model"], entry["reasoning"]
+    )
+
+
+def attest_draft(
+    root: Path,
+    trial_id: str,
+    attempt: int,
+    lane: str,
+    draft_path: Path,
+    *,
+    thread_id: str,
+    model: str,
+    reasoning: str,
+    lane_manifest_sha256: str,
+) -> dict[str, Any]:
+    directory_path = lane_root(root, trial_id, attempt, lane)
+    if (
+        not draft_path.is_absolute()
+        or draft_path.parent != directory_path
+        or draft_path.name in {"response.json", COMPLETION_ATTESTATION}
+        or not SHA256.fullmatch(lane_manifest_sha256)
+    ):
+        raise HandoffError("response_draft_path_invalid")
+    directory = _open_lane(root, trial_id, attempt, lane, create=False)
+    try:
+        raw = read_bounded_regular_at(directory, draft_path.name)
+        attestation = {
+            "schema_version": COMPLETION_ATTESTATION_SCHEMA,
+            "owner": "parent",
+            "thread_status": "completed",
+            "draft_status": "stable_final",
+            "trial_id": trial_id,
+            "attempt": attempt,
+            "role": lane,
+            "thread_id": thread_id,
+            "execution_identity": _execution_identity(
+                trial_id, lane, thread_id, model, reasoning
+            ),
+            "lane_manifest_sha256": lane_manifest_sha256,
+            "draft_path": str(draft_path),
+            "draft_size_bytes": len(raw),
+            "draft_sha256": digest(raw),
+        }
+        atomic_write_at(directory, COMPLETION_ATTESTATION, canonical(attestation))
+        return attestation
+    finally:
+        os.close(directory)
+
+
+def read_attested_draft(
+    root: Path,
+    trial_id: str,
+    attempt: int,
+    lane: str,
+    draft_path: Path,
+    *,
+    thread_id: str,
+    model: str,
+    reasoning: str,
+    lane_manifest_sha256: str,
+) -> bytes:
+    directory_path = lane_root(root, trial_id, attempt, lane)
+    if (
+        not draft_path.is_absolute()
+        or draft_path.parent != directory_path
+        or not SHA256.fullmatch(lane_manifest_sha256)
+    ):
+        raise HandoffError("response_draft_path_invalid")
+    directory = _open_lane(root, trial_id, attempt, lane, create=False)
+    try:
+        _, attestation = read_canonical_at(directory, COMPLETION_ATTESTATION)
+        expected_identity = _execution_identity(
+            trial_id, lane, thread_id, model, reasoning
+        )
+        if (
+            set(attestation) != {
+                "schema_version", "owner", "thread_status", "draft_status",
+                "trial_id", "attempt", "role", "thread_id", "execution_identity",
+                "lane_manifest_sha256", "draft_path", "draft_size_bytes", "draft_sha256",
+            }
+            or attestation["schema_version"] != COMPLETION_ATTESTATION_SCHEMA
+            or attestation["owner"] != "parent"
+            or attestation["thread_status"] != "completed"
+            or attestation["draft_status"] != "stable_final"
+            or attestation["trial_id"] != trial_id
+            or attestation["attempt"] != attempt
+            or attestation["role"] != lane
+            or attestation["thread_id"] != thread_id
+            or attestation["execution_identity"] != expected_identity
+            or attestation["lane_manifest_sha256"] != lane_manifest_sha256
+            or attestation["draft_path"] != str(draft_path)
+        ):
+            raise HandoffError("completion_attestation_invalid")
+        raw = read_bounded_regular_at(directory, draft_path.name)
+        if (
+            attestation["draft_size_bytes"] != len(raw)
+            or attestation["draft_sha256"] != digest(raw)
+        ):
+            raise HandoffError("completion_attestation_draft_changed")
+        return raw
+    except HandoffError as error:
+        if str(error) in {"handoff_file_missing", "invalid_canonical_json"}:
+            raise HandoffError("completion_attestation_invalid") from None
+        raise
+    finally:
+        os.close(directory)
 
 
 def read_lane(root: Path, trial_id: str, attempt: int, lane: str,
@@ -315,7 +506,11 @@ def fixture_response(lane: str, trial_id: str, request: dict[str, Any]) -> dict[
             "context_deliveries_complete": True,
         }
     if lane == "answer":
-        answer = request.get("payload", {}).get("fixture_answer", f"fixture answer for {trial_id}")
+        answer = f"fixture answer for {trial_id}"
+        if request.get("schema_version") == "velgraphing-answer-model-input-v1":
+            evidence = request.get("evidence", [])
+            candidate_id = evidence[0].get("id") if evidence and type(evidence[0]) is dict else None
+            answer = f"fixture answer [{candidate_id}]" if candidate_id else answer
         if type(answer) is not str:
             raise HandoffError("fixture_answer_invalid")
         return {
@@ -326,7 +521,6 @@ def fixture_response(lane: str, trial_id: str, request: dict[str, Any]) -> dict[
             "context_deliveries_complete": True,
         }
     if lane == "grader":
-        identity = request.get("identity", {})
         return {
             "schema_version": "velgraphing-grader-output-v1",
             "required_fact_score": 1,
@@ -334,7 +528,6 @@ def fixture_response(lane: str, trial_id: str, request: dict[str, Any]) -> dict[
             "critical_facts_exact": True,
             "unsupported_material_claims": 0,
             "grader_id": f"fixture-grader-{trial_id}",
-            "rubric_sha256": identity.get("rubric_sha256"),
             "usage": None,
             "model_calls_complete": False,
         }
@@ -357,16 +550,29 @@ def wait_for_request(root: Path, trial_id: str, attempt: int, lane: str,
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
-    for name in ("wait", "respond", "fixture-worker"):
+    for name in ("wait", "attest", "respond", "fixture-worker"):
         command = commands.add_parser(name)
         command.add_argument("--run-root", required=True)
         command.add_argument("--trial-id", required=True)
         command.add_argument("--attempt", type=int, required=True)
         command.add_argument("--lane", choices=sorted(LANES), required=True)
-        if name != "respond":
+        if name in {"wait", "fixture-worker"}:
             command.add_argument("--wait-seconds", type=float, required=True)
-        else:
+        elif name == "respond":
             command.add_argument("--response-file")
+            command.add_argument("--normalize-json", action="store_true")
+            command.add_argument("--thread-id")
+            command.add_argument("--model")
+            command.add_argument("--reasoning")
+            command.add_argument("--lane-manifest-sha256")
+        else:
+            command.add_argument("--draft-file", required=True)
+            command.add_argument("--thread-id", required=True)
+            command.add_argument("--model", required=True)
+            command.add_argument("--reasoning", required=True)
+            command.add_argument("--lane-manifest-sha256", required=True)
+            command.add_argument("--thread-status", choices=["completed"], required=True)
+            command.add_argument("--draft-status", choices=["stable-final"], required=True)
     return result
 
 
@@ -383,16 +589,54 @@ def main(argv: list[str] | None = None) -> int:
                 raise HandoffError("handoff_file_invalid")
             sys.stdout.buffer.write(wait_for_response(
                 root, args.trial_id, args.attempt, args.lane, args.wait_seconds, raw))
+        elif args.command == "attest":
+            expected_identity = bound_lane_identity(
+                root, args.trial_id, args.lane, args.lane_manifest_sha256
+            )
+            if expected_identity != _execution_identity(
+                args.trial_id, args.lane, args.thread_id, args.model, args.reasoning
+            ):
+                raise HandoffError("lane_manifest_identity_invalid")
+            attestation = attest_draft(
+                root, args.trial_id, args.attempt, args.lane, Path(args.draft_file),
+                thread_id=args.thread_id, model=args.model, reasoning=args.reasoning,
+                lane_manifest_sha256=args.lane_manifest_sha256,
+            )
+            sys.stdout.buffer.write(canonical({
+                "status": "completion_attested",
+                "attestation_sha256": digest(canonical(attestation)),
+                "draft_sha256": attestation["draft_sha256"],
+            }))
         elif args.command == "respond":
             if args.response_file:
                 source = Path(args.response_file)
-                if source.parent != directory or source.name == "response.json":
+                if (
+                    source.parent != directory
+                    or source.name in {"response.json", COMPLETION_ATTESTATION}
+                    or not all((
+                        args.thread_id, args.model, args.reasoning,
+                        args.lane_manifest_sha256,
+                    ))
+                ):
                     raise HandoffError("response_draft_path_invalid")
-                raw = read_lane(root, args.trial_id, args.attempt, args.lane, source.name)[0]
+                expected_identity = bound_lane_identity(
+                    root, args.trial_id, args.lane, args.lane_manifest_sha256
+                )
+                if expected_identity != _execution_identity(
+                    args.trial_id, args.lane, args.thread_id, args.model, args.reasoning
+                ):
+                    raise HandoffError("lane_manifest_identity_invalid")
+                raw = read_attested_draft(
+                    root, args.trial_id, args.attempt, args.lane, source,
+                    thread_id=args.thread_id, model=args.model, reasoning=args.reasoning,
+                    lane_manifest_sha256=args.lane_manifest_sha256,
+                )
             else:
                 raw = sys.stdin.buffer.read(MAX_BYTES + 1)
             if len(raw) > MAX_BYTES:
                 raise HandoffError("handoff_file_invalid")
+            if args.normalize_json:
+                raw = normalize_json_object(raw)
             write_response(root, args.trial_id, args.attempt, args.lane, raw)
             sys.stdout.buffer.write(canonical({"status": "response_written", "sha256": digest(raw)}))
         else:
