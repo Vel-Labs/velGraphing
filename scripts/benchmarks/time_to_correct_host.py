@@ -25,6 +25,13 @@ USAGE_KEYS = {
     "cached_input_tokens", "reasoning_output_tokens", "cost_usd",
 }
 EXECUTION_IDENTITY_KEYS = {"model", "reasoning", "role", "trial_id", "thread_id"}
+USAGE_DESCRIPTION = (
+    "Null means usage telemetry is unavailable; it does not negate a completed model call."
+)
+MODEL_CALLS_COMPLETE_DESCRIPTION = (
+    "True means the bound model call completed and produced this response, independent of "
+    "usage availability. False means the call was missing, incomplete, or untracked."
+)
 
 
 def _string_list(value: Any, reason: str) -> list[str]:
@@ -173,8 +180,10 @@ def _identified_contract(
 ANSWER_RESPONSE_CONTRACT = _response_contract({
     "schema_version": {"const": ANSWER_OUTPUT_VERSION},
     "answer_text": {"type": "string"},
-    "usage": {"type": ["object", "null"]},
-    "model_calls_complete": {"type": "boolean"},
+    "usage": {"type": ["object", "null"], "description": USAGE_DESCRIPTION},
+    "model_calls_complete": {
+        "type": "boolean", "description": MODEL_CALLS_COMPLETE_DESCRIPTION,
+    },
     "context_deliveries_complete": {"type": "boolean"},
 })
 
@@ -185,8 +194,10 @@ GRADER_RESPONSE_CONTRACT = _response_contract({
     "critical_facts_exact": {"type": "boolean"},
     "unsupported_material_claims": {"type": "integer", "minimum": 0},
     "grader_id": {"type": "string"},
-    "usage": {"type": ["object", "null"]},
-    "model_calls_complete": {"type": "boolean"},
+    "usage": {"type": ["object", "null"], "description": USAGE_DESCRIPTION},
+    "model_calls_complete": {
+        "type": "boolean", "description": MODEL_CALLS_COMPLETE_DESCRIPTION,
+    },
 })
 
 

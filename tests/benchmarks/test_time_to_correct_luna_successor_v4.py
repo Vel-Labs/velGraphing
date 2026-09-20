@@ -132,7 +132,7 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.060555264)
         self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.104595456)
         self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.895404544)
-        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r7")
+        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r8")
         self.assertLessEqual(plan["call_authorization"]["planned_calls"], 8)
         by_task = {}
         for row in rows:
@@ -276,6 +276,52 @@ class LunaSuccessorTests(unittest.TestCase):
                 mod.MeasurementError, "incomplete_trial_requires_parent_audit"
             ):
                 mod.require_resumable(root, incomplete, set(loaded))
+
+    def test_incorrect_trial_accepts_unavailable_usage_only_with_complete_calls(self) -> None:
+        lanes = {
+            (entry["trial_id"], entry["role"]): entry for entry in lane_entries()
+        }
+        trial_id = mod.DISPATCH[0]
+        result = {
+            "terminal_reason": "repair_budget_exhausted",
+            "attempts": [{
+                "coverage": {"model_calls": True, "context_deliveries": True},
+                "answer_boundary": {
+                    "model_calls_complete": True,
+                    "context_deliveries_complete": True,
+                    "execution_identity": mod._lane_execution_identity(
+                        lanes[(trial_id, "answer")]
+                    ),
+                },
+                "grader_boundary": {
+                    "execution_identity": mod._lane_execution_identity(
+                        lanes[(trial_id, "grader")]
+                    ),
+                },
+                "model_calls": [{
+                    "call_id": f"{role}-0",
+                    "kind": role,
+                    "model": "gpt-5.6-luna",
+                    "provenance": "unavailable",
+                    "input_tokens": None,
+                    "output_tokens": None,
+                    "cached_input_tokens": None,
+                    "reasoning_output_tokens": None,
+                    "cost_usd": None,
+                } for role in mod.LANE_ROLES],
+            }],
+        }
+        mod._require_accepted_trial(result)
+
+        incomplete = json.loads(json.dumps(result))
+        incomplete["attempts"][0]["coverage"]["model_calls"] = False
+        systemic = json.loads(json.dumps(result))
+        systemic["terminal_reason"] = "measurement_error"
+        for label, invalid in {"incomplete": incomplete, "systemic": systemic}.items():
+            with self.subTest(label=label), self.assertRaisesRegex(
+                mod.SuccessorError, "successor_systemic_trial_failure"
+            ):
+                mod._require_accepted_trial(invalid)
 
     def test_controller_skips_completed_trials_and_keeps_frozen_order(self) -> None:
         plan = json.loads(mod.PLAN_PATH.read_text(encoding="utf-8"))
