@@ -25,14 +25,38 @@ from time_to_correct_calibration import (HANDOFF_PATH, LiveJevBudget, bind_contr
                                          validate_live_authority, verify_lane,
                                          V3_CANDIDATE_POLICY, V3_MEASUREMENT_CONTRACT)
 from time_to_correct_handoff import (
+    COMPLETION_ATTESTATION,
     HandoffError,
     MAX_BYTES,
+    attest_draft,
     normalize_json_object,
+    read_attested_draft,
     read_canonical,
 )
 from time_to_correct_host import (ANSWER_RESPONSE_CONTRACT, GRADER_RESPONSE_CONTRACT,
                                   run_process_trial)
 from time_to_correct_jev import evaluate_live
+
+
+def write_lane_manifest(
+    root: Path, trial_id: str, role: str, thread_id: str,
+    model: str = "gpt-5.6-luna", reasoning: str = "medium",
+) -> str:
+    command = [sys.executable, "-c", "pass"]
+    raw = canonical({
+        "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
+        "entries": [{
+            "trial_id": trial_id,
+            "role": role,
+            "thread_id": thread_id,
+            "model": model,
+            "reasoning": reasoning,
+            "argv": command,
+            "argv_sha256": digest(canonical(command)),
+        }],
+    })
+    (root / "lane-manifest.json").write_bytes(raw)
+    return digest(raw)
 
 
 class CalibrationTests(unittest.TestCase):
@@ -219,14 +243,29 @@ class CalibrationTests(unittest.TestCase):
             response = canonical({"schema_version": "fixture-response-v1", "answer": "published"})
             draft = lane / "draft-response.json"
             draft.write_bytes(response)
+            manifest_sha256 = write_lane_manifest(
+                root, "publish", "answer", "thread-publish"
+            )
+            identity = [
+                "--thread-id", "thread-publish", "--model", "gpt-5.6-luna",
+                "--reasoning", "medium", "--lane-manifest-sha256", manifest_sha256,
+            ]
+            attested = subprocess.run(
+                [sys.executable, str(HANDOFF_PATH), "attest", "--run-root", str(root),
+                 "--trial-id", "publish", "--attempt", "0", "--lane", "answer",
+                 "--draft-file", str(draft), *identity,
+                 "--thread-status", "completed", "--draft-status", "stable-final"],
+                cwd=ROOT, env={}, capture_output=True, check=False,
+            )
             completed = subprocess.run(
                 [sys.executable, str(HANDOFF_PATH), "respond", "--run-root", str(root),
                  "--trial-id", "publish", "--attempt", "0", "--lane", "answer",
-                 "--response-file", str(draft)],
+                 "--response-file", str(draft), *identity],
                 cwd=ROOT, env={}, capture_output=True, check=False,
             )
             published = (lane / "response.json").read_bytes()
             draft_value = read_canonical(draft)[1]
+        self.assertEqual((attested.returncode, attested.stderr), (0, b""))
         self.assertEqual((completed.returncode, completed.stderr), (0, b""))
         self.assertEqual(published, response)
         self.assertEqual(draft_value["answer"], "published")
@@ -253,7 +292,19 @@ class CalibrationTests(unittest.TestCase):
                 if source == "draft":
                     draft = lane / "draft-response.json"
                     draft.write_bytes(raw)
-                    command.extend(["--response-file", str(draft)])
+                    manifest_sha256 = write_lane_manifest(
+                        root, trial_id, "grader", "thread-1"
+                    )
+                    attest_draft(
+                        root, trial_id, 0, "grader", draft,
+                        thread_id="thread-1", model="gpt-5.6-luna", reasoning="medium",
+                        lane_manifest_sha256=manifest_sha256,
+                    )
+                    command.extend([
+                        "--response-file", str(draft), "--thread-id", "thread-1",
+                        "--model", "gpt-5.6-luna", "--reasoning", "medium",
+                        "--lane-manifest-sha256", manifest_sha256,
+                    ])
                     input_raw = None
                 completed = subprocess.run(
                     command, cwd=ROOT, env={}, input=input_raw,
@@ -261,6 +312,110 @@ class CalibrationTests(unittest.TestCase):
                 )
                 self.assertEqual((completed.returncode, completed.stderr), (0, b""))
                 self.assertEqual((lane / "response.json").read_bytes(), expected)
+
+    def test_draft_observed_before_completion_is_rejected(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            lane = root / "trials/pending/attempt-0/answer"
+            lane.mkdir(parents=True)
+            draft = lane / "draft.json"
+            draft.write_bytes(canonical({"answer": "partial"}))
+            with self.assertRaisesRegex(HandoffError, "completion_attestation_invalid"):
+                read_attested_draft(
+                    root, "pending", 0, "answer", draft,
+                    thread_id="thread-pending", model="gpt-5.6-luna", reasoning="medium",
+                    lane_manifest_sha256="a" * 64,
+                )
+
+    def test_completed_mutated_draft_is_rejected(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            lane = root / "trials/mutated/attempt-0/answer"
+            lane.mkdir(parents=True)
+            draft = lane / "draft.json"
+            draft.write_bytes(canonical({"answer": "final"}))
+            attest_draft(
+                root, "mutated", 0, "answer", draft,
+                thread_id="thread-mutated", model="gpt-5.6-luna", reasoning="medium",
+                lane_manifest_sha256="a" * 64,
+            )
+            draft.write_bytes(canonical({"answer": "changed"}))
+            with self.assertRaisesRegex(
+                HandoffError, "completion_attestation_draft_changed"
+            ):
+                read_attested_draft(
+                    root, "mutated", 0, "answer", draft,
+                    thread_id="thread-mutated", model="gpt-5.6-luna", reasoning="medium",
+                    lane_manifest_sha256="a" * 64,
+                )
+
+    def test_completed_stable_matching_draft_succeeds(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            lane = root / "trials/stable/attempt-0/grader"
+            lane.mkdir(parents=True)
+            draft = lane / "draft.json"
+            expected = canonical({"grade": "final"})
+            draft.write_bytes(expected)
+            attest_draft(
+                root, "stable", 0, "grader", draft,
+                thread_id="thread-stable", model="gpt-5.6-luna", reasoning="medium",
+                lane_manifest_sha256="a" * 64,
+            )
+            self.assertEqual(
+                read_attested_draft(
+                    root, "stable", 0, "grader", draft,
+                    thread_id="thread-stable", model="gpt-5.6-luna", reasoning="medium",
+                    lane_manifest_sha256="a" * 64,
+                ),
+                expected,
+            )
+
+    def test_completion_attestation_rejects_wrong_lane_or_thread_identity(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            lane = root / "trials/identity/attempt-0/answer"
+            lane.mkdir(parents=True)
+            draft = lane / "draft.json"
+            draft.write_bytes(canonical({"answer": "final"}))
+            manifest_sha256 = write_lane_manifest(
+                root, "identity", "answer", "thread-correct"
+            )
+            rejected = subprocess.run(
+                [sys.executable, str(HANDOFF_PATH), "attest", "--run-root", str(root),
+                 "--trial-id", "identity", "--attempt", "0", "--lane", "answer",
+                 "--draft-file", str(draft), "--thread-id", "thread-wrong",
+                 "--model", "gpt-5.6-luna", "--reasoning", "medium",
+                 "--lane-manifest-sha256", manifest_sha256,
+                 "--thread-status", "completed", "--draft-status", "stable-final"],
+                cwd=ROOT, env={}, capture_output=True, check=False,
+            )
+            self.assertEqual(rejected.returncode, 3)
+            self.assertIn(b"lane_manifest_identity_invalid", rejected.stderr)
+            attest_draft(
+                root, "identity", 0, "answer", draft,
+                thread_id="thread-correct", model="gpt-5.6-luna", reasoning="medium",
+                lane_manifest_sha256=manifest_sha256,
+            )
+            with self.assertRaisesRegex(HandoffError, "completion_attestation_invalid"):
+                read_attested_draft(
+                    root, "identity", 0, "answer", draft,
+                    thread_id="thread-wrong", model="gpt-5.6-luna", reasoning="medium",
+                    lane_manifest_sha256=manifest_sha256,
+                )
+            wrong_lane = root / "trials/identity/attempt-0/grader"
+            wrong_lane.mkdir()
+            wrong_draft = wrong_lane / "draft.json"
+            wrong_draft.write_bytes(draft.read_bytes())
+            (wrong_lane / COMPLETION_ATTESTATION).write_bytes(
+                (lane / COMPLETION_ATTESTATION).read_bytes()
+            )
+            with self.assertRaisesRegex(HandoffError, "completion_attestation_invalid"):
+                read_attested_draft(
+                    root, "identity", 0, "grader", wrong_draft,
+                    thread_id="thread-correct", model="gpt-5.6-luna", reasoning="medium",
+                    lane_manifest_sha256=manifest_sha256,
+                )
 
     def test_response_cli_strict_default_rejects_noncanonical_nested_keys(self):
         raw = b'{"z":0,"execution_identity":{"thread_id":"t","model":"m"}}'
