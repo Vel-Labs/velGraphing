@@ -827,6 +827,10 @@ def _validated_run_root(path: Path) -> Path:
     return dependency._validated_run_root(path)
 
 
+def _controller_run_root(path: Path) -> Path:
+    return _validated_run_root(path if path.is_absolute() else ROOT / path)
+
+
 def _current_trial_identity(
     task_id: str,
     arm: str,
@@ -1001,7 +1005,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if arguments.command == "preflight":
             print(canonical(preflight(*inputs)).decode())
             return 0
-        root = _validated_run_root(arguments.run_root)
+        root = _controller_run_root(arguments.run_root)
         lane_manifest_path = arguments.lane_manifest
         if not lane_manifest_path.is_absolute():
             lane_manifest_path = ROOT / lane_manifest_path

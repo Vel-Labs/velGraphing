@@ -274,6 +274,30 @@ class LunaSuccessorTests(unittest.TestCase):
                 ):
                     mod._validate_lane_entries(value)
 
+    def test_controller_accepts_frozen_relative_run_root_and_rejects_escape(self) -> None:
+        run_root_argument = Path(
+            mod.CONTROLLER_ARGV[mod.CONTROLLER_ARGV.index("--run-root") + 1]
+        )
+        self.assertEqual(run_root_argument, Path(mod.RUN_ROOT))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            local = root / ".velgraphing-local"
+            run_root = root / mod.RUN_ROOT
+            local.mkdir(mode=0o700)
+            run_root.mkdir(mode=0o700)
+            with (
+                mock.patch.object(mod, "ROOT", root),
+                mock.patch.object(mod.dependency, "ROOT", root),
+                mock.patch.object(mod.generator, "_git", return_value=""),
+            ):
+                self.assertEqual(
+                    mod._controller_run_root(run_root_argument), run_root
+                )
+                with self.assertRaisesRegex(
+                    mod.SuccessorError, "successor_run_root_mismatch"
+                ):
+                    mod._controller_run_root(Path("../outside"))
+
     def test_selection_revalidates_source_and_preserves_required_evidence(self) -> None:
         from tests.core.test_ranked_context_selection import fixture
 
