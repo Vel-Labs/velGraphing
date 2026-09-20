@@ -610,6 +610,10 @@ tasks:
       repaired_issue: "Commit 93f6dd8 fixed validate --lane-manifest by deriving and then checking the nondefault run root and absolute Python executable already frozen in the manifest argv. The final 32-lane manifest now validates through the public CLI."
       independent_audit: "Luna PASS with no blocking findings. It verified controller self-binding, the exact manifest hash, 32 unique identities and argv arrays, Luna/Astra model bindings, the eight-call zero-retry budget gates, and that the live run root contains no call ledger, trial receipt, completed record, or result."
       start_gate: "The current Codex process has no TYPESAFE_API_KEY. Computer control cannot access Terminal. An operator must export the retained key in a Terminal process and start the exact frozen controller without exposing the value."
+      remote_sync:
+        benchmark_branch: "origin/codex/retrievel-four-arm-study-v1"
+        benchmark_head: "93f6dd8af0187e052317f93656fe13387aef6035"
+        custody_branch: "origin/codex/retrievel-adaptive-pipeline"
     phase_receipts:
       - phase: "phase_1_benchmark_only_freeze"
         result: done
