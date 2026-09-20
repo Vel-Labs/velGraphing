@@ -552,7 +552,7 @@ tasks:
     status: active
     reasoning_hint: high
     objective: "Freeze, execute, independently grade, and seal the redesigned four-arm time-to-correct study."
-    current_phase: "phase_1_benchmark_only_freeze"
+    current_phase: "phase_2_candidate_pools_and_execution_manifest"
     implementation_thread: "01a0b0e4-21fa-7961-80d8-090e1c6728eb"
     implementation_branch: "codex/retrievel-four-arm-study-v1"
     implementation_base: "3bad9cbfa618e4a39789298a52a8d03d2afdb8f2"
@@ -590,6 +590,30 @@ tasks:
         - "D-01 requires duplicate-specific evidence; base-case detail is diagnostic unless the public question requests it."
         - "C-02 is excluded."
       phase_1_boundary: "Freeze and validate only. No provider, answer, or grader call."
+    phase_receipts:
+      - phase: "phase_1_benchmark_only_freeze"
+        result: done
+        branch: "codex/retrievel-four-arm-study-v1"
+        commit: "8e439ada526871b3a781886643db302bc6658cec"
+        changed_files:
+          - benchmarks/velgraphing-four-arm-study-v1/README.md
+          - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+          - benchmarks/velgraphing-four-arm-study-v1/freeze.json
+          - benchmarks/velgraphing-four-arm-study-v1/questions.json
+          - benchmarks/velgraphing-four-arm-study-v1/rubrics.json
+          - scripts/benchmarks/four_arm_study_v1.py
+          - tests/benchmarks/test_four_arm_study_v1.py
+        validation:
+          - "7 focused freeze tests passed."
+          - "182 mapped benchmark and product consumers passed."
+          - "Offline validator returned frozen_offline_phase_1_pending_execution_inputs with 16 dispatches."
+          - "py_compile and git diff --check passed."
+          - "Independent Luna final review passed after three blocking findings were repaired."
+        calls:
+          provider: 0
+          answer: 0
+          grader: 0
+        summary: "Accepted the smallest benchmark-only freeze. It binds the four tasks, four arms, corrected rubrics, Luna answer model, Astra grader model, public source and product identity, Jev ceiling, blindness, telemetry, and fail-closed execution gates without copying the superseded T030 stack."
     receipt: null
   - id: T999
     type: judge
