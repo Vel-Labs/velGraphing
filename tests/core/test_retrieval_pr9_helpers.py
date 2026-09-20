@@ -54,6 +54,71 @@ def result(path, *facets, evidence=()):
     )
 
 
+def completion_case():
+    topics = ("one", "two", "three", "four")
+
+    def document(name):
+        sections = [
+            f"## Topic {topic}\ntopic-{topic} " + "evidence " * 20 + "\n"
+            for topic in topics
+        ]
+        return (f"# {name.title()} guide\n\n" + "\n".join(sections)).encode()
+
+    sources = {
+        f"docs/{name}-guide.md": document(name)
+        for name in ("alpha", "beta", "gamma")
+    }
+    sources["docs/required.md"] = b"required proof\n"
+    records = []
+    for path, raw in sources.items():
+        digest = hashlib.sha256(raw).hexdigest()
+        records.append(GraphRecord(
+            f"repo:{path}", "source", path, raw.decode(),
+            Provenance(path, digest, "bytes", True), TrustClass.VERIFIED_SOURCE,
+            Sensitivity.PUBLIC, Freshness.CURRENT, Admission.VERIFIER, True,
+        ))
+    snapshot = SourceSnapshotV4(tuple(
+        SourceIdentityV4(path, len(raw), hashlib.sha256(raw).hexdigest())
+        for path, raw in sorted(sources.items())
+    ))
+
+    class MapReader:
+        def read_bytes(self, path): return sources[path]
+        def is_symlink(self, path): return False
+
+    retrieval = RetrievalResult(
+        "direct", "fixture", tuple(
+            RetrievalHit(
+                f"repo:docs/{name}-guide.md", f"docs/{name}-guide.md", 1,
+                ("exact",), (f"{name}-guide",), 0,
+            )
+            for name in ("alpha", "beta", "gamma")
+        ), (), "", 0, 100.0, (), (), False,
+    )
+    query_terms = tuple(
+        [f"{name}-guide" for name in ("alpha", "beta", "gamma")]
+        + [f"topic-{topic}" for topic in topics]
+    )
+    expected = [
+        (
+            f"docs/{name}-guide.md",
+            (f"## Topic {topic}\ntopic-{topic} " + "evidence " * 20 + "\n\n").encode(),
+        )
+        for topic in topics[:3]
+        for name in ("alpha", "beta")
+    ]
+    required_raw = sources["docs/required.md"]
+    required_sha = hashlib.sha256(required_raw).hexdigest()
+    evidence = EvidenceItem(
+        "repo:docs/required.md", "docs/required.md", required_sha, 0,
+        len(required_raw), required_sha, AuthorityClass.RUNTIME, ("required",),
+    )
+    return (
+        Graph(tuple(records)), snapshot, MapReader(), retrieval, query_terms,
+        sources, expected, evidence,
+    )
+
+
 class Pr9RetrievalHelperTests(unittest.TestCase):
     def test_named_markdown_and_verified_link_complete_evidence(self):
         sources = {
@@ -126,6 +191,62 @@ class Pr9RetrievalHelperTests(unittest.TestCase):
                 (json.dumps(identity, sort_keys=True, separators=(",", ":")) + "\n").encode()
             ).hexdigest()
             self.assertEqual(candidate.candidate_id, expected)
+
+    def test_evidence_completion_caps_targets_units_and_stabilizes_ties(self):
+        graph, snapshot, reader, retrieval, terms, sources, expected, _ = completion_case()
+        budget = {
+            "maximum_candidates": 64,
+            "maximum_candidate_bytes": 32_768,
+            "maximum_unit_bytes": 256,
+        }
+
+        def run(candidate_graph=graph, query_terms=terms):
+            return ranked_candidates_from_retrieval(
+                candidate_graph, TaskSpec("completion-caps", query_terms),
+                snapshot, reader, retrieval, **budget,
+            )
+
+        first = run()
+        observed = [
+            (item.source_path, sources[item.source_path][item.byte_start:item.byte_end])
+            for item in first[:6]
+        ]
+        self.assertEqual(observed, expected)
+        self.assertEqual({path for path, _ in observed}, {
+            "docs/alpha-guide.md", "docs/beta-guide.md",
+        })
+        self.assertEqual(first, run())
+        self.assertEqual(first, run(Graph(tuple(reversed(graph.records))), tuple(reversed(terms))))
+        self.assertEqual(first[6].source_path, "docs/alpha-guide.md")
+        self.assertTrue(
+            sources[first[6].source_path][first[6].byte_start:first[6].byte_end]
+            .startswith(b"# Alpha guide")
+        )
+
+    def test_required_evidence_survives_full_completion_budget(self):
+        graph, snapshot, reader, retrieval, terms, _, _, evidence = completion_case()
+        retrieval = RetrievalResult(
+            retrieval.route, retrieval.reason, retrieval.hits, retrieval.spans,
+            retrieval.context, retrieval.context_bytes, retrieval.facet_coverage_percent,
+            retrieval.channel_rankings, retrieval.recommended_fallback_paths,
+            retrieval.fail_closed, evidence=(evidence,),
+        )
+        broad = ranked_candidates_from_retrieval(
+            graph, TaskSpec("required-completion", terms), snapshot, reader, retrieval,
+            maximum_candidates=64, maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=256,
+        )
+        exact_bytes = sum(item.byte_end - item.byte_start for item in broad[:7])
+        constrained = ranked_candidates_from_retrieval(
+            graph, TaskSpec("required-completion", terms), snapshot, reader, retrieval,
+            maximum_candidates=7, maximum_candidate_bytes=exact_bytes,
+            maximum_unit_bytes=256,
+        )
+        self.assertEqual(constrained, broad[:7])
+        self.assertTrue(constrained[0].required)
+        self.assertEqual(constrained[0].source_path, "docs/required.md")
+        self.assertEqual(len(constrained), 7)
+        self.assertTrue(all(item.byte_end - item.byte_start <= 256 for item in constrained))
 
     def test_window_keeps_deep_anchor(self):
         raw = b"prefix " * 800 + b"needle" + b" suffix" * 200
