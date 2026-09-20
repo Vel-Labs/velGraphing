@@ -29,7 +29,9 @@ from packages.core import (
     build_repository_file_cards,
     compile_prompt,
     compile_proof_obligations,
+    derive_source_relations,
     graph_find,
+    is_authenticated_eligible,
     navigate,
     ranked_candidates_from_retrieval,
     retrieve,
@@ -182,6 +184,80 @@ def obligated_facets(*obligations: ProofObligation, count: int = 8) -> PromptFac
         tuple(PromptFacet(FacetKind.ENTITY, f"facet-{index}", 1) for index in range(count)),
         proof_obligations=obligations,
     )
+
+
+class SourceRelationDerivationTests(unittest.TestCase):
+    def test_derivation_is_source_bound_and_reports_explicit_coverage(self) -> None:
+        sources = {
+            "src/caller.py": (
+                b"import src.helper\n"
+                b"from src.helper import helper\n"
+                b"from src.helper import *\n"
+                b"from missing import absent\n"
+            ),
+            "src/helper.py": b"def helper():\n    return 1\n",
+            "README.md": (
+                b"# Start\n"
+                b"[guide](docs/guide.md#install)\n"
+                b"[missing](docs/missing.md#install)\n"
+                b"[external](https://example.com/page#install)\n"
+                b"[plain](docs/guide.md)\n"
+            ),
+            "docs/guide.md": b"# Install\nUse helper.\n",
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+
+        first = derive_source_relations(graph, snapshot, reader)
+        second = derive_source_relations(graph, snapshot, Reader(sources))
+
+        self.assertEqual(first, second)
+        self.assertEqual(
+            {edge.relation for edge in first.edges},
+            {"imports", "links_to_heading"},
+        )
+        self.assertEqual(
+            [item.to_dict() for item in first.coverage],
+            [
+                {
+                    "relation": "imports",
+                    "supported": "python_ast_from_import_named_top_level_declaration",
+                    "resolved": 1,
+                    "unresolved": 1,
+                    "unsupported": 2,
+                },
+                {
+                    "relation": "links_to_heading",
+                    "supported": "markdown_relative_path_fragment_unique_atx_heading",
+                    "resolved": 1,
+                    "unresolved": 1,
+                    "unsupported": 2,
+                },
+            ],
+        )
+        Graph(graph.records, first.edges)
+
+        restricted_records = tuple(
+            replace(record, sensitivity=Sensitivity.RESTRICTED)
+            if record.provenance.path == "src/helper.py"
+            else record
+            for record in graph.records
+        )
+        restricted = derive_source_relations(
+            Graph(restricted_records), snapshot, Reader(sources)
+        )
+        import_edge = next(edge for edge in restricted.edges if edge.relation == "imports")
+        self.assertIs(import_edge.sensitivity, Sensitivity.RESTRICTED)
+        self.assertFalse(is_authenticated_eligible(import_edge, (Sensitivity.INTERNAL,)))
+        self.assertTrue(is_authenticated_eligible(import_edge, (Sensitivity.RESTRICTED,)))
+
+        poisoned = replace(
+            graph.records[0],
+            content=graph.records[0].content + "# changed\n",
+        )
+        with self.assertRaisesRegex(ValueError, "relation source custody mismatch"):
+            derive_source_relations(
+                Graph((poisoned, *graph.records[1:])), snapshot, Reader(sources)
+            )
 
 
 class SourceBoundExpansionTests(unittest.TestCase):

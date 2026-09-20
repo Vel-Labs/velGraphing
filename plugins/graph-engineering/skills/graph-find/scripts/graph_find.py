@@ -4,19 +4,16 @@
 from __future__ import annotations
 
 import argparse
-import ast
 from dataclasses import replace
 import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
-import posixpath
 import re
 import stat
 import subprocess
 import sys
 from typing import Callable, Sequence
-from urllib.parse import unquote
 
 sys.dont_write_bytecode = True
 
@@ -48,11 +45,9 @@ try:  # noqa: E402
         Admission,
         Freshness,
         Graph,
-        GraphEdge,
         GraphRecord,
         Provenance,
         Sensitivity,
-        SourceCoordinate,
         SourceIdentityV4,
         SourceSnapshotV4,
         TaskSpec,
@@ -60,6 +55,7 @@ try:  # noqa: E402
         build_repository_tag_index,
         compile_prompt,
         compile_proof_obligations,
+        derive_source_relations,
         graph_find,
         plan_ranked_context,
         ranked_candidates_from_retrieval,
@@ -73,11 +69,9 @@ except ModuleNotFoundError:  # packaged plugin runtime
         Admission,
         Freshness,
         Graph,
-        GraphEdge,
         GraphRecord,
         Provenance,
         Sensitivity,
-        SourceCoordinate,
         SourceIdentityV4,
         SourceSnapshotV4,
         TaskSpec,
@@ -85,6 +79,7 @@ except ModuleNotFoundError:  # packaged plugin runtime
         build_repository_tag_index,
         compile_prompt,
         compile_proof_obligations,
+        derive_source_relations,
         graph_find,
         plan_ranked_context,
         ranked_candidates_from_retrieval,
@@ -100,8 +95,6 @@ DEFAULT_MAX_TOTAL_BYTES = 16 * 1024 * 1024
 HARD_MAX_FILE_BYTES = 16 * 1024 * 1024
 HARD_MAX_TOTAL_BYTES = 128 * 1024 * 1024
 _TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9_-]{1,63}")
-_MARKDOWN_HEADING = re.compile(r"(?m)^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
-_MARKDOWN_LINK = re.compile(r"\[[^\]\n]+\]\(([^()\s]+#[^()\s#]+)\)")
 _SENSITIVE_COMPONENTS = frozenset({"private", "secrets", "credentials"})
 _SENSITIVE_SUFFIXES = frozenset({".key", ".pem", ".p12", ".pfx"})
 _PRIVATE_KEY_BASENAMES = frozenset(
@@ -230,233 +223,6 @@ class SnapshotReader:
         return False
 
 
-def _coordinate(
-    snapshot_sha256: str,
-    path: str,
-    data: bytes,
-    byte_start: int,
-    byte_end: int,
-    entity_kind: str,
-    occurrence_role: str,
-    symbol: str,
-) -> SourceCoordinate:
-    return SourceCoordinate(
-        snapshot_sha256,
-        path,
-        hashlib.sha256(data).hexdigest(),
-        byte_start,
-        byte_end,
-        1 + data[:byte_start].count(b"\n"),
-        1 + data[: byte_end - 1].count(b"\n"),
-        entity_kind,
-        occurrence_role,
-        symbol,
-    )
-
-
-def _ast_range(data: bytes, node: ast.AST) -> tuple[int, int] | None:
-    line = getattr(node, "lineno", None)
-    end_line = getattr(node, "end_lineno", None)
-    column = getattr(node, "col_offset", None)
-    end_column = getattr(node, "end_col_offset", None)
-    if None in (line, end_line, column, end_column):
-        return None
-    starts = [0]
-    starts.extend(index + 1 for index, value in enumerate(data) if value == 10)
-    try:
-        return starts[line - 1] + column, starts[end_line - 1] + end_column
-    except IndexError:
-        return None
-
-
-def _module_name(path: str) -> str | None:
-    if not path.endswith(".py"):
-        return None
-    parts = path[:-3].split("/")
-    if parts[-1] == "__init__":
-        parts.pop()
-    return ".".join(parts) or None
-
-
-def _resolved_module(source_path: str, node: ast.ImportFrom) -> str | None:
-    if not node.module:
-        return None
-    if not node.level:
-        return node.module
-    package = source_path[:-3].split("/")[:-1]
-    if source_path.endswith("/__init__.py"):
-        package = source_path[:-12].split("/")
-    keep = len(package) - node.level + 1
-    if not package or keep <= 0:
-        return None
-    return ".".join([*package[:keep], *node.module.split(".")])
-
-
-def _heading_slug(value: str) -> str:
-    value = re.sub(r"[`*_~]", "", value.casefold())
-    value = re.sub(r"[^\w\s-]", "", value)
-    return re.sub(r"[-\s]+", "-", value).strip("-")
-
-
-def _markdown_headings(text: str) -> list[tuple[str, int, int]]:
-    headings: list[tuple[str, int, int]] = []
-    fence: tuple[str, int] | None = None
-    offset = 0
-    for raw_line in text.splitlines(keepends=True):
-        line = raw_line.rstrip("\r\n")
-        if fence is not None:
-            character, minimum = fence
-            if re.fullmatch(rf" {{0,3}}{re.escape(character)}{{{minimum},}}[ \t]*", line):
-                fence = None
-        else:
-            opener = re.match(r" {0,3}(`{3,}|~{3,})", line)
-            if opener is not None:
-                run = opener.group(1)
-                fence = (run[0], len(run))
-            else:
-                heading = _MARKDOWN_HEADING.fullmatch(line)
-                if heading is not None:
-                    headings.append(
-                        (heading.group(1), offset + heading.start(1), offset + heading.end(1))
-                    )
-        offset += len(raw_line)
-    return headings
-
-
-def _derive_edges(
-    sources: dict[str, bytes], snapshot_sha256: str
-) -> tuple[GraphEdge, ...]:
-    modules: dict[str, list[str]] = {}
-    declarations: dict[str, dict[str, list[SourceCoordinate]]] = {}
-    trees: dict[str, ast.Module] = {}
-    headings: dict[str, dict[str, list[SourceCoordinate]]] = {}
-    for path, data in sorted(sources.items()):
-        module = _module_name(path)
-        if module is not None:
-            modules.setdefault(module, []).append(path)
-            try:
-                tree = ast.parse(data.decode("utf-8"), filename=path)
-            except SyntaxError:
-                continue
-            trees[path] = tree
-            by_name: dict[str, list[SourceCoordinate]] = {}
-            for node in tree.body:
-                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                    continue
-                bounds = _ast_range(data, node)
-                if bounds is None or bounds[0] >= bounds[1]:
-                    continue
-                by_name.setdefault(node.name, []).append(
-                    _coordinate(
-                        snapshot_sha256,
-                        path,
-                        data,
-                        *bounds,
-                        "python_declaration",
-                        "declaration" if isinstance(node, ast.ClassDef) else "definition",
-                        node.name,
-                    )
-                )
-            declarations[path] = by_name
-        if path.casefold().endswith((".md", ".markdown")):
-            text = data.decode("utf-8")
-            by_slug: dict[str, list[SourceCoordinate]] = {}
-            for heading, character_start, character_end in _markdown_headings(text):
-                slug = _heading_slug(heading)
-                if not slug:
-                    continue
-                start = len(text[:character_start].encode("utf-8"))
-                end = len(text[:character_end].encode("utf-8"))
-                by_slug.setdefault(slug, []).append(
-                    _coordinate(snapshot_sha256, path, data, start, end, "markdown_heading", "declaration", slug)
-                )
-            headings[path] = by_slug
-
-    edges: list[GraphEdge] = []
-
-    def add(
-        relation: str,
-        source: SourceCoordinate,
-        target: SourceCoordinate,
-    ) -> None:
-        identity = json.dumps(
-            [relation, source.to_dict(), target.to_dict()], sort_keys=True, separators=(",", ":")
-        ).encode("utf-8")
-        edges.append(
-            GraphEdge(
-                f"edge:{hashlib.sha256(identity).hexdigest()}",
-                f"repo:{source.source_path}",
-                f"repo:{target.source_path}",
-                relation,
-                1.0,
-                Provenance(
-                    source.source_path,
-                    source.source_sha256,
-                    f"bytes:{source.byte_start}-{source.byte_end}",
-                    True,
-                ),
-                TrustClass.VERIFIED_SOURCE,
-                Sensitivity.INTERNAL,
-                Freshness.CURRENT,
-                Admission.VERIFIER,
-                True,
-                source_coordinate=source,
-                target_coordinate=target,
-            )
-        )
-
-    for path, tree in sorted(trees.items()):
-        data = sources[path]
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ImportFrom):
-                continue
-            module = _resolved_module(path, node)
-            targets = modules.get(module or "", ())
-            if len(targets) != 1:
-                continue
-            target_path = targets[0]
-            for alias in node.names:
-                declarations_for_name = declarations.get(target_path, {}).get(alias.name, ())
-                bounds = _ast_range(data, alias)
-                if alias.name == "*" or len(declarations_for_name) != 1 or bounds is None:
-                    continue
-                add(
-                    "imports",
-                    _coordinate(snapshot_sha256, path, data, *bounds, "python_import", "import", alias.name),
-                    declarations_for_name[0],
-                )
-
-    for path, data in sorted(sources.items()):
-        if path not in headings:
-            continue
-        text = data.decode("utf-8")
-        for match in _MARKDOWN_LINK.finditer(text):
-            destination = match.group(1)
-            link_path, fragment = destination.rsplit("#", 1)
-            if (
-                not link_path
-                or "%" in link_path
-                or link_path.startswith(("/", "//"))
-                or ":" in link_path
-                or ".." in PurePosixPath(link_path).parts
-            ):
-                continue
-            target_path = posixpath.normpath(posixpath.join(posixpath.dirname(path), link_path))
-            if target_path.startswith("../") or target_path not in headings:
-                continue
-            targets = headings[target_path].get(_heading_slug(unquote(fragment)), ())
-            if len(targets) != 1:
-                continue
-            start = len(text[: match.start(1)].encode("utf-8"))
-            end = len(text[: match.end(1)].encode("utf-8"))
-            add(
-                "links_to_heading",
-                _coordinate(snapshot_sha256, path, data, start, end, "markdown_link", "reference", destination),
-                targets[0],
-            )
-    return tuple(sorted(edges, key=lambda edge: edge.edge_id))
-
-
 def _scan(
     root: Path,
     max_file_bytes: int,
@@ -520,7 +286,9 @@ def _scan(
         )
         for path, data in sorted(sources.items())
     )
-    edges = _derive_edges(sources, snapshot.snapshot_sha256) if derive_edges else ()
+    source_graph = Graph(records)
+    relations = derive_source_relations(source_graph, snapshot, reader) if derive_edges else None
+    edges = relations.edges if relations is not None else ()
     reason_counts: dict[str, int] = {}
     for item in skipped:
         reason = item["reason"]
@@ -540,6 +308,11 @@ def _scan(
         "max_file_bytes": max_file_bytes,
         "max_total_bytes": max_total_bytes,
         "edges_derived": len(edges),
+        "relation_coverage": (
+            [item.to_dict() for item in relations.coverage]
+            if relations is not None
+            else []
+        ),
     }
     return Graph(records, edges), snapshot, reader, metadata
 
