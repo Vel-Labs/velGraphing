@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T071
+active_task: T080
 
 tasks:
   - id: T010
@@ -304,7 +304,7 @@ tasks:
   - id: T071
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: medium
     objective: "Derive source-witnessed JavaScript static relative named-import edges through the canonical relation seam."
     allowed_files:
@@ -328,14 +328,39 @@ tasks:
       - "A new parser dependency is required."
       - "The implementation would infer exports or edges from regex-only semantics."
       - "The work requires TypeScript, package resolution, re-exports, dynamic imports, or connector identities."
-    receipt: null
+    receipt:
+      result: done
+      changed_files:
+        - packages/core/javascript_coordinates.py
+        - packages/core/retrieval.py
+        - plugins/graph-engineering/runtime/core/javascript_coordinates.py
+        - plugins/graph-engineering/runtime/core/retrieval.py
+        - plugins/graph-engineering/runtime/.projection-state.json
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - tests/core/test_javascript_coordinates.py
+        - tests/core/test_retrieval.py
+        - tests/skills/test_portable_skills.py
+      commands:
+        - cmd: "python -m unittest tests.core.test_javascript_coordinates tests.core.test_retrieval tests.skills.test_portable_skills -v"
+          status: pass
+        - cmd: "python3 scripts/package/project_portable_plugin.py twice"
+          status: pass
+        - cmd: "python3 scripts/package/verify_source_package_parity.py"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+        - cmd: "GitHub CI on Python 3.11 and 3.13"
+          status: pass
+      summary: "Accepted at e4b79e645681236f7712b660f1f67cc05079eb5b and merged through PR #14 at 4a7597e91c3356ade9186e61bd75bfcd2ef56767. The shared relation seam now derives source-bound static relative JavaScript named imports to unique direct named exports and reports separate resolved, unresolved, and unsupported coverage. Independent review found and the Worker repaired a side-effect-import crash and uppercase suffix inconsistency. Parent reran 110 focused and consumer tests and 87-file package parity."
+      evidence:
+        - "https://github.com/Vel-Labs/velGraphing/pull/14"
   - id: T080
     type: pm
     assignee: PM
-    status: queued
+    status: active
     objective: "Compile source-witnessed connector identity and cross-language resolution packages from accepted relation coverage."
     inputs:
-      - "T060 and T070 receipts"
+      - "T060, T070, and T071 receipts"
     constraints:
       - "Connector nodes remain derived and reversible."
       - "Jev cannot admit identities or edges."
@@ -413,15 +438,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch clean at its latest GoalBuddy commit before the T060 receipt update"
+  dirty_fingerprint: "custody branch contains only the current GoalBuddy T071 acceptance and T080 activation update"
   last_verification:
     result: pass
-    task: T060
+    task: T071
     commands:
-      - "272 core tests passed."
-      - "36 skill tests passed."
-      - "Package parity passed for 87 files at e72fccdf1f817c76d20694788373242d65d9d376458154478c85062120823ff2."
-      - "Independent Luna re-audit passed after the sensitivity repair."
+      - "110 JavaScript-coordinate, retrieval, and portable-skill tests passed."
+      - "Package parity passed for 87 files at 510a0fa2aa24e9e9dfb4e3b20ab47d6fb5cb35cbb3295075d5ee4e6f2ce34ecc."
+      - "Independent Luna re-audit passed after the side-effect-import and uppercase-suffix repairs."
+      - "GitHub CI passed on Python 3.11 and 3.13."
 
 provider_budget:
   provider: typesafe_jev

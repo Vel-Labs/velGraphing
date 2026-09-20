@@ -12,12 +12,15 @@ retrieval program until evidence supports a separate package decision.
 
 ## Current truth
 
-- PR #11 is the product candidate. It is based on `main` and is mergeable with
-  green Python 3.11 and 3.13 checks.
-- PR #12 is the evidence candidate. It is stacked on PR #11 and is mergeable
-  with green Python 3.11 and 3.13 checks.
-- PR #11 must merge first. PR #12 must then target the merged `main`, retain
-  evidence-only scope, pass CI, and merge second.
+- PR #11 and PR #12 merged in the required product-then-evidence order.
+- PR #13 merged the canonical source-relation seam for Python imports and
+  Markdown links.
+- PR #14 merged the first additional language adapter. It supports one narrow
+  JavaScript relation form: static relative named imports to unique direct
+  named exports.
+- Connector identity and cross-language resolution design is now active. It
+  must reuse these source-bound relations and remain deterministic and
+  reversible.
 - T030 is closed unresolved. Its failures and partial results remain evidence.
   They do not prove Graph value, Jev value, or product performance.
 - Forty-six live Jev calls occurred during the prior goal. None used the exact
