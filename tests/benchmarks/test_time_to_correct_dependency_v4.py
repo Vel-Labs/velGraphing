@@ -34,6 +34,7 @@ SPEC = importlib.util.spec_from_file_location(
 )
 mod = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(mod)
+FIXTURE_CANDIDATE_IDS = tuple(str(index) * 64 for index in range(4))
 
 
 ANSWER_CODE = r'''
@@ -66,19 +67,27 @@ class DependencyControllerTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name).resolve()
         graph, snapshot, reader, candidates = fixture()
+        self.candidate_ids = FIXTURE_CANDIDATE_IDS
+        first = replace(candidates[0], candidate_id=self.candidate_ids[0])
+        parent = replace(candidates[1], candidate_id=self.candidate_ids[1])
         self.source = self.root / candidates[0].source_path
         self.source.parent.mkdir(parents=True)
         self.source.write_bytes(reader.sources[candidates[0].source_path])
-        displaced = replace(candidates[2], candidate_id="c3", record_id="record-c3")
-        child = replace(candidates[2], relationship_parent_candidate_id="c1")
+        displaced = replace(
+            candidates[2], candidate_id=self.candidate_ids[3], record_id="record-c3"
+        )
+        child = replace(
+            candidates[2], candidate_id=self.candidate_ids[2],
+            relationship_parent_candidate_id=self.candidate_ids[1],
+        )
         graph = Graph((*graph.records, source_record(
             displaced.record_id,
             displaced.source_path,
             displaced.source_sha256,
             "optional-b",
         )))
-        graph = graph_with_relationship_edge(graph, snapshot, reader, candidates[1], child)
-        pool = (candidates[0], displaced, candidates[1], child)
+        graph = graph_with_relationship_edge(graph, snapshot, reader, parent, child)
+        pool = (first, displaced, parent, child)
         rows = []
         for candidate in pool:
             rows.append({
@@ -139,7 +148,12 @@ class DependencyControllerTests(unittest.TestCase):
     @staticmethod
     def evaluator(packet, root, **kwargs):
         prepared = jev.prepare(packet, root, kwargs["model"])
-        scores = {"c1": 2, "c2": 2, "c3": 0, "c0": 0}
+        scores = {
+            FIXTURE_CANDIDATE_IDS[0]: 0,
+            FIXTURE_CANDIDATE_IDS[1]: 2,
+            FIXTURE_CANDIDATE_IDS[2]: 2,
+            FIXTURE_CANDIDATE_IDS[3]: 0,
+        }
         response = {
             "model": kwargs["model"],
             "answers": {
@@ -184,7 +198,7 @@ class DependencyControllerTests(unittest.TestCase):
         ledger_root = self.root / f"ledger-{arm}"
         ledger_root.mkdir(mode=0o700)
         ledger = mod.LiveJevBudget(ledger_root, 2)
-        with mock.patch.object(mod, "FINAL_ANSWER_BYTES", 1400):
+        with mock.patch.object(mod, "FINAL_ANSWER_BYTES", 2200):
             return mod.run_arm(
                 arm,
                 "a" * 40,
@@ -263,10 +277,10 @@ class DependencyControllerTests(unittest.TestCase):
         d = self.run_arm("D")
         c_observation = c["attempts"][0]["candidate_observation"]
         d_observation = d["attempts"][0]["candidate_observation"]
-        self.assertNotIn("c2", c_observation["selected_candidate_ids"])
-        self.assertIn("c2", d_observation["selected_candidate_ids"])
-        self.assertEqual(c_observation["required_candidate_ids"], ["c0"])
-        self.assertEqual(d_observation["required_candidate_ids"], ["c0"])
+        self.assertNotIn(self.candidate_ids[2], c_observation["selected_candidate_ids"])
+        self.assertIn(self.candidate_ids[2], d_observation["selected_candidate_ids"])
+        self.assertEqual(c_observation["required_candidate_ids"], [self.candidate_ids[0]])
+        self.assertEqual(d_observation["required_candidate_ids"], [self.candidate_ids[0]])
         self.assertEqual(c["budget"]["max_repairs"], 0)
         self.assertEqual(d["budget"]["max_repairs"], 0)
 
@@ -837,7 +851,7 @@ class DependencyControllerTests(unittest.TestCase):
             mock.patch.object(mod.generator, "_manifest", return_value={"commit": "a" * 40}),
             mock.patch.object(mod, "lane_state_sha256", return_value="d" * 64),
             mock.patch.object(mod, "regenerate_pool", side_effect=regenerate),
-            mock.patch.object(mod, "FINAL_ANSWER_BYTES", 1400),
+            mock.patch.object(mod, "FINAL_ANSWER_BYTES", 2200),
         )
         with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
             evaluate = mock.Mock(side_effect=self.evaluator)

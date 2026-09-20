@@ -328,6 +328,16 @@ def run_process_trial(
     grader_identity = _execution_identity(grader_execution_identity, "grader")
     answer_contract = _identified_contract(answer_response_contract, answer_identity)
     grader_contract = _identified_contract(grader_response_contract, grader_identity)
+    if answer_contract is not None and answer_identity is not None:
+        answer_contract = dict(answer_contract)
+        answer_schema = dict(answer_contract["json_schema"])
+        answer_properties = dict(answer_schema["properties"])
+        answer_properties["usage"] = {
+            "const": None,
+            "description": USAGE_DESCRIPTION,
+        }
+        answer_schema["properties"] = answer_properties
+        answer_contract["json_schema"] = answer_schema
     expected_grader_id = (
         identifier(f"grader-{grader_identity['trial_id']}")
         if grader_identity is not None else None
@@ -390,7 +400,7 @@ def run_process_trial(
         if prepared.get("schema_version") == "velgraphing-answer-evidence-v3":
             allowed = {row.get("id") for row in prepared.get("evidence", [])
                        if type(row) is dict and type(row.get("id")) is str}
-            cited = re.findall(r"\[([A-Za-z0-9_-]+)\]", output["answer_text"])
+            cited = re.findall(r"\[([a-f0-9]{64})\]", output["answer_text"])
             if require_answer_evidence_citation and not cited:
                 raise MeasurementError("answer_evidence_citation_missing")
             if any(candidate_id not in allowed for candidate_id in cited):

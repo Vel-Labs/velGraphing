@@ -171,6 +171,7 @@ class HostBoundaryTests(unittest.TestCase):
         self.assertEqual(len(result["attempts"][0]["context_deliveries"]), 1)
 
     def test_actual_d01_subprocess_inputs_are_allowlisted(self):
+        evidence_id = "d" * 64
         answer_code = ANSWER_CODE.replace(
             'if "response_contract" in payload:',
             '''
@@ -178,7 +179,8 @@ if payload["question"] != "Which implementation is imported immediately after me
 if payload["instructions"] != ["Cite supporting evidence IDs as [cN]."]: raise SystemExit(7)
 if payload["evidence"] != [{"id":"d0","path":"sorts/quick_sort.py","excerpt":"pivot = collection.pop(randint(0, len(collection) - 1))","source_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","byte_start":253,"byte_end":1299,"relationship_parent_candidate_id":"parent"}]: raise SystemExit(7)
 if "response_contract" in payload:''').replace(
-                "observed subprocess answer", "observed subprocess answer [d0]")
+                "observed subprocess answer", "observed subprocess answer [d0]"
+            ).replace("d0", evidence_id)
         grader_code = GRADER_CODE.replace(
             'if "response_contract" in payload:',
             '''
@@ -186,7 +188,9 @@ if payload["answer_text"] != "observed subprocess answer [d0]": raise SystemExit
 if payload["rubric"] != {"required_facts":["Names the imported implementation."],"critical_facts":["Explains pivot selection and placement."],"acceptable_spans":["sorts/quick_sort.py"]}: raise SystemExit(7)
 if "response_contract" in payload:''').replace(
             '"required_fact_maximum": 10,', '"required_fact_maximum": 1,'
-        ).replace('"required_fact_score": 9,', '"required_fact_score": 1,')
+        ).replace('"required_fact_score": 9,', '"required_fact_score": 1,').replace(
+            "d0", evidence_id
+        )
         prohibited = {
             "run_id": "run", "trial_id": "trial", "arm": "D", "route": "typed_graph",
             "jev_status": "reranked", "treatment": "on", "request_sha256": "a" * 64,
@@ -200,7 +204,7 @@ if "response_contract" in payload:''').replace(
             "question": "Which implementation is imported immediately after merge_sort, and how does it choose and place its pivot?",
             "citation_instruction": "Cite supporting evidence IDs as [cN].",
             "evidence": [{
-                "id": "d0", "path": "sorts/quick_sort.py",
+                "id": evidence_id, "path": "sorts/quick_sort.py",
                 "excerpt": "pivot = collection.pop(randint(0, len(collection) - 1))",
                 "source_sha256": "c" * 64, "byte_start": 253, "byte_end": 1299,
                 "relationship_parent_candidate_id": "parent",
@@ -266,7 +270,12 @@ if "response_contract" in payload:''').replace(
             "trial_id": "trial1", "thread_id": "grader-thread",
         }
         result = self.run_host(
-            identified_code("answer", answer_identity),
+            identified_code("answer", answer_identity).replace(
+                "result=",
+                "assert contract['json_schema']['properties']['usage']['const'] is None\n"
+                "result=",
+                1,
+            ),
             grader_code=identified_code("grader", grader_identity),
             grader_model="fixture-grader",
             answer_execution_identity=answer_identity,
@@ -430,31 +439,37 @@ if "response_contract" in payload:''').replace(
             )
 
     def test_v3_answer_requires_known_evidence_citation(self):
+        evidence_id = "a" * 64
+        unknown_id = "b" * 64
         prepared = {
             "schema_version": "velgraphing-answer-evidence-v3",
             "question": "frozen question",
             "citation_instruction": "Cite supporting evidence IDs as [cN].",
-            "evidence": [{"id": "c0", "path": "source.py", "excerpt": "evidence"}],
+            "evidence": [{"id": evidence_id, "path": "source.py", "excerpt": "evidence"}],
         }
         missing = self.run_host(ANSWER_CODE, prepared=prepared)
         self.assertEqual(missing["attempts"][0]["failure_reason"],
                          "answer_evidence_citation_missing")
         invalid = self.run_host(
-            ANSWER_CODE.replace("observed subprocess answer", "unsupported [c9]"),
+            ANSWER_CODE.replace("observed subprocess answer", f"unsupported [{unknown_id}]"),
             prepared=prepared)
         self.assertEqual(invalid["attempts"][0]["failure_reason"],
                          "answer_evidence_citation_invalid")
         valid = self.run_host(
-            ANSWER_CODE.replace("observed subprocess answer", "supported [c0]"),
+            ANSWER_CODE.replace(
+                "observed subprocess answer", f"supported [{evidence_id}] with [pivot]"
+            ),
             prepared=prepared)
         self.assertEqual(valid["terminal_reason"], "passed")
 
     def test_missing_citation_can_reach_grader_but_invalid_id_still_fails(self):
+        evidence_id = "a" * 64
+        unknown_id = "b" * 64
         prepared = {
             "schema_version": "velgraphing-answer-evidence-v3",
             "question": "frozen question",
             "citation_instruction": "Cite supporting evidence IDs as [cN].",
-            "evidence": [{"id": "c0", "path": "source.py", "excerpt": "evidence"}],
+            "evidence": [{"id": evidence_id, "path": "source.py", "excerpt": "evidence"}],
         }
         missing = self.run_host(
             ANSWER_CODE,
@@ -463,7 +478,7 @@ if "response_contract" in payload:''').replace(
         )
         self.assertEqual(missing["terminal_reason"], "passed")
         invalid = self.run_host(
-            ANSWER_CODE.replace("observed subprocess answer", "unsupported [c9]"),
+            ANSWER_CODE.replace("observed subprocess answer", f"unsupported [{unknown_id}]"),
             prepared=prepared,
             require_answer_evidence_citation=False,
         )
