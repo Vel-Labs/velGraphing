@@ -390,6 +390,40 @@ class RankedCandidateTests(unittest.TestCase):
         self.assertIn(b"return quick_sort", excerpt)
         self.assertLessEqual(len(excerpt), 4096)
 
+    def test_generator_completes_named_document_and_linked_chapter(self) -> None:
+        sources = {
+            "README.md": b"# Index\n[Scalability](docs/scalability.md)\n",
+            "docs/url-shortener.md": (
+                b"# URL shortener\n\n## Read path\nTraffic and cache assumptions.\n"
+            ),
+            "docs/scalability.md": (
+                b"# Scalability\n\n## Stateless services\nKeep request state external.\n"
+            ),
+        }
+        fixture = Fixture(
+            sources,
+            "Explain URL shortener read-path traffic assumptions and cite the "
+            "scalability chapter stateless-service guidance.",
+        )
+        try:
+            artifact, _ = mod.generate(
+                fixture.questions, fixture.manifests, fixture.lanes, "1" * 40,
+                study_id="unit-fixture",
+            )
+        finally:
+            fixture.close()
+        runs = {run["route"]: run for run in artifact["runs"]}
+        control = runs["direct"]["candidates"]
+        self.assertEqual(runs["tag_index"]["candidates"], control)
+        self.assertEqual(runs["typed_graph_no_edges"]["candidates"], control)
+        self.assertEqual(runs["typed_graph_no_expansion"]["candidates"], control)
+        excerpts = [
+            sources[item["path"]][item["byte_start"]:item["byte_end"]]
+            for item in control
+        ]
+        self.assertTrue(any(b"Traffic and cache assumptions" in item for item in excerpts))
+        self.assertTrue(any(b"Stateless services" in item for item in excerpts))
+
     def test_manifest_source_range_and_utf8_fail_closed(self) -> None:
         fixture = Fixture({"source.py": b"value = '\xc3\xa9'\n"}, "find value")
         try:

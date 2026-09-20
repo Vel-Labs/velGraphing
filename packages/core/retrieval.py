@@ -42,6 +42,7 @@ _TEST_NAME = re.compile(
 _IMPORT = re.compile(
     r"(?m)(?:\bfrom\s+[\"']([^\"']+)[\"']|\brequire\s*\(\s*[\"']([^\"']+)[\"']|\bimport\s+(?:[^\n;]*?\s+from\s+)?[\"']([^\"']+)[\"'])"
 )
+_MARKDOWN_LINK = re.compile(rb"\[([^\]\r\n]+)\]\(([^)\r\n]+)\)")
 
 _STOPWORDS = frozenset(
     {
@@ -86,6 +87,18 @@ _RRF_K = 60
 _MAX_FACETS = 20
 _MIN_FACETS = 8
 _MAX_TAGS_PER_RECORD = 4096
+_MAX_EVIDENCE_COMPLETIONS = 6
+_EVIDENCE_COMPLETION_COMMON = frozenset({
+    *_PROOF_COMMON_TAGS,
+    "both", "chapter", "chapters", "cite", "connect", "design", "explain",
+    "frozen", "general", "guidance", "material", "reference", "separate",
+    "stated", "why",
+})
+_ANCILLARY_DOCUMENT_HEADINGS = (
+    "exercise", "flashcards", "follow-up-questions", "further-reading",
+    "key-takeaways", "learning-objectives", "references",
+)
+_DOCUMENT_VARIANTS = frozenset({"small", "medium", "large"})
 
 
 class TagKind(str, Enum):
@@ -597,6 +610,150 @@ def ranked_candidates_from_retrieval(
     ]
     primary = [*required, *optional]
 
+    # Complete named documentation evidence before final retention. Follow only
+    # links present in already admitted spans, and re-enter through make_candidate
+    # so every added unit receives the same custody and budget checks.
+    query_path_words = {
+        word
+        for term in task.query_terms
+        for word in _identifier_parts(term)
+        if len(word) > 2 and word not in _STOPWORDS and word not in _GENERIC
+    }
+    query_weights: dict[str, int] = {}
+    for term in task.query_terms:
+        weight = 3 if "-" in term else 1
+        for word in _identifier_parts(term):
+            if len(word) > 2 and word not in _EVIDENCE_COMPLETION_COMMON:
+                query_weights[word] = max(weight, query_weights.get(word, 0))
+    query_words = set(query_weights)
+    admitted_markdown = [
+        candidate for candidate in primary
+        if candidate.source_path.lower().endswith((".md", ".markdown"))
+    ]
+    target_paths: list[str] = []
+    target_seen: set[str] = set()
+
+    def path_words(path: str) -> set[str]:
+        return {
+            word
+            for word in _identifier_parts(posixpath.basename(path).rsplit(".", 1)[0])
+            if (
+                len(word) > 2
+                and word[0].isalpha()
+                and word not in _STOPWORDS
+                and word not in _GENERIC
+            )
+        }
+
+    def add_target(path: str, terms: set[str], *, partial: bool = False) -> None:
+        matched = terms & query_path_words
+        requested_variant = query_path_words & _DOCUMENT_VARIANTS
+        if (
+            matched
+            and (terms <= query_path_words or (partial and len(matched) >= 2))
+            and (not requested_variant or not terms & _DOCUMENT_VARIANTS
+                 or bool(terms & requested_variant))
+            and path not in target_seen
+        ):
+            target_seen.add(path)
+            target_paths.append(path)
+
+    for candidate in admitted_markdown:
+        add_target(candidate.source_path, path_words(candidate.source_path), partial=True)
+        raw = source_bytes[candidate.source_path]
+        for match in _MARKDOWN_LINK.finditer(raw, candidate.byte_start, candidate.byte_end):
+            try:
+                destination = match.group(2).decode("utf-8").strip()
+            except UnicodeDecodeError:
+                continue
+            if destination.startswith("<") and ">" in destination:
+                destination = destination[1:destination.index(">")]
+            else:
+                destination = destination.split(maxsplit=1)[0]
+            destination = destination.split("#", 1)[0]
+            if not destination or "://" in destination or destination.startswith("/"):
+                continue
+            target = posixpath.normpath(posixpath.join(
+                posixpath.dirname(candidate.source_path), destination,
+            ))
+            if not _valid_source_path(target) or target not in sources:
+                continue
+            add_target(target, path_words(target))
+
+    target_paths = target_paths[:2]
+    records_by_path = {record.provenance.path: record for record in records.values()}
+    completion_by_path: dict[str, list[RankedContextCandidate]] = defaultdict(list)
+    completion_ids = set(required_ids)
+    for path in target_paths:
+        record = records_by_path.get(path)
+        source = sources.get(path)
+        raw = source_bytes.get(path)
+        if record is None or source is None or raw is None:
+            continue
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        units: dict[tuple[int, int], tuple[set[str], bool]] = {}
+        for word in sorted(query_words):
+            pattern = re.compile(rf"(?<![A-Za-z0-9]){re.escape(word)}(?![A-Za-z0-9])", re.IGNORECASE)
+            for match in pattern.finditer(content):
+                anchor_start, anchor_end = _byte_bounds(content, match.start(), match.end())
+                start, end, complete = _bounded_source_unit_bounds(
+                    raw, path, anchor_start, anchor_end, maximum_unit_bytes,
+                )
+                if end <= start:
+                    continue
+                first_line = raw[start:end].split(b"\n", 1)[0].decode(
+                    "utf-8", errors="ignore"
+                )
+                heading = _canonical(first_line.lstrip("# "))
+                if (
+                    not raw[start:end].partition(b"\n")[2].strip()
+                    or first_line.strip() == "---"
+                    or heading.startswith(_ANCILLARY_DOCUMENT_HEADINGS)
+                ):
+                    continue
+                matched, prior_complete = units.setdefault((start, end), (set(), False))
+                matched.add(word)
+                units[(start, end)] = matched, prior_complete or complete
+
+        def unit_priority(bounds: tuple[int, int]) -> tuple[int, bool, int, int, bool, int]:
+            start, end = bounds
+            first_line = raw[start:end].split(b"\n", 1)[0].decode("utf-8", errors="ignore")
+            is_heading = bool(_HEADING.match(first_line))
+            heading_words = set(_words(first_line)) if is_heading else set()
+            heading_weight = sum(
+                query_weights.get(word, query_weights.get(word.rstrip("s"), 0))
+                for word in heading_words
+            )
+            content_weight = sum(query_weights[word] for word in units[bounds][0])
+            return (
+                -heading_weight,
+                not is_heading,
+                start if heading_weight == 0 else -content_weight,
+                -len(units[bounds][0]),
+                not units[bounds][1],
+                end,
+            )
+
+        for start, end in sorted(units, key=unit_priority):
+            candidate = make_candidate(
+                record.record_id, path, source.sha256, start, end, required=False,
+            )
+            if candidate.candidate_id in completion_ids:
+                continue
+            completion_ids.add(candidate.candidate_id)
+            completion_by_path[path].append(candidate)
+
+    completion = [
+        candidates[offset]
+        for offset in range(max(map(len, completion_by_path.values()), default=0))
+        for path in target_paths
+        if offset < len(candidates := completion_by_path[path])
+    ][:_MAX_EVIDENCE_COMPLETIONS]
+    primary = [*required, *completion, *optional]
+
     primary_ids = {candidate.candidate_id for candidate in primary}
     supports_by_parent: dict[str, list[RankedContextCandidate]] = defaultdict(list)
     seen_supports: set[RelationshipSupport] = set()
@@ -681,7 +838,7 @@ def ranked_candidates_from_retrieval(
     ordered: list[RankedContextCandidate] = list(required)
     for candidate in required:
         ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
-    for candidate in optional:
+    for candidate in [*completion, *optional]:
         ordered.append(candidate)
         ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
 

@@ -5,6 +5,7 @@ not represented as executed by the isolated handoff tests.
 """
 from __future__ import annotations
 import hashlib
+import json
 import random
 import unittest
 
@@ -54,6 +55,78 @@ def result(path, *facets, evidence=()):
 
 
 class Pr9RetrievalHelperTests(unittest.TestCase):
+    def test_named_markdown_and_verified_link_complete_evidence(self):
+        sources = {
+            "README.md": (
+                b"# Index\n[Scalability](docs/scalability.md)\n"
+                b"[Other](docs/other.md)\n"
+            ),
+            "docs/url-shortener.md": (
+                b"# URL shortener\n\n## Read path\nTraffic and cache evidence.\n\n"
+                b"## Scaling assumptions\nRead-heavy assumptions.\n"
+            ),
+            "docs/scalability.md": (
+                b"# Scalability\n\n## Vertical versus horizontal\nScale out.\n\n"
+                b"## Stateless services\nKeep request state external.\n"
+            ),
+            "docs/other.md": b"# Other\nUnrelated material.\n",
+        }
+        records = []
+        for path, raw in sources.items():
+            digest = hashlib.sha256(raw).hexdigest()
+            records.append(GraphRecord(
+                f"repo:{path}", "source", path, raw.decode(),
+                Provenance(path, digest, "bytes", True), TrustClass.VERIFIED_SOURCE,
+                Sensitivity.PUBLIC, Freshness.CURRENT, Admission.VERIFIER, True,
+            ))
+        snapshot = SourceSnapshotV4(tuple(
+            SourceIdentityV4(path, len(raw), hashlib.sha256(raw).hexdigest())
+            for path, raw in sorted(sources.items())
+        ))
+
+        class MapReader:
+            def read_bytes(self, path): return sources[path]
+            def is_symlink(self, path): return False
+
+        retrieval = RetrievalResult(
+            "direct", "fixture", (
+                RetrievalHit("repo:README.md", "README.md", 2, ("exact",), ("index",), 0),
+                RetrievalHit(
+                    "repo:docs/url-shortener.md", "docs/url-shortener.md", 1,
+                    ("exact",), ("url-shortener",), 0,
+                ),
+            ), (), "", 0, 100.0, (), (), False,
+        )
+        candidates = ranked_candidates_from_retrieval(
+            Graph(tuple(records)),
+            TaskSpec("complete-docs", (
+                "url-shortener", "read-path", "traffic-assumptions", "scalability",
+                "vertical-versus-horizontal", "stateless-service",
+            )),
+            snapshot, MapReader(), retrieval, **BUDGET,
+        )
+        paths = [candidate.source_path for candidate in candidates[:6]]
+        self.assertIn("docs/url-shortener.md", paths)
+        self.assertIn("docs/scalability.md", paths)
+        self.assertNotIn("docs/other.md", [candidate.source_path for candidate in candidates])
+        excerpts = [
+            sources[item.source_path][item.byte_start:item.byte_end]
+            for item in candidates[:6]
+        ]
+        self.assertTrue(any(b"Traffic and cache evidence" in item for item in excerpts))
+        self.assertTrue(any(b"Stateless services" in item for item in excerpts))
+        for candidate in candidates:
+            identity = {
+                "path": candidate.source_path,
+                "source_sha256": candidate.source_sha256,
+                "byte_start": candidate.byte_start,
+                "byte_end": candidate.byte_end,
+            }
+            expected = hashlib.sha256(
+                (json.dumps(identity, sort_keys=True, separators=(",", ":")) + "\n").encode()
+            ).hexdigest()
+            self.assertEqual(candidate.candidate_id, expected)
+
     def test_window_keeps_deep_anchor(self):
         raw = b"prefix " * 800 + b"needle" + b" suffix" * 200
         start = raw.index(b"needle")
