@@ -51,6 +51,18 @@ def _instrument(module: Any, trial: Trial, *, operation_prefix: str = "jev") -> 
             if preparation_calls == 1:
                 trial.bind(candidate_set_sha256=prepared["candidate_set_sha256"],
                            request_sha256=prepared["request_sha256"])
+                request = prepared["request"]
+                trial.current["_jev_packet_telemetry"] = {
+                    "request_bytes": prepared["request_bytes"],
+                    "shared_state_bytes": len(module.canonical(request["state"])),
+                    "questions_bytes": len(module.canonical(request["questions"])),
+                    "candidate_count": len(request["state"]["candidates"]),
+                    "question_count": len(request["questions"]),
+                    "rubric_version": prepared["rubric_version"],
+                    # TypeSafe reports request-level usage, not this split.
+                    "shared_state_tokens": None,
+                    "question_suffix_tokens": None,
+                }
             return prepared
     def read(*args: Any, **kwargs: Any) -> bytes:
         nonlocal source_calls
@@ -73,25 +85,45 @@ def prepare_preview(trial: Trial, repo: Path, packet: dict[str, Any], root: Path
 
 
 def _record(trial: Trial, module: Any, result: dict[str, Any], *, execution: str,
-            provenance: str) -> None:
+            provenance: str, retain_packet_telemetry: bool) -> None:
     usage = result.get("usage") if execution in {"live", "fixture_provider"} else result.get("replayed_usage")
     trial.usage(f"jev-{trial.current['attempt_id']}", "jev",
                 provenance=provenance if usage else "unavailable",
                 model=result.get("resolved_model") or module.DEFAULT_MODEL,
                 input_tokens=usage["input_tokens"] if usage else None,
                 output_tokens=usage["output_tokens"] if usage else None)
+    packet_telemetry = {
+        "request_bytes": None,
+        "shared_state_bytes": None,
+        "questions_bytes": None,
+        "candidate_count": None,
+        "question_count": None,
+        "rubric_version": module.RUBRIC_VERSION,
+        "shared_state_tokens": None,
+        "question_suffix_tokens": None,
+        **trial.current.pop("_jev_packet_telemetry", {}),
+    }
     trial.current["jev_observation"] = {
         key: result.get(key) for key in (
             "status", "reason", "baseline_order", "order", "required_ids",
             "candidate_set_sha256", "request_sha256", "source_revalidated", "resolved_model",
         )
     }
+    if retain_packet_telemetry:
+        trial.current["jev_observation"].update({
+            **packet_telemetry,
+            "source_bytes_verified": result.get("source_bytes_verified"),
+            "scores": copy.deepcopy(result.get("scores", [])),
+            "elapsed_ms": result.get("elapsed_ms"),
+            "attempted_calls": result.get("attempted_calls"),
+        })
     trial.current["jev_observation"]["measurement_execution"] = execution
 
 
 def evaluate_offline(trial: Trial, repo: Path, packet: dict[str, Any], root: Path, *,
                      envelope: dict[str, Any], mode: str = "rerank",
-                     fixture_provider: bool = False) -> dict[str, Any]:
+                     fixture_provider: bool = False,
+                     retain_packet_telemetry: bool = False) -> dict[str, Any]:
     """Instrument existing prepare/parse/revalidation without changing ranking.
 
     envelope must be a request-bound replay envelope, including in fixture mode.
@@ -124,13 +156,14 @@ def evaluate_offline(trial: Trial, repo: Path, packet: dict[str, Any], root: Pat
         result = module.evaluate(packet, root, mode=mode, replay=envelope)
     _record(trial, module, result,
             execution="fixture_provider" if fixture_provider else "replay",
-            provenance="fixture")
+            provenance="fixture", retain_packet_telemetry=retain_packet_telemetry)
     return result
 
 
 def evaluate_live(trial: Trial, repo: Path, packet: dict[str, Any], root: Path, *,
                   approved_request_sha256: str, runtime_approved: bool,
-                  max_live_calls: int, call_number: int, timeout_s: float = 10) -> dict[str, Any]:
+                  max_live_calls: int, call_number: int, timeout_s: float = 10,
+                  retain_packet_telemetry: bool = False) -> dict[str, Any]:
     """Run one canonical live evaluation after caller-owned approval and cap checks."""
     if trial.execution != "observed" or runtime_approved is not True:
         raise MeasurementError("live_jev_not_approved")
@@ -149,5 +182,6 @@ def evaluate_live(trial: Trial, repo: Path, packet: dict[str, Any], root: Path, 
         approved_request_sha256=approved_request_sha256,
         model=module.DEFAULT_MODEL, timeout_s=timeout_s,
     )
-    _record(trial, module, result, execution="live", provenance="provider_reported")
+    _record(trial, module, result, execution="live", provenance="provider_reported",
+            retain_packet_telemetry=retain_packet_telemetry)
     return result
