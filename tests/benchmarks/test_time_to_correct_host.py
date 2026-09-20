@@ -182,7 +182,9 @@ if "response_contract" in payload:''').replace(
             '''
 if payload["answer_text"] != "observed subprocess answer [d0]": raise SystemExit(7)
 if payload["rubric"] != {"required_facts":["Names the imported implementation."],"critical_facts":["Explains pivot selection and placement."],"acceptable_spans":["sorts/quick_sort.py"]}: raise SystemExit(7)
-if "response_contract" in payload:''')
+if "response_contract" in payload:''').replace(
+            '"required_fact_maximum": 10,', '"required_fact_maximum": 1,'
+        ).replace('"required_fact_score": 9,', '"required_fact_score": 1,')
         prohibited = {
             "run_id": "run", "trial_id": "trial", "arm": "D", "route": "typed_graph",
             "jev_status": "reranked", "treatment": "on", "request_sha256": "a" * 64,
@@ -284,6 +286,43 @@ if "response_contract" in payload:''')
         self.assertEqual(
             result["attempts"][0]["grader_boundary"]["execution_identity"],
             grader_identity,
+        )
+
+    def test_grader_maximum_must_match_frozen_required_facts(self):
+        answer_identity = {
+            "model": "fixture-model", "reasoning": "none", "role": "answer",
+            "trial_id": "trial1", "thread_id": "answer-thread",
+        }
+        grader_identity = {
+            "model": "fixture-grader", "reasoning": "none", "role": "grader",
+            "trial_id": "trial1", "thread_id": "grader-thread",
+        }
+        grader_code = identified_code("grader", grader_identity).replace(
+            "result=",
+            "properties=contract['json_schema']['properties']\n"
+            "assert properties['required_fact_score']['type'] == 'integer'\n"
+            "assert properties['required_fact_score']['maximum'] == 2\n"
+            "assert properties['required_fact_maximum']['const'] == 2\n"
+            "result=",
+            1,
+        )
+        result = self.run_host(
+            identified_code("answer", answer_identity),
+            grader_code=grader_code,
+            grader_context={
+                "required_facts": ["one", "two"],
+                "critical_facts": [],
+                "acceptable_spans": [],
+            },
+            grader_model="fixture-grader",
+            answer_execution_identity=answer_identity,
+            grader_execution_identity=grader_identity,
+            strict_contracts=True,
+        )
+        self.assertEqual(result["terminal_reason"], "measurement_error")
+        self.assertEqual(
+            result["attempts"][0]["failure_reason"],
+            "grader_required_fact_maximum_mismatch",
         )
 
     def test_strict_answer_identity_rejects_absent_or_substituted_fields(self):

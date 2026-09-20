@@ -324,6 +324,27 @@ def run_process_trial(
     grader_identity = _execution_identity(grader_execution_identity, "grader")
     answer_contract = _identified_contract(answer_response_contract, answer_identity)
     grader_contract = _identified_contract(grader_response_contract, grader_identity)
+    required_fact_maximum = None
+    if grader_context is not None:
+        required_fact_maximum = len(
+            _grader_input("", grader_context)["rubric"]["required_facts"]
+        )
+        if required_fact_maximum == 0:
+            raise MeasurementError("invalid_grader_rubric")
+        if grader_contract is not None:
+            grader_contract = dict(grader_contract)
+            schema = dict(grader_contract["json_schema"])
+            properties = dict(schema["properties"])
+            properties["required_fact_score"] = {
+                "type": "integer", "minimum": 0, "maximum": required_fact_maximum,
+                "description": "Count of satisfied frozen required facts.",
+            }
+            properties["required_fact_maximum"] = {
+                "type": "integer", "const": required_fact_maximum,
+                "description": "Frozen rubric required_facts count.",
+            }
+            schema["properties"] = properties
+            grader_contract["json_schema"] = schema
 
     def answer(t: Trial, prepared: Mapping[str, Any], attempt: int) -> Answer:
         if type(prepared) is not dict:
@@ -408,16 +429,20 @@ def run_process_trial(
             context_deliveries=bool(answer_boundary.get("context_deliveries_complete")),
         )
         required_score = output["required_fact_score"]
-        required_maximum = output["required_fact_maximum"]
-        if type(required_score) not in (int, float) or type(required_maximum) not in (int, float):
+        reported_maximum = output["required_fact_maximum"]
+        if type(required_score) is not int or type(reported_maximum) is not int:
             raise MeasurementError("invalid_grader_output")
-        recall = required_score / required_maximum if required_maximum else -1
+        if required_fact_maximum is not None and reported_maximum != required_fact_maximum:
+            raise MeasurementError("grader_required_fact_maximum_mismatch")
+        if reported_maximum <= 0 or not 0 <= required_score <= reported_maximum:
+            raise MeasurementError("invalid_grader_output")
+        recall = required_score / reported_maximum
         passed = (recall >= t.pass_recall_min and output["critical_facts_exact"] is True
                   and output["unsupported_material_claims"] == 0)
         return Grade(
             passed,
             required_score,
-            required_maximum,
+            reported_maximum,
             output["critical_facts_exact"],
             output["unsupported_material_claims"],
             output["grader_id"],

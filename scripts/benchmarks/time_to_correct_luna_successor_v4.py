@@ -61,7 +61,7 @@ PROVIDER_TIMEOUT_SECONDS = 10
 ANSWER_TIMEOUT_SECONDS = 180
 GRADER_TIMEOUT_SECONDS = 120
 TRIAL_WALL_LIMIT_SECONDS = 600
-RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r8"
+RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r9"
 LANE_ROLES = ("answer", "grader")
 LANE_MANIFEST_SCHEMA = "velgraphing-v4-luna-lane-manifest-v1"
 LANE_ENTRY_FIELDS = (
@@ -101,16 +101,16 @@ STOP_RULES = [
 ]
 CALL_AUTHORIZATION = {
     "maximum_cost_usd": 1.0,
-    "completed_prior_calls": 11,
+    "completed_prior_calls": 19,
     "planned_calls": 8,
-    "aggregate_authorized_calls": 19,
+    "aggregate_authorized_calls": 27,
     "price_usd_per_million_input_tokens": 0.042,
     "request_bytes_per_call_max": REQUEST_BYTES,
     "per_call_worst_case_usd": 0.005505024,
-    "prior_authorization_envelope_usd": 0.060555264,
+    "prior_authorization_envelope_usd": 0.104595456,
     "incremental_authorization_envelope_usd": 0.044040192,
-    "aggregate_authorization_envelope_usd": 0.104595456,
-    "authorization_remaining_usd": 0.895404544,
+    "aggregate_authorization_envelope_usd": 0.148635648,
+    "authorization_remaining_usd": 0.851364352,
 }
 
 

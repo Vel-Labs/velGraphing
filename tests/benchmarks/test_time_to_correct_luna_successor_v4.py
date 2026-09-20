@@ -127,12 +127,12 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertEqual([row["trial_id"] for row in rows], list(mod.DISPATCH))
         self.assertEqual(sum(row["call_disposition"] == "planned" for row in rows), 8)
         self.assertEqual(plan["call_authorization"]["planned_calls"], 8)
-        self.assertEqual(plan["call_authorization"]["completed_prior_calls"], 11)
-        self.assertEqual(plan["call_authorization"]["aggregate_authorized_calls"], 19)
-        self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.060555264)
-        self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.104595456)
-        self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.895404544)
-        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r8")
+        self.assertEqual(plan["call_authorization"]["completed_prior_calls"], 19)
+        self.assertEqual(plan["call_authorization"]["aggregate_authorized_calls"], 27)
+        self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.104595456)
+        self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.148635648)
+        self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.851364352)
+        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r9")
         self.assertLessEqual(plan["call_authorization"]["planned_calls"], 8)
         by_task = {}
         for row in rows:
@@ -357,7 +357,9 @@ class LunaSuccessorTests(unittest.TestCase):
                     {"trial_id": f"{arm}-{task}"}, Path("lane"), "c" * 64
                 ),
             ),
-            mock.patch.object(mod, "_load_current_completed", return_value=completed),
+            mock.patch.object(
+                mod, "_load_current_completed", side_effect=lambda *_: dict(completed)
+            ),
             mock.patch.object(mod, "require_resumable") as require_resumable,
             mock.patch.object(mod, "save_completed_trial") as save_completed,
             mock.patch.object(mod, "run_trial", return_value=result) as run_trial,
@@ -367,21 +369,41 @@ class LunaSuccessorTests(unittest.TestCase):
                 Path("manifests"), Path("lanes"), Path("preview"), Path("run"),
                 lane_manifest=lanes,
             )
-        self.assertEqual(len(output["results"]), 16)
-        self.assertEqual(
-            [f"{call.args[1]}-{call.args[0]}" for call in run_trial.call_args_list],
-            list(mod.DISPATCH[2:]),
-        )
-        self.assertEqual(save_completed.call_count, 14)
-        self.assertEqual(require_resumable.call_count, 16)
-        self.assertTrue(all(
-            call.kwargs["ledger"].cap == 8 for call in run_trial.call_args_list
-        ))
-        self.assertTrue(all(
-            call.kwargs["answer_lane"]["role"] == "answer"
-            and call.kwargs["grader_lane"]["role"] == "grader"
-            for call in run_trial.call_args_list
-        ))
+            self.assertEqual(len(output["results"]), 16)
+            self.assertEqual(
+                [f"{call.args[1]}-{call.args[0]}" for call in run_trial.call_args_list],
+                list(mod.DISPATCH[2:]),
+            )
+            self.assertEqual(save_completed.call_count, 14)
+            self.assertEqual(require_resumable.call_count, 16)
+            self.assertTrue(all(
+                call.kwargs["ledger"].cap == 8 for call in run_trial.call_args_list
+            ))
+            self.assertTrue(all(
+                call.kwargs["answer_lane"]["role"] == "answer"
+                and call.kwargs["grader_lane"]["role"] == "grader"
+                for call in run_trial.call_args_list
+            ))
+
+            run_trial.reset_mock()
+            save_completed.reset_mock()
+            run_trial.return_value = {
+                "terminal_reason": "measurement_error",
+                "attempts": [{"coverage": {
+                    "model_calls": True,
+                    "context_deliveries": True,
+                }}],
+            }
+            with self.assertRaisesRegex(
+                mod.SuccessorError, "successor_systemic_trial_failure"
+            ):
+                mod.run_successor(
+                    Path("candidates"), Path("questions"), Path("rubrics"),
+                    Path("manifests"), Path("lanes"), Path("preview"), Path("run"),
+                    lane_manifest=lanes,
+                )
+            self.assertEqual(run_trial.call_count, 1)
+            self.assertEqual(save_completed.call_count, 1)
 
 
 if __name__ == "__main__":
