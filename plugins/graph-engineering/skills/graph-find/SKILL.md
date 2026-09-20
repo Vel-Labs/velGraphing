@@ -8,9 +8,10 @@ description: Find bounded, source-verified repository pointers for a prompt. Ret
 Run `scripts/graph_find.py` with an explicit absolute Git repository root and a
 prompt. The adapter reads only Git-tracked, regular UTF-8 files. It builds the
 verified `Graph` and `SourceSnapshotV4` in memory. It derives only uniquely
-resolved Python `from module import name` edges and relative Markdown links to
-headings. It then invokes the existing `graph_find` seam. It does not write,
-call a network or provider, persist an index, or return source bodies.
+resolved Python `from module import name` edges, static relative JavaScript
+named imports to direct named exports, and relative Markdown links to headings.
+It then invokes the existing `graph_find` seam. It does not write, call a
+network or provider, persist an index, or return source bodies.
 
 ```sh
 python3 -B scripts/graph_find.py --root /path/to/repository --prompt "find token refresh"
@@ -32,6 +33,14 @@ means the evidence is incomplete; use the listed fallback paths with a direct
 source read. `fail_closed: true` means an authentication or custody boundary
 blocked the result. A graph result is a navigation aid. Repository source remains
 authoritative.
+
+For a `change-impact` intent, relationship support can include one bounded
+incoming edge from a selected definition to its verified importer. The support
+keeps the original edge orientation and labels its direction. It does not alter
+seed ranking, evidence, fallback paths, or byte budgets. The importer becomes
+optional context only when ranked-context explicitly consumes the support.
+Other intents keep outgoing-only relationship support, and no support expands a
+second hop.
 
 Use `--ranked-context plan` only when source context is explicitly requested.
 This opt-in path builds Direct and relationship-expanded candidates from the
