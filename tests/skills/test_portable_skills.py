@@ -526,6 +526,12 @@ class PortableSkillTests(unittest.TestCase):
             (root / "src" / "helper.py").write_text(
                 "def helper():\n    return 1\n", encoding="utf-8"
             )
+            (root / "src" / "caller.js").write_text(
+                "import { render } from './view.js';\nrender();\n", encoding="utf-8"
+            )
+            (root / "src" / "view.js").write_text(
+                "export function render() { return 'view'; }\n", encoding="utf-8"
+            )
             (root / "README.md").write_text(
                 "# Start\nSee the [install guide](docs/guide.md#install).\n",
                 encoding="utf-8",
@@ -542,7 +548,7 @@ class PortableSkillTests(unittest.TestCase):
                     "--root",
                     str(root),
                     "--prompt",
-                    "find call_helper install guide",
+                    "find call_helper render install guide",
                 ],
                 text=True,
                 capture_output=True,
@@ -554,10 +560,17 @@ class PortableSkillTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         supports = payload["relationship_supports"]
         self.assertEqual({item["relation"] for item in supports}, {"imports", "links_to_heading"})
-        self.assertEqual(payload["scan"]["edges_derived"], 2)
+        self.assertEqual(payload["scan"]["edges_derived"], 3)
         self.assertEqual(
             payload["scan"]["relation_coverage"],
             [
+                {
+                    "relation": "imports",
+                    "supported": "javascript_tree_sitter_static_relative_named_direct_export",
+                    "resolved": 1,
+                    "unresolved": 0,
+                    "unsupported": 0,
+                },
                 {
                     "relation": "imports",
                     "supported": "python_ast_from_import_named_top_level_declaration",
@@ -607,9 +620,13 @@ class PortableSkillTests(unittest.TestCase):
         self.assertEqual(payload["scan"]["edges_derived"], 0)
         self.assertEqual(payload["relationship_supports"], [])
         self.assertEqual(
-            [(item["relation"], item["resolved"], item["unresolved"], item["unsupported"])
+            [(item["supported"], item["resolved"], item["unresolved"], item["unsupported"])
              for item in payload["scan"]["relation_coverage"]],
-            [("imports", 0, 1, 0), ("links_to_heading", 0, 1, 0)],
+            [
+                ("javascript_tree_sitter_static_relative_named_direct_export", 0, 0, 0),
+                ("python_ast_from_import_named_top_level_declaration", 0, 1, 0),
+                ("markdown_relative_path_fragment_unique_atx_heading", 0, 1, 0),
+            ],
         )
 
     def test_graph_find_rejects_unsupported_imports_and_markdown_links(self) -> None:
@@ -650,9 +667,13 @@ class PortableSkillTests(unittest.TestCase):
         self.assertEqual(payload["scan"]["edges_derived"], 0)
         self.assertEqual(payload["relationship_supports"], [])
         self.assertEqual(
-            [(item["relation"], item["resolved"], item["unresolved"], item["unsupported"])
+            [(item["supported"], item["resolved"], item["unresolved"], item["unsupported"])
              for item in payload["scan"]["relation_coverage"]],
-            [("imports", 0, 1, 2), ("links_to_heading", 0, 1, 4)],
+            [
+                ("javascript_tree_sitter_static_relative_named_direct_export", 0, 0, 0),
+                ("python_ast_from_import_named_top_level_declaration", 0, 1, 2),
+                ("markdown_relative_path_fragment_unique_atx_heading", 0, 1, 4),
+            ],
         )
 
     def test_graph_find_ignores_headings_inside_markdown_fences(self) -> None:

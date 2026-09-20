@@ -21,6 +21,7 @@ import re
 from typing import TYPE_CHECKING, Iterable, Mapping, Sequence
 from urllib.parse import unquote
 
+from .javascript_coordinates import JavaScriptCoordinateProvider
 from .jev import (
     MAX_CANDIDATES,
     MAX_EXCERPT_BYTES,
@@ -42,7 +43,7 @@ from .models import (
 )
 from .routing_v4 import SourceReaderV4, SourceSnapshotV4, _read_verified_source_bytes
 from .selection import AssistResult, ContextSpan, assist
-from .source_coordinates import SourceCoordinate
+from .source_coordinates import SourceCoordinate, source_snapshot
 
 if TYPE_CHECKING:
     from .selection import RankedContextCandidate
@@ -460,7 +461,7 @@ class SourceRelationResult:
             raise TypeError("source relation coverage must contain SourceRelationCoverage values")
         if tuple(sorted(self.edges, key=lambda edge: edge.edge_id)) != self.edges:
             raise ValueError("source relation edges must be deterministically ordered")
-        if tuple(sorted(self.coverage, key=lambda item: item.relation)) != self.coverage:
+        if tuple(sorted(self.coverage, key=lambda item: (item.relation, item.supported))) != self.coverage:
             raise ValueError("source relation coverage must be deterministically ordered")
 
     def to_dict(self) -> dict[str, object]:
@@ -1235,11 +1236,12 @@ def derive_source_relations(
     snapshot: SourceSnapshotV4,
     reader: SourceReaderV4,
 ) -> SourceRelationResult:
-    """Derive the two supported source-witnessed relation forms.
+    """Derive the supported source-witnessed relation forms.
 
     The seam supports named Python ``from`` imports to one top-level declaration
-    and relative Markdown ``path#fragment`` links to one ATX heading. Other
-    relation forms remain unsupported and are counted rather than inferred.
+    static relative JavaScript named imports to one direct named export, and
+    relative Markdown ``path#fragment`` links to one ATX heading. Other relation
+    forms remain unsupported and are counted rather than inferred.
     """
 
     if type(graph) is not Graph:
@@ -1271,7 +1273,8 @@ def derive_source_relations(
     trees: dict[str, ast.Module] = {}
     headings: dict[str, dict[str, list[SourceCoordinate]]] = {}
     counts = {
-        "imports": {"resolved": 0, "unresolved": 0, "unsupported": 0},
+        "javascript_imports": {"resolved": 0, "unresolved": 0, "unsupported": 0},
+        "python_imports": {"resolved": 0, "unresolved": 0, "unsupported": 0},
         "links_to_heading": {"resolved": 0, "unresolved": 0, "unsupported": 0},
     }
     for path, data in sorted(source_bytes.items()):
@@ -1281,7 +1284,7 @@ def derive_source_relations(
             try:
                 tree = ast.parse(data.decode("utf-8"), filename=path)
             except (SyntaxError, UnicodeError):
-                counts["imports"]["unsupported"] += 1
+                counts["python_imports"]["unsupported"] += 1
                 continue
             trees[path] = tree
             by_name: dict[str, list[SourceCoordinate]] = {}
@@ -1377,7 +1380,7 @@ def derive_source_relations(
         data = source_bytes[path]
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                counts["imports"]["unsupported"] += len(node.names)
+                counts["python_imports"]["unsupported"] += len(node.names)
                 continue
             if not isinstance(node, ast.ImportFrom):
                 continue
@@ -1385,7 +1388,7 @@ def derive_source_relations(
             targets = modules.get(module or "", ())
             for alias in node.names:
                 if alias.name == "*" or module is None:
-                    counts["imports"]["unsupported"] += 1
+                    counts["python_imports"]["unsupported"] += 1
                     continue
                 bounds = _relation_ast_range(data, alias)
                 declarations_for_name = (
@@ -1394,7 +1397,7 @@ def derive_source_relations(
                     else ()
                 )
                 if len(targets) != 1 or len(declarations_for_name) != 1 or bounds is None:
-                    counts["imports"]["unresolved"] += 1
+                    counts["python_imports"]["unresolved"] += 1
                     continue
                 add(
                     "imports",
@@ -1409,7 +1412,71 @@ def derive_source_relations(
                     ),
                     declarations_for_name[0],
                 )
-                counts["imports"]["resolved"] += 1
+                counts["python_imports"]["resolved"] += 1
+
+    javascript = JavaScriptCoordinateProvider().relations(source_snapshot(source_bytes))
+    if not javascript.supported:
+        raise ValueError(javascript.reason or "javascript_relation_index_unavailable")
+    counts["javascript_imports"]["unsupported"] = javascript.unsupported
+    javascript_paths = frozenset(
+        path for path in source_bytes
+        if path.casefold().endswith((".js", ".jsx", ".mjs", ".cjs"))
+    )
+    javascript_exports: dict[str, dict[str, list[SourceCoordinate]]] = {}
+    for item in javascript.exports:
+        data = source_bytes[item.source_path]
+        javascript_exports.setdefault(item.source_path, {}).setdefault(item.symbol, []).append(
+            _relation_coordinate(
+                snapshot.snapshot_sha256,
+                item.source_path,
+                data,
+                item.byte_start,
+                item.byte_end,
+                "javascript_export_declaration",
+                "definition",
+                item.symbol,
+            )
+        )
+    for item in javascript.imports:
+        base = posixpath.normpath(posixpath.join(posixpath.dirname(item.source_path), item.module))
+        if base == ".." or base.startswith("../"):
+            counts["javascript_imports"]["unresolved"] += 1
+            continue
+        suffix = PurePosixPath(base).suffix.casefold()
+        candidates = (
+            (base,)
+            if suffix
+            else tuple(
+                candidate
+                for extension in (".cjs", ".js", ".jsx", ".mjs")
+                for candidate in (f"{base}{extension}", f"{base}/index{extension}")
+            )
+        )
+        target_paths = tuple(path for path in candidates if path in javascript_paths)
+        declarations_for_name = (
+            javascript_exports.get(target_paths[0], {}).get(item.symbol, ())
+            if len(target_paths) == 1
+            else ()
+        )
+        if len(target_paths) != 1 or len(declarations_for_name) != 1:
+            counts["javascript_imports"]["unresolved"] += 1
+            continue
+        data = source_bytes[item.source_path]
+        add(
+            "imports",
+            _relation_coordinate(
+                snapshot.snapshot_sha256,
+                item.source_path,
+                data,
+                item.byte_start,
+                item.byte_end,
+                "javascript_import",
+                "import",
+                item.symbol,
+            ),
+            declarations_for_name[0],
+        )
+        counts["javascript_imports"]["resolved"] += 1
 
     for path, data in sorted(source_bytes.items()):
         if path not in headings:
@@ -1467,8 +1534,13 @@ def derive_source_relations(
     coverage = (
         SourceRelationCoverage(
             "imports",
+            "javascript_tree_sitter_static_relative_named_direct_export",
+            **counts["javascript_imports"],
+        ),
+        SourceRelationCoverage(
+            "imports",
             "python_ast_from_import_named_top_level_declaration",
-            **counts["imports"],
+            **counts["python_imports"],
         ),
         SourceRelationCoverage(
             "links_to_heading",

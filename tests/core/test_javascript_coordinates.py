@@ -34,6 +34,48 @@ class JavaScriptCoordinateProviderTests(unittest.TestCase):
         self.assertFalse(result.supported)
         self.assertEqual("no_supported_javascript_sources", result.reason)
 
+    def test_relation_index_uses_named_import_and_direct_export_nodes(self) -> None:
+        snapshot = source_snapshot({
+            "src/caller.js": (
+                b"import main, { helper as alias } from './helper.js';\n"
+                b"import * as helpers from './helper.js';\n"
+                b"import './side.js';\n"
+                b"import { packageHelper } from 'package';\n"
+                b"const later = import('./lazy.js');\n"
+                b"export { helper } from './helper.js';\n"
+            ),
+            "src/helper.js": (
+                b"export function helper() {}\n"
+                b"export const other = 1;\n"
+                b"export default function hidden() {}\n"
+            ),
+        })
+
+        result = JavaScriptCoordinateProvider().relations(snapshot)
+
+        self.assertTrue(result.supported)
+        self.assertEqual(6, result.unsupported)
+        self.assertEqual(
+            [(item.source_path, item.module, item.symbol) for item in result.imports],
+            [("src/caller.js", "./helper.js", "helper")],
+        )
+        self.assertEqual(
+            [(item.source_path, item.symbol) for item in result.exports],
+            [("src/helper.js", "helper"), ("src/helper.js", "other")],
+        )
+        imported = result.imports[0]
+        exported = result.exports[0]
+        self.assertEqual(b"helper", snapshot.source(imported.source_path).content[imported.byte_start:imported.byte_end])
+        self.assertEqual(b"function helper() {}", snapshot.source(exported.source_path).content[exported.byte_start:exported.byte_end])
+
+    def test_relation_parse_errors_fail_closed(self) -> None:
+        result = JavaScriptCoordinateProvider().relations(
+            source_snapshot({"broken.js": b"import { broken from './broken.js';"})
+        )
+        self.assertFalse(result.supported)
+        self.assertEqual((), result.imports)
+        self.assertTrue(result.reason.startswith("javascript_parse_error:"))
+
 
 if __name__ == "__main__":
     unittest.main()

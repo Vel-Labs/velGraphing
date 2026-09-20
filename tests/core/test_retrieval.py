@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 import hashlib
 import unittest
+from unittest.mock import patch
 
 import packages.core.retrieval as retrieval_module
 from packages.core import (
@@ -220,6 +221,13 @@ class SourceRelationDerivationTests(unittest.TestCase):
             [
                 {
                     "relation": "imports",
+                    "supported": "javascript_tree_sitter_static_relative_named_direct_export",
+                    "resolved": 0,
+                    "unresolved": 0,
+                    "unsupported": 0,
+                },
+                {
+                    "relation": "imports",
                     "supported": "python_ast_from_import_named_top_level_declaration",
                     "resolved": 1,
                     "unresolved": 1,
@@ -258,6 +266,94 @@ class SourceRelationDerivationTests(unittest.TestCase):
             derive_source_relations(
                 Graph((poisoned, *graph.records[1:])), snapshot, Reader(sources)
             )
+
+    def test_javascript_named_relative_import_resolves_to_unique_direct_export(self) -> None:
+        sources = {
+            "src/caller.js": (
+                b"import { helper as alias } from './helper.js';\n"
+                b"import { missing } from './helper.js';\n"
+                b"import fallback from './helper.js';\n"
+                b"import { external } from 'package';\n"
+            ),
+            "src/helper.js": b"export function helper() { return 1; }\n",
+        }
+        graph, snapshot, _ = multi_source_fixture(sources)
+        graph = Graph(tuple(
+            replace(record, sensitivity=Sensitivity.RESTRICTED)
+            if record.provenance.path == "src/helper.js"
+            else record
+            for record in graph.records
+        ))
+
+        result = derive_source_relations(graph, snapshot, Reader(sources))
+
+        edge = self.assert_single_javascript_edge(result)
+        self.assertIs(edge.sensitivity, Sensitivity.RESTRICTED)
+        self.assertEqual(b"helper", sources[edge.source_coordinate.source_path][edge.source_coordinate.byte_start:edge.source_coordinate.byte_end])
+        self.assertEqual(
+            b"function helper() { return 1; }",
+            sources[edge.target_coordinate.source_path][edge.target_coordinate.byte_start:edge.target_coordinate.byte_end],
+        )
+        coverage = next(item for item in result.coverage if item.supported.startswith("javascript_"))
+        self.assertEqual((1, 1, 2), (coverage.resolved, coverage.unresolved, coverage.unsupported))
+
+    def test_javascript_relation_parser_failures_are_explicit(self) -> None:
+        graph, snapshot, reader = single_source_fixture(
+            b"import { broken from './broken.js';", "src/broken.js"
+        )
+        with self.assertRaisesRegex(ValueError, "javascript_parse_error:src/broken.js"):
+            derive_source_relations(graph, snapshot, reader)
+
+        graph, snapshot, reader = single_source_fixture(
+            b"export function helper() {}", "src/helper.js"
+        )
+        with patch("packages.core.javascript_coordinates.Parser", None):
+            with self.assertRaisesRegex(ValueError, "javascript_parser_unavailable"):
+                derive_source_relations(graph, snapshot, reader)
+
+    def test_javascript_target_path_and_export_must_each_be_unique(self) -> None:
+        sources = {
+            "src/caller.js": (
+                b"import { helper } from './helper';\n"
+                b"import { duplicate } from './duplicates.js';\n"
+            ),
+            "src/helper.js": b"export function helper() {}\n",
+            "src/helper/index.js": b"export function helper() {}\n",
+            "src/duplicates.js": (
+                b"export function duplicate() {}\n"
+                b"export function duplicate() {}\n"
+            ),
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+
+        result = derive_source_relations(graph, snapshot, reader)
+
+        self.assertEqual((), result.edges)
+        coverage = next(item for item in result.coverage if item.supported.startswith("javascript_"))
+        self.assertEqual((0, 2, 0), (coverage.resolved, coverage.unresolved, coverage.unsupported))
+
+    def test_javascript_uppercase_suffix_preserves_exact_paths(self) -> None:
+        sources = {
+            "src/CALLER.JS": b"import { helper } from './helper.JS';\n",
+            "src/helper.JS": b"export function helper() {}\n",
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+
+        edge = self.assert_single_javascript_edge(
+            derive_source_relations(graph, snapshot, reader)
+        )
+
+        self.assertEqual("src/CALLER.JS", edge.source_coordinate.source_path)
+        self.assertEqual("src/helper.JS", edge.target_coordinate.source_path)
+
+    def assert_single_javascript_edge(self, result: object) -> GraphEdge:
+        edges = getattr(result, "edges")
+        self.assertEqual(1, len(edges))
+        edge = edges[0]
+        self.assertEqual("imports", edge.relation)
+        self.assertEqual("javascript_import", edge.source_coordinate.entity_kind)
+        self.assertEqual("javascript_export_declaration", edge.target_coordinate.entity_kind)
+        return edge
 
 
 class SourceBoundExpansionTests(unittest.TestCase):
