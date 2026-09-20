@@ -96,7 +96,7 @@ sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":"), ensur
 '''
 
 
-def identified_code(role, identity=None):
+def identified_code(role, identity=None, grader_id=None):
     result = ({
         "answer_text": "strict answer",
         "context_deliveries_complete": True,
@@ -105,7 +105,9 @@ def identified_code(role, identity=None):
         "usage": None,
     } if role == "answer" else {
         "critical_facts_exact": True,
-        "grader_id": "strict-grader",
+        "grader_id": grader_id or (
+            f"grader-{identity['trial_id']}" if identity else "strict-grader"
+        ),
         "model_calls_complete": True,
         "required_fact_maximum": 1,
         "required_fact_score": 1,
@@ -324,6 +326,41 @@ if "response_contract" in payload:''').replace(
             result["attempts"][0]["failure_reason"],
             "grader_required_fact_maximum_mismatch",
         )
+
+    def test_grader_id_must_match_generated_const(self):
+        answer_identity = {
+            "model": "fixture-model", "reasoning": "none", "role": "answer",
+            "trial_id": "trial1", "thread_id": "answer-thread",
+        }
+        grader_identity = {
+            "model": "fixture-grader", "reasoning": "none", "role": "grader",
+            "trial_id": "trial1", "thread_id": "grader-thread",
+        }
+        grader_code = identified_code(
+            "grader", grader_identity, "fixture-grader/trial1"
+        ).replace(
+            "result=",
+            "assert contract['json_schema']['properties']['grader_id']['const'] "
+            "== 'grader-trial1'\n"
+            "assert contract['json_schema']['properties']['usage']['const'] is None\n"
+            "result=",
+            1,
+        )
+        result = self.run_host(
+            identified_code("answer", answer_identity),
+            grader_code=grader_code,
+            grader_context={
+                "required_facts": ["one"],
+                "critical_facts": [],
+                "acceptable_spans": [],
+            },
+            grader_model="fixture-grader",
+            answer_execution_identity=answer_identity,
+            grader_execution_identity=grader_identity,
+            strict_contracts=True,
+        )
+        self.assertEqual(result["terminal_reason"], "measurement_error")
+        self.assertEqual(result["attempts"][0]["failure_reason"], "grader_id_mismatch")
 
     def test_strict_answer_identity_rejects_absent_or_substituted_fields(self):
         expected = {

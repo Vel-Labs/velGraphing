@@ -13,9 +13,13 @@ import subprocess
 from typing import Any, Callable, Mapping
 
 try:
-    from .time_to_correct import Answer, Grade, MeasurementError, Trial, canonical, digest
+    from .time_to_correct import (
+        Answer, Grade, MeasurementError, Trial, canonical, digest, identifier,
+    )
 except ImportError:
-    from time_to_correct import Answer, Grade, MeasurementError, Trial, canonical, digest
+    from time_to_correct import (
+        Answer, Grade, MeasurementError, Trial, canonical, digest, identifier,
+    )
 
 
 ANSWER_OUTPUT_VERSION = "velgraphing-answer-output-v1"
@@ -324,6 +328,10 @@ def run_process_trial(
     grader_identity = _execution_identity(grader_execution_identity, "grader")
     answer_contract = _identified_contract(answer_response_contract, answer_identity)
     grader_contract = _identified_contract(grader_response_contract, grader_identity)
+    expected_grader_id = (
+        identifier(f"grader-{grader_identity['trial_id']}")
+        if grader_identity is not None else None
+    )
     required_fact_maximum = None
     if grader_context is not None:
         required_fact_maximum = len(
@@ -331,10 +339,11 @@ def run_process_trial(
         )
         if required_fact_maximum == 0:
             raise MeasurementError("invalid_grader_rubric")
-        if grader_contract is not None:
-            grader_contract = dict(grader_contract)
-            schema = dict(grader_contract["json_schema"])
-            properties = dict(schema["properties"])
+    if grader_contract is not None:
+        grader_contract = dict(grader_contract)
+        schema = dict(grader_contract["json_schema"])
+        properties = dict(schema["properties"])
+        if required_fact_maximum is not None:
             properties["required_fact_score"] = {
                 "type": "integer", "minimum": 0, "maximum": required_fact_maximum,
                 "description": "Count of satisfied frozen required facts.",
@@ -343,8 +352,17 @@ def run_process_trial(
                 "type": "integer", "const": required_fact_maximum,
                 "description": "Frozen rubric required_facts count.",
             }
-            schema["properties"] = properties
-            grader_contract["json_schema"] = schema
+        if expected_grader_id is not None:
+            properties["grader_id"] = {
+                "const": expected_grader_id,
+                "description": "Host-bound grader lane identifier.",
+            }
+            properties["usage"] = {
+                "const": None,
+                "description": USAGE_DESCRIPTION,
+            }
+        schema["properties"] = properties
+        grader_contract["json_schema"] = schema
 
     def answer(t: Trial, prepared: Mapping[str, Any], attempt: int) -> Answer:
         if type(prepared) is not dict:
@@ -411,6 +429,8 @@ def run_process_trial(
             raise MeasurementError("invalid_grader_output")
         if grader_identity is not None and output["execution_identity"] != grader_identity:
             raise MeasurementError("grader_execution_identity_mismatch")
+        if expected_grader_id is not None and output["grader_id"] != expected_grader_id:
+            raise MeasurementError("grader_id_mismatch")
         if (
             grader_model is not None
             and output["usage"] is not None
