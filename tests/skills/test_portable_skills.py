@@ -307,6 +307,10 @@ class PortableSkillTests(unittest.TestCase):
         self.assertIn("remains", skill)
         self.assertIn("authoritative", skill)
         self.assertIn("does not write", skill)
+        self.assertIn("static relative JavaScript", skill)
+        self.assertIn("change-impact", skill)
+        self.assertIn("incoming edge", skill)
+        self.assertIn("seed ranking, evidence, fallback paths, or byte budgets", skill)
 
     def test_graph_find_subprocess_returns_pointers_without_bodies(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
@@ -589,6 +593,45 @@ class PortableSkillTests(unittest.TestCase):
         )
         self.assertTrue(all(item["source_coordinate"]["schema_version"] == "source-coordinate-v1" for item in supports))
         self.assertNotIn("return helper()", result.stdout)
+
+    def test_graph_find_change_impact_exposes_incoming_support(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-impact-") as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "src" / "caller.py").write_text(
+                "from src.helper import helper\n\ndef call_helper():\n    return helper()\n",
+                encoding="utf-8",
+            )
+            (root / "src" / "helper.py").write_text(
+                "def helper():\n    return 1\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "change impact helper function caller import",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        incoming = [
+            item for item in payload["relationship_supports"]
+            if item["direction"] == "incoming"
+        ]
+        self.assertEqual(1, len(incoming))
+        self.assertEqual("src/helper.py", incoming[0]["seed_coordinate"]["source_path"])
+        self.assertEqual("src/caller.py", incoming[0]["related_coordinate"]["source_path"])
 
     def test_graph_find_leaves_ambiguous_relations_unresolved(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"

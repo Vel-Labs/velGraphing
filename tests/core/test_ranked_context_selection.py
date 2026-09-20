@@ -150,6 +150,8 @@ def graph_with_relationship_edge(
     reader: SourceReader,
     parent: RankedContextCandidate,
     relationship: RankedContextCandidate,
+    *,
+    relation: str = "references",
 ) -> Graph:
     records = tuple(
         replace(
@@ -178,7 +180,7 @@ def graph_with_relationship_edge(
         "edge-c1-c2",
         parent.record_id,
         relationship.record_id,
-        "references",
+        relation,
         1.0,
         Provenance(parent.source_path, parent.source_sha256, "relationship", True),
         TrustClass.VERIFIED_SOURCE,
@@ -767,6 +769,9 @@ class RankedContextSelectionTests(unittest.TestCase):
             candidate_id="relationship-target",
             relationship_parent_candidate_id="c0",
         )
+        graph = graph_with_relationship_edge(
+            graph, snapshot, reader, candidates[0], relationship
+        )
         result = select(
             graph, spec(), snapshot, reader, (candidates[0], relationship)
         )
@@ -791,6 +796,74 @@ class RankedContextSelectionTests(unittest.TestCase):
         self.assertNotIn("relationship-target", result.projection.required_candidate_ids)
         self.assertEqual(fail_closed.route, "defer")
         self.assertTrue(fail_closed.projection.fail_closed)
+
+    def test_incoming_relationship_candidate_requires_exact_original_edge(self) -> None:
+        graph, snapshot, reader, candidates = fixture()
+        source = candidates[1]
+        parent = candidates[2]
+        graph = graph_with_relationship_edge(
+            graph, snapshot, reader, source, parent, relation="imports"
+        )
+        incoming = replace(
+            source,
+            relationship_parent_candidate_id=parent.candidate_id,
+            relationship_edge_id="edge-c1-c2",
+            relationship_direction="incoming",
+            relationship_relation="imports",
+            relationship_sensitivity=Sensitivity.PUBLIC,
+        )
+        ordered = (candidates[0], parent, incoming)
+
+        result = select(graph, spec(), snapshot, reader, ordered)
+
+        self.assertEqual("ranked", result.route)
+        self.assertIn(incoming.candidate_id, result.projection.included_optional_candidate_ids)
+
+        forged = (
+            replace(incoming, relationship_direction="outgoing"),
+            replace(incoming, relationship_edge_id="edge:forged"),
+            replace(incoming, relationship_relation="references"),
+            replace(incoming, relationship_sensitivity=Sensitivity.INTERNAL),
+            replace(incoming, record_id="record:forged"),
+            replace(
+                incoming,
+                relationship_edge_id=None,
+                relationship_direction=None,
+                relationship_relation=None,
+                relationship_sensitivity=None,
+            ),
+        )
+        for changed in forged:
+            with self.subTest(changed=changed):
+                rejected = select(
+                    graph, spec(), snapshot, reader,
+                    (candidates[0], parent, changed),
+                )
+                self.assertEqual("defer", rejected.route)
+                self.assertEqual(
+                    "relationship_candidate_custody_mismatch", rejected.reason
+                )
+
+        non_reverse_graph = graph_with_relationship_edge(
+            Graph(graph.records), snapshot, reader, source, parent,
+            relation="references",
+        )
+        non_reverse = replace(incoming, relationship_relation="references")
+        rejected = select(
+            non_reverse_graph, spec(), snapshot, reader,
+            (candidates[0], parent, non_reverse),
+        )
+        self.assertEqual("defer", rejected.route)
+        self.assertEqual("relationship_candidate_custody_mismatch", rejected.reason)
+
+        extra_digest = hashlib.sha256(b"").hexdigest()
+        forged_snapshot = SourceSnapshotV4(tuple(sorted((
+            *snapshot.sources,
+            SourceIdentityV4("extra.py", 0, extra_digest),
+        ), key=lambda item: item.path)))
+        rejected = select(graph, spec(), forged_snapshot, reader, ordered)
+        self.assertEqual("defer", rejected.route)
+        self.assertEqual("relationship_candidate_custody_mismatch", rejected.reason)
 
     def test_relationship_provenance_rejects_required_missing_or_later_parent(self) -> None:
         graph, snapshot, reader, candidates = fixture()
@@ -866,6 +939,20 @@ class RankedContextSelectionTests(unittest.TestCase):
             second_child.source_sha256,
             "optional-b",
         )))
+        graph = graph_with_relationship_edge(
+            graph, snapshot, reader, candidates[1], first_child
+        )
+        graph = Graph(
+            graph.records,
+            (
+                *graph.edges,
+                replace(
+                    graph.edges[0],
+                    edge_id="edge-c1-c3",
+                    target_id=second_child.record_id,
+                ),
+            ),
+        )
         parent_only = select(graph, spec(), snapshot, reader, candidates[:2])
         tight = replace(
             spec(), byte_budget=parent_only.projection.serialized_byte_count

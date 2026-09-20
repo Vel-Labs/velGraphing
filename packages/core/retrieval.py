@@ -42,7 +42,7 @@ from .models import (
     is_authenticated_eligible,
 )
 from .routing_v4 import SourceReaderV4, SourceSnapshotV4, _read_verified_source_bytes
-from .selection import AssistResult, ContextSpan, assist
+from .selection import _REVERSE_RELATIONS, AssistResult, ContextSpan, assist
 from .source_coordinates import SourceCoordinate, source_snapshot
 
 if TYPE_CHECKING:
@@ -90,13 +90,6 @@ _ALLOWED_RELATIONS = frozenset(
         "packages_manifest", "packages_source_tree", "persists_audit_for_panel", "produces",
         "publishes_section_selection", "reads", "requires_authority", "routes", "specifies_scoring_reference",
         "supports", "tested_by", "tests", "uses", "writes",
-    }
-)
-_REVERSE_RELATIONS = frozenset(
-    {
-        "calls", "consumes", "declares", "depends_on", "describes", "documents",
-        "implements", "imports", "packages", "produces", "supports", "tested_by",
-        "tests", "uses",
     }
 )
 _CHANNEL_ORDER = ("exact", "sparse", "wiki", "graph")
@@ -407,15 +400,36 @@ class RelationshipSupport:
     target_record_id: str
     source_coordinate: SourceCoordinate
     target_coordinate: SourceCoordinate
+    direction: str = "outgoing"
+    sensitivity: Sensitivity = Sensitivity.PUBLIC
+
+    def __post_init__(self) -> None:
+        if self.direction not in {"incoming", "outgoing"}:
+            raise ValueError("relationship support direction is unsupported")
+        if not isinstance(self.sensitivity, Sensitivity):
+            raise TypeError("relationship support sensitivity is unsupported")
+
+    @property
+    def seed_coordinate(self) -> SourceCoordinate:
+        return self.source_coordinate if self.direction == "outgoing" else self.target_coordinate
+
+    @property
+    def related_coordinate(self) -> SourceCoordinate:
+        return self.target_coordinate if self.direction == "outgoing" else self.source_coordinate
 
     def to_dict(self) -> dict[str, object]:
         return {
             "edge_id": self.edge_id,
             "relation": self.relation,
+            "direction": self.direction,
             "seed_record_id": self.seed_record_id,
             "target_record_id": self.target_record_id,
+            "related_record_id": self.target_record_id,
+            "sensitivity": self.sensitivity.value,
             "source_coordinate": self.source_coordinate.to_dict(),
             "target_coordinate": self.target_coordinate.to_dict(),
+            "seed_coordinate": self.seed_coordinate.to_dict(),
+            "related_coordinate": self.related_coordinate.to_dict(),
         }
 
 
@@ -537,6 +551,10 @@ def ranked_candidates_from_retrieval(
         *,
         required: bool,
         parent_id: str | None = None,
+        relationship_edge_id: str | None = None,
+        relationship_direction: str | None = None,
+        relationship_relation: str | None = None,
+        relationship_sensitivity: Sensitivity | None = None,
     ) -> RankedContextCandidate:
         record = records.get(record_id)
         source = sources.get(path)
@@ -569,6 +587,8 @@ def ranked_candidates_from_retrieval(
         return RankedContextCandidate(
             hashlib.sha256(jev_canonical(identity)).hexdigest(),
             path, digest, start, end, required, record_id, parent_id,
+            relationship_edge_id, relationship_direction, relationship_relation,
+            relationship_sensitivity,
         )
 
     required: list[RankedContextCandidate] = []
@@ -835,32 +855,43 @@ def ranked_candidates_from_retrieval(
         edge = edges.get(support.edge_id)
         seed = records.get(support.seed_record_id)
         target = records.get(support.target_record_id)
-        coordinate = support.target_coordinate
-        source_coordinate = support.source_coordinate
-        seed_source = sources.get(source_coordinate.source_path)
-        seed_raw = source_bytes.get(source_coordinate.source_path)
+        coordinate = support.related_coordinate
+        seed_coordinate = support.seed_coordinate
+        seed_source = sources.get(seed_coordinate.source_path)
+        seed_raw = source_bytes.get(seed_coordinate.source_path)
         source = sources.get(coordinate.source_path)
         raw = source_bytes.get(coordinate.source_path)
+        expected_source_id = support.seed_record_id if support.direction == "outgoing" else support.target_record_id
+        expected_target_id = support.target_record_id if support.direction == "outgoing" else support.seed_record_id
+        sensitivity_rank = {
+            Sensitivity.PUBLIC: 0,
+            Sensitivity.INTERNAL: 1,
+            Sensitivity.RESTRICTED: 2,
+        }
         if (
             edge is None
-            or edge.source_id != support.seed_record_id
-            or edge.target_id != support.target_record_id
+            or edge.source_id != expected_source_id
+            or edge.target_id != expected_target_id
             or edge.relation != support.relation
-            or edge.source_coordinate != source_coordinate
-            or edge.target_coordinate != coordinate
+            or edge.source_coordinate != support.source_coordinate
+            or edge.target_coordinate != support.target_coordinate
+            or edge.sensitivity is not support.sensitivity
+            or seed is None
+            or target is None
+            or edge.sensitivity is not max(
+                (seed.sensitivity, target.sensitivity), key=sensitivity_rank.__getitem__
+            )
             or edge.relation not in _ALLOWED_RELATIONS
             or not is_authenticated_eligible(edge, task.allowed_sensitivities)
-            or source_coordinate.snapshot_sha256 != snapshot.snapshot_sha256
+            or seed_coordinate.snapshot_sha256 != snapshot.snapshot_sha256
             or coordinate.snapshot_sha256 != snapshot.snapshot_sha256
-            or seed is None
             or seed_source is None
             or seed_raw is None
-            or seed.provenance.path != source_coordinate.source_path
-            or seed.provenance.sha256 != source_coordinate.source_sha256
-            or seed_source.sha256 != source_coordinate.source_sha256
+            or seed.provenance.path != seed_coordinate.source_path
+            or seed.provenance.sha256 != seed_coordinate.source_sha256
+            or seed_source.sha256 != seed_coordinate.source_sha256
             or seed.content.encode("utf-8") != seed_raw
-            or not 0 <= source_coordinate.byte_start < source_coordinate.byte_end <= len(seed_raw)
-            or target is None
+            or not 0 <= seed_coordinate.byte_start < seed_coordinate.byte_end <= len(seed_raw)
             or source is None
             or raw is None
             or target.provenance.path != coordinate.source_path
@@ -875,10 +906,10 @@ def ranked_candidates_from_retrieval(
             (
                 item for item in primary
                 if item.record_id == support.seed_record_id
-                and item.source_path == source_coordinate.source_path
-                and item.source_sha256 == source_coordinate.source_sha256
-                and item.byte_start <= source_coordinate.byte_start
-                and source_coordinate.byte_end <= item.byte_end
+                and item.source_path == seed_coordinate.source_path
+                and item.source_sha256 == seed_coordinate.source_sha256
+                and item.byte_start <= seed_coordinate.byte_start
+                and seed_coordinate.byte_end <= item.byte_end
             ),
             None,
         )
@@ -895,6 +926,10 @@ def ranked_candidates_from_retrieval(
                 support.target_record_id, coordinate.source_path,
                 coordinate.source_sha256, start, end, required=False,
                 parent_id=parent.candidate_id,
+                relationship_edge_id=support.edge_id,
+                relationship_direction=support.direction,
+                relationship_relation=support.relation,
+                relationship_sensitivity=support.sensitivity,
             )
         except JevError as error:
             if str(error) == "unsupported_source_type":
@@ -2239,29 +2274,62 @@ def retrieve(
     if source_bound_expansion and expand_one_hop:
         support_by_seed = {}
         selected_seeds = {hit.record_id for hit in hits if hit.hop == 0}
+        change_impact = any(
+            facet.kind is FacetKind.INTENT and facet.value == "change-impact"
+            for facet in facets.facets
+        )
+        eligible_edges = []
         for edge in sorted(graph.edges, key=lambda item: (item.source_id, item.relation, item.edge_id)):
-            if edge.source_id not in selected_seeds or edge.source_id in support_by_seed:
-                continue
             if edge.relation not in _ALLOWED_RELATIONS or not is_authenticated_eligible(
                 edge, task.allowed_sensitivities
             ):
                 continue
             if edge.source_coordinate is None or edge.target_coordinate is None:
                 continue
-            if edge.source_coordinate.snapshot_sha256 != snapshot.snapshot_sha256:
-                continue
-            if not is_authenticated_eligible(
-                record_map[edge.target_id], task.allowed_sensitivities
+            if (
+                edge.source_coordinate.snapshot_sha256 != snapshot.snapshot_sha256
+                or edge.target_coordinate.snapshot_sha256 != snapshot.snapshot_sha256
             ):
                 continue
-            support_by_seed[edge.source_id] = RelationshipSupport(
-                edge.edge_id,
-                edge.relation,
-                edge.source_id,
-                edge.target_id,
-                edge.source_coordinate,
-                edge.target_coordinate,
-            )
+            source_record = record_map[edge.source_id]
+            target_record = record_map[edge.target_id]
+            if not (
+                is_authenticated_eligible(source_record, task.allowed_sensitivities)
+                and is_authenticated_eligible(target_record, task.allowed_sensitivities)
+            ):
+                continue
+            sensitivity_rank = {
+                Sensitivity.PUBLIC: 0,
+                Sensitivity.INTERNAL: 1,
+                Sensitivity.RESTRICTED: 2,
+            }
+            if edge.sensitivity is not max(
+                (source_record.sensitivity, target_record.sensitivity),
+                key=sensitivity_rank.__getitem__,
+            ):
+                continue
+            eligible_edges.append(edge)
+        direction_order = ("incoming", "outgoing") if change_impact else ("outgoing",)
+        for direction in direction_order:
+            for edge in eligible_edges:
+                if direction == "incoming":
+                    if edge.relation not in _REVERSE_RELATIONS:
+                        continue
+                    seed_id, related_id = edge.target_id, edge.source_id
+                else:
+                    seed_id, related_id = edge.source_id, edge.target_id
+                if seed_id not in selected_seeds or seed_id in support_by_seed:
+                    continue
+                support_by_seed[seed_id] = RelationshipSupport(
+                    edge.edge_id,
+                    edge.relation,
+                    seed_id,
+                    related_id,
+                    edge.source_coordinate,
+                    edge.target_coordinate,
+                    direction,
+                    edge.sensitivity,
+                )
         relationship_supports = tuple(support_by_seed[key] for key in sorted(support_by_seed))
     return RetrievalResult(
         route="graph" if sufficient else "defer",

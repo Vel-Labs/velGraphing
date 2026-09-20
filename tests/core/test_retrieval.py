@@ -34,9 +34,11 @@ from packages.core import (
     graph_find,
     is_authenticated_eligible,
     navigate,
+    plan_ranked_context,
     ranked_candidates_from_retrieval,
     retrieve,
     retrieve_hybrid,
+    select_ranked_context,
 )
 
 
@@ -500,6 +502,236 @@ class SourceBoundExpansionTests(unittest.TestCase):
                 maximum_unit_bytes=4096,
             )
 
+    def test_change_impact_adds_one_verified_incoming_support_and_optional_child(self) -> None:
+        sources = {
+            "src/caller.py": (
+                b"from src.helper import helper\n\n"
+                b"def use_helper():\n    return helper()\n"
+            ),
+            "src/helper.py": b"def helper():\n    return 1\n",
+            "src/root.py": b"from src.caller import use_helper\n",
+        }
+        plain_graph, snapshot, reader = multi_source_fixture(sources)
+        records = tuple(
+            replace(record, sensitivity=Sensitivity.RESTRICTED)
+            if record.provenance.path == "src/caller.py"
+            else record
+            for record in plain_graph.records
+        )
+        source_graph = Graph(records)
+        graph = Graph(
+            records,
+            derive_source_relations(source_graph, snapshot, Reader(sources)).edges,
+        )
+        index = build_repository_tag_index(graph, snapshot, reader)
+        obligation = ProofObligation(
+            "helper", AuthorityClass.RUNTIME,
+            source_hints=("src/helper.py",), anchor_hints=("helper",),
+        )
+
+        def facets(intent: str) -> PromptFacetSet:
+            return PromptFacetSet(
+                "f" * 64,
+                (
+                    PromptFacet(FacetKind.INTENT, intent, 8),
+                    *(PromptFacet(FacetKind.ENTITY, f"facet-{index}", 1) for index in range(7)),
+                ),
+                proof_obligations=(obligation,),
+            )
+
+        impact_task = task(allowed_sensitivities=(Sensitivity.PUBLIC, Sensitivity.RESTRICTED))
+        arguments = (graph, impact_task, index)
+        baseline = retrieve(
+            *arguments, facets("trace"), snapshot, reader,
+            source_bound_expansion=True, expand_one_hop=True,
+        )
+        impact = retrieve(
+            *arguments, facets("change-impact"), snapshot, reader,
+            source_bound_expansion=True, expand_one_hop=True,
+        )
+
+        primary_fields = (
+            "route", "reason", "hits", "evidence", "spans", "context", "context_bytes",
+            "facet_coverage_percent", "channel_rankings", "recommended_fallback_paths",
+            "fail_closed", "covered_obligation_ids", "unresolved_obligation_ids",
+            "unresolved_critical_obligation_ids", "remaining_byte_budget",
+        )
+        self.assertEqual(
+            tuple(getattr(impact, field) for field in primary_fields),
+            tuple(getattr(baseline, field) for field in primary_fields),
+        )
+        self.assertEqual((), baseline.relationship_supports)
+        self.assertEqual(1, len(impact.relationship_supports))
+        support = impact.relationship_supports[0]
+        self.assertEqual("incoming", support.direction)
+        self.assertEqual("repo:src/helper.py", support.seed_record_id)
+        self.assertEqual("repo:src/caller.py", support.target_record_id)
+        self.assertIs(Sensitivity.RESTRICTED, support.sensitivity)
+        payload = support.to_dict()
+        self.assertEqual("src/caller.py", payload["source_coordinate"]["source_path"])
+        self.assertEqual("src/helper.py", payload["target_coordinate"]["source_path"])
+        self.assertEqual("src/helper.py", payload["seed_coordinate"]["source_path"])
+        self.assertEqual("src/caller.py", payload["related_coordinate"]["source_path"])
+
+        candidates = ranked_candidates_from_retrieval(
+            graph, impact_task, snapshot, reader, impact,
+            maximum_candidates=8,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        children = [item for item in candidates if item.relationship_parent_candidate_id]
+        self.assertEqual(1, len(children))
+        child = children[0]
+        parent_index = next(
+            index for index, item in enumerate(candidates)
+            if item.candidate_id == child.relationship_parent_candidate_id
+        )
+        self.assertLess(parent_index, candidates.index(child))
+        self.assertEqual("incoming", child.relationship_direction)
+        self.assertEqual(support.edge_id, child.relationship_edge_id)
+        self.assertEqual("repo:src/caller.py", child.record_id)
+
+        direct_candidates = ranked_candidates_from_retrieval(
+            graph, impact_task, snapshot, reader, baseline,
+            maximum_candidates=8,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        plan = plan_ranked_context(
+            graph,
+            impact_task,
+            snapshot,
+            reader,
+            query="change impact for helper",
+            direct_candidates=direct_candidates,
+            graph_candidates=candidates,
+        )
+        selected = select_ranked_context(
+            graph,
+            impact_task,
+            snapshot,
+            reader,
+            query="change impact for helper",
+            candidates=plan.candidates,
+        )
+        required_ids = tuple(
+            item.candidate_id for item in direct_candidates if item.required
+        )
+        self.assertEqual("graph", plan.route)
+        self.assertEqual("ranked", selected.route)
+        self.assertFalse(child.required)
+        self.assertLess(
+            selected.projection.selected_candidate_ids.index(
+                child.relationship_parent_candidate_id
+            ),
+            selected.projection.selected_candidate_ids.index(child.candidate_id),
+        )
+        self.assertEqual(required_ids, selected.projection.required_candidate_ids)
+        self.assertLessEqual(len(candidates), 8)
+        self.assertLessEqual(
+            sum(item.byte_end - item.byte_start for item in candidates), 32_768
+        )
+        self.assertLessEqual(
+            selected.projection.serialized_byte_count, impact_task.byte_budget
+        )
+
+        stripped_child = replace(
+            child,
+            relationship_edge_id=None,
+            relationship_direction=None,
+            relationship_relation=None,
+            relationship_sensitivity=None,
+        )
+        stripped = tuple(
+            stripped_child if item.candidate_id == child.candidate_id else item
+            for item in plan.candidates
+        )
+        rejected = select_ranked_context(
+            graph,
+            impact_task,
+            snapshot,
+            reader,
+            query="change impact for helper",
+            candidates=stripped,
+        )
+        self.assertEqual("defer", rejected.route)
+        self.assertEqual("relationship_candidate_custody_mismatch", rejected.reason)
+
+        def build(changed: object) -> None:
+            ranked_candidates_from_retrieval(
+                graph, impact_task, snapshot, reader,
+                replace(impact, relationship_supports=(changed,)),
+                maximum_candidates=8,
+                maximum_candidate_bytes=32_768,
+                maximum_unit_bytes=4096,
+            )
+
+        with self.assertRaises(ValueError):
+            replace(support, direction="sideways")
+        forged = (
+            replace(support, direction="outgoing"),
+            replace(support, source_coordinate=support.target_coordinate),
+            replace(
+                support,
+                source_coordinate=replace(
+                    support.source_coordinate, snapshot_sha256="0" * 64
+                ),
+            ),
+            replace(support, sensitivity=Sensitivity.PUBLIC),
+        )
+        for changed in forged:
+            with self.subTest(changed=changed), self.assertRaisesRegex(
+                ValueError, "relationship_support_custody_mismatch"
+            ):
+                build(changed)
+
+    def test_change_impact_prioritizes_incoming_before_outgoing_fallback(self) -> None:
+        sources = {
+            "src/a_definition.py": (
+                b"from src.b_dependency import dependency\n\n"
+                b"def helper():\n    return dependency()\n"
+            ),
+            "src/b_dependency.py": b"def dependency():\n    return 1\n",
+            "src/z_importer.py": b"from src.a_definition import helper\n",
+        }
+        plain_graph, snapshot, reader = multi_source_fixture(sources)
+        graph = Graph(
+            plain_graph.records,
+            derive_source_relations(plain_graph, snapshot, Reader(sources)).edges,
+        )
+        index = build_repository_tag_index(graph, snapshot, reader)
+        obligation = ProofObligation(
+            "helper", AuthorityClass.RUNTIME,
+            source_hints=("src/a_definition.py",), anchor_hints=("helper",),
+        )
+        ordinary_facets = obligated_facets(obligation)
+        impact_facets = replace(
+            ordinary_facets,
+            facets=(
+                PromptFacet(FacetKind.INTENT, "change-impact", 8),
+                *ordinary_facets.facets[1:],
+            ),
+        )
+
+        ordinary = retrieve(
+            graph, task(), index, ordinary_facets, snapshot, reader,
+            source_bound_expansion=True, expand_one_hop=True,
+        )
+        impact = retrieve(
+            graph, task(), index, impact_facets, snapshot, reader,
+            source_bound_expansion=True, expand_one_hop=True,
+        )
+
+        self.assertEqual("outgoing", ordinary.relationship_supports[0].direction)
+        self.assertEqual(
+            "repo:src/b_dependency.py",
+            ordinary.relationship_supports[0].target_record_id,
+        )
+        self.assertEqual(1, len(impact.relationship_supports))
+        self.assertEqual("incoming", impact.relationship_supports[0].direction)
+        self.assertEqual(
+            "repo:src/z_importer.py", impact.relationship_supports[0].target_record_id
+        )
 
 class ProofObligationCompilerTests(unittest.TestCase):
     def test_compilation_is_deterministic_and_caps_behavioral_units(self) -> None:

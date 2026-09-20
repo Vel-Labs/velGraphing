@@ -14,6 +14,7 @@ from .models import (
     Graph,
     GraphEdge,
     GraphRecord,
+    Sensitivity,
     TaskSpec,
     is_authenticated_eligible,
 )
@@ -43,6 +44,13 @@ _ASSIST_REASONS = frozenset(
         "required_sources_direct",
         "required_sources_missing",
         "required_sources_selected",
+    }
+)
+_REVERSE_RELATIONS = frozenset(
+    {
+        "calls", "consumes", "declares", "depends_on", "describes", "documents",
+        "implements", "imports", "packages", "produces", "supports", "tested_by",
+        "tests", "uses",
     }
 )
 
@@ -157,6 +165,10 @@ class RankedContextCandidate:
     required: bool
     record_id: str
     relationship_parent_candidate_id: str | None = None
+    relationship_edge_id: str | None = None
+    relationship_direction: str | None = None
+    relationship_relation: str | None = None
+    relationship_sensitivity: Sensitivity | None = None
 
     def __post_init__(self) -> None:
         if type(self.record_id) is not str or not self.record_id:
@@ -170,6 +182,20 @@ class RankedContextCandidate:
             )
         ):
             raise ValueError("relationship candidates must be optional with a parent ID")
+        relationship_metadata = (
+            self.relationship_edge_id,
+            self.relationship_direction,
+            self.relationship_relation,
+            self.relationship_sensitivity,
+        )
+        if any(value is not None for value in relationship_metadata):
+            if (
+                self.relationship_parent_candidate_id is None
+                or any(value is None for value in relationship_metadata)
+                or self.relationship_direction not in {"incoming", "outgoing"}
+                or not isinstance(self.relationship_sensitivity, Sensitivity)
+            ):
+                raise ValueError("relationship candidate metadata is incomplete")
         validate_packet({
             "schema_version": PACKET_VERSION,
             "query": "candidate validation",
@@ -404,6 +430,18 @@ def select_ranked_context(
     )
     candidate_set_sha256 = jev_sha256(jev_canonical(packet["candidates"]))
     query_sha256 = jev_sha256(packet["query"].encode("utf-8"))
+    for candidate in candidates:
+        parent_id = candidate.relationship_parent_candidate_id
+        if (
+            parent_id is not None
+            and not _has_verified_relationship_edge(
+                graph, task, snapshot, seen_candidates[parent_id], candidate
+            )
+        ):
+            return _ranked_defer(
+                task, candidate_set_sha256, approved_request_sha256, required_ids,
+                "relationship_candidate_custody_mismatch", unavailable_decision,
+            )
     snapshot_sources = {source.path: source for source in snapshot.sources}
     records = graph.record_map()
     selected_sources: dict[str, SourceIdentityV4] = {}
@@ -786,25 +824,49 @@ def _has_verified_relationship_edge(
     parent: RankedContextCandidate,
     candidate: RankedContextCandidate,
 ) -> bool:
+    metadata_bound = candidate.relationship_edge_id is not None
+    records = graph.record_map()
+    sensitivity_rank = {
+        Sensitivity.PUBLIC: 0,
+        Sensitivity.INTERNAL: 1,
+        Sensitivity.RESTRICTED: 2,
+    }
     for edge in graph.edges:
         source = edge.source_coordinate
         target = edge.target_coordinate
+        direction = candidate.relationship_direction or "outgoing"
+        expected_source = parent if direction == "outgoing" else candidate
+        expected_target = candidate if direction == "outgoing" else parent
+        source_record = records.get(edge.source_id)
+        target_record = records.get(edge.target_id)
         if (
-            edge.source_id == parent.record_id
-            and edge.target_id == candidate.record_id
+            (not metadata_bound or edge.edge_id == candidate.relationship_edge_id)
+            and (not metadata_bound or edge.relation == candidate.relationship_relation)
+            and (not metadata_bound or edge.sensitivity is candidate.relationship_sensitivity)
+            and (direction != "incoming" or edge.relation in _REVERSE_RELATIONS)
+            and edge.source_id == expected_source.record_id
+            and edge.target_id == expected_target.record_id
             and is_authenticated_eligible(edge, task.allowed_sensitivities)
+            and source_record is not None
+            and target_record is not None
+            and is_authenticated_eligible(source_record, task.allowed_sensitivities)
+            and is_authenticated_eligible(target_record, task.allowed_sensitivities)
+            and edge.sensitivity is max(
+                (source_record.sensitivity, target_record.sensitivity),
+                key=sensitivity_rank.__getitem__,
+            )
             and source is not None
             and target is not None
             and source.snapshot_sha256 == snapshot.snapshot_sha256
             and target.snapshot_sha256 == snapshot.snapshot_sha256
             and (source.source_path, source.source_sha256)
-            == (parent.source_path, parent.source_sha256)
+            == (expected_source.source_path, expected_source.source_sha256)
             and (target.source_path, target.source_sha256)
-            == (candidate.source_path, candidate.source_sha256)
-            and parent.byte_start <= source.byte_start
-            and source.byte_end <= parent.byte_end
-            and candidate.byte_start <= target.byte_start
-            and target.byte_end <= candidate.byte_end
+            == (expected_target.source_path, expected_target.source_sha256)
+            and expected_source.byte_start <= source.byte_start
+            and source.byte_end <= expected_source.byte_end
+            and expected_target.byte_start <= target.byte_start
+            and target.byte_end <= expected_target.byte_end
         ):
             return True
     return False
