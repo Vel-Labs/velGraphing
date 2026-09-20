@@ -4,6 +4,7 @@ from dataclasses import replace
 import hashlib
 import unittest
 
+import packages.core.retrieval as retrieval_module
 from packages.core import (
     Admission,
     AuthorityClass,
@@ -18,6 +19,7 @@ from packages.core import (
     ProofObligation,
     Provenance,
     Sensitivity,
+    SourceCoordinate,
     SourceIdentityV4,
     SourceSnapshotV4,
     compose_navigation_context,
@@ -29,6 +31,7 @@ from packages.core import (
     compile_proof_obligations,
     graph_find,
     navigate,
+    ranked_candidates_from_retrieval,
     retrieve,
     retrieve_hybrid,
 )
@@ -179,6 +182,151 @@ def obligated_facets(*obligations: ProofObligation, count: int = 8) -> PromptFac
         tuple(PromptFacet(FacetKind.ENTITY, f"facet-{index}", 1) for index in range(count)),
         proof_obligations=obligations,
     )
+
+
+class SourceBoundExpansionTests(unittest.TestCase):
+    def test_bound_support_is_metadata_only_and_unbound_edges_do_not_support(self) -> None:
+        sources = {
+            "src/caller.py": b"from src.helper import helper\n\ndef call_helper():\n    return helper()\n",
+            "src/helper.py": b"def helper():\n    return 1\n",
+        }
+        plain_graph, snapshot, reader = multi_source_fixture(sources)
+        records = plain_graph.record_map()
+        source_raw = sources["src/caller.py"]
+        target_raw = sources["src/helper.py"]
+        source_start = source_raw.rindex(b"helper")
+        target_start = target_raw.index(b"def helper")
+        source_coordinate = SourceCoordinate(
+            snapshot.snapshot_sha256,
+            "src/caller.py",
+            hashlib.sha256(source_raw).hexdigest(),
+            source_start,
+            source_start + len(b"helper"),
+            4,
+            4,
+            "python_call",
+            "call",
+            "helper",
+        )
+        target_coordinate = SourceCoordinate(
+            snapshot.snapshot_sha256,
+            "src/helper.py",
+            hashlib.sha256(target_raw).hexdigest(),
+            target_start,
+            len(target_raw),
+            1,
+            2,
+            "python_declaration",
+            "definition",
+            "helper",
+        )
+        bound = GraphEdge(
+            "edge:bound",
+            "repo:src/caller.py",
+            "repo:src/helper.py",
+            "imports",
+            1.0,
+            records["repo:src/caller.py"].provenance,
+            TrustClass.VERIFIED_SOURCE,
+            Sensitivity.PUBLIC,
+            Freshness.CURRENT,
+            Admission.VERIFIER,
+            True,
+            source_coordinate=source_coordinate,
+            target_coordinate=target_coordinate,
+        )
+        graph = Graph(plain_graph.records, (bound, replace(bound, edge_id="edge:second")))
+        index = build_repository_tag_index(graph, snapshot, reader)
+        obligation = ProofObligation(
+            "caller", AuthorityClass.RUNTIME,
+            source_hints=("src/caller.py",), anchor_hints=("call-helper",),
+        )
+        arguments = (
+            graph, task(), index, obligated_facets(obligation), snapshot, reader,
+        )
+        baseline = retrieve(
+            *arguments, channels=("exact", "sparse", "wiki"), expand_one_hop=False
+        )
+        enabled = retrieve(*arguments, source_bound_expansion=True, expand_one_hop=True)
+        edge_disabled_graph = Graph(plain_graph.records)
+        edge_disabled_index = build_repository_tag_index(edge_disabled_graph, snapshot, reader)
+        edge_disabled = retrieve(
+            edge_disabled_graph,
+            task(),
+            edge_disabled_index,
+            obligated_facets(obligation),
+            snapshot,
+            reader,
+            source_bound_expansion=True,
+            expand_one_hop=True,
+        )
+        no_expansion = retrieve(
+            *arguments, source_bound_expansion=True, expand_one_hop=False
+        )
+        primary_fields = (
+            "route", "reason", "hits", "evidence", "spans", "context", "context_bytes",
+            "facet_coverage_percent", "channel_rankings", "recommended_fallback_paths",
+            "fail_closed", "covered_obligation_ids", "unresolved_obligation_ids",
+            "unresolved_critical_obligation_ids", "remaining_byte_budget",
+        )
+        for result in (enabled, edge_disabled, no_expansion):
+            self.assertEqual(
+                tuple(getattr(result, field) for field in primary_fields),
+                tuple(getattr(baseline, field) for field in primary_fields),
+            )
+        self.assertEqual(len(enabled.relationship_supports), 1)
+        self.assertEqual(enabled.relationship_supports[0].edge_id, "edge:bound")
+        self.assertEqual(enabled.relationship_supports[0].target_record_id, "repo:src/helper.py")
+        self.assertEqual(edge_disabled.relationship_supports, ())
+        self.assertEqual(no_expansion.relationship_supports, ())
+        with self.assertRaisesRegex(TypeError, "must be bool"):
+            retrieve(*arguments, source_bound_expansion=1)  # type: ignore[arg-type]
+
+        unbound = Graph(plain_graph.records, (replace(bound, source_coordinate=None, target_coordinate=None),))
+        unbound_index = build_repository_tag_index(unbound, snapshot, reader)
+        result = retrieve(
+            unbound, task(), unbound_index, obligated_facets(obligation), snapshot, reader,
+            expand_one_hop=False, source_bound_expansion=True,
+        )
+        self.assertEqual(result.relationship_supports, ())
+
+        valid_candidates = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader, enabled,
+            maximum_candidates=64,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        self.assertTrue(any(
+            candidate.relationship_parent_candidate_id is not None
+            for candidate in valid_candidates
+        ))
+        with self.assertRaisesRegex(ValueError, "duplicate_relationship_support"):
+            ranked_candidates_from_retrieval(
+                graph, task(), snapshot, reader,
+                replace(
+                    enabled,
+                    relationship_supports=(
+                        enabled.relationship_supports[0],
+                        enabled.relationship_supports[0],
+                    ),
+                ),
+                maximum_candidates=64,
+                maximum_candidate_bytes=32_768,
+                maximum_unit_bytes=4096,
+            )
+
+        forged_support = replace(
+            enabled.relationship_supports[0], source_coordinate=target_coordinate
+        )
+        object.__setattr__(bound, "source_coordinate", target_coordinate)
+        with self.assertRaisesRegex(ValueError, "relationship_support_custody_mismatch"):
+            ranked_candidates_from_retrieval(
+                graph, task(), snapshot, reader,
+                replace(enabled, relationship_supports=(forged_support,)),
+                maximum_candidates=64,
+                maximum_candidate_bytes=32_768,
+                maximum_unit_bytes=4096,
+            )
 
 
 class ProofObligationCompilerTests(unittest.TestCase):
@@ -414,6 +562,74 @@ class TagIndexTests(unittest.TestCase):
             (FacetKind.SEMANTIC, "token"),
             {(facet.kind, facet.value) for facet in facets.facets},
         )
+
+    def test_prompt_identifiers_decompose_hyphens_and_underscores(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = compile_prompt("Trace refresh_token token-expiry behavior", index)
+        identifiers = {
+            facet.value for facet in facets.facets
+            if facet.kind is FacetKind.IDENTIFIER
+        }
+        self.assertTrue(
+            {"refresh-token", "refresh", "token", "expiry"} <= identifiers
+        )
+        token_expiry = next(
+            facet for facet in facets.facets if facet.value == "token-expiry"
+        )
+        self.assertFalse(token_expiry.required)
+
+    def test_prompt_excludes_common_generic_words(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = compile_prompt(
+            "Trace token as configuration in runtime using it with expiry evidence",
+            index,
+        )
+        self.assertTrue(
+            {"as", "in", "it", "using"}.isdisjoint(
+                facet.value for facet in facets.facets
+            )
+        )
+
+    def test_late_evidence_clause_retains_repository_vocabulary(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = compile_prompt(
+            "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima "
+            "mango november oscar papa; token expiry configuration",
+            index,
+        )
+        identities = {(facet.kind, facet.value) for facet in facets.facets}
+        self.assertIn((FacetKind.ENTITY, "token"), identities)
+        self.assertIn((FacetKind.ENTITY, "expiry"), identities)
+
+    def test_channel_scoring_uses_strongest_same_value_facet(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        fillers = tuple(
+            PromptFacet(FacetKind.ENTITY, f"absent-{offset}", 1)
+            for offset in range(6)
+        )
+        strongest = PromptFacetSet(
+            "a" * 64,
+            (PromptFacet(FacetKind.ENTITY, "token", 9), *fillers),
+        )
+        duplicated = PromptFacetSet(
+            "b" * 64,
+            (
+                PromptFacet(FacetKind.ENTITY, "token", 9),
+                *fillers,
+                PromptFacet(FacetKind.SEMANTIC, "token", 2),
+            ),
+        )
+        expected, _ = retrieval_module._channel_scores(
+            "sparse", graph, index.by_record(), strongest, (Sensitivity.PUBLIC,)
+        )
+        actual, _ = retrieval_module._channel_scores(
+            "sparse", graph, index.by_record(), duplicated, (Sensitivity.PUBLIC,)
+        )
+        self.assertEqual(actual, expected)
 
     def test_short_or_generic_prompt_is_insufficient_without_padding(self) -> None:
         graph, snapshot, reader = fixture()

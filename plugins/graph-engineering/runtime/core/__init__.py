@@ -29,6 +29,7 @@ from .retrieval import (
     RepositoryTag,
     RepositoryFileCard,
     RepositoryTagIndex,
+    RelationshipSupport,
     RetrievalHit,
     RetrievalResult,
     SourcePreview,
@@ -40,6 +41,7 @@ from .retrieval import (
     graph_find,
     match_proof_obligation,
     match_proof_obligations,
+    ranked_candidates_from_retrieval,
     retrieve,
     retrieve_hybrid,
     navigate,
@@ -71,18 +73,25 @@ from .routing_v4 import (
 from .navigation_v4 import NavigationItem, NavigationResult, NavigationV4, navigate_v4
 from .navigation_v5 import NavigationBudget, NavigationCost, NavigationStep, NavigationV5, NavigationV5Result, navigate_v5
 from .javascript_coordinates import JavaScriptCoordinateProvider
-from .source_coordinates import source_snapshot
+from .source_coordinates import SourceCoordinate, source_snapshot
 from .selection import (
     AssistObservation,
     AssistResult,
     ContextProjection,
     ContextSpan,
+    RankedContextCandidate,
+    RankedContextJevDecision,
+    RankedContextPlan,
+    RankedContextProjection,
+    RankedContextResult,
     SelectionResult,
     assist,
     observe_assist,
     select,
     select_context,
     select_documents,
+    plan_ranked_context,
+    select_ranked_context,
 )
 from .serialization import SerializedProjection, serialize_projection
 
@@ -95,6 +104,11 @@ __all__ = [
     "AssertionStatusV4",
     "ContextProjection",
     "ContextSpan",
+    "RankedContextCandidate",
+    "RankedContextJevDecision",
+    "RankedContextPlan",
+    "RankedContextProjection",
+    "RankedContextResult",
     "ExportPolicy",
     "ExportResult",
     "EvidenceItem",
@@ -124,6 +138,7 @@ __all__ = [
     "RepositoryTag",
     "RepositoryFileCard",
     "RepositoryTagIndex",
+    "RelationshipSupport",
     "RetrievalHit",
     "RetrievalResult",
     "SourcePreview",
@@ -135,6 +150,7 @@ __all__ = [
     "Sensitivity",
     "SerializedProjection",
     "SourceIdentityV4",
+    "SourceCoordinate",
     "SourceReaderV4",
     "SourceSnapshotV4",
     "NavigationItem",
@@ -165,6 +181,7 @@ __all__ = [
     "observe_assist",
     "resolve_route",
     "recommend_route_v4",
+    "ranked_candidates_from_retrieval",
     "retrieve",
     "retrieve_hybrid",
     "navigate",
@@ -173,6 +190,8 @@ __all__ = [
     "select",
     "select_context",
     "select_documents",
+    "plan_ranked_context",
+    "select_ranked_context",
     "serialize_projection",
     "navigate_v4",
     "navigate_v5",
