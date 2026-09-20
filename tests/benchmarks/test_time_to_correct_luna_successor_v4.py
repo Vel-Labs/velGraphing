@@ -127,12 +127,12 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertEqual([row["trial_id"] for row in rows], list(mod.DISPATCH))
         self.assertEqual(sum(row["call_disposition"] == "planned" for row in rows), 8)
         self.assertEqual(plan["call_authorization"]["planned_calls"], 8)
-        self.assertEqual(plan["call_authorization"]["completed_prior_calls"], 24)
-        self.assertEqual(plan["call_authorization"]["aggregate_authorized_calls"], 32)
-        self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.132120576)
-        self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.176160768)
-        self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.823839232)
-        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r11")
+        self.assertEqual(plan["call_authorization"]["completed_prior_calls"], 26)
+        self.assertEqual(plan["call_authorization"]["aggregate_authorized_calls"], 34)
+        self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.143130624)
+        self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.187170816)
+        self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.812829184)
+        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r12")
         self.assertLessEqual(plan["call_authorization"]["planned_calls"], 8)
         by_task = {}
         for row in rows:

@@ -97,18 +97,18 @@
   ],
   "call_authorization": {
     "maximum_cost_usd": 1.0,
-    "completed_prior_calls": 24,
+    "completed_prior_calls": 26,
     "planned_calls": 8,
-    "aggregate_authorized_calls": 32,
+    "aggregate_authorized_calls": 34,
     "price_usd_per_million_input_tokens": 0.042,
     "request_bytes_per_call_max": 131072,
     "per_call_worst_case_usd": 0.005505024,
-    "prior_authorization_envelope_usd": 0.132120576,
+    "prior_authorization_envelope_usd": 0.143130624,
     "incremental_authorization_envelope_usd": 0.044040192,
-    "aggregate_authorization_envelope_usd": 0.176160768,
-    "authorization_remaining_usd": 0.823839232
+    "aggregate_authorization_envelope_usd": 0.187170816,
+    "authorization_remaining_usd": 0.812829184
   },
-  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r11",
+  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r12",
   "live_authorized": true,
   "provider_calls_executed": 0
 }
