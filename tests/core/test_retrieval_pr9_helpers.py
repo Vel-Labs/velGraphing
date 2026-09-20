@@ -68,7 +68,7 @@ def completion_case():
         f"docs/{name}-guide.md": document(name)
         for name in ("alpha", "beta", "gamma")
     }
-    sources["docs/required.md"] = b"required proof\n"
+    sources["docs/required.md"] = b"required proof\n".ljust(256, b"x")
     records = []
     for path, raw in sources.items():
         digest = hashlib.sha256(raw).hexdigest()
@@ -245,6 +245,7 @@ class Pr9RetrievalHelperTests(unittest.TestCase):
         self.assertEqual(constrained, broad[:7])
         self.assertTrue(constrained[0].required)
         self.assertEqual(constrained[0].source_path, "docs/required.md")
+        self.assertEqual(constrained[0].byte_end - constrained[0].byte_start, 256)
         self.assertEqual(len(constrained), 7)
         self.assertTrue(all(item.byte_end - item.byte_start <= 256 for item in constrained))
 
