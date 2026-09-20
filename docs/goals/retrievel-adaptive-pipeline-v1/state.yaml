@@ -552,7 +552,7 @@ tasks:
     status: active
     reasoning_hint: high
     objective: "Freeze, execute, independently grade, and seal the redesigned four-arm time-to-correct study."
-    current_phase: "phase_3b_live_lane_freeze_and_execution"
+    current_phase: "phase_3b_lane_manifest_frozen_validation_repair"
     implementation_thread: "01a0b0e4-21fa-7961-80d8-090e1c6728eb"
     implementation_branch: "codex/retrievel-four-arm-study-v1"
     implementation_base: "3bad9cbfa618e4a39789298a52a8d03d2afdb8f2"
@@ -590,6 +590,23 @@ tasks:
         - "D-01 requires duplicate-specific evidence; base-case detail is diagnostic unless the public question requests it."
         - "C-02 is excluded."
       phase_1_boundary: "Freeze and validate only. No provider, answer, or grader call."
+    active_execution:
+      run_id: "live-r1-24ace1d"
+      lane_manifest_sha256: "0c2b750f3e34f187485db4386a573aa5a7dc92b1c7ef75f97a045c6c64305bad"
+      answer_threads: 16
+      grader_threads: 16
+      unique_threads: 32
+      answer_model: "gpt-5.6-luna"
+      answer_reasoning: medium
+      grader_model: "gpt-6-astra"
+      grader_reasoning: high
+      bindings_custody: "Ignored private JSON under .velgraphing-local; no treatment labels or source content were sent during task creation."
+      calls:
+        provider: 0
+        answer: 0
+        grader: 0
+      status: "frozen_pending_validate_cli_repair"
+      issue: "freeze-lanes produced a valid nondefault manifest, but validate --lane-manifest omitted its frozen run root and Python executable and rejected it. The implementation agent owns the bounded root-cause repair before execution."
     phase_receipts:
       - phase: "phase_1_benchmark_only_freeze"
         result: done
