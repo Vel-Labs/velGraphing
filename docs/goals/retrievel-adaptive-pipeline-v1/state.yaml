@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T060
+active_task: T070
 
 tasks:
   - id: T010
@@ -208,7 +208,7 @@ tasks:
   - id: T060
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: medium
     objective: "Move current Python-import and Markdown-link relation derivation behind one canonical core seam and return explicit supported, unresolved, and unsupported relation coverage."
     allowed_files:
@@ -230,11 +230,36 @@ tasks:
       - "The work requires changing PR #11 or PR #12 before their merge."
       - "A source-free or model-admitted edge would enter the graph."
       - "Verification fails twice with the same signature and no changed hypothesis."
-    receipt: null
+    receipt:
+      result: done
+      changed_files:
+        - packages/core/retrieval.py
+        - packages/core/__init__.py
+        - plugins/graph-engineering/skills/graph-find/scripts/graph_find.py
+        - plugins/graph-engineering/runtime/core/retrieval.py
+        - plugins/graph-engineering/runtime/core/__init__.py
+        - plugins/graph-engineering/runtime/.projection-state.json
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - tests/core/test_retrieval.py
+        - tests/skills/test_portable_skills.py
+      commands:
+        - cmd: "python -m unittest discover -s tests/core"
+          status: pass
+        - cmd: "python -m unittest discover -s tests/skills"
+          status: pass
+        - cmd: "python3 scripts/package/project_portable_plugin.py twice"
+          status: pass
+        - cmd: "python3 scripts/package/verify_source_package_parity.py"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "Accepted at 3de71a558f616ad0365c04fc030bd3f992ea8ce6. The portable command now delegates Python-import and Markdown-link relation derivation to one canonical core seam with explicit narrow-form coverage. A Luna audit found and the Worker repaired a restricted-to-internal sensitivity downgrade. Parent reran 272 core tests, 36 skill tests, and 87-file package parity. PR #13 is open and mergeable; CI is pending."
+      evidence:
+        - "https://github.com/Vel-Labs/velGraphing/pull/13"
   - id: T070
     type: pm
     assignee: PM
-    status: queued
+    status: active
     objective: "Compile the next language-family adapter package from T060 coverage evidence, with exact files, fixtures, and consumer checks."
     inputs:
       - "T060 receipt"
@@ -329,13 +354,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch contains only the active GoalBuddy v2 repair before its dedicated commit"
+  dirty_fingerprint: "custody branch clean at its latest GoalBuddy commit before the T060 receipt update"
   last_verification:
     result: pass
-    task: T050
+    task: T060
     commands:
-      - "PR #11 merged to main at 8e17f7a5fff3100369088caf6ab1f1c5506326a1."
-      - "PR #12 retained evidence-only scope after retargeting and merged to main at 0539d2c8581f4304945e9631449a5e7d321494a2."
+      - "272 core tests passed."
+      - "36 skill tests passed."
+      - "Package parity passed for 87 files at e72fccdf1f817c76d20694788373242d65d9d376458154478c85062120823ff2."
+      - "Independent Luna re-audit passed after the sensitivity repair."
 
 provider_budget:
   provider: typesafe_jev
