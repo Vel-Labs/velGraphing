@@ -1,7 +1,7 @@
 {
-  "schema_version": "velgraphing-v4-luna-successor-plan-v4",
+  "schema_version": "velgraphing-v4-luna-successor-plan-v5",
   "study_id": "velgraphing-v4-luna-four-task-successor-v1",
-  "status": "live_authorized_lane_manifest_frozen",
+  "status": "frozen_lane_manifest_pending_live_authorization",
   "candidate_artifact": {
     "path": ".inputs/t030-luna-successor-ranked-candidates-2255d9e.json",
     "sha256": "be5c4449581d46dab3aecc3e00dd8966cf8478ccabb174b98bec4741cace88dc",
@@ -46,9 +46,9 @@
     "argv_identity": "sha256_of_canonical_argv"
   },
   "lane_manifest": {
-    "path": ".velgraphing-local/retrievel-t030-luna-successor-r15/lane-manifest.json",
-    "sha256": "05474868d4bef62adf26f7158345e125d2d3d52971b7ae271200df636c86fa44",
-    "status": "frozen",
+    "path": ".velgraphing-local/retrievel-t030-luna-successor-r16/lane-manifest.json",
+    "sha256": null,
+    "status": "pending_host_lane_allocation",
     "entry_count": 32,
     "answer_lanes": 16,
     "grader_lanes": 16
@@ -73,13 +73,13 @@
       "--preview",
       "benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-jev-preview-2255d9e.json",
       "--run-root",
-      ".velgraphing-local/retrievel-t030-luna-successor-r15",
+      ".velgraphing-local/retrievel-t030-luna-successor-r16",
       "--lane-manifest",
-      ".velgraphing-local/retrievel-t030-luna-successor-r15/lane-manifest.json",
+      ".velgraphing-local/retrievel-t030-luna-successor-r16/lane-manifest.json",
       "--output",
-      ".velgraphing-local/retrievel-t030-luna-successor-r15/result.json"
+      ".velgraphing-local/retrievel-t030-luna-successor-r16/result.json"
     ],
-    "argv_sha256": "1fc23230aafcd12440646cb29477415491aa5a93a1193559bf2acef76d566d32"
+    "argv_sha256": "5fe607f1f74347cafeff066b7b4c14429c9450c0d610ffe1faeabaf1f87c5ce0"
   },
   "telemetry_schema": {
     "result_schema_version": "velgraphing-v4-luna-successor-result-v1",
@@ -116,15 +116,35 @@
     "accounting": "host_transport_not_model_retry",
     "failure_policy": "fail_closed_on_missing_invalid_identity_or_contract"
   },
+  "continuation_import": {
+    "path": ".velgraphing-local/retrievel-t030-luna-successor-r16/continuation-import.json",
+    "sha256": "60740d89c0b9f16c878daf1c99530ba560711bf78453c5e58a31e8f8ec6ae4c4",
+    "source_run_root": ".velgraphing-local/retrievel-t030-luna-successor-r15",
+    "source_run_custody_sha256": "9ed63df410b0ca340a55339d88ce4fda0eddefcf4da6d9c724554a0b4dbb8f50",
+    "source_lane_manifest_sha256": "05474868d4bef62adf26f7158345e125d2d3d52971b7ae271200df636c86fa44",
+    "imported_trials": [
+      "A-S-01", "B-S-01", "D-S-01", "C-S-01",
+      "B-D-01", "C-D-01", "A-D-01", "D-D-01",
+      "C-L-01", "D-L-01", "B-L-01", "A-L-01",
+      "D-M-02", "A-M-02"
+    ],
+    "pending_trials": ["C-M-02", "B-M-02"],
+    "pending_lane_slots": [
+      {"trial_id":"C-M-02","role":"answer"},
+      {"trial_id":"C-M-02","role":"grader"},
+      {"trial_id":"B-M-02","role":"answer"},
+      {"trial_id":"B-M-02","role":"grader"}
+    ]
+  },
   "limits": {
     "candidate_count": 64,
     "candidate_aggregate_bytes": 32768,
     "candidate_unit_bytes": 4096,
     "final_answer_bytes": 16384,
     "request_bytes": 131072,
-    "answer_calls": 16,
-    "grader_calls": 16,
-    "maximum_jev_calls": 8,
+    "answer_calls": 2,
+    "grader_calls": 2,
+    "maximum_jev_calls": 1,
     "retries": 0,
     "provider_timeout_seconds": 10,
     "answer_timeout_seconds": 180,
@@ -138,20 +158,20 @@
     "D-M-02", "A-M-02", "C-M-02", "B-M-02"
   ],
   "arm_preflight": [
-    {"trial_id":"A-S-01","task_id":"S-01","arm":"A","route":"direct","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"B-S-01","task_id":"S-01","arm":"B","route":"direct","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":"f05b5e07de8d62f78b157b722f72c44f28eccd74b5b37688fb5535cc18edb86d","request_sha256":"b73f66ae242e5bf5edceef8f6a612e1fe57fdf0bc77bc605430afb4d91dd268e","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"D-S-01","task_id":"S-01","arm":"D","route":"typed_graph","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":"2d10f01ef4eaf512f8e4e241c5f0ea4b900471d56182d34b2a8c47485160953e","request_sha256":"b73f66ae242e5bf5edceef8f6a612e1fe57fdf0bc77bc605430afb4d91dd268e","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"C-S-01","task_id":"S-01","arm":"C","route":"typed_graph","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"B-D-01","task_id":"D-01","arm":"B","route":"direct","pool_sha256":"3c4a9ea12b9f6d49dfe14b791dbe465d72a7948fad95144059ebe55b9a1a71e2","preview_sha256":"7cb7b0e47f8a4218334228d68cf24528fbd5c55782bd944de608f45140454369","request_sha256":"b63f730ae2e2290a3ab964c170c851c205b6ba28f1df53b9679ea25009a14277","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"C-D-01","task_id":"D-01","arm":"C","route":"typed_graph","pool_sha256":"efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"A-D-01","task_id":"D-01","arm":"A","route":"direct","pool_sha256":"3c4a9ea12b9f6d49dfe14b791dbe465d72a7948fad95144059ebe55b9a1a71e2","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"D-D-01","task_id":"D-01","arm":"D","route":"typed_graph","pool_sha256":"efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58","preview_sha256":"a6dd110d2c38205548ff0a95295197698556ace98d02b9b58cb89f89486bb929","request_sha256":"ae0bde087faf70dd31d77f6887f5975d98bbe52996e37eb41c98f1ef7b4e47c3","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"C-L-01","task_id":"L-01","arm":"C","route":"typed_graph","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"D-L-01","task_id":"L-01","arm":"D","route":"typed_graph","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":"4a7f4d2d4714f91e5763ba1a6a9f775f370dadfd8581341748c8ab738ba20cc7","request_sha256":"77744dfef08364f18b61aebe7135141f2f6540ea53559f29d553c5a0549d09f3","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"B-L-01","task_id":"L-01","arm":"B","route":"direct","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":"0c90fc4ab25c92fed931511ff94ae817564604d2f2283a8152fe412a8a43b64b","request_sha256":"77744dfef08364f18b61aebe7135141f2f6540ea53559f29d553c5a0549d09f3","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"A-L-01","task_id":"L-01","arm":"A","route":"direct","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"D-M-02","task_id":"M-02","arm":"D","route":"typed_graph","pool_sha256":"09c5732db532631af44ab0379bcd3495ddc1148f3eb1aa792e241b479276e749","preview_sha256":"d90c55f586e4c3bcffe04f1fded2a0e0814e449df1c6c8c935cc7062c31e59ef","request_sha256":"e841d09580993e8103669f4bb20f3abf63fc80082dfdd73a9779cc33290b0117","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"A-M-02","task_id":"M-02","arm":"A","route":"direct","pool_sha256":"09c5732db532631af44ab0379bcd3495ddc1148f3eb1aa792e241b479276e749","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"A-S-01","task_id":"S-01","arm":"A","route":"direct","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"B-S-01","task_id":"S-01","arm":"B","route":"direct","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":"f05b5e07de8d62f78b157b722f72c44f28eccd74b5b37688fb5535cc18edb86d","request_sha256":"b73f66ae242e5bf5edceef8f6a612e1fe57fdf0bc77bc605430afb4d91dd268e","jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"D-S-01","task_id":"S-01","arm":"D","route":"typed_graph","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":"2d10f01ef4eaf512f8e4e241c5f0ea4b900471d56182d34b2a8c47485160953e","request_sha256":"b73f66ae242e5bf5edceef8f6a612e1fe57fdf0bc77bc605430afb4d91dd268e","jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"C-S-01","task_id":"S-01","arm":"C","route":"typed_graph","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"B-D-01","task_id":"D-01","arm":"B","route":"direct","pool_sha256":"3c4a9ea12b9f6d49dfe14b791dbe465d72a7948fad95144059ebe55b9a1a71e2","preview_sha256":"7cb7b0e47f8a4218334228d68cf24528fbd5c55782bd944de608f45140454369","request_sha256":"b63f730ae2e2290a3ab964c170c851c205b6ba28f1df53b9679ea25009a14277","jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"C-D-01","task_id":"D-01","arm":"C","route":"typed_graph","pool_sha256":"efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"A-D-01","task_id":"D-01","arm":"A","route":"direct","pool_sha256":"3c4a9ea12b9f6d49dfe14b791dbe465d72a7948fad95144059ebe55b9a1a71e2","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"D-D-01","task_id":"D-01","arm":"D","route":"typed_graph","pool_sha256":"efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58","preview_sha256":"a6dd110d2c38205548ff0a95295197698556ace98d02b9b58cb89f89486bb929","request_sha256":"ae0bde087faf70dd31d77f6887f5975d98bbe52996e37eb41c98f1ef7b4e47c3","jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"C-L-01","task_id":"L-01","arm":"C","route":"typed_graph","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"D-L-01","task_id":"L-01","arm":"D","route":"typed_graph","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":"4a7f4d2d4714f91e5763ba1a6a9f775f370dadfd8581341748c8ab738ba20cc7","request_sha256":"77744dfef08364f18b61aebe7135141f2f6540ea53559f29d553c5a0549d09f3","jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"B-L-01","task_id":"L-01","arm":"B","route":"direct","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":"0c90fc4ab25c92fed931511ff94ae817564604d2f2283a8152fe412a8a43b64b","request_sha256":"77744dfef08364f18b61aebe7135141f2f6540ea53559f29d553c5a0549d09f3","jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"A-L-01","task_id":"L-01","arm":"A","route":"direct","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"D-M-02","task_id":"M-02","arm":"D","route":"typed_graph","pool_sha256":"09c5732db532631af44ab0379bcd3495ddc1148f3eb1aa792e241b479276e749","preview_sha256":"d90c55f586e4c3bcffe04f1fded2a0e0814e449df1c6c8c935cc7062c31e59ef","request_sha256":"e841d09580993e8103669f4bb20f3abf63fc80082dfdd73a9779cc33290b0117","jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
+    {"trial_id":"A-M-02","task_id":"M-02","arm":"A","route":"direct","pool_sha256":"09c5732db532631af44ab0379bcd3495ddc1148f3eb1aa792e241b479276e749","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"imported_completed"},
     {"trial_id":"C-M-02","task_id":"M-02","arm":"C","route":"typed_graph","pool_sha256":"09c5732db532631af44ab0379bcd3495ddc1148f3eb1aa792e241b479276e749","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
     {"trial_id":"B-M-02","task_id":"M-02","arm":"B","route":"direct","pool_sha256":"09c5732db532631af44ab0379bcd3495ddc1148f3eb1aa792e241b479276e749","preview_sha256":"2a630dac5e8a611069a8e66228f8402a96cc66daf16058ced85dc980c28c869c","request_sha256":"e841d09580993e8103669f4bb20f3abf63fc80082dfdd73a9779cc33290b0117","jev_call_could_affect_selection":true,"call_disposition":"planned"}
   ],
@@ -163,23 +183,24 @@
     "stop_on_provider_retry_or_call_cap_exhaustion",
     "stop_on_answer_or_grader_model_mismatch",
     "stop_on_lane_manifest_or_execution_identity_mismatch",
+    "stop_on_continuation_receipt_lane_or_provider_link_mismatch",
     "stop_on_lane_state_change",
     "stop_after_any_systemic_trial_failure"
   ],
   "call_authorization": {
     "maximum_cost_usd": 1.0,
-    "completed_prior_calls": 39,
-    "planned_calls": 8,
+    "completed_prior_calls": 46,
+    "planned_calls": 1,
     "aggregate_authorized_calls": 47,
     "price_usd_per_million_input_tokens": 0.042,
     "request_bytes_per_call_max": 131072,
     "per_call_worst_case_usd": 0.005505024,
-    "prior_authorization_envelope_usd": 0.214695936,
-    "incremental_authorization_envelope_usd": 0.044040192,
+    "prior_authorization_envelope_usd": 0.253231104,
+    "incremental_authorization_envelope_usd": 0.005505024,
     "aggregate_authorization_envelope_usd": 0.258736128,
     "authorization_remaining_usd": 0.741263872
   },
-  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r15",
-  "live_authorized": true,
+  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r16",
+  "live_authorized": false,
   "provider_calls_executed": 0
 }

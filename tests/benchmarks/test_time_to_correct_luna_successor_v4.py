@@ -125,50 +125,46 @@ class LunaSuccessorTests(unittest.TestCase):
         plan = json.loads(mod.PLAN_PATH.read_text(encoding="utf-8"))
         rows = plan["arm_preflight"]
         self.assertEqual([row["trial_id"] for row in rows], list(mod.DISPATCH))
-        self.assertEqual(sum(row["call_disposition"] == "planned" for row in rows), 8)
-        self.assertEqual(plan["call_authorization"]["planned_calls"], 8)
-        self.assertEqual(plan["call_authorization"]["completed_prior_calls"], 39)
+        self.assertEqual(sum(row["call_disposition"] == "planned" for row in rows), 1)
+        self.assertEqual(plan["call_authorization"]["planned_calls"], 1)
+        self.assertEqual(plan["call_authorization"]["completed_prior_calls"], 46)
         self.assertEqual(plan["call_authorization"]["aggregate_authorized_calls"], 47)
-        self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.214695936)
+        self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.253231104)
         self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.258736128)
         self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.741263872)
-        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r15")
-        self.assertLessEqual(plan["call_authorization"]["planned_calls"], 8)
+        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r16")
+        self.assertEqual(
+            [row["trial_id"] for row in rows if row["call_disposition"] == "planned"],
+            ["B-M-02"],
+        )
         by_task = {}
         for row in rows:
             by_task.setdefault(row["task_id"], {})[row["arm"]] = row
-            if row["arm"] in {"A", "C"}:
-                self.assertEqual(row["call_disposition"], "treatment_off")
-                self.assertIsNone(row["preview_sha256"])
-                self.assertIsNone(row["request_sha256"])
-            else:
-                self.assertEqual(len(row["preview_sha256"]), 64)
-                expected = (
-                    "planned" if row["jev_call_could_affect_selection"]
-                    else "skip_no_membership_effect"
-                )
-                self.assertEqual(row["call_disposition"], expected)
+            if row["trial_id"] in mod.IMPORTED_TRIALS:
+                self.assertEqual(row["call_disposition"], "imported_completed")
+        self.assertEqual(
+            next(row for row in rows if row["trial_id"] == "C-M-02")["call_disposition"],
+            "treatment_off",
+        )
         for arms in by_task.values():
             self.assertEqual(arms["A"]["pool_sha256"], arms["B"]["pool_sha256"])
             self.assertEqual(arms["C"]["pool_sha256"], arms["D"]["pool_sha256"])
 
-    def test_plan_is_source_free_and_live_manifest_is_frozen(self) -> None:
+    def test_plan_is_source_free_and_waits_for_four_fresh_lanes(self) -> None:
         plan = json.loads(mod.PLAN_PATH.read_text(encoding="utf-8"))
-        self.assertTrue(plan["live_authorized"])
+        self.assertFalse(plan["live_authorized"])
         self.assertEqual(plan["provider_calls_executed"], 0)
-        self.assertEqual(plan["status"], "live_authorized_lane_manifest_frozen")
+        self.assertEqual(plan["status"], "frozen_lane_manifest_pending_live_authorization")
         self.assertNotIn("excerpt", json.dumps(plan))
         self.assertEqual(plan["models"]["answer"], "gpt-5.6-luna")
         self.assertEqual(plan["models"]["grader"], "gpt-5.6-luna")
         self.assertEqual(plan["lane_manifest_contract"], mod.LANE_MANIFEST_CONTRACT)
-        self.assertEqual(plan["lane_manifest"]["status"], "frozen")
-        self.assertEqual(len(plan["lane_manifest"]["sha256"]), 64)
+        self.assertEqual(plan["lane_manifest"], mod.LANE_MANIFEST_BINDING)
+        self.assertEqual(plan["continuation_import"], mod.CONTINUATION_IMPORT_BINDING)
+        self.assertEqual(plan["continuation_import"]["pending_lane_slots"], list(mod.PENDING_LANE_SLOTS))
         self.assertEqual(plan["controller"], mod.CONTROLLER)
         self.assertEqual(plan["telemetry_schema"], mod.TELEMETRY_SCHEMA)
         self.assertEqual(plan["host_transport_contract"], mod.HOST_TRANSPORT_CONTRACT)
-        plan["live_authorized"] = False
-        plan["status"] = "frozen_lane_manifest_pending_live_authorization"
-        plan["lane_manifest"] = dict(mod.LANE_MANIFEST_BINDING)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "plan.json"
             path.write_text(json.dumps(plan), encoding="utf-8")
@@ -231,6 +227,13 @@ class LunaSuccessorTests(unittest.TestCase):
                 mock.patch.object(mod.preview, "_load_inputs", return_value=(artifact, questions)),
                 mock.patch.object(mod.preview, "validate_preview"),
                 mock.patch.object(mod.generator, "generate", return_value=(artifact, {})),
+                mock.patch.object(
+                    mod, "_current_trial_identity",
+                    side_effect=lambda task, arm, *_: (
+                        {"trial_id": f"{arm}-{task}"}, Path("lane"), "c" * 64
+                    ),
+                ),
+                mock.patch.object(mod, "validate_continuation", return_value={}),
             ):
                 loaded = mod.load_plan(plan_path, expected_live_authorized=True)
                 frozen = mod.preflight(
@@ -240,7 +243,7 @@ class LunaSuccessorTests(unittest.TestCase):
                 )
                 self.assertEqual(loaded["lane_manifest"]["status"], "frozen")
                 self.assertTrue(frozen["live_authorized"])
-                self.assertEqual(frozen["planned_jev_calls"], 8)
+                self.assertEqual(frozen["planned_jev_calls"], 1)
 
                 plan["lane_manifest"]["sha256"] = "0" * 64
                 plan_path.write_bytes(mod.canonical(plan))
@@ -388,6 +391,49 @@ class LunaSuccessorTests(unittest.TestCase):
             ):
                 mod.require_resumable(root, incomplete, set(loaded))
 
+    def test_continuation_hash_and_provider_link_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.json"
+            copied = root / "copied.json"
+            raw = mod.canonical({"receipt": "opaque"})
+            source.write_bytes(raw)
+            copied.write_bytes(raw)
+            mod._validate_copied_file(source, copied, mod.digest(raw))
+            copied.write_bytes(mod.canonical({"receipt": "changed"}))
+            with self.assertRaisesRegex(
+                mod.SuccessorError, "successor_continuation_receipt_hash_invalid"
+            ):
+                mod._validate_copied_file(source, copied, mod.digest(raw))
+
+        request_sha256 = "a" * 64
+        observation = {
+            "schema_version": "velgraphing-jev-observation-v1",
+            "request_sha256": request_sha256,
+            "attempted_calls": 1,
+        }
+        result = {"attempts": [{
+            "bindings": {"request_sha256": request_sha256},
+            "jev_observation": observation,
+        }]}
+        ledger = {
+            "schema_version": "velgraphing-jev-call-receipt-v1",
+            "trial_id": "B-M-02",
+            "request_sha256": request_sha256,
+            "status": "consumed",
+            "attempted_calls": 1,
+        }
+        self.assertEqual(
+            mod._validate_jev_link("B-M-02", result, ledger, observation),
+            request_sha256,
+        )
+        with self.assertRaisesRegex(
+            mod.SuccessorError, "successor_continuation_jev_link_invalid"
+        ):
+            mod._validate_jev_link(
+                "B-M-02", result, {**ledger, "request_sha256": "b" * 64}, observation
+            )
+
     def test_incorrect_trial_accepts_unavailable_usage_only_with_complete_calls(self) -> None:
         lanes = {
             (entry["trial_id"], entry["role"]): entry for entry in lane_entries()
@@ -452,7 +498,7 @@ class LunaSuccessorTests(unittest.TestCase):
         lanes = {
             (entry["trial_id"], entry["role"]): entry for entry in lane_entries()
         }
-        completed = {trial_id: result for trial_id in mod.DISPATCH[:2]}
+        completed = {trial_id: result for trial_id in mod.IMPORTED_TRIALS}
         with (
             mock.patch.object(mod, "preflight", return_value={
                 "arm_preflight": plan["arm_preflight"],
@@ -471,6 +517,7 @@ class LunaSuccessorTests(unittest.TestCase):
             mock.patch.object(
                 mod, "_load_current_completed", side_effect=lambda *_: dict(completed)
             ),
+            mock.patch.object(mod, "validate_continuation"),
             mock.patch.object(mod, "require_resumable") as require_resumable,
             mock.patch.object(mod, "save_completed_trial") as save_completed,
             mock.patch.object(mod, "run_trial", return_value=result) as run_trial,
@@ -483,12 +530,12 @@ class LunaSuccessorTests(unittest.TestCase):
             self.assertEqual(len(output["results"]), 16)
             self.assertEqual(
                 [f"{call.args[1]}-{call.args[0]}" for call in run_trial.call_args_list],
-                list(mod.DISPATCH[2:]),
+                list(mod.PENDING_TRIALS),
             )
-            self.assertEqual(save_completed.call_count, 14)
+            self.assertEqual(save_completed.call_count, 2)
             self.assertEqual(require_resumable.call_count, 16)
             self.assertTrue(all(
-                call.kwargs["ledger"].cap == 8 for call in run_trial.call_args_list
+                call.kwargs["ledger"].cap == 1 for call in run_trial.call_args_list
             ))
             self.assertTrue(all(
                 call.kwargs["answer_lane"]["role"] == "answer"

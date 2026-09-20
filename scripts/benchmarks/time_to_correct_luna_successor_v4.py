@@ -61,7 +61,20 @@ PROVIDER_TIMEOUT_SECONDS = 10
 ANSWER_TIMEOUT_SECONDS = 180
 GRADER_TIMEOUT_SECONDS = 120
 TRIAL_WALL_LIMIT_SECONDS = 600
-RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r15"
+SOURCE_RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r15"
+RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r16"
+SOURCE_LANE_MANIFEST_SHA256 = "05474868d4bef62adf26f7158345e125d2d3d52971b7ae271200df636c86fa44"
+SOURCE_RUN_CUSTODY_SHA256 = "9ed63df410b0ca340a55339d88ce4fda0eddefcf4da6d9c724554a0b4dbb8f50"
+PENDING_TRIALS = ("C-M-02", "B-M-02")
+IMPORTED_TRIALS = tuple(trial_id for trial_id in DISPATCH if trial_id not in PENDING_TRIALS)
+IMPORTED_JEV_TRIALS = (
+    "B-D-01", "B-L-01", "B-S-01", "D-D-01", "D-L-01", "D-M-02", "D-S-01",
+)
+PENDING_LANE_SLOTS = tuple(
+    {"trial_id": trial_id, "role": role}
+    for trial_id in PENDING_TRIALS for role in ("answer", "grader")
+)
+CONTINUATION_IMPORT_SCHEMA = "velgraphing-v4-luna-successor-continuation-import-v1"
 LANE_ROLES = ("answer", "grader")
 LANE_MANIFEST_SCHEMA = "velgraphing-v4-luna-lane-manifest-v1"
 LANE_ENTRY_FIELDS = (
@@ -96,21 +109,33 @@ STOP_RULES = [
     "stop_on_provider_retry_or_call_cap_exhaustion",
     "stop_on_answer_or_grader_model_mismatch",
     "stop_on_lane_manifest_or_execution_identity_mismatch",
+    "stop_on_continuation_receipt_lane_or_provider_link_mismatch",
     "stop_on_lane_state_change",
     "stop_after_any_systemic_trial_failure",
 ]
 CALL_AUTHORIZATION = {
     "maximum_cost_usd": 1.0,
-    "completed_prior_calls": 39,
-    "planned_calls": 8,
+    "completed_prior_calls": 46,
+    "planned_calls": 1,
     "aggregate_authorized_calls": 47,
     "price_usd_per_million_input_tokens": 0.042,
     "request_bytes_per_call_max": REQUEST_BYTES,
     "per_call_worst_case_usd": 0.005505024,
-    "prior_authorization_envelope_usd": 0.214695936,
-    "incremental_authorization_envelope_usd": 0.044040192,
+    "prior_authorization_envelope_usd": 0.253231104,
+    "incremental_authorization_envelope_usd": 0.005505024,
     "aggregate_authorization_envelope_usd": 0.258736128,
     "authorization_remaining_usd": 0.741263872,
+}
+
+CONTINUATION_IMPORT_BINDING = {
+    "path": f"{RUN_ROOT}/continuation-import.json",
+    "sha256": "60740d89c0b9f16c878daf1c99530ba560711bf78453c5e58a31e8f8ec6ae4c4",
+    "source_run_root": SOURCE_RUN_ROOT,
+    "source_run_custody_sha256": SOURCE_RUN_CUSTODY_SHA256,
+    "source_lane_manifest_sha256": SOURCE_LANE_MANIFEST_SHA256,
+    "imported_trials": list(IMPORTED_TRIALS),
+    "pending_trials": list(PENDING_TRIALS),
+    "pending_lane_slots": list(PENDING_LANE_SLOTS),
 }
 
 CANDIDATE_ARTIFACT = {
@@ -192,6 +217,209 @@ def _read_json(path: Path, reason: str) -> dict[str, Any]:
 
 def _semantic_sha256(value: object) -> str:
     return digest(generator._canonical(value))
+
+
+def _canonical_file(path: Path, reason: str) -> tuple[bytes, dict[str, Any]]:
+    try:
+        metadata = path.lstat()
+        raw = path.read_bytes()
+        value = json.loads(raw)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        raise SuccessorError(reason) from None
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or type(value) is not dict
+        or raw != canonical(value)
+    ):
+        raise SuccessorError(reason)
+    return raw, value
+
+
+def tree_custody_sha256(root: Path) -> str:
+    """Hash sorted file hashes and relative paths without parsing payloads."""
+    if not root.is_absolute() or root.is_symlink() or not root.is_dir():
+        raise SuccessorError("successor_continuation_source_invalid")
+    rows = []
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink() or (not path.is_dir() and not path.is_file()):
+            raise SuccessorError("successor_continuation_source_invalid")
+        if path.is_file():
+            relative = path.relative_to(root).as_posix()
+            rows.append(f"{digest(path.read_bytes())}  {relative}\n".encode("utf-8"))
+    if not rows:
+        raise SuccessorError("successor_continuation_source_invalid")
+    return digest(b"".join(rows))
+
+
+def _validate_completed_result(
+    result: Mapping[str, Any],
+    identity: Mapping[str, Any],
+    candidate_set_sha256: str,
+    lane_manifest: Mapping[tuple[str, str], Mapping[str, Any]],
+) -> None:
+    trial_id = identity["trial_id"]
+    attempts = result.get("attempts")
+    attempt = attempts[-1] if type(attempts) is list and attempts else {}
+    if (
+        result.get("schema_version") != "velgraphing-time-to-correct-v1"
+        or result.get("identity") != identity
+        or attempt.get("bindings", {}).get("candidate_set_sha256")
+        != candidate_set_sha256
+        or attempt.get("answer_boundary", {}).get("execution_identity")
+        != _lane_execution_identity(lane_manifest[(trial_id, "answer")])
+        or attempt.get("grader_boundary", {}).get("execution_identity")
+        != _lane_execution_identity(lane_manifest[(trial_id, "grader")])
+    ):
+        raise SuccessorError("successor_completed_trial_conflict")
+    _require_accepted_trial(result)
+
+
+def _validate_jev_link(
+    trial_id: str,
+    result: Mapping[str, Any],
+    ledger: Mapping[str, Any],
+    observation: Mapping[str, Any],
+) -> str:
+    attempt = result["attempts"][-1]
+    request_sha256 = attempt.get("bindings", {}).get("request_sha256")
+    if (
+        ledger.get("schema_version") != "velgraphing-jev-call-receipt-v1"
+        or ledger.get("trial_id") != trial_id
+        or ledger.get("request_sha256") != request_sha256
+        or ledger.get("status") != "consumed"
+        or ledger.get("attempted_calls") != 1
+        or observation.get("schema_version") != "velgraphing-jev-observation-v1"
+        or observation.get("request_sha256") != request_sha256
+        or observation.get("attempted_calls") != 1
+        or attempt.get("jev_observation") != observation
+    ):
+        raise SuccessorError("successor_continuation_jev_link_invalid")
+    return request_sha256
+
+
+def _validate_copied_file(source: Path, destination: Path, sha256: str) -> None:
+    try:
+        source_raw = source.read_bytes()
+        destination_raw = destination.read_bytes()
+    except OSError:
+        raise SuccessorError("successor_continuation_import_invalid") from None
+    if (
+        source.is_symlink() or destination.is_symlink()
+        or source_raw != destination_raw
+        or digest(source_raw) != sha256
+    ):
+        raise SuccessorError("successor_continuation_receipt_hash_invalid")
+
+
+def freeze_continuation(
+    source_root: Path,
+    target_root: Path,
+    identities: Mapping[str, Mapping[str, Any]],
+    candidate_sets: Mapping[str, str],
+    *,
+    expected_source_custody_sha256: str = SOURCE_RUN_CUSTODY_SHA256,
+    expected_source_lane_manifest_sha256: str = SOURCE_LANE_MANIFEST_SHA256,
+) -> dict[str, Any]:
+    """Copy accepted terminal receipts and their linked Jev evidence once."""
+    if (
+        not source_root.is_absolute()
+        or not target_root.is_absolute()
+        or source_root.resolve() != (ROOT / SOURCE_RUN_ROOT).resolve()
+        or target_root.resolve() != (ROOT / RUN_ROOT).resolve()
+        or target_root.exists()
+    ):
+        raise SuccessorError("successor_continuation_target_invalid")
+    source_custody = tree_custody_sha256(source_root)
+    if source_custody != expected_source_custody_sha256:
+        raise SuccessorError("successor_continuation_source_drift")
+    source_lanes = _lane_manifest(
+        source_root / "lane-manifest.json", source_root,
+        expected_sha256=expected_source_lane_manifest_sha256,
+    )
+    source_results = {
+        result["identity"]["trial_id"]: result
+        for result in load_completed_trials(source_root / "completed", DISPATCH)
+    }
+    if (
+        set(source_results) != set(IMPORTED_TRIALS) | {"C-M-02"}
+        or source_results["C-M-02"].get("terminal_reason") != "measurement_error"
+        or source_results["C-M-02"].get("attempts", [{}])[-1].get("grade") is not None
+    ):
+        raise SuccessorError("successor_continuation_source_invalid")
+
+    copies: list[tuple[str, str, str, str, bytes]] = []
+    links = []
+    for trial_id in IMPORTED_TRIALS:
+        result = source_results[trial_id]
+        _validate_completed_result(
+            result, identities[trial_id], candidate_sets[trial_id], source_lanes
+        )
+        source_path = source_root / "completed" / f"{trial_id}.json"
+        raw = source_path.read_bytes()
+        copies.append((
+            "completed_trial", trial_id, f"completed/{trial_id}.json",
+            digest(raw), raw,
+        ))
+        if trial_id not in IMPORTED_JEV_TRIALS:
+            continue
+        ledger_raw, ledger = _canonical_file(
+            source_root / "jev-calls" / f"{trial_id}.json",
+            "successor_continuation_jev_link_invalid",
+        )
+        observation_raw, observation = _canonical_file(
+            source_root / "jev-observations" / f"{trial_id}.json",
+            "successor_continuation_jev_link_invalid",
+        )
+        request_sha256 = _validate_jev_link(trial_id, result, ledger, observation)
+        ledger_path = f"imports/jev-calls/{trial_id}.json"
+        observation_path = f"imports/jev-observations/{trial_id}.json"
+        copies.extend((
+            ("jev_call_receipt", trial_id, ledger_path, digest(ledger_raw), ledger_raw),
+            ("jev_observation", trial_id, observation_path,
+             digest(observation_raw), observation_raw),
+        ))
+        links.append({
+            "trial_id": trial_id,
+            "request_sha256": request_sha256,
+            "ledger_path": ledger_path,
+            "ledger_sha256": digest(ledger_raw),
+            "observation_path": observation_path,
+            "observation_sha256": digest(observation_raw),
+        })
+
+    target_root.mkdir(mode=0o700, parents=True)
+    os.chmod(target_root, 0o700)
+    file_rows = []
+    for kind, trial_id, relative, sha256, raw in copies:
+        destination = target_root / relative
+        atomic_write(destination, raw)
+        file_rows.append({
+            "kind": kind,
+            "trial_id": trial_id,
+            "source_path": str(Path(SOURCE_RUN_ROOT) / relative.replace("imports/", "")),
+            "destination_path": relative,
+            "sha256": sha256,
+        })
+    imported_lanes = [
+        dict(source_lanes[(trial_id, role)])
+        for trial_id in IMPORTED_TRIALS for role in LANE_ROLES
+    ]
+    manifest = {
+        "schema_version": CONTINUATION_IMPORT_SCHEMA,
+        "source_run_root": SOURCE_RUN_ROOT,
+        "source_run_custody_sha256": source_custody,
+        "source_lane_manifest_sha256": expected_source_lane_manifest_sha256,
+        "candidate_artifact_sha256": CANDIDATE_ARTIFACT["sha256"],
+        "imported_trials": list(IMPORTED_TRIALS),
+        "pending_trials": list(PENDING_TRIALS),
+        "pending_lane_slots": list(PENDING_LANE_SLOTS),
+        "files": file_rows,
+        "lane_entries": imported_lanes,
+        "jev_links": links,
+    }
+    atomic_write(target_root / "continuation-import.json", canonical(manifest))
+    return manifest
 
 
 def load_questions(path: Path = QUESTIONS_PATH) -> tuple[dict[str, dict[str, str]], str]:
@@ -289,6 +517,7 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
     questions = plan.get("question_registry")
     rubric = plan.get("rubric_manifest")
     call_authorization = plan.get("call_authorization")
+    continuation_import = plan.get("continuation_import")
     if (
         set(plan) != {
             "schema_version", "study_id", "status", "candidate_artifact",
@@ -297,8 +526,9 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
             "arm_preflight", "stop_rules", "call_authorization", "run_root",
             "live_authorized", "provider_calls_executed", "lane_manifest_contract",
             "lane_manifest", "controller", "telemetry_schema", "host_transport_contract",
+            "continuation_import",
         }
-        or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v4"
+        or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v5"
         or plan["study_id"] != STUDY_ID
         or plan["status"] != (
             "live_authorized_lane_manifest_frozen"
@@ -327,6 +557,7 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
         }
         or plan["stop_rules"] != STOP_RULES
         or call_authorization != CALL_AUTHORIZATION
+        or continuation_import != CONTINUATION_IMPORT_BINDING
         or plan["models"] != {
             "answer": ANSWER_MODEL,
             "grader": GRADER_MODEL,
@@ -340,8 +571,8 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
             "candidate_unit_bytes": 4096,
             "final_answer_bytes": FINAL_ANSWER_BYTES,
             "request_bytes": REQUEST_BYTES,
-            "answer_calls": 16,
-            "grader_calls": 16,
+            "answer_calls": len(PENDING_TRIALS),
+            "grader_calls": len(PENDING_TRIALS),
             "maximum_jev_calls": CALL_AUTHORIZATION["planned_calls"],
             "retries": 0,
             "provider_timeout_seconds": PROVIDER_TIMEOUT_SECONDS,
@@ -517,7 +748,7 @@ def preflight(
 ) -> dict[str, Any]:
     plan = load_plan(plan_path, expected_live_authorized=expected_live_authorized)
     questions, registry_sha256 = load_questions(questions_path)
-    _, rubric_sha256 = load_rubrics(rubrics_path)
+    rubrics, rubric_sha256 = load_rubrics(rubrics_path)
     candidate_raw = candidates_path.read_bytes()
     preview_raw = preview_path.read_bytes()
     artifact, loaded_questions = preview._load_inputs(
@@ -577,7 +808,13 @@ def preflight(
             pools[arm] = digest(canonical(run["candidates"]))
             row = index[trial_id]
             can_affect = bool(row["jev_call_could_affect_selection"])
-            if arm not in JEV_ARMS:
+            if trial_id in IMPORTED_TRIALS:
+                disposition = "imported_completed"
+                request_sha256 = row["request_sha256"] if arm in JEV_ARMS else None
+                preview_sha256 = (
+                    digest(canonical(preview_records[trial_id])) if arm in JEV_ARMS else None
+                )
+            elif arm not in JEV_ARMS:
                 disposition = "treatment_off"
                 request_sha256 = None
                 preview_sha256 = None
@@ -609,6 +846,19 @@ def preflight(
         or planned_calls > 8
     ):
         raise SuccessorError("successor_preflight_mismatch")
+    identities = {}
+    candidate_sets = {}
+    for trial_id in DISPATCH:
+        arm, task_id = trial_id.split("-", 1)
+        identities[trial_id] = _current_trial_identity(
+            task_id, arm, questions[task_id], rubrics[task_id],
+            manifests_root, lanes_root,
+        )[0]
+        packet = dependency._packet(runs[(task_id, ARMS[arm])], questions[task_id])
+        candidate_sets[trial_id] = digest(canonical(packet["candidates"]))
+    continuation = validate_continuation(
+        (ROOT / RUN_ROOT).resolve(), identities, candidate_sets
+    )
     return {
         "schema_version": "velgraphing-v4-luna-successor-preflight-v1",
         "study_id": STUDY_ID,
@@ -622,6 +872,7 @@ def preflight(
         "controller_argv_sha256": CONTROLLER["argv_sha256"],
         "telemetry_schema_sha256": digest(canonical(TELEMETRY_SCHEMA)),
         "host_transport_contract_sha256": digest(canonical(HOST_TRANSPORT_CONTRACT)),
+        "continuation_import_sha256": digest(canonical(continuation)),
         "arm_preflight": observed,
     }
 
@@ -838,6 +1089,141 @@ def _lane_manifest(
     return _validate_lane_entries(value["entries"])
 
 
+def validate_continuation(
+    root: Path,
+    identities: Mapping[str, Mapping[str, Any]],
+    candidate_sets: Mapping[str, str],
+    *,
+    live_lanes: Mapping[tuple[str, str], Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    if (
+        not root.is_absolute()
+        or root.is_symlink()
+        or not root.is_dir()
+        or stat.S_IMODE(root.stat().st_mode) != 0o700
+    ):
+        raise SuccessorError("successor_continuation_import_invalid")
+    manifest_raw, manifest = _canonical_file(
+        root / "continuation-import.json", "successor_continuation_import_invalid"
+    )
+    if (
+        digest(manifest_raw) != CONTINUATION_IMPORT_BINDING["sha256"]
+        or set(manifest) != {
+            "schema_version", "source_run_root", "source_run_custody_sha256",
+            "source_lane_manifest_sha256", "candidate_artifact_sha256",
+            "imported_trials", "pending_trials", "pending_lane_slots", "files",
+            "lane_entries", "jev_links",
+        }
+        or manifest["schema_version"] != CONTINUATION_IMPORT_SCHEMA
+        or manifest["source_run_root"] != SOURCE_RUN_ROOT
+        or manifest["source_run_custody_sha256"] != SOURCE_RUN_CUSTODY_SHA256
+        or manifest["source_lane_manifest_sha256"] != SOURCE_LANE_MANIFEST_SHA256
+        or manifest["candidate_artifact_sha256"] != CANDIDATE_ARTIFACT["sha256"]
+        or manifest["imported_trials"] != list(IMPORTED_TRIALS)
+        or manifest["pending_trials"] != list(PENDING_TRIALS)
+        or manifest["pending_lane_slots"] != list(PENDING_LANE_SLOTS)
+    ):
+        raise SuccessorError("successor_continuation_import_invalid")
+
+    source_root = ROOT / SOURCE_RUN_ROOT
+    if tree_custody_sha256(source_root) != SOURCE_RUN_CUSTODY_SHA256:
+        raise SuccessorError("successor_continuation_source_drift")
+    source_lanes = _lane_manifest(
+        source_root / "lane-manifest.json", source_root,
+        expected_sha256=SOURCE_LANE_MANIFEST_SHA256,
+    )
+    expected_lanes = [
+        dict(source_lanes[(trial_id, role)])
+        for trial_id in IMPORTED_TRIALS for role in LANE_ROLES
+    ]
+    if manifest["lane_entries"] != expected_lanes:
+        raise SuccessorError("successor_continuation_lane_identity_invalid")
+    if live_lanes is not None and any(
+        live_lanes.get((entry["trial_id"], entry["role"])) != entry
+        for entry in expected_lanes
+    ):
+        raise SuccessorError("successor_continuation_lane_identity_invalid")
+
+    files = manifest["files"]
+    if type(files) is not list or any(type(row) is not dict for row in files):
+        raise SuccessorError("successor_continuation_import_invalid")
+    by_destination = {row.get("destination_path"): row for row in files}
+    expected_destinations = {
+        *(f"completed/{trial_id}.json" for trial_id in IMPORTED_TRIALS),
+        *(f"imports/jev-calls/{trial_id}.json" for trial_id in IMPORTED_JEV_TRIALS),
+        *(f"imports/jev-observations/{trial_id}.json" for trial_id in IMPORTED_JEV_TRIALS),
+    }
+    actual_files = {
+        path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file()
+    }
+    runtime_files = {
+        "continuation-import.json", "lane-manifest.json", "controller.log", "result.json",
+        *(f"completed/{trial_id}.json" for trial_id in PENDING_TRIALS),
+        "jev-calls/B-M-02.json", "jev-observations/B-M-02.json",
+    }
+    unexpected = actual_files - expected_destinations - runtime_files
+    if (
+        len(by_destination) != len(files)
+        or set(by_destination) != expected_destinations
+        or not expected_destinations.issubset(actual_files)
+        or any(
+            not any(path.startswith(f"trials/{trial_id}/") for trial_id in PENDING_TRIALS)
+            for path in unexpected
+        )
+    ):
+        raise SuccessorError("successor_continuation_import_invalid")
+    for relative, row in by_destination.items():
+        if set(row) != {
+            "kind", "trial_id", "source_path", "destination_path", "sha256"
+        }:
+            raise SuccessorError("successor_continuation_import_invalid")
+        source = ROOT / row["source_path"]
+        destination = root / relative
+        _validate_copied_file(source, destination, row["sha256"])
+
+    results = {
+        result["identity"]["trial_id"]: result
+        for result in load_completed_trials(root / "completed", IMPORTED_TRIALS)
+    }
+    if set(results) != set(IMPORTED_TRIALS):
+        raise SuccessorError("successor_continuation_import_invalid")
+    for trial_id, result in results.items():
+        _validate_completed_result(
+            result, identities[trial_id], candidate_sets[trial_id], source_lanes
+        )
+
+    links = manifest["jev_links"]
+    if (
+        type(links) is not list
+        or len(links) != len(IMPORTED_JEV_TRIALS)
+        or {row.get("trial_id") for row in links} != set(IMPORTED_JEV_TRIALS)
+    ):
+        raise SuccessorError("successor_continuation_jev_link_invalid")
+    for link in links:
+        if set(link) != {
+            "trial_id", "request_sha256", "ledger_path", "ledger_sha256",
+            "observation_path", "observation_sha256",
+        }:
+            raise SuccessorError("successor_continuation_jev_link_invalid")
+        trial_id = link["trial_id"]
+        ledger_raw, ledger = _canonical_file(
+            root / link["ledger_path"], "successor_continuation_jev_link_invalid"
+        )
+        observation_raw, observation = _canonical_file(
+            root / link["observation_path"], "successor_continuation_jev_link_invalid"
+        )
+        request_sha256 = _validate_jev_link(
+            trial_id, results[trial_id], ledger, observation
+        )
+        if (
+            link["request_sha256"] != request_sha256
+            or link["ledger_sha256"] != digest(ledger_raw)
+            or link["observation_sha256"] != digest(observation_raw)
+        ):
+            raise SuccessorError("successor_continuation_jev_link_invalid")
+    return manifest
+
+
 def _validated_run_root(path: Path) -> Path:
     expected = (ROOT / RUN_ROOT).resolve()
     if path.resolve() != expected:
@@ -883,18 +1269,9 @@ def _load_current_completed(
     by_id: dict[str, dict[str, Any]] = {}
     for result in completed:
         trial_id = result["identity"]["trial_id"]
-        attempts = result.get("attempts")
-        attempt = attempts[-1] if type(attempts) is list and attempts else {}
-        if (
-            result["identity"] != identities[trial_id]
-            or attempt.get("bindings", {}).get("candidate_set_sha256")
-            != candidate_sets[trial_id]
-            or attempt.get("answer_boundary", {}).get("execution_identity")
-            != _lane_execution_identity(lane_manifest[(trial_id, "answer")])
-            or attempt.get("grader_boundary", {}).get("execution_identity")
-            != _lane_execution_identity(lane_manifest[(trial_id, "grader")])
-        ):
-            raise SuccessorError("successor_completed_trial_conflict")
+        _validate_completed_result(
+            result, identities[trial_id], candidate_sets[trial_id], lane_manifest
+        )
         by_id[trial_id] = result
     return by_id
 
@@ -954,6 +1331,9 @@ def run_successor(
         )[0]
         packet = dependency._packet(runs[(task_id, ARMS[arm])], questions[task_id])
         candidate_sets[trial_id] = digest(canonical(packet["candidates"]))
+    validate_continuation(
+        run_root, identities, candidate_sets, live_lanes=lane_manifest
+    )
     receipt_root = run_root / "completed"
     results_by_id = _load_current_completed(
         receipt_root, identities, candidate_sets, lane_manifest
