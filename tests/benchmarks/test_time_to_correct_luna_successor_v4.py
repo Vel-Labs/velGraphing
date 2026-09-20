@@ -132,7 +132,7 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertEqual(plan["call_authorization"]["prior_authorization_envelope_usd"], 0.060555264)
         self.assertEqual(plan["call_authorization"]["aggregate_authorization_envelope_usd"], 0.104595456)
         self.assertEqual(plan["call_authorization"]["authorization_remaining_usd"], 0.895404544)
-        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r6")
+        self.assertEqual(plan["run_root"], ".velgraphing-local/retrievel-t030-luna-successor-r7")
         self.assertLessEqual(plan["call_authorization"]["planned_calls"], 8)
         by_task = {}
         for row in rows:
