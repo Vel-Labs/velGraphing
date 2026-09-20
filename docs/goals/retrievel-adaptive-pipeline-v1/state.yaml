@@ -552,7 +552,7 @@ tasks:
     status: active
     reasoning_hint: high
     objective: "Freeze, execute, independently grade, and seal the redesigned four-arm time-to-correct study."
-    current_phase: "phase_2_candidate_pools_and_execution_manifest"
+    current_phase: "phase_3a_execution_controller_and_lane_manifest"
     implementation_thread: "01a0b0e4-21fa-7961-80d8-090e1c6728eb"
     implementation_branch: "codex/retrievel-four-arm-study-v1"
     implementation_base: "3bad9cbfa618e4a39789298a52a8d03d2afdb8f2"
@@ -614,6 +614,32 @@ tasks:
           answer: 0
           grader: 0
         summary: "Accepted the smallest benchmark-only freeze. It binds the four tasks, four arms, corrected rubrics, Luna answer model, Astra grader model, public source and product identity, Jev ceiling, blindness, telemetry, and fail-closed execution gates without copying the superseded T030 stack."
+      - phase: "phase_2_candidate_pools_and_membership_preflight"
+        result: done
+        branch: "codex/retrievel-four-arm-study-v1"
+        commit: "a480a4a5984597e0d303c49696c799ab94410a34"
+        tracked_preflight_sha256: "d7b4d88b73c03b2cc6369fe023f5155ee6e13558e0d17e617234bf03e819e646"
+        local_pool_artifact_sha256: "572cf660d9c550eca4478ddec8db45c430422a3b39df2f6bfda3d66f1e0bbfea"
+        pool_count: 8
+        planned_jev_calls: 8
+        skipped_jev_calls: 0
+        relationship_delta_tasks:
+          - D-01
+        equal_direct_graph_tasks:
+          - S-01
+          - L-01
+          - M-02
+        validation:
+          - "11 focused phase-2 tests passed."
+          - "263 mapped consumers passed in the declared repository virtual environment."
+          - "The exact prepare command reproduced the tracked preflight and ignored pool hashes byte-for-byte."
+          - "The canonical validator, py_compile, and git diff --check passed."
+          - "Independent Luna final review passed after verifying controller identity and symlink-alias fail-closed behavior."
+        calls:
+          provider: 0
+          answer: 0
+          grader: 0
+        summary: "Accepted eight real frozen pools produced through the merged product scanner, relation, retrieval, candidate, selector, and Jev-preview seams. Only D-01 has one source-witnessed Graph relationship candidate. The other three tasks truthfully retain equal Direct and Graph candidate sets. Every B and D pool can change final membership, so eight Jev calls remain planned with zero retries."
     receipt: null
   - id: T999
     type: judge
