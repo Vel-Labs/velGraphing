@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T080
+active_task: T081
 
 tasks:
   - id: T010
@@ -357,7 +357,7 @@ tasks:
   - id: T080
     type: pm
     assignee: PM
-    status: active
+    status: done
     objective: "Compile source-witnessed connector identity and cross-language resolution packages from accepted relation coverage."
     inputs:
       - "T060, T070, and T071 receipts"
@@ -367,6 +367,65 @@ tasks:
     expected_output:
       - "Connector identity contract"
       - "Bounded resolver Worker package"
+    receipt:
+      result: done
+      changed_files: []
+      commands:
+        - cmd: "Inspect Graph, GraphRecord, GraphEdge, SourceRelationResult, derive_source_relations, graph-find adapter, and current relation consumers"
+          status: pass
+      summary: "Selected one bounded connector proof instead of a generic connector registry. An environment-key connector groups exact, verified Python os.environ string access and JavaScript process.env member access only when the same key has witnesses from both language families. The connector retains its kind, value, strongest sensitivity, and exact source coordinates. It is derived, deterministic, reversible, and does not become an authoritative GraphRecord or a Jev-admitted edge. Dynamic keys, single-language keys, ambiguous syntax, and broader API, route, schema, command, package, and topic connectors remain unresolved or unsupported."
+      worker_package:
+        objective: "Derive one source-witnessed cross-language environment-key connector through the canonical relation seam and expose count and coverage through graph-find."
+        allowed_files:
+          - packages/core/javascript_coordinates.py
+          - packages/core/retrieval.py
+          - packages/core/__init__.py
+          - plugins/graph-engineering/skills/graph-find/scripts/graph_find.py
+          - plugins/graph-engineering/runtime/core/javascript_coordinates.py
+          - plugins/graph-engineering/runtime/core/retrieval.py
+          - plugins/graph-engineering/runtime/core/__init__.py
+          - plugins/graph-engineering/runtime/.projection-state.json
+          - plugins/graph-engineering/.codex-plugin/release-manifest.json
+          - tests/core/test_javascript_coordinates.py
+          - tests/core/test_retrieval.py
+          - tests/skills/test_portable_skills.py
+        verify:
+          - "python -m unittest tests.core.test_javascript_coordinates tests.core.test_retrieval tests.skills.test_portable_skills -v"
+          - "python3 scripts/package/project_portable_plugin.py twice"
+          - "python3 scripts/package/verify_source_package_parity.py"
+          - "git diff --check"
+        stop_if:
+          - "The package requires a generic connector registry, new dependency, new graph store, or source-free identity inference."
+          - "The connector would become an authoritative source record or would expose environment values."
+          - "The work requires API, route, schema, command, package, topic, or configuration-file connector support."
+  - id: T081
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: medium
+    objective: "Derive one source-witnessed cross-language environment-key connector through the canonical relation seam and expose count and coverage through graph-find."
+    allowed_files:
+      - packages/core/javascript_coordinates.py
+      - packages/core/retrieval.py
+      - packages/core/__init__.py
+      - plugins/graph-engineering/skills/graph-find/scripts/graph_find.py
+      - plugins/graph-engineering/runtime/core/javascript_coordinates.py
+      - plugins/graph-engineering/runtime/core/retrieval.py
+      - plugins/graph-engineering/runtime/core/__init__.py
+      - plugins/graph-engineering/runtime/.projection-state.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - tests/core/test_javascript_coordinates.py
+      - tests/core/test_retrieval.py
+      - tests/skills/test_portable_skills.py
+    verify:
+      - "python -m unittest tests.core.test_javascript_coordinates tests.core.test_retrieval tests.skills.test_portable_skills -v"
+      - "python3 scripts/package/project_portable_plugin.py twice"
+      - "python3 scripts/package/verify_source_package_parity.py"
+      - "git diff --check"
+    stop_if:
+      - "The package requires a generic connector registry, new dependency, new graph store, or source-free identity inference."
+      - "The connector would become an authoritative source record or would expose environment values."
+      - "The work requires API, route, schema, command, package, topic, or configuration-file connector support."
     receipt: null
   - id: T090
     type: pm
