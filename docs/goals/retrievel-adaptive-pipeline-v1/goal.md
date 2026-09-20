@@ -18,9 +18,10 @@ retrieval program until evidence supports a separate package decision.
 - PR #14 merged the first additional language adapter. It supports one narrow
   JavaScript relation form: static relative named imports to unique direct
   named exports.
-- Connector identity and cross-language resolution design is now active. It
-  must reuse these source-bound relations and remain deterministic and
-  reversible.
+- An independent design review rejected new connector nodes for the current
+  path. Existing edge IDs and exact endpoint coordinates already provide
+  deterministic interstitial identities. New cross-language identity types
+  require a concrete source-witnessed query that current edges cannot serve.
 - T030 is closed unresolved. Its failures and partial results remain evidence.
   They do not prove Graph value, Jev value, or product performance.
 - Forty-six live Jev calls occurred during the prior goal. None used the exact
@@ -35,10 +36,12 @@ Use one canonical source-bound graph with multiple task projections.
 1. Source and symbol nodes are the authoritative foundation.
 2. Language adapters emit verified typed relations.
 3. A shared relation contract keeps language outputs comparable.
-4. Connector nodes represent source-witnessed interstitial identities such as
-   APIs, commands, packages, schemas, tables, topics, and configuration keys.
-5. Cross-language identity resolution links compatible symbols and connector
-   identities without treating a model judgment as graph truth.
+4. Verified relation edges are the current interstitial identities. A new
+   connector node type is added only when a concrete query cannot use the
+   existing edge identity and exact endpoint coordinates.
+5. Cross-language identity resolution requires an explicit source witness. A
+   matching name or path is not sufficient, and a model judgment is not graph
+   truth.
 6. Coverage and unresolved reports expose what the graph can and cannot prove.
 7. Incremental refresh updates only changed source-bound graph material.
 8. Obsidian-style modes are projections over the same graph: global coverage,
@@ -56,8 +59,9 @@ Use one canonical source-bound graph with multiple task projections.
    core seam and reports supported, unresolved, and unsupported relation work.
 3. At least two language families use the shared typed-relation contract, with
    explicit unsupported coverage instead of silent omission.
-4. Connector identities remain derived and source-bound. Cross-language links
-   are deterministic, explainable, and reversible.
+4. Interstitial relation identities remain derived and source-bound. Any later
+   cross-language connector is deterministic, explainable, reversible, and
+   justified by an observable query that existing edges cannot answer.
 5. The supported graph projections operate over one graph and preserve direct
    source fallback.
 6. The exact installed product path completes a bounded live Jev canary within
@@ -114,8 +118,8 @@ budgets, required evidence, fallback, telemetry, and final context selection.
 | T050 | Merge PR #11, retarget and verify PR #12, then merge PR #12. |
 | T060 | Move relation derivation behind one core seam and expose coverage and unresolved reporting. |
 | T070 | Add the next language-family relation adapter through the shared contract. |
-| T080 | Add source-witnessed connector identities and bounded cross-language resolution. |
-| T090 | Add global, local, impact, connector, evidence, and unresolved graph projections. |
+| T080 | Audit connector identity need; defer new nodes while verified edge identities are sufficient. |
+| T090 | Add global, local, impact, relation, evidence, and unresolved graph projections. |
 | T100 | Run the exact installed live Jev canary under the aggregate dollar ledger. |
 | T110 | Run and seal the redesigned end-to-end four-arm study. |
 | T999 | Run the final audit and Parent lifecycle closeout. |
