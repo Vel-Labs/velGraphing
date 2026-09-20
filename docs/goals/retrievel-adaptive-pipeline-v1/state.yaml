@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T070
+active_task: T071
 
 tasks:
   - id: T010
@@ -253,13 +253,13 @@ tasks:
           status: pass
         - cmd: "git diff --check"
           status: pass
-      summary: "Accepted at 3de71a558f616ad0365c04fc030bd3f992ea8ce6. The portable command now delegates Python-import and Markdown-link relation derivation to one canonical core seam with explicit narrow-form coverage. A Luna audit found and the Worker repaired a restricted-to-internal sensitivity downgrade. Parent reran 272 core tests, 36 skill tests, and 87-file package parity. PR #13 is open and mergeable; CI is pending."
+      summary: "Accepted at 3de71a558f616ad0365c04fc030bd3f992ea8ce6 and merged through PR #13 at 59c229994f10fd0f23ab5ed46ee9e06838cfbb13. The portable command now delegates Python-import and Markdown-link relation derivation to one canonical core seam with explicit narrow-form coverage. A Luna audit found and the Worker repaired a restricted-to-internal sensitivity downgrade. Parent reran 272 core tests, 36 skill tests, and 87-file package parity; CI passed on Python 3.11 and 3.13."
       evidence:
         - "https://github.com/Vel-Labs/velGraphing/pull/13"
   - id: T070
     type: pm
     assignee: PM
-    status: active
+    status: done
     objective: "Compile the next language-family adapter package from T060 coverage evidence, with exact files, fixtures, and consumer checks."
     inputs:
       - "T060 receipt"
@@ -269,6 +269,65 @@ tasks:
       - "Add one language family per accepted package."
     expected_output:
       - "Largest safe Worker package for JavaScript and TypeScript relation derivation."
+    receipt:
+      result: done
+      changed_files: []
+      commands:
+        - cmd: "Inspect packages/core/javascript_coordinates.py and tests/core/test_javascript_coordinates.py"
+          status: pass
+        - cmd: "Create codex/retrievel-javascript-relations-v1 from origin/main at 59c229994f10fd0f23ab5ed46ee9e06838cfbb13"
+          status: pass
+      summary: "Selected one bounded JavaScript package that reuses the installed tree-sitter provider. It will support only static relative named imports to unique direct named exports, emit exact source coordinates and separate language-form coverage, preserve strongest endpoint sensitivity, and report unsupported or unresolved forms. TypeScript, default or namespace imports, re-exports, package imports, dynamic imports, and connector identities remain deferred."
+      worker_package:
+        objective: "Derive source-witnessed JavaScript static relative named-import edges through the canonical relation seam."
+        allowed_files:
+          - packages/core/javascript_coordinates.py
+          - packages/core/retrieval.py
+          - packages/core/__init__.py
+          - plugins/graph-engineering/runtime/core/javascript_coordinates.py
+          - plugins/graph-engineering/runtime/core/retrieval.py
+          - plugins/graph-engineering/runtime/core/__init__.py
+          - plugins/graph-engineering/runtime/.projection-state.json
+          - plugins/graph-engineering/.codex-plugin/release-manifest.json
+          - tests/core/test_javascript_coordinates.py
+          - tests/core/test_retrieval.py
+          - tests/skills/test_portable_skills.py
+        verify:
+          - "python -m unittest tests.core.test_javascript_coordinates tests.core.test_retrieval tests.skills.test_portable_skills -v"
+          - "python3 scripts/package/project_portable_plugin.py twice"
+          - "python3 scripts/package/verify_source_package_parity.py"
+          - "git diff --check"
+        stop_if:
+          - "A new parser dependency is required."
+          - "The implementation would infer exports or edges from regex-only semantics."
+          - "The work requires TypeScript, package resolution, re-exports, dynamic imports, or connector identities."
+  - id: T071
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: medium
+    objective: "Derive source-witnessed JavaScript static relative named-import edges through the canonical relation seam."
+    allowed_files:
+      - packages/core/javascript_coordinates.py
+      - packages/core/retrieval.py
+      - packages/core/__init__.py
+      - plugins/graph-engineering/runtime/core/javascript_coordinates.py
+      - plugins/graph-engineering/runtime/core/retrieval.py
+      - plugins/graph-engineering/runtime/core/__init__.py
+      - plugins/graph-engineering/runtime/.projection-state.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - tests/core/test_javascript_coordinates.py
+      - tests/core/test_retrieval.py
+      - tests/skills/test_portable_skills.py
+    verify:
+      - "python -m unittest tests.core.test_javascript_coordinates tests.core.test_retrieval tests.skills.test_portable_skills -v"
+      - "python3 scripts/package/project_portable_plugin.py twice"
+      - "python3 scripts/package/verify_source_package_parity.py"
+      - "git diff --check"
+    stop_if:
+      - "A new parser dependency is required."
+      - "The implementation would infer exports or edges from regex-only semantics."
+      - "The work requires TypeScript, package resolution, re-exports, dynamic imports, or connector identities."
     receipt: null
   - id: T080
     type: pm
