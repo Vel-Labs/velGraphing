@@ -1,10 +1,10 @@
 goal: retrievel-adaptive-pipeline-v1
 status: active
-proof_boundary: t030_luna_successor_r5_transport_failure_r6_live_authorized_no_execution
+proof_boundary: t030_closed_unresolved_r16_parent_operational_timeout_excluded
 milestones_complete: 2
 milestones_total: 5
-current_milestone: T030
-current_gate: r6_live_lane_preparation
+current_milestone: T040
+current_gate: branch_consolidation_and_review_preparation
 candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
 candidate_identity:
   repair_parent_commit: 3d4a979eae1db6a3d682caec1249c5e67d7bfbe4
@@ -20,38 +20,39 @@ candidate_identity:
   r5_restart_commit: b2a09112698b12f8cac2819b15f3945c4b8cdd6d
   final_luna_successor: direct_child_with_subject_fix_benchmark_normalize_handoff_for_r6
   final_sha_record: parent_handoff_and_git_history
-exact_blocker: r6_lane_manifest_and_32_luna_threads_not_created
-next_milestone: T030
+exact_blocker: none
+next_milestone: T040
 provider:
   name: typesafe_jev
   model: jev-1.13.0
   public_source_only: true
   maximum_cost_usd: 1.00
-  authorized_call_total: 19
-  completed_call_total: 11
-  planned_successor_call_total: 8
+  authorized_call_total: 47
+  completed_call_total: 46
+  planned_successor_call_total: 0
+  unused_authorized_call_total: 1
   request_bytes_per_call_max: 131072
   price_as_of: 2026-09-19
   price_usd_per_million_input_tokens: 0.042
   output_token_price_usd: 0.00
-  successor_incremental_authorization_usd: 0.044040192
-  authorization_envelope_usd: 0.104595456
-  authorization_remaining_usd: 0.895404544
-  budget_status: r6_live_authorized_lane_preparation_pending
+  successor_incremental_authorization_usd: 0.0
+  authorization_envelope_usd: unavailable
+  authorization_remaining_usd: unavailable
+  budget_status: t030_closed_no_further_benchmark_authorized
   cost_telemetry: unavailable
   actual_usage_boundary: ignored_local_only
   public_results_boundary: separate_provider_permission_required
-  successor_live_authorized: true
+  successor_live_authorized: false
   successor_provider_calls_made: 0
-  calls_made: 11
+  calls_made: 46
   non_provider_attempt_total: 1
   last_private_result_sha256: b40d84af3b05d43adcb7bf70130762e8e644f87a1c401cb1bc0b633bbbd11a37
   last_private_result_seal_sha256: 313038939aab0fe2882335d97520a48892e8cbcff166fbcebf3ec47656ad63c8
-  last_failure_class: r5_noncanonical_response_transport_excluded
+  last_failure_class: r16_parent_operational_timeout_excluded
   successor_candidate_sha256: 9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61
   successor_preview_sha256: 8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9
   successor_lane_manifest_contract_sha256: 46e2e18a102b376cee5df40e7ba205c305a415a37e4e025addc39dc73319b4be
-  successor_run_root: .velgraphing-local/retrievel-t030-luna-successor-r6
+  successor_run_root: .velgraphing-local/retrievel-t030-luna-successor-r16
   r3_evidence_status: excluded_infrastructure_failure_no_result
   r3_completed_successor_jev_calls: 1
   r4_evidence_status: excluded_protocol_harness_boundary_no_result
@@ -59,10 +60,18 @@ provider:
   r5_evidence_status: excluded_transport_encoding_failure_no_result
   r5_completed_successor_jev_calls: 0
   r5_persisted_transport_failures: 1
+  r12_evidence_status: latest_complete_16_trial_four_arm_result
+  r15_evidence_status: diagnostic_partial_only
+  r16_evidence_status: excluded_parent_operational_timeout_no_result
+  r16_tree_custody_sha256: 6f66583f2a620fce5e09d5c80d571425fa42d7e3683f18bd1f80db81062b06ad
+  r16_completed_successor_jev_calls: 0
+  r16_result_json: absent
+promotion_decision: rejected_unresolved
+claim_boundary: no_graph_jev_speed_quality_token_or_cost_claim
 tasks:
   T010: complete
   T020: complete
-  T030: active
+  T030: closed_unresolved
   T040: pending
   T050: pending
   T999: pending
@@ -78,4 +87,4 @@ successor_review:
   parent: passed_exact_candidate_audit
   parent_audit_candidate_commit: 57ff3e4d7446761336ceb10193598796d96cf993
   blind_rubric: repaired
-updated_at: 2026-09-19
+updated_at: 2026-09-20

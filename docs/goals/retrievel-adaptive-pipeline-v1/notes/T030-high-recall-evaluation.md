@@ -692,3 +692,32 @@ does not change the separate public-results permission boundary.
 - `tests/benchmarks/test_time_to_correct_luna_successor_v4.py`
 - `docs/goals/retrievel-adaptive-pipeline-v1/state.yaml`
 - `docs/goals/retrievel-adaptive-pipeline-v1/notes/T030-high-recall-evaluation.md`
+
+## R16 Operational Timeout Closeout
+
+Hard stop: no R17 and no R16 rerun. The R16 controller stopped
+`successor_systemic_trial_failure`. Its terminal `completed/C-M-02.json`
+receipt records `measurement_error`, failure stage `answer`, and failure reason
+`process_exit_nonzero`. The request was written at
+`2026-09-20T08:14:19.378659`. The answer wait timed out at
+`2026-09-20T08:17:14.386409` after exactly 175 seconds. The bound Luna draft
+completed at `2026-09-20T08:17:16.530970`, about two seconds after the timeout.
+
+The root cause was a Parent operational dispatch error. Parent first gave the
+bound lane a duplicate wait command with empty stdin. That command consumed the
+frozen timeout. The corrected lane then wrote a valid draft. Parent attested
+and published it only after the thread completed, too late for the original
+controller. B-M-02 never started. R16 provider/Jev calls: `0`. The cumulative
+goal actual Jev call count remains `46`. `result.json` is absent.
+
+The ignored R16 root is retained byte-for-byte as source-free evidence. Its
+aggregate custody SHA-256 is
+`6f66583f2a620fce5e09d5c80d571425fa42d7e3683f18bd1f80db81062b06ad`,
+computed from sorted relative paths and file SHA-256 values across 37 files.
+R16 is excluded Parent operational-timeout evidence. It is not product,
+provider, or answer-quality evidence.
+
+R12 remains the latest complete 16-trial four-arm result. R15 and R16 are
+diagnostic partial runs. T030 is closed unresolved and rejected for promotion.
+No Graph+Jev speed, quality, token, or cost claim is supported. The next gate
+is branch consolidation and review preparation for T040, not another benchmark.
