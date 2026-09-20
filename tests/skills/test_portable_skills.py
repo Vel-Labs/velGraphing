@@ -555,6 +555,25 @@ class PortableSkillTests(unittest.TestCase):
         supports = payload["relationship_supports"]
         self.assertEqual({item["relation"] for item in supports}, {"imports", "links_to_heading"})
         self.assertEqual(payload["scan"]["edges_derived"], 2)
+        self.assertEqual(
+            payload["scan"]["relation_coverage"],
+            [
+                {
+                    "relation": "imports",
+                    "supported": "python_ast_from_import_named_top_level_declaration",
+                    "resolved": 1,
+                    "unresolved": 0,
+                    "unsupported": 0,
+                },
+                {
+                    "relation": "links_to_heading",
+                    "supported": "markdown_relative_path_fragment_unique_atx_heading",
+                    "resolved": 1,
+                    "unresolved": 0,
+                    "unsupported": 0,
+                },
+            ],
+        )
         self.assertTrue(all(item["source_coordinate"]["schema_version"] == "source-coordinate-v1" for item in supports))
         self.assertNotIn("return helper()", result.stdout)
 
@@ -587,6 +606,11 @@ class PortableSkillTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["scan"]["edges_derived"], 0)
         self.assertEqual(payload["relationship_supports"], [])
+        self.assertEqual(
+            [(item["relation"], item["resolved"], item["unresolved"], item["unsupported"])
+             for item in payload["scan"]["relation_coverage"]],
+            [("imports", 0, 1, 0), ("links_to_heading", 0, 1, 0)],
+        )
 
     def test_graph_find_rejects_unsupported_imports_and_markdown_links(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
@@ -625,6 +649,11 @@ class PortableSkillTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["scan"]["edges_derived"], 0)
         self.assertEqual(payload["relationship_supports"], [])
+        self.assertEqual(
+            [(item["relation"], item["resolved"], item["unresolved"], item["unsupported"])
+             for item in payload["scan"]["relation_coverage"]],
+            [("imports", 0, 1, 2), ("links_to_heading", 0, 1, 4)],
+        )
 
     def test_graph_find_ignores_headings_inside_markdown_fences(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
