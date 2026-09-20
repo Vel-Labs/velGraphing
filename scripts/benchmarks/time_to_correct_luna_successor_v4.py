@@ -284,21 +284,19 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
         }
         or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v3"
         or plan["study_id"] != STUDY_ID
-        or plan["status"] != "frozen_lane_manifest_pending_live_authorization"
+        or plan["status"] != (
+            "live_authorized_lane_manifest_frozen"
+            if expected_live_authorized
+            else "frozen_lane_manifest_pending_live_authorization"
+        )
         or plan["run_root"] != RUN_ROOT
         or plan["live_authorized"] is not expected_live_authorized
         or plan["provider_calls_executed"] != 0
         or plan["dispatch_order"] != list(DISPATCH)
         or plan["source_snapshots"] != SNAPSHOTS
         or plan["lane_manifest_contract"] != LANE_MANIFEST_CONTRACT
-        or plan["lane_manifest"] != LANE_MANIFEST_BINDING
         or plan["controller"] != CONTROLLER
         or plan["telemetry_schema"] != TELEMETRY_SCHEMA
-        or expected_live_authorized and (
-            plan["lane_manifest"]["status"] != "frozen"
-            or type(plan["lane_manifest"]["sha256"]) is not str
-            or len(plan["lane_manifest"]["sha256"]) != 64
-        )
         or candidate != CANDIDATE_ARTIFACT
         or preview_artifact != PREVIEW_ARTIFACT
         or questions != {
@@ -336,6 +334,32 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
         }
     ):
         raise SuccessorError("successor_plan_invalid")
+    binding = plan["lane_manifest"]
+    common_binding = {
+        key: LANE_MANIFEST_BINDING[key]
+        for key in ("path", "entry_count", "answer_lanes", "grader_lanes")
+    }
+    if (
+        type(binding) is not dict
+        or set(binding) != set(LANE_MANIFEST_BINDING)
+        or any(binding.get(key) != value for key, value in common_binding.items())
+    ):
+        raise SuccessorError("successor_plan_invalid")
+    if not expected_live_authorized:
+        if binding != LANE_MANIFEST_BINDING:
+            raise SuccessorError("successor_plan_invalid")
+        return plan
+    manifest_sha256 = binding["sha256"]
+    if (
+        binding["status"] != "frozen"
+        or type(manifest_sha256) is not str
+        or len(manifest_sha256) != 64
+        or any(character not in "0123456789abcdef" for character in manifest_sha256)
+    ):
+        raise SuccessorError("successor_plan_invalid")
+    manifest_root = ROOT / RUN_ROOT
+    manifest_path = ROOT / binding["path"]
+    _lane_manifest(manifest_path, manifest_root, expected_sha256=manifest_sha256)
     return plan
 
 
@@ -472,8 +496,9 @@ def preflight(
     preview_path: Path,
     *,
     expected_live_authorized: bool = False,
+    plan_path: Path = PLAN_PATH,
 ) -> dict[str, Any]:
-    plan = load_plan(expected_live_authorized=expected_live_authorized)
+    plan = load_plan(plan_path, expected_live_authorized=expected_live_authorized)
     questions, registry_sha256 = load_questions(questions_path)
     _, rubric_sha256 = load_rubrics(rubrics_path)
     candidate_raw = candidates_path.read_bytes()
@@ -576,7 +601,7 @@ def preflight(
         "provider_calls_executed": 0,
         "live_authorized": expected_live_authorized,
         "lane_manifest_contract_sha256": digest(canonical(LANE_MANIFEST_CONTRACT)),
-        "lane_manifest_binding_sha256": digest(canonical(LANE_MANIFEST_BINDING)),
+        "lane_manifest_binding_sha256": digest(canonical(plan["lane_manifest"])),
         "controller_argv_sha256": CONTROLLER["argv_sha256"],
         "telemetry_schema_sha256": digest(canonical(TELEMETRY_SCHEMA)),
         "arm_preflight": observed,
@@ -775,14 +800,21 @@ def _validate_lane_entries(value: Any) -> dict[tuple[str, str], dict[str, Any]]:
     return entries
 
 
-def _lane_manifest(path: Path, root: Path) -> dict[tuple[str, str], dict[str, Any]]:
+def _lane_manifest(
+    path: Path,
+    root: Path,
+    *,
+    expected_sha256: str | None = None,
+) -> dict[tuple[str, str], dict[str, Any]]:
     if not path.is_absolute() or path.parent != root or path.is_symlink():
         raise SuccessorError("successor_lane_manifest_invalid")
     value = _read_json(path, "successor_lane_manifest_invalid")
+    raw = path.read_bytes()
     if (
-        path.read_bytes() != canonical(value)
+        raw != canonical(value)
         or set(value) != {"schema_version", "entries"}
         or value["schema_version"] != LANE_MANIFEST_SCHEMA
+        or expected_sha256 is not None and digest(raw) != expected_sha256
     ):
         raise SuccessorError("successor_lane_manifest_invalid")
     return _validate_lane_entries(value["entries"])
@@ -974,6 +1006,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not lane_manifest_path.is_absolute():
             lane_manifest_path = ROOT / lane_manifest_path
         lane_manifest_path = lane_manifest_path.resolve(strict=True)
+        live_plan = load_plan(expected_live_authorized=True)
+        expected_manifest_path = (ROOT / live_plan["lane_manifest"]["path"]).resolve(strict=True)
+        if lane_manifest_path != expected_manifest_path:
+            raise SuccessorError("successor_lane_manifest_invalid")
         output = arguments.output if arguments.output.is_absolute() else ROOT / arguments.output
         if (
             not output.is_absolute() or output.parent != root
@@ -982,7 +1018,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise SuccessorError("successor_output_invalid")
         result = run_successor(
             *inputs, root,
-            lane_manifest=_lane_manifest(lane_manifest_path, root),
+            lane_manifest=_lane_manifest(
+                lane_manifest_path,
+                root,
+                expected_sha256=live_plan["lane_manifest"]["sha256"],
+            ),
         )
         atomic_write(output, canonical(result))
         print(canonical({

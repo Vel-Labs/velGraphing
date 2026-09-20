@@ -168,11 +168,80 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertEqual(plan["telemetry_schema"], mod.TELEMETRY_SCHEMA)
         self.assertIsNone(plan["lane_manifest"]["sha256"])
         plan["live_authorized"] = True
+        plan["status"] = "live_authorized_lane_manifest_frozen"
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "plan.json"
             path.write_text(json.dumps(plan), encoding="utf-8")
             with self.assertRaisesRegex(mod.SuccessorError, "successor_plan_invalid"):
                 mod.load_plan(path, expected_live_authorized=True)
+
+    def test_frozen_lane_manifest_allows_live_plan_and_preflight(self) -> None:
+        candidate_path = mod.PLAN_PATH.parent / mod.CANDIDATE_ARTIFACT["path"]
+        artifact = json.loads(candidate_path.read_text(encoding="utf-8"))
+        questions, _ = mod.load_questions()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run_root = root / mod.RUN_ROOT
+            run_root.mkdir(parents=True)
+            manifest_path = run_root / "lane-manifest.json"
+            manifest_raw = mod.canonical({
+                "schema_version": mod.LANE_MANIFEST_SCHEMA,
+                "entries": lane_entries(),
+            })
+            manifest_path.write_bytes(manifest_raw)
+
+            plan = json.loads(mod.PLAN_PATH.read_text(encoding="utf-8"))
+            plan["status"] = "live_authorized_lane_manifest_frozen"
+            plan["live_authorized"] = True
+            plan["lane_manifest"] = {
+                **mod.LANE_MANIFEST_BINDING,
+                "status": "frozen",
+                "sha256": mod.digest(manifest_raw),
+            }
+            preview_value = {"index": [], "records": []}
+            for row in plan["arm_preflight"]:
+                record = {"arm": row["arm"], "task_id": row["task_id"]}
+                preview_value["records"].append(record)
+                preview_value["index"].append({
+                    "arm": row["arm"],
+                    "task_id": row["task_id"],
+                    "request_sha256": row["request_sha256"],
+                    "jev_call_could_affect_selection": row["jev_call_could_affect_selection"],
+                })
+                row["preview_sha256"] = (
+                    mod.digest(mod.canonical(record)) if row["arm"] in {"B", "D"} else None
+                )
+            preview_path = root / "preview.json"
+            preview_raw = mod.canonical(preview_value)
+            preview_path.write_bytes(preview_raw)
+            preview_binding = {**mod.PREVIEW_ARTIFACT, "sha256": mod.digest(preview_raw)}
+            plan["preview_artifact"] = preview_binding
+            plan_path = root / "plan.json"
+            plan_path.write_bytes(mod.canonical(plan))
+
+            with (
+                mock.patch.object(mod, "ROOT", root),
+                mock.patch.object(mod, "PREVIEW_ARTIFACT", preview_binding),
+                mock.patch.object(mod.preview, "_load_inputs", return_value=(artifact, questions)),
+                mock.patch.object(mod.preview, "validate_preview"),
+                mock.patch.object(mod.generator, "generate", return_value=(artifact, {})),
+            ):
+                loaded = mod.load_plan(plan_path, expected_live_authorized=True)
+                frozen = mod.preflight(
+                    candidate_path, mod.QUESTIONS_PATH, mod.RUBRICS_PATH,
+                    root, root, preview_path,
+                    expected_live_authorized=True, plan_path=plan_path,
+                )
+                self.assertEqual(loaded["lane_manifest"]["status"], "frozen")
+                self.assertTrue(frozen["live_authorized"])
+                self.assertEqual(frozen["planned_jev_calls"], 8)
+
+                plan["lane_manifest"]["sha256"] = "0" * 64
+                plan_path.write_bytes(mod.canonical(plan))
+                with self.assertRaisesRegex(
+                    mod.SuccessorError, "successor_lane_manifest_invalid"
+                ):
+                    mod.load_plan(plan_path, expected_live_authorized=True)
 
     def test_lane_manifest_requires_complete_unique_hashed_lanes(self) -> None:
         entries = lane_entries()
