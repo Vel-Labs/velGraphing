@@ -61,7 +61,7 @@ PROVIDER_TIMEOUT_SECONDS = 10
 ANSWER_TIMEOUT_SECONDS = 180
 GRADER_TIMEOUT_SECONDS = 120
 TRIAL_WALL_LIMIT_SECONDS = 600
-RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r14"
+RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r15"
 LANE_ROLES = ("answer", "grader")
 LANE_MANIFEST_SCHEMA = "velgraphing-v4-luna-lane-manifest-v1"
 LANE_ENTRY_FIELDS = (
@@ -101,16 +101,16 @@ STOP_RULES = [
 ]
 CALL_AUTHORIZATION = {
     "maximum_cost_usd": 1.0,
-    "completed_prior_calls": 36,
+    "completed_prior_calls": 39,
     "planned_calls": 8,
-    "aggregate_authorized_calls": 44,
+    "aggregate_authorized_calls": 47,
     "price_usd_per_million_input_tokens": 0.042,
     "request_bytes_per_call_max": REQUEST_BYTES,
     "per_call_worst_case_usd": 0.005505024,
-    "prior_authorization_envelope_usd": 0.198180864,
+    "prior_authorization_envelope_usd": 0.214695936,
     "incremental_authorization_envelope_usd": 0.044040192,
-    "aggregate_authorization_envelope_usd": 0.242221056,
-    "authorization_remaining_usd": 0.757778944,
+    "aggregate_authorization_envelope_usd": 0.258736128,
+    "authorization_remaining_usd": 0.741263872,
 }
 
 CANDIDATE_ARTIFACT = {
@@ -157,6 +157,22 @@ TELEMETRY_SCHEMA = {
     "usage_null_means_unavailable": True,
     "completion_fields": ["model_calls_complete", "context_deliveries_complete"],
     "execution_identity_required": True,
+}
+HOST_TRANSPORT_CONTRACT = {
+    "schema_version": "velgraphing-v4-host-transport-v1",
+    "producer": "bound_luna_lane",
+    "draft_scope": "exact_lane_directory",
+    "transport_owner": "parent",
+    "command": [
+        "/usr/bin/env", "python3", "scripts/benchmarks/time_to_correct_handoff.py",
+        "respond", "--run-root", "<absolute_frozen_run_root>",
+        "--trial-id", "<trial_id>", "--attempt", "0", "--lane", "<role>",
+        "--response-file", "<exact_lane_generated_draft>", "--normalize-json",
+    ],
+    "timing": "as_soon_as_draft_appears",
+    "content_policy": "canonical_json_only_no_edit_regeneration_or_substitution",
+    "accounting": "host_transport_not_model_retry",
+    "failure_policy": "fail_closed_on_missing_invalid_identity_or_contract",
 }
 
 
@@ -280,9 +296,9 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
             "source_snapshots", "models", "limits", "dispatch_order",
             "arm_preflight", "stop_rules", "call_authorization", "run_root",
             "live_authorized", "provider_calls_executed", "lane_manifest_contract",
-            "lane_manifest", "controller", "telemetry_schema",
+            "lane_manifest", "controller", "telemetry_schema", "host_transport_contract",
         }
-        or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v3"
+        or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v4"
         or plan["study_id"] != STUDY_ID
         or plan["status"] != (
             "live_authorized_lane_manifest_frozen"
@@ -297,6 +313,7 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
         or plan["lane_manifest_contract"] != LANE_MANIFEST_CONTRACT
         or plan["controller"] != CONTROLLER
         or plan["telemetry_schema"] != TELEMETRY_SCHEMA
+        or plan["host_transport_contract"] != HOST_TRANSPORT_CONTRACT
         or candidate != CANDIDATE_ARTIFACT
         or preview_artifact != PREVIEW_ARTIFACT
         or questions != {
@@ -604,6 +621,7 @@ def preflight(
         "lane_manifest_binding_sha256": digest(canonical(plan["lane_manifest"])),
         "controller_argv_sha256": CONTROLLER["argv_sha256"],
         "telemetry_schema_sha256": digest(canonical(TELEMETRY_SCHEMA)),
+        "host_transport_contract_sha256": digest(canonical(HOST_TRANSPORT_CONTRACT)),
         "arm_preflight": observed,
     }
 
