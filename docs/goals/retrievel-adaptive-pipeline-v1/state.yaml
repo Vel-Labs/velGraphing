@@ -552,7 +552,7 @@ tasks:
     status: active
     reasoning_hint: high
     objective: "Freeze, execute, independently grade, and seal the redesigned four-arm time-to-correct study."
-    current_phase: "phase_3a_execution_controller_and_lane_manifest"
+    current_phase: "phase_3b_live_lane_freeze_and_execution"
     implementation_thread: "01a0b0e4-21fa-7961-80d8-090e1c6728eb"
     implementation_branch: "codex/retrievel-four-arm-study-v1"
     implementation_base: "3bad9cbfa618e4a39789298a52a8d03d2afdb8f2"
@@ -640,6 +640,31 @@ tasks:
           answer: 0
           grader: 0
         summary: "Accepted eight real frozen pools produced through the merged product scanner, relation, retrieval, candidate, selector, and Jev-preview seams. Only D-01 has one source-witnessed Graph relationship candidate. The other three tasks truthfully retain equal Direct and Graph candidate sets. Every B and D pool can change final membership, so eight Jev calls remain planned with zero retries."
+      - phase: "phase_3a_execution_controller_and_lane_manifest"
+        result: done
+        branch: "codex/retrievel-four-arm-study-v1"
+        commit: "24ace1db4e1fb0ddd77c5ec527b969286386ede8"
+        changed_files:
+          - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+          - benchmarks/velgraphing-four-arm-study-v1/README.md
+          - benchmarks/velgraphing-four-arm-study-v1/freeze.json
+          - scripts/benchmarks/four_arm_study_v1.py
+          - scripts/benchmarks/time_to_correct_calibration.py
+          - tests/benchmarks/test_four_arm_study_v1.py
+          - tests/benchmarks/test_time_to_correct_calibration.py
+        fixture_result_sha256: "c845ac7e3d1de3d9863ede6152e6bde8ce6cb1aadf2303dc7232491f405c395e"
+        fixture_lane_manifest_sha256: "cf4fa4e6f51c0bfe4d3a5d814192b6abb71608a10243458ddb2c22ddfc04ec24"
+        validation:
+          - "44 focused controller and custody tests passed."
+          - "87 mapped benchmark, Jev, packet, host, and selector consumers passed with one known unavailable-lane skip."
+          - "The canonical validator, py_compile, git diff --check, and clean-worktree check passed."
+          - "Parent qualification closed four fixture trials, recorded one declared D-S-01 fallback, and resumed without replay."
+          - "Independent Luna review passed after exact manifest hash and Python executable approval bindings were added."
+        calls:
+          provider: 0
+          answer: 0
+          grader: 0
+        summary: "Accepted the thin phase-three adapter over the existing calibration custody helpers. It binds 32 fresh lane identities, exact invocation and manifest hashes, source revalidation, zero-retry provider custody, resumable receipts, full time-to-correct telemetry, the eight-call public-source budget, and a private result seal. A rejected 1,451-line standalone runner draft was removed before this candidate; no duplicate benchmark runtime remains."
     receipt: null
   - id: T999
     type: judge
@@ -664,16 +689,16 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch contains the T100 safe-fallback receipt and T110 activation update"
+  dirty_fingerprint: "custody branch records T110 phase-three adapter acceptance and phase-three live execution activation"
   last_verification:
     result: pass
-    task: T091
+    task: T110
     commands:
-      - "127 retrieval, ranked-selection, and portable-skill tests passed."
-      - "All six repository suites passed: 515 tests with one known unavailable-lane benchmark skip."
-      - "Package parity passed for 87 files at 4244298c1b0607283ccef2b95d3d1169490bef0906acc500389cd993138c1295."
-      - "Independent Luna re-audit passed after metadata-stripping and reverse-policy repairs."
-      - "GitHub CI passed on Python 3.11 and 3.13."
+      - "44 focused T110 controller and custody tests passed."
+      - "87 mapped consumers passed with one known unavailable-lane skip."
+      - "The frozen-study validator, py_compile, git diff --check, and clean-worktree check passed."
+      - "Parent fixture qualification closed four trials, then resumed without replay and with zero provider calls."
+      - "Independent Luna re-audit passed after exact manifest and executable approval bindings were added."
 
 provider_budget:
   provider: typesafe_jev
