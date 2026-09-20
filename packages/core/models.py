@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from enum import Enum
+import hashlib
 from typing import Any, Mapping
+
+from .source_coordinates import SourceCoordinate
 
 
 class TrustClass(str, Enum):
@@ -116,9 +119,25 @@ class GraphEdge:
     eligible: bool = False
     agent_generated: bool = False
     export_allowed: bool = False
+    source_coordinate: SourceCoordinate | None = None
+    target_coordinate: SourceCoordinate | None = None
+
+    def __post_init__(self) -> None:
+        self._require_coordinate_pair()
+
+    def _require_coordinate_pair(self) -> None:
+        if (self.source_coordinate is None) != (self.target_coordinate is None):
+            raise ValueError(f"edge {self.edge_id} must bind both endpoint coordinates")
 
     def to_dict(self) -> dict[str, Any]:
-        return _enum_values(asdict(self))
+        self._require_coordinate_pair()
+        payload = asdict(self)
+        source_coordinate = payload.pop("source_coordinate")
+        target_coordinate = payload.pop("target_coordinate")
+        if source_coordinate is not None:
+            payload["source_coordinate"] = self.source_coordinate.to_dict()  # type: ignore[union-attr]
+            payload["target_coordinate"] = self.target_coordinate.to_dict()  # type: ignore[union-attr]
+        return _enum_values(payload)
 
 
 @dataclass(frozen=True)
@@ -134,11 +153,21 @@ class Graph:
         if len(edge_ids) != len(set(edge_ids)):
             raise ValueError("edge IDs must be unique")
         known = set(record_ids)
+        records = self.record_map()
         for edge in self.edges:
             if edge.source_id not in known or edge.target_id not in known:
                 raise ValueError(f"edge {edge.edge_id} has an unknown endpoint")
             if not 0.0 <= edge.relevance <= 1.0:
                 raise ValueError(f"edge {edge.edge_id} relevance must be between 0 and 1")
+            coordinates = (edge.source_coordinate, edge.target_coordinate)
+            if (coordinates[0] is None) != (coordinates[1] is None):
+                raise ValueError(f"edge {edge.edge_id} must bind both endpoint coordinates")
+            if coordinates[0] is not None:
+                assert coordinates[1] is not None
+                if coordinates[0].snapshot_sha256 != coordinates[1].snapshot_sha256:
+                    raise ValueError(f"edge {edge.edge_id} coordinates cross source snapshots")
+                _validate_coordinate(edge, coordinates[0], records[edge.source_id], "source")
+                _validate_coordinate(edge, coordinates[1], records[edge.target_id], "target")
 
     def record_map(self) -> dict[str, GraphRecord]:
         return {record.record_id: record for record in self.records}
@@ -146,6 +175,29 @@ class Graph:
     def edge_map(self) -> dict[str, GraphEdge]:
         return {edge.edge_id: edge for edge in self.edges}
 
+
+def _validate_coordinate(
+    edge: GraphEdge,
+    coordinate: SourceCoordinate,
+    record: GraphRecord,
+    endpoint: str,
+) -> None:
+    raw = record.content.encode("utf-8")
+    if coordinate.source_path != record.provenance.path:
+        raise ValueError(f"edge {edge.edge_id} {endpoint} coordinate path disagrees with endpoint")
+    if coordinate.source_sha256 != record.provenance.sha256:
+        raise ValueError(f"edge {edge.edge_id} {endpoint} coordinate digest disagrees with endpoint")
+    if coordinate.byte_end > len(raw) or coordinate.source_sha256 != hashlib.sha256(raw).hexdigest():
+        raise ValueError(f"edge {edge.edge_id} {endpoint} coordinate does not match endpoint bytes")
+    line_start = 1 + raw[: coordinate.byte_start].count(b"\n")
+    line_end = 1 + raw[: coordinate.byte_end - 1].count(b"\n")
+    if (coordinate.line_start, coordinate.line_end) != (line_start, line_end):
+        raise ValueError(f"edge {edge.edge_id} {endpoint} coordinate lines do not match endpoint bytes")
+    if endpoint == "source" and (
+        edge.provenance.path != coordinate.source_path
+        or edge.provenance.sha256 != coordinate.source_sha256
+    ):
+        raise ValueError(f"edge {edge.edge_id} provenance disagrees with source coordinate")
 
 @dataclass(frozen=True)
 class TaskSpec:

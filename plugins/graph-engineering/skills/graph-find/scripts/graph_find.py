@@ -4,16 +4,19 @@
 from __future__ import annotations
 
 import argparse
+import ast
 from dataclasses import replace
 import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import posixpath
 import re
 import stat
 import subprocess
 import sys
-from typing import Sequence
+from typing import Callable, Sequence
+from urllib.parse import unquote
 
 sys.dont_write_bytecode = True
 
@@ -45,29 +48,51 @@ try:  # noqa: E402
         Admission,
         Freshness,
         Graph,
+        GraphEdge,
         GraphRecord,
         Provenance,
         Sensitivity,
+        SourceCoordinate,
         SourceIdentityV4,
         SourceSnapshotV4,
         TaskSpec,
         TrustClass,
+        build_repository_tag_index,
+        compile_prompt,
+        compile_proof_obligations,
         graph_find,
+        plan_ranked_context,
+        ranked_candidates_from_retrieval,
+        retrieve,
+        select_ranked_context,
     )
+    from packages.core import jev
+    from packages.core.retrieval import _STOPWORDS, _words
 except ModuleNotFoundError:  # packaged plugin runtime
     from core import (  # type: ignore[no-redef]
         Admission,
         Freshness,
         Graph,
+        GraphEdge,
         GraphRecord,
         Provenance,
         Sensitivity,
+        SourceCoordinate,
         SourceIdentityV4,
         SourceSnapshotV4,
         TaskSpec,
         TrustClass,
+        build_repository_tag_index,
+        compile_prompt,
+        compile_proof_obligations,
         graph_find,
+        plan_ranked_context,
+        ranked_candidates_from_retrieval,
+        retrieve,
+        select_ranked_context,
     )
+    from core import jev  # type: ignore[no-redef]
+    from core.retrieval import _STOPWORDS, _words  # type: ignore[no-redef]
 
 
 DEFAULT_MAX_FILE_BYTES = 1024 * 1024
@@ -75,6 +100,8 @@ DEFAULT_MAX_TOTAL_BYTES = 16 * 1024 * 1024
 HARD_MAX_FILE_BYTES = 16 * 1024 * 1024
 HARD_MAX_TOTAL_BYTES = 128 * 1024 * 1024
 _TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9_-]{1,63}")
+_MARKDOWN_HEADING = re.compile(r"(?m)^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
+_MARKDOWN_LINK = re.compile(r"\[[^\]\n]+\]\(([^()\s]+#[^()\s#]+)\)")
 _SENSITIVE_COMPONENTS = frozenset({"private", "secrets", "credentials"})
 _SENSITIVE_SUFFIXES = frozenset({".key", ".pem", ".p12", ".pfx"})
 _PRIVATE_KEY_BASENAMES = frozenset(
@@ -203,8 +230,240 @@ class SnapshotReader:
         return False
 
 
+def _coordinate(
+    snapshot_sha256: str,
+    path: str,
+    data: bytes,
+    byte_start: int,
+    byte_end: int,
+    entity_kind: str,
+    occurrence_role: str,
+    symbol: str,
+) -> SourceCoordinate:
+    return SourceCoordinate(
+        snapshot_sha256,
+        path,
+        hashlib.sha256(data).hexdigest(),
+        byte_start,
+        byte_end,
+        1 + data[:byte_start].count(b"\n"),
+        1 + data[: byte_end - 1].count(b"\n"),
+        entity_kind,
+        occurrence_role,
+        symbol,
+    )
+
+
+def _ast_range(data: bytes, node: ast.AST) -> tuple[int, int] | None:
+    line = getattr(node, "lineno", None)
+    end_line = getattr(node, "end_lineno", None)
+    column = getattr(node, "col_offset", None)
+    end_column = getattr(node, "end_col_offset", None)
+    if None in (line, end_line, column, end_column):
+        return None
+    starts = [0]
+    starts.extend(index + 1 for index, value in enumerate(data) if value == 10)
+    try:
+        return starts[line - 1] + column, starts[end_line - 1] + end_column
+    except IndexError:
+        return None
+
+
+def _module_name(path: str) -> str | None:
+    if not path.endswith(".py"):
+        return None
+    parts = path[:-3].split("/")
+    if parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(parts) or None
+
+
+def _resolved_module(source_path: str, node: ast.ImportFrom) -> str | None:
+    if not node.module:
+        return None
+    if not node.level:
+        return node.module
+    package = source_path[:-3].split("/")[:-1]
+    if source_path.endswith("/__init__.py"):
+        package = source_path[:-12].split("/")
+    keep = len(package) - node.level + 1
+    if not package or keep <= 0:
+        return None
+    return ".".join([*package[:keep], *node.module.split(".")])
+
+
+def _heading_slug(value: str) -> str:
+    value = re.sub(r"[`*_~]", "", value.casefold())
+    value = re.sub(r"[^\w\s-]", "", value)
+    return re.sub(r"[-\s]+", "-", value).strip("-")
+
+
+def _markdown_headings(text: str) -> list[tuple[str, int, int]]:
+    headings: list[tuple[str, int, int]] = []
+    fence: tuple[str, int] | None = None
+    offset = 0
+    for raw_line in text.splitlines(keepends=True):
+        line = raw_line.rstrip("\r\n")
+        if fence is not None:
+            character, minimum = fence
+            if re.fullmatch(rf" {{0,3}}{re.escape(character)}{{{minimum},}}[ \t]*", line):
+                fence = None
+        else:
+            opener = re.match(r" {0,3}(`{3,}|~{3,})", line)
+            if opener is not None:
+                run = opener.group(1)
+                fence = (run[0], len(run))
+            else:
+                heading = _MARKDOWN_HEADING.fullmatch(line)
+                if heading is not None:
+                    headings.append(
+                        (heading.group(1), offset + heading.start(1), offset + heading.end(1))
+                    )
+        offset += len(raw_line)
+    return headings
+
+
+def _derive_edges(
+    sources: dict[str, bytes], snapshot_sha256: str
+) -> tuple[GraphEdge, ...]:
+    modules: dict[str, list[str]] = {}
+    declarations: dict[str, dict[str, list[SourceCoordinate]]] = {}
+    trees: dict[str, ast.Module] = {}
+    headings: dict[str, dict[str, list[SourceCoordinate]]] = {}
+    for path, data in sorted(sources.items()):
+        module = _module_name(path)
+        if module is not None:
+            modules.setdefault(module, []).append(path)
+            try:
+                tree = ast.parse(data.decode("utf-8"), filename=path)
+            except SyntaxError:
+                continue
+            trees[path] = tree
+            by_name: dict[str, list[SourceCoordinate]] = {}
+            for node in tree.body:
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    continue
+                bounds = _ast_range(data, node)
+                if bounds is None or bounds[0] >= bounds[1]:
+                    continue
+                by_name.setdefault(node.name, []).append(
+                    _coordinate(
+                        snapshot_sha256,
+                        path,
+                        data,
+                        *bounds,
+                        "python_declaration",
+                        "declaration" if isinstance(node, ast.ClassDef) else "definition",
+                        node.name,
+                    )
+                )
+            declarations[path] = by_name
+        if path.casefold().endswith((".md", ".markdown")):
+            text = data.decode("utf-8")
+            by_slug: dict[str, list[SourceCoordinate]] = {}
+            for heading, character_start, character_end in _markdown_headings(text):
+                slug = _heading_slug(heading)
+                if not slug:
+                    continue
+                start = len(text[:character_start].encode("utf-8"))
+                end = len(text[:character_end].encode("utf-8"))
+                by_slug.setdefault(slug, []).append(
+                    _coordinate(snapshot_sha256, path, data, start, end, "markdown_heading", "declaration", slug)
+                )
+            headings[path] = by_slug
+
+    edges: list[GraphEdge] = []
+
+    def add(
+        relation: str,
+        source: SourceCoordinate,
+        target: SourceCoordinate,
+    ) -> None:
+        identity = json.dumps(
+            [relation, source.to_dict(), target.to_dict()], sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        edges.append(
+            GraphEdge(
+                f"edge:{hashlib.sha256(identity).hexdigest()}",
+                f"repo:{source.source_path}",
+                f"repo:{target.source_path}",
+                relation,
+                1.0,
+                Provenance(
+                    source.source_path,
+                    source.source_sha256,
+                    f"bytes:{source.byte_start}-{source.byte_end}",
+                    True,
+                ),
+                TrustClass.VERIFIED_SOURCE,
+                Sensitivity.INTERNAL,
+                Freshness.CURRENT,
+                Admission.VERIFIER,
+                True,
+                source_coordinate=source,
+                target_coordinate=target,
+            )
+        )
+
+    for path, tree in sorted(trees.items()):
+        data = sources[path]
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            module = _resolved_module(path, node)
+            targets = modules.get(module or "", ())
+            if len(targets) != 1:
+                continue
+            target_path = targets[0]
+            for alias in node.names:
+                declarations_for_name = declarations.get(target_path, {}).get(alias.name, ())
+                bounds = _ast_range(data, alias)
+                if alias.name == "*" or len(declarations_for_name) != 1 or bounds is None:
+                    continue
+                add(
+                    "imports",
+                    _coordinate(snapshot_sha256, path, data, *bounds, "python_import", "import", alias.name),
+                    declarations_for_name[0],
+                )
+
+    for path, data in sorted(sources.items()):
+        if path not in headings:
+            continue
+        text = data.decode("utf-8")
+        for match in _MARKDOWN_LINK.finditer(text):
+            destination = match.group(1)
+            link_path, fragment = destination.rsplit("#", 1)
+            if (
+                not link_path
+                or "%" in link_path
+                or link_path.startswith(("/", "//"))
+                or ":" in link_path
+                or ".." in PurePosixPath(link_path).parts
+            ):
+                continue
+            target_path = posixpath.normpath(posixpath.join(posixpath.dirname(path), link_path))
+            if target_path.startswith("../") or target_path not in headings:
+                continue
+            targets = headings[target_path].get(_heading_slug(unquote(fragment)), ())
+            if len(targets) != 1:
+                continue
+            start = len(text[: match.start(1)].encode("utf-8"))
+            end = len(text[: match.end(1)].encode("utf-8"))
+            add(
+                "links_to_heading",
+                _coordinate(snapshot_sha256, path, data, start, end, "markdown_link", "reference", destination),
+                targets[0],
+            )
+    return tuple(sorted(edges, key=lambda edge: edge.edge_id))
+
+
 def _scan(
-    root: Path, max_file_bytes: int, max_total_bytes: int
+    root: Path,
+    max_file_bytes: int,
+    max_total_bytes: int,
+    *,
+    derive_edges: bool = True,
+    source_observer: Callable[[str, bytes], None] | None = None,
 ) -> tuple[Graph, SourceSnapshotV4, SnapshotReader, dict[str, object]]:
     _repository_root(root)
     paths = _git(root, "ls-files", "-z", "--cached").split(b"\x00")
@@ -233,6 +492,8 @@ def _scan(
         if total + len(data) > max_total_bytes:
             skipped.append({"path": relative.as_posix(), "reason": "max_total_bytes"})
             continue
+        if source_observer is not None:
+            source_observer(relative.as_posix(), data)
         total += len(data)
         sources[relative.as_posix()] = data
     if not sources:
@@ -259,6 +520,7 @@ def _scan(
         )
         for path, data in sorted(sources.items())
     )
+    edges = _derive_edges(sources, snapshot.snapshot_sha256) if derive_edges else ()
     reason_counts: dict[str, int] = {}
     for item in skipped:
         reason = item["reason"]
@@ -277,8 +539,9 @@ def _scan(
         "source_bytes": total,
         "max_file_bytes": max_file_bytes,
         "max_total_bytes": max_total_bytes,
+        "edges_derived": len(edges),
     }
-    return Graph(records), snapshot, reader, metadata
+    return Graph(records, edges), snapshot, reader, metadata
 
 
 def _positive_bounded(value: str, label: str, ceiling: int) -> int:
@@ -291,6 +554,221 @@ def _positive_bounded(value: str, label: str, ceiling: int) -> int:
     return number
 
 
+def _load_jev_replay(path: str) -> object:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        descriptor = os.open(path, flags)
+        with os.fdopen(descriptor, "rb") as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > jev.MAX_RESPONSE_BYTES:
+                raise InputError("Jev replay must be a bounded regular file")
+            raw = stream.read(jev.MAX_RESPONSE_BYTES + 1)
+    except OSError as error:
+        raise InputError("Jev replay is unavailable") from error
+    if len(raw) > jev.MAX_RESPONSE_BYTES:
+        raise InputError("Jev replay exceeds the response byte limit")
+    try:
+        return jev.decode(raw)
+    except jev.JevError as error:
+        raise InputError(f"Jev replay is invalid: {error}") from error
+
+
+def _ranked_packet(query: str, candidates: tuple[object, ...]) -> dict[str, object]:
+    return jev.validate_packet({
+        "schema_version": jev.PACKET_VERSION,
+        "query": query,
+        "candidates": [
+            {
+                "id": candidate.candidate_id,
+                "path": candidate.source_path,
+                "source_sha256": candidate.source_sha256,
+                "byte_start": candidate.byte_start,
+                "byte_end": candidate.byte_end,
+                "required": candidate.required,
+            }
+            for candidate in candidates
+        ],
+    })
+
+
+def _ranked_selection(result: object) -> dict[str, object]:
+    projection = result.projection
+    return {
+        "approved_request_sha256": result.approved_request_sha256,
+        "candidate_set_sha256": result.candidate_set_sha256,
+        "context": json.loads(projection.content) if projection.content else None,
+        "excerpt_byte_count": projection.excerpt_byte_count,
+        "fail_closed": projection.fail_closed,
+        "jev_decision": result.jev_decision.to_dict(),
+        "jev_source_revalidated": result.jev_source_revalidated,
+        "order_source": result.order_source,
+        "reason": result.reason,
+        "route": result.route,
+        "schema_version": "graph-find-ranked-context-selection-v1",
+        "serialized_byte_count": projection.serialized_byte_count,
+        "source_revalidated": result.source_revalidated,
+    }
+
+
+def _ranked_fallback(mode: str, reason: str) -> dict[str, object]:
+    return {
+        "jev_observation": None,
+        "jev_preview": None,
+        "mode": mode,
+        "network_called": False,
+        "plan": None,
+        "reason": reason,
+        "route": "defer",
+        "schema_version": "graph-find-ranked-context-v1",
+        "selection": None,
+        "status": "fallback",
+        "fail_closed": True,
+    }
+
+
+def _ranked_context(
+    root: Path,
+    graph: Graph,
+    task: TaskSpec,
+    prompt: str,
+    snapshot: SourceSnapshotV4,
+    reader: SnapshotReader,
+    *,
+    semantic_candidates: tuple[str, ...],
+    maximum_results: int,
+    mode: str,
+    jev_mode: str,
+    jev_model: str,
+    jev_timeout: float,
+    jev_response: str | None,
+    allow_network: bool,
+    approved_request_sha256: str | None,
+) -> dict[str, object]:
+    index = build_repository_tag_index(graph, snapshot, reader)
+    facets = compile_prompt(prompt, index, semantic_candidates=semantic_candidates)
+
+    def run(expand_one_hop: bool):
+        return retrieve(
+            graph,
+            task,
+            index,
+            facets,
+            snapshot,
+            reader,
+            expand_one_hop=expand_one_hop,
+            source_bound_expansion=True,
+            maximum_results=maximum_results,
+        )
+
+    direct = run(False)
+    short_prompt = len([word for word in _words(prompt) if word not in _STOPWORDS]) < 3
+    if direct.reason == "prompt_facets_insufficient" or short_prompt:
+        obligations = compile_proof_obligations(prompt, graph, index, snapshot, reader)
+        facets = compile_prompt(
+            prompt,
+            index,
+            semantic_candidates=semantic_candidates,
+            proof_obligations=obligations,
+        )
+        direct = run(False)
+    graph_result = run(True)
+    try:
+        direct_candidates = ranked_candidates_from_retrieval(
+            graph,
+            task,
+            snapshot,
+            reader,
+            direct,
+            maximum_candidates=jev.MAX_CANDIDATES,
+            maximum_candidate_bytes=jev.MAX_EXCERPTS_BYTES,
+            maximum_unit_bytes=jev.MAX_EXCERPT_BYTES,
+        )
+        graph_candidates = ranked_candidates_from_retrieval(
+            graph,
+            task,
+            snapshot,
+            reader,
+            graph_result,
+            maximum_candidates=jev.MAX_CANDIDATES,
+            maximum_candidate_bytes=jev.MAX_EXCERPTS_BYTES,
+            maximum_unit_bytes=jev.MAX_EXCERPT_BYTES,
+        )
+        plan = plan_ranked_context(
+            graph,
+            task,
+            snapshot,
+            reader,
+            query=prompt,
+            direct_candidates=direct_candidates,
+            graph_candidates=graph_candidates,
+            jev_enabled=mode != "plan",
+        )
+    except (TypeError, ValueError, jev.JevError) as error:
+        return _ranked_fallback(mode, str(error))
+
+    result: dict[str, object] = {
+        "jev_observation": None,
+        "jev_preview": None,
+        "mode": mode,
+        "network_called": False,
+        "plan": plan.to_dict(),
+        "reason": plan.reason,
+        "schema_version": "graph-find-ranked-context-v1",
+        "selection": _ranked_selection(plan.baseline),
+        "status": "fallback" if plan.baseline.projection.fail_closed else "selected",
+    }
+    if mode == "plan" or not plan.baseline.jev_decision.jev_call_could_affect_selection:
+        return result
+
+    packet = _ranked_packet(prompt, plan.candidates)
+    if mode == "preview":
+        try:
+            result["jev_preview"] = jev.prepare(packet, root, jev_model)
+        except jev.JevError as error:
+            return _ranked_fallback(mode, str(error))
+        return result
+
+    observation = jev.evaluate(
+        packet,
+        root,
+        mode=jev_mode,
+        allow_network=allow_network,
+        approved_request_sha256=approved_request_sha256,
+        model=jev_model,
+        timeout_s=jev_timeout,
+        replay=_load_jev_replay(jev_response) if mode == "replay" and jev_response else None,
+    )
+    request_sha256 = observation.get("request_sha256")
+    qualified = (
+        observation.get("status") == "reranked"
+        and observation.get("mode") == "rerank"
+        and observation.get("source_revalidated") is True
+        and observation.get("execution") in {"live", "replay"}
+    )
+    selected = select_ranked_context(
+        graph,
+        task,
+        snapshot,
+        reader,
+        query=prompt,
+        candidates=plan.candidates,
+        approved_request_sha256=(
+            request_sha256 if isinstance(request_sha256, str) else None
+        ),
+        jev_observation=observation,
+        jev_enabled=True,
+        jev_observation_qualified=qualified,
+    )
+    result.update({
+        "jev_observation": observation,
+        "network_called": observation.get("execution") == "live",
+        "reason": selected.reason,
+        "selection": _ranked_selection(selected),
+        "status": "fallback" if selected.projection.fail_closed else "selected",
+    })
+    return result
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, help="absolute canonical Git repository root")
@@ -300,9 +778,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--max-total-bytes", type=lambda value: _positive_bounded(value, "--max-total-bytes", HARD_MAX_TOTAL_BYTES), default=DEFAULT_MAX_TOTAL_BYTES)
     parser.add_argument("--maximum-results", type=lambda value: _positive_bounded(value, "--maximum-results", 200), default=6)
     parser.add_argument("--byte-budget", type=lambda value: _positive_bounded(value, "--byte-budget", HARD_MAX_TOTAL_BYTES), default=32768)
+    parser.add_argument("--ranked-context", choices=("plan", "preview", "replay", "evaluate"))
+    parser.add_argument("--jev-mode", choices=("shadow", "rerank"), default="rerank")
+    parser.add_argument("--jev-model", default=jev.DEFAULT_MODEL)
+    parser.add_argument("--jev-timeout", type=float, default=10.0)
+    parser.add_argument("--jev-response")
+    parser.add_argument("--allow-network", action="store_true")
+    parser.add_argument("--approve-request-sha256")
     arguments = parser.parse_args(argv)
     if not arguments.prompt.strip():
         parser.error("--prompt must be non-empty")
+    if arguments.ranked_context == "replay" and not arguments.jev_response:
+        parser.error("--ranked-context replay requires --jev-response")
+    if arguments.ranked_context != "replay" and arguments.jev_response:
+        parser.error("--jev-response requires --ranked-context replay")
+    if arguments.ranked_context != "evaluate" and (
+        arguments.allow_network or arguments.approve_request_sha256
+    ):
+        parser.error("network approval controls require --ranked-context evaluate")
     try:
         root = _canonical_root(arguments.root)
         graph, snapshot, reader, scan_metadata = _scan(
@@ -323,6 +816,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             snapshot,
             reader,
             semantic_candidates=tuple(arguments.semantic_candidate),
+            expand_one_hop=True,
+            source_bound_expansion=True,
             maximum_results=arguments.maximum_results,
         )
         if scan_metadata["sensitive_paths_excluded"]:
@@ -331,6 +826,32 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = replace(result, route="defer", reason="repository_scan_incomplete")
         payload = result.to_dict()
         payload["scan"] = scan_metadata
+        if arguments.ranked_context is not None:
+            if not scan_metadata["scan_complete"]:
+                payload["ranked_context"] = _ranked_fallback(
+                    arguments.ranked_context,
+                    "sensitive_paths_excluded"
+                    if scan_metadata["sensitive_paths_excluded"]
+                    else "repository_scan_incomplete",
+                )
+            else:
+                payload["ranked_context"] = _ranked_context(
+                    root,
+                    graph,
+                    task,
+                    arguments.prompt,
+                    snapshot,
+                    reader,
+                    semantic_candidates=tuple(arguments.semantic_candidate),
+                    maximum_results=arguments.maximum_results,
+                    mode=arguments.ranked_context,
+                    jev_mode=arguments.jev_mode,
+                    jev_model=arguments.jev_model,
+                    jev_timeout=arguments.jev_timeout,
+                    jev_response=arguments.jev_response,
+                    allow_network=arguments.allow_network,
+                    approved_request_sha256=arguments.approve_request_sha256,
+                )
         json.dump(payload, sys.stdout, sort_keys=True, separators=(",", ":"))
         sys.stdout.write("\n")
         return 0

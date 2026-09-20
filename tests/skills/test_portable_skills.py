@@ -347,6 +347,125 @@ class PortableSkillTests(unittest.TestCase):
         self.assertNotIn("untracked.txt", result.stdout)
         self.assertTrue(all("source_path" in item for item in payload["evidence"]))
 
+    def test_graph_find_ranked_context_opt_in_plans_replays_and_falls_back(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-ranked-") as raw:
+            root = Path(raw)
+            source = root / "src" / "evidence.py"
+            source.parent.mkdir()
+            source.write_text(
+                "\n\n".join(
+                    f"def alpha_evidence_{index}():\n"
+                    f"    return '{label} alpha evidence implementation behavior {'x' * 180}'"
+                    for index, label in enumerate(("first", "second", "third", "fourth"))
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "src/evidence.py"], check=True)
+
+            def run(
+                mode: str | None,
+                response: Path | None = None,
+                prompt: str = "find alpha evidence implementation behavior",
+            ) -> dict[str, object]:
+                command = [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    prompt,
+                    "--maximum-results",
+                    "3",
+                    "--byte-budget",
+                    "1600",
+                ]
+                if mode is not None:
+                    command.extend(("--ranked-context", mode))
+                if response is not None:
+                    command.extend(("--jev-response", str(response)))
+                env = dict(os.environ)
+                env.pop("TYPESAFE_API_KEY", None)
+                env["PYTHONDONTWRITEBYTECODE"] = "1"
+                result = subprocess.run(
+                    command, text=True, capture_output=True, check=False, env=env
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                return json.loads(result.stdout)
+
+            default = run(None)
+            planned = run("plan")
+            short_planned = run("plan", prompt="alpha_evidence_0")
+            previewed = run("preview")
+            preview = previewed["ranked_context"]["jev_preview"]
+            self.assertIsNotNone(preview, previewed["ranked_context"])
+            questions = preview["request"]["questions"]
+            answers = {}
+            for offset, name in enumerate(sorted(questions)):
+                high = offset == len(questions) - 1
+                answers[name] = {
+                    "type": "score",
+                    "probabilities": {"0": 0.0 if high else 1.0, "1": 0.0, "2": 1.0 if high else 0.0},
+                    "legend": {
+                        str(index): criterion
+                        for index, criterion in enumerate(questions[name]["criteria"])
+                    },
+                    "score": 2.0 if high else 0.0,
+                    "confidence": 1.0,
+                }
+            replay = root / "replay.json"
+            replay.write_text(json.dumps({
+                "schema_version": "velgraphing-jev-replay-v1",
+                "request_sha256": preview["request_sha256"],
+                "response": {
+                    "model": preview["request"]["model"],
+                    "answers": answers,
+                    "usage": {"input_tokens": 0, "output_tokens": 0},
+                },
+            }), encoding="utf-8")
+            replayed = run("replay", replay)
+            invalid = root / "invalid-replay.json"
+            invalid.write_text(json.dumps({
+                "schema_version": "velgraphing-jev-replay-v1",
+                "request_sha256": "0" * 64,
+                "response": {
+                    "model": preview["request"]["model"],
+                    "answers": answers,
+                    "usage": {"input_tokens": 0, "output_tokens": 0},
+                },
+            }), encoding="utf-8")
+            fallback = run("replay", invalid)
+
+        self.assertNotIn("ranked_context", default)
+        self.assertNotIn("context", default)
+        self.assertEqual("plan", planned["ranked_context"]["mode"])
+        self.assertFalse(planned["ranked_context"]["network_called"])
+        self.assertIsNone(planned["ranked_context"]["jev_observation"])
+        self.assertGreater(planned["ranked_context"]["plan"]["candidate_count"], 1)
+        short_context = short_planned["ranked_context"]["selection"]["context"]
+        self.assertTrue(short_context["required_candidate_ids"])
+        self.assertTrue(
+            set(short_context["required_candidate_ids"]).issubset(
+                short_context["selected_candidate_ids"]
+            )
+        )
+        self.assertFalse(previewed["ranked_context"]["network_called"])
+        self.assertEqual("reranked", replayed["ranked_context"]["jev_observation"]["status"])
+        self.assertEqual("replay", replayed["ranked_context"]["jev_observation"]["execution"])
+        self.assertFalse(replayed["ranked_context"]["network_called"])
+        self.assertEqual("reranked", replayed["ranked_context"]["selection"]["order_source"])
+        self.assertTrue(
+            replayed["ranked_context"]["selection"]["jev_decision"]["jev_observation_applied"]
+        )
+        self.assertEqual("fallback", fallback["ranked_context"]["jev_observation"]["status"])
+        self.assertEqual("replay_request_mismatch", fallback["ranked_context"]["jev_observation"]["reason"])
+        self.assertEqual("baseline", fallback["ranked_context"]["selection"]["order_source"])
+        self.assertFalse(
+            fallback["ranked_context"]["selection"]["jev_decision"]["jev_observation_applied"]
+        )
+
     def test_graph_find_rebuilds_from_current_tracked_bytes(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
         with tempfile.TemporaryDirectory(prefix="graph-find-fresh-") as raw:
@@ -392,6 +511,212 @@ class PortableSkillTests(unittest.TestCase):
         self.assertIn(
             "src/target.py",
             {item["source_path"] for item in second["hits"]},
+        )
+
+    def test_graph_find_returns_only_uniquely_resolved_source_bound_support(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-edges-") as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "docs").mkdir()
+            (root / "src" / "caller.py").write_text(
+                "from src.helper import helper\n\ndef call_helper():\n    return helper()\n",
+                encoding="utf-8",
+            )
+            (root / "src" / "helper.py").write_text(
+                "def helper():\n    return 1\n", encoding="utf-8"
+            )
+            (root / "README.md").write_text(
+                "# Start\nSee the [install guide](docs/guide.md#install).\n",
+                encoding="utf-8",
+            )
+            (root / "docs" / "guide.md").write_text(
+                "# Install\nUse call_helper.\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find call_helper install guide",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        supports = payload["relationship_supports"]
+        self.assertEqual({item["relation"] for item in supports}, {"imports", "links_to_heading"})
+        self.assertEqual(payload["scan"]["edges_derived"], 2)
+        self.assertTrue(all(item["source_coordinate"]["schema_version"] == "source-coordinate-v1" for item in supports))
+        self.assertNotIn("return helper()", result.stdout)
+
+    def test_graph_find_leaves_ambiguous_relations_unresolved(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-ambiguous-") as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "src" / "caller.py").write_text(
+                "from src.helper import helper\n", encoding="utf-8"
+            )
+            (root / "src" / "helper.py").write_text(
+                "def helper():\n    return 1\n\ndef helper():\n    return 2\n",
+                encoding="utf-8",
+            )
+            (root / "README.md").write_text(
+                "# Topic\n# Topic\n[topic](README.md#topic)\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [sys.executable, str(script), "--root", str(root), "--prompt", "find helper topic"],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["scan"]["edges_derived"], 0)
+        self.assertEqual(payload["relationship_supports"], [])
+
+    def test_graph_find_rejects_unsupported_imports_and_markdown_links(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-rejected-edges-") as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "docs").mkdir()
+            (root / "src" / "caller.py").write_text(
+                "import src.helper\nfrom src.helper import *\nfrom missing import helper\n",
+                encoding="utf-8",
+            )
+            (root / "src" / "helper.py").write_text(
+                "def helper():\n    return 1\n", encoding="utf-8"
+            )
+            (root / "README.md").write_text(
+                "# Topic\n"
+                "[external](https://example.com/page#topic)\n"
+                "[alias](docs/../README.md#topic)\n"
+                "[fragment](#topic)\n"
+                "[missing target](docs/missing.md#topic)\n"
+                "[missing fragment](docs/guide.md)\n",
+                encoding="utf-8",
+            )
+            (root / "docs" / "guide.md").write_text("# Topic\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [sys.executable, str(script), "--root", str(root), "--prompt", "find helper topic"],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["scan"]["edges_derived"], 0)
+        self.assertEqual(payload["relationship_supports"], [])
+
+    def test_graph_find_ignores_headings_inside_markdown_fences(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-fences-") as raw:
+            root = Path(raw)
+            (root / "docs").mkdir()
+            (root / "README.md").write_text(
+                "# Index\n"
+                "[real](docs/guide.md#real)\n"
+                "[backtick](docs/guide.md#backtick-fake)\n"
+                "[tilde](docs/guide.md#tilde-fake)\n"
+                "[unclosed](docs/guide.md#unclosed-fake)\n",
+                encoding="utf-8",
+            )
+            (root / "docs" / "guide.md").write_text(
+                "```python\n# Backtick fake\n````\n"
+                "# Real\n"
+                "~~~~ text\n# Tilde fake\n~~~~~\n"
+                "```\n# Unclosed fake\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find README Index real backtick tilde unclosed guide",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["scan"]["edges_derived"], 1)
+        self.assertEqual(
+            {item["target_coordinate"]["symbol"] for item in payload["relationship_supports"]},
+            {"real"},
+        )
+
+    def test_graph_find_resolves_only_package_valid_relative_imports(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-relative-imports-") as raw:
+            root = Path(raw)
+            (root / "pkg" / "deep").mkdir(parents=True)
+            (root / "root.py").write_text("from .helper import root_f\n", encoding="utf-8")
+            (root / "helper.py").write_text(
+                "def root_f():\n    pass\n\ndef escaped_f():\n    pass\n", encoding="utf-8"
+            )
+            (root / "pkg" / "mod.py").write_text(
+                "from ..helper import escaped_f\n", encoding="utf-8"
+            )
+            (root / "pkg" / "valid.py").write_text(
+                "from .helper import sibling_f\n", encoding="utf-8"
+            )
+            (root / "pkg" / "deep" / "mod.py").write_text(
+                "from ..helper import parent_f\n", encoding="utf-8"
+            )
+            (root / "pkg" / "helper.py").write_text(
+                "def sibling_f():\n    pass\n\ndef parent_f():\n    pass\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find root_f escaped_f sibling_f parent_f",
+                    "--maximum-results",
+                    "8",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["scan"]["edges_derived"], 2)
+        self.assertEqual(
+            {item["source_coordinate"]["source_path"] for item in payload["relationship_supports"]},
+            {"pkg/deep/mod.py", "pkg/valid.py"},
         )
 
     def test_graph_find_subprocess_rejects_alias_and_byte_caps(self) -> None:
@@ -507,6 +832,8 @@ class PortableSkillTests(unittest.TestCase):
                     str(root),
                     "--prompt",
                     "find refresh_token",
+                    "--ranked-context",
+                    "plan",
                 ],
                 text=True,
                 capture_output=True,
@@ -521,6 +848,10 @@ class PortableSkillTests(unittest.TestCase):
         self.assertEqual(5, payload["scan"]["sensitive_paths_excluded"])
         self.assertEqual(5, payload["scan"]["skip_counts"]["sensitive_paths_excluded"])
         self.assertTrue(payload["scan"]["scan_complete"] is False)
+        self.assertEqual("defer", payload["ranked_context"]["route"])
+        self.assertTrue(payload["ranked_context"]["fail_closed"])
+        self.assertEqual("sensitive_paths_excluded", payload["ranked_context"]["reason"])
+        self.assertIsNone(payload["ranked_context"]["selection"])
         for name in sensitive_names:
             self.assertNotIn(name, result.stdout)
 

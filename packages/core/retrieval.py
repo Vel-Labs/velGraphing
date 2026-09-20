@@ -15,11 +15,22 @@ import hashlib
 import math
 import posixpath
 import re
-from typing import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Iterable, Mapping, Sequence
 
+from .jev import (
+    MAX_CANDIDATES,
+    MAX_EXCERPT_BYTES,
+    MAX_EXCERPTS_BYTES,
+    JevError,
+    canonical as jev_canonical,
+)
 from .models import Graph, GraphRecord, Sensitivity, TaskSpec, is_authenticated_eligible
 from .routing_v4 import SourceReaderV4, SourceSnapshotV4, _read_verified_source_bytes
 from .selection import AssistResult, ContextSpan, assist
+from .source_coordinates import SourceCoordinate
+
+if TYPE_CHECKING:
+    from .selection import RankedContextCandidate
 
 
 _TOKEN = re.compile(r"[A-Za-z][A-Za-z0-9_-]{1,63}")
@@ -31,14 +42,15 @@ _TEST_NAME = re.compile(
 _IMPORT = re.compile(
     r"(?m)(?:\bfrom\s+[\"']([^\"']+)[\"']|\brequire\s*\(\s*[\"']([^\"']+)[\"']|\bimport\s+(?:[^\n;]*?\s+from\s+)?[\"']([^\"']+)[\"'])"
 )
+_MARKDOWN_LINK = re.compile(rb"\[([^\]\r\n]+)\]\(([^)\r\n]+)\)")
 
 _STOPWORDS = frozenset(
     {
-        "about", "after", "also", "and", "are", "before", "can", "could",
+        "about", "after", "also", "and", "are", "as", "before", "can", "could",
         "describe", "does", "each", "explain", "for", "from", "have", "how",
-        "identify", "into", "its", "may", "must", "of", "on", "or", "our",
+        "identify", "in", "into", "it", "its", "may", "must", "of", "on", "or", "our",
         "should", "that", "the", "their", "then", "these", "this", "through",
-        "to", "what", "when", "where", "which", "with", "would", "you",
+        "to", "using", "what", "when", "where", "which", "with", "would", "you",
     }
 )
 _GENERIC = frozenset({"code", "config", "data", "file", "graph", "module", "policy", "project", "repo", "source", "system"})
@@ -56,7 +68,7 @@ _ALLOWED_RELATIONS = frozenset(
         "dispatches_audits", "documents", "documents_audit_role", "documents_panel_surface",
         "documents_runtime_role", "emits_overlay_classes", "implements", "implements_documented_heuristic",
         "imports", "injects_content_script", "injects_overlay_styles", "loads_controller",
-        "loads_stylesheet", "notifies_panel", "owns", "packages", "packages_documentation",
+        "links_to_heading", "loads_stylesheet", "notifies_panel", "owns", "packages", "packages_documentation",
         "packages_manifest", "packages_source_tree", "persists_audit_for_panel", "produces",
         "publishes_section_selection", "reads", "requires_authority", "routes", "specifies_scoring_reference",
         "supports", "tested_by", "tests", "uses", "writes",
@@ -75,6 +87,18 @@ _RRF_K = 60
 _MAX_FACETS = 20
 _MIN_FACETS = 8
 _MAX_TAGS_PER_RECORD = 4096
+_MAX_EVIDENCE_COMPLETIONS = 6
+_EVIDENCE_COMPLETION_COMMON = frozenset({
+    *_PROOF_COMMON_TAGS,
+    "both", "chapter", "chapters", "cite", "connect", "design", "explain",
+    "frozen", "general", "guidance", "material", "reference", "separate",
+    "stated", "why",
+})
+_ANCILLARY_DOCUMENT_HEADINGS = (
+    "exercise", "flashcards", "follow-up-questions", "further-reading",
+    "key-takeaways", "learning-objectives", "references",
+)
+_DOCUMENT_VARIANTS = frozenset({"small", "medium", "large"})
 
 
 class TagKind(str, Enum):
@@ -356,6 +380,28 @@ class RetrievalHit:
 
 
 @dataclass(frozen=True)
+class RelationshipSupport:
+    """One verified edge pointer associated with a selected seed."""
+
+    edge_id: str
+    relation: str
+    seed_record_id: str
+    target_record_id: str
+    source_coordinate: SourceCoordinate
+    target_coordinate: SourceCoordinate
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "edge_id": self.edge_id,
+            "relation": self.relation,
+            "seed_record_id": self.seed_record_id,
+            "target_record_id": self.target_record_id,
+            "source_coordinate": self.source_coordinate.to_dict(),
+            "target_coordinate": self.target_coordinate.to_dict(),
+        }
+
+
+@dataclass(frozen=True)
 class RetrievalResult:
     route: str
     reason: str
@@ -372,6 +418,464 @@ class RetrievalResult:
     unresolved_obligation_ids: tuple[str, ...] = ()
     unresolved_critical_obligation_ids: tuple[str, ...] = ()
     remaining_byte_budget: int = 0
+    relationship_supports: tuple[RelationshipSupport, ...] = ()
+
+
+def ranked_candidates_from_retrieval(
+    graph: Graph,
+    task: TaskSpec,
+    snapshot: SourceSnapshotV4,
+    reader: SourceReaderV4,
+    retrieval: RetrievalResult,
+    *,
+    maximum_candidates: int,
+    maximum_candidate_bytes: int,
+    maximum_unit_bytes: int,
+) -> tuple[RankedContextCandidate, ...]:
+    """Build one explicitly capped, Jev-compatible candidate shortlist.
+
+    Candidate ranges are source-bound units. A bounded fallback range is not a
+    completeness claim. Required status comes only from caller-declared proof
+    obligation evidence.
+    """
+
+    from .selection import RankedContextCandidate
+
+    if type(graph) is not Graph or type(task) is not TaskSpec:
+        raise TypeError("graph and task must use exact core types")
+    if type(snapshot) is not SourceSnapshotV4 or type(retrieval) is not RetrievalResult:
+        raise TypeError("snapshot and retrieval must use exact core types")
+    for value, limit, label in (
+        (maximum_candidates, MAX_CANDIDATES, "maximum_candidates"),
+        (maximum_candidate_bytes, MAX_EXCERPTS_BYTES, "maximum_candidate_bytes"),
+        (maximum_unit_bytes, MAX_EXCERPT_BYTES, "maximum_unit_bytes"),
+    ):
+        if type(value) is not int or not 1 <= value <= limit:
+            raise ValueError(f"{label}_invalid")
+    if retrieval.fail_closed:
+        raise ValueError("retrieval_failed_closed")
+    source_bytes = _read_verified_source_bytes(snapshot, reader)
+    sources = {source.path: source for source in snapshot.sources}
+    records = graph.record_map()
+
+    def make_candidate(
+        record_id: str,
+        path: str,
+        digest: str,
+        start: int,
+        end: int,
+        *,
+        required: bool,
+        parent_id: str | None = None,
+    ) -> RankedContextCandidate:
+        record = records.get(record_id)
+        source = sources.get(path)
+        raw = source_bytes.get(path)
+        if (
+            record is None or source is None or raw is None
+            or record.provenance.path != path
+            or record.provenance.sha256 != digest
+            or source.sha256 != digest
+            or hashlib.sha256(raw).hexdigest() != digest
+            or record.content.encode("utf-8") != raw
+            or not is_authenticated_eligible(record, task.allowed_sensitivities)
+            or not 0 <= start < end <= len(raw)
+        ):
+            raise ValueError("candidate_custody_mismatch")
+        excerpt = raw[start:end]
+        try:
+            if excerpt.decode("utf-8").encode("utf-8") != excerpt:
+                raise ValueError("candidate_not_utf8")
+        except UnicodeDecodeError as error:
+            raise ValueError("candidate_not_utf8") from error
+        if len(excerpt) > maximum_unit_bytes:
+            raise ValueError("required_candidate_budget_exceeded" if required else "candidate_unit_budget_exceeded")
+        identity = {
+            "path": path,
+            "source_sha256": digest,
+            "byte_start": start,
+            "byte_end": end,
+        }
+        return RankedContextCandidate(
+            hashlib.sha256(jev_canonical(identity)).hexdigest(),
+            path, digest, start, end, required, record_id, parent_id,
+        )
+
+    required: list[RankedContextCandidate] = []
+    required_ids: set[str] = set()
+    for evidence in retrieval.evidence:
+        if not evidence.obligation_ids:
+            continue
+        try:
+            candidate = make_candidate(
+                evidence.record_id, evidence.source_path, evidence.source_sha256,
+                evidence.byte_start, evidence.byte_end, required=True,
+            )
+        except JevError as error:
+            raise ValueError("required_candidate_jev_incompatible") from error
+        except ValueError as error:
+            if str(error) == "required_candidate_budget_exceeded":
+                raise
+            raise ValueError("required_candidate_custody_mismatch") from error
+        raw = source_bytes[evidence.source_path]
+        if evidence.excerpt_sha256 != hashlib.sha256(
+            raw[evidence.byte_start:evidence.byte_end]
+        ).hexdigest():
+            raise ValueError("required_candidate_custody_mismatch")
+        if candidate.candidate_id in required_ids:
+            raise ValueError("duplicate_required_evidence")
+        required_ids.add(candidate.candidate_id)
+        required.append(candidate)
+
+    required_bytes = sum(item.byte_end - item.byte_start for item in required)
+    if len(required) > maximum_candidates or required_bytes > maximum_candidate_bytes:
+        raise ValueError("required_candidate_budget_exceeded")
+
+    optional_by_record: dict[str, list[RankedContextCandidate]] = defaultdict(list)
+    seen_primary: set[str] = set(required_ids)
+    hit_records: set[str] = set()
+    hit_order: list[str] = []
+    for hit in retrieval.hits:
+        if hit.record_id in hit_records:
+            raise ValueError("duplicate_retrieval_hit")
+        hit_records.add(hit.record_id)
+        hit_order.append(hit.record_id)
+        record = records.get(hit.record_id)
+        source = sources.get(hit.source_path)
+        raw = source_bytes.get(hit.source_path)
+        if (
+            record is None
+            or source is None
+            or raw is None
+            or record.provenance.path != hit.source_path
+            or record.provenance.sha256 != source.sha256
+            or hashlib.sha256(raw).hexdigest() != source.sha256
+            or not is_authenticated_eligible(record, task.allowed_sensitivities)
+        ):
+            raise ValueError("retrieval_candidate_custody_mismatch")
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError("retrieval_candidate_not_utf8") from error
+        if content.encode("utf-8") != raw or record.content.encode("utf-8") != raw:
+            raise ValueError("retrieval_candidate_custody_mismatch")
+
+        units: dict[tuple[int, int], tuple[set[str], bool]] = {}
+        for tag in _extract_tags(record, content):
+            if (
+                tag.byte_start is None
+                or tag.byte_end is None
+                or tag.value not in hit.matched_facets
+            ):
+                continue
+            start, end, complete = _bounded_source_unit_bounds(
+                raw, hit.source_path, tag.byte_start, tag.byte_end, maximum_unit_bytes
+            )
+            if end > start:
+                facets, prior_complete = units.setdefault((start, end), (set(), False))
+                facets.add(tag.value)
+                units[(start, end)] = facets, prior_complete or complete
+
+        ordered_units = sorted(
+            units,
+            key=lambda bounds: (
+                -len(units[bounds][0]),
+                not units[bounds][1],
+                bounds[0],
+                bounds[1],
+            ),
+        )
+        for start, end in ordered_units:
+            try:
+                candidate = make_candidate(
+                    hit.record_id, hit.source_path, source.sha256, start, end,
+                    required=False,
+                )
+            except JevError as error:
+                if str(error) == "unsupported_source_type":
+                    continue
+                raise ValueError("retrieval_candidate_jev_incompatible") from error
+            except ValueError as error:
+                raise ValueError("retrieval_candidate_custody_mismatch") from error
+            if candidate.candidate_id in seen_primary:
+                continue
+            seen_primary.add(candidate.candidate_id)
+            optional_by_record[hit.record_id].append(candidate)
+
+    optional = [
+        candidates[offset]
+        for offset in range(max(map(len, optional_by_record.values()), default=0))
+        for record_id in hit_order
+        if offset < len(candidates := optional_by_record[record_id])
+    ]
+    primary = [*required, *optional]
+
+    # Complete named documentation evidence before final retention. Follow only
+    # links present in already admitted spans, and re-enter through make_candidate
+    # so every added unit receives the same custody and budget checks.
+    query_path_words = {
+        word
+        for term in task.query_terms
+        for word in _identifier_parts(term)
+        if len(word) > 2 and word not in _STOPWORDS and word not in _GENERIC
+    }
+    query_weights: dict[str, int] = {}
+    for term in task.query_terms:
+        weight = 3 if "-" in term else 1
+        for word in _identifier_parts(term):
+            if len(word) > 2 and word not in _EVIDENCE_COMPLETION_COMMON:
+                query_weights[word] = max(weight, query_weights.get(word, 0))
+    query_words = set(query_weights)
+    admitted_markdown = [
+        candidate for candidate in primary
+        if candidate.source_path.lower().endswith((".md", ".markdown"))
+    ]
+    target_paths: list[str] = []
+    target_seen: set[str] = set()
+
+    def path_words(path: str) -> set[str]:
+        return {
+            word
+            for word in _identifier_parts(posixpath.basename(path).rsplit(".", 1)[0])
+            if (
+                len(word) > 2
+                and word[0].isalpha()
+                and word not in _STOPWORDS
+                and word not in _GENERIC
+            )
+        }
+
+    def add_target(path: str, terms: set[str], *, partial: bool = False) -> None:
+        matched = terms & query_path_words
+        requested_variant = query_path_words & _DOCUMENT_VARIANTS
+        if (
+            matched
+            and (terms <= query_path_words or (partial and len(matched) >= 2))
+            and (not requested_variant or not terms & _DOCUMENT_VARIANTS
+                 or bool(terms & requested_variant))
+            and path not in target_seen
+        ):
+            target_seen.add(path)
+            target_paths.append(path)
+
+    for candidate in admitted_markdown:
+        add_target(candidate.source_path, path_words(candidate.source_path), partial=True)
+        raw = source_bytes[candidate.source_path]
+        for match in _MARKDOWN_LINK.finditer(raw, candidate.byte_start, candidate.byte_end):
+            try:
+                destination = match.group(2).decode("utf-8").strip()
+            except UnicodeDecodeError:
+                continue
+            if destination.startswith("<") and ">" in destination:
+                destination = destination[1:destination.index(">")]
+            else:
+                destination = destination.split(maxsplit=1)[0]
+            destination = destination.split("#", 1)[0]
+            if not destination or "://" in destination or destination.startswith("/"):
+                continue
+            target = posixpath.normpath(posixpath.join(
+                posixpath.dirname(candidate.source_path), destination,
+            ))
+            if not _valid_source_path(target) or target not in sources:
+                continue
+            add_target(target, path_words(target))
+
+    target_paths = target_paths[:2]
+    records_by_path = {record.provenance.path: record for record in records.values()}
+    completion_by_path: dict[str, list[RankedContextCandidate]] = defaultdict(list)
+    completion_ids = set(required_ids)
+    for path in target_paths:
+        record = records_by_path.get(path)
+        source = sources.get(path)
+        raw = source_bytes.get(path)
+        if record is None or source is None or raw is None:
+            continue
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        units: dict[tuple[int, int], tuple[set[str], bool]] = {}
+        for word in sorted(query_words):
+            pattern = re.compile(rf"(?<![A-Za-z0-9]){re.escape(word)}(?![A-Za-z0-9])", re.IGNORECASE)
+            for match in pattern.finditer(content):
+                anchor_start, anchor_end = _byte_bounds(content, match.start(), match.end())
+                start, end, complete = _bounded_source_unit_bounds(
+                    raw, path, anchor_start, anchor_end, maximum_unit_bytes,
+                )
+                if end <= start:
+                    continue
+                first_line = raw[start:end].split(b"\n", 1)[0].decode(
+                    "utf-8", errors="ignore"
+                )
+                heading = _canonical(first_line.lstrip("# "))
+                if (
+                    not raw[start:end].partition(b"\n")[2].strip()
+                    or first_line.strip() == "---"
+                    or heading.startswith(_ANCILLARY_DOCUMENT_HEADINGS)
+                ):
+                    continue
+                matched, prior_complete = units.setdefault((start, end), (set(), False))
+                matched.add(word)
+                units[(start, end)] = matched, prior_complete or complete
+
+        def unit_priority(bounds: tuple[int, int]) -> tuple[int, bool, int, int, bool, int]:
+            start, end = bounds
+            first_line = raw[start:end].split(b"\n", 1)[0].decode("utf-8", errors="ignore")
+            is_heading = bool(_HEADING.match(first_line))
+            heading_words = set(_words(first_line)) if is_heading else set()
+            heading_weight = sum(
+                query_weights.get(word, query_weights.get(word.rstrip("s"), 0))
+                for word in heading_words
+            )
+            content_weight = sum(query_weights[word] for word in units[bounds][0])
+            return (
+                -heading_weight,
+                not is_heading,
+                start if heading_weight == 0 else -content_weight,
+                -len(units[bounds][0]),
+                not units[bounds][1],
+                end,
+            )
+
+        for start, end in sorted(units, key=unit_priority):
+            candidate = make_candidate(
+                record.record_id, path, source.sha256, start, end, required=False,
+            )
+            if candidate.candidate_id in completion_ids:
+                continue
+            completion_ids.add(candidate.candidate_id)
+            completion_by_path[path].append(candidate)
+
+    completion = [
+        candidates[offset]
+        for offset in range(max(map(len, completion_by_path.values()), default=0))
+        for path in target_paths
+        if offset < len(candidates := completion_by_path[path])
+    ][:_MAX_EVIDENCE_COMPLETIONS]
+    primary = [*required, *completion, *optional]
+
+    primary_ids = {candidate.candidate_id for candidate in primary}
+    supports_by_parent: dict[str, list[RankedContextCandidate]] = defaultdict(list)
+    seen_supports: set[RelationshipSupport] = set()
+    edges = graph.edge_map()
+    for support in retrieval.relationship_supports:
+        if support in seen_supports:
+            raise ValueError("duplicate_relationship_support")
+        seen_supports.add(support)
+        edge = edges.get(support.edge_id)
+        seed = records.get(support.seed_record_id)
+        target = records.get(support.target_record_id)
+        coordinate = support.target_coordinate
+        source_coordinate = support.source_coordinate
+        seed_source = sources.get(source_coordinate.source_path)
+        seed_raw = source_bytes.get(source_coordinate.source_path)
+        source = sources.get(coordinate.source_path)
+        raw = source_bytes.get(coordinate.source_path)
+        if (
+            edge is None
+            or edge.source_id != support.seed_record_id
+            or edge.target_id != support.target_record_id
+            or edge.relation != support.relation
+            or edge.source_coordinate != source_coordinate
+            or edge.target_coordinate != coordinate
+            or edge.relation not in _ALLOWED_RELATIONS
+            or not is_authenticated_eligible(edge, task.allowed_sensitivities)
+            or source_coordinate.snapshot_sha256 != snapshot.snapshot_sha256
+            or coordinate.snapshot_sha256 != snapshot.snapshot_sha256
+            or seed is None
+            or seed_source is None
+            or seed_raw is None
+            or seed.provenance.path != source_coordinate.source_path
+            or seed.provenance.sha256 != source_coordinate.source_sha256
+            or seed_source.sha256 != source_coordinate.source_sha256
+            or seed.content.encode("utf-8") != seed_raw
+            or not 0 <= source_coordinate.byte_start < source_coordinate.byte_end <= len(seed_raw)
+            or target is None
+            or source is None
+            or raw is None
+            or target.provenance.path != coordinate.source_path
+            or target.provenance.sha256 != coordinate.source_sha256
+            or target.content.encode("utf-8") != raw
+            or source.sha256 != coordinate.source_sha256
+            or not is_authenticated_eligible(target, task.allowed_sensitivities)
+            or not 0 <= coordinate.byte_start < coordinate.byte_end <= len(raw)
+        ):
+            raise ValueError("relationship_support_custody_mismatch")
+        parent = next(
+            (
+                item for item in primary
+                if item.record_id == support.seed_record_id
+                and item.source_path == source_coordinate.source_path
+                and item.source_sha256 == source_coordinate.source_sha256
+                and item.byte_start <= source_coordinate.byte_start
+                and source_coordinate.byte_end <= item.byte_end
+            ),
+            None,
+        )
+        if parent is None:
+            continue
+        start, end, _ = _bounded_source_unit_bounds(
+            raw, coordinate.source_path, coordinate.byte_start,
+            coordinate.byte_end, maximum_unit_bytes,
+        )
+        if end <= start:
+            continue
+        try:
+            candidate = make_candidate(
+                support.target_record_id, coordinate.source_path,
+                coordinate.source_sha256, start, end, required=False,
+                parent_id=parent.candidate_id,
+            )
+        except JevError as error:
+            if str(error) == "unsupported_source_type":
+                continue
+            raise ValueError("relationship_candidate_jev_incompatible") from error
+        except ValueError as error:
+            raise ValueError("relationship_support_custody_mismatch") from error
+        if candidate.candidate_id not in primary_ids:
+            supports_by_parent[parent.candidate_id].append(candidate)
+
+    ordered: list[RankedContextCandidate] = list(required)
+    for candidate in required:
+        ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
+    for candidate in [*completion, *optional]:
+        ordered.append(candidate)
+        ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
+
+    required_candidates = [candidate for candidate in ordered if candidate.required]
+    required_bytes = sum(
+        candidate.byte_end - candidate.byte_start for candidate in required_candidates
+    )
+    if (
+        len(required_candidates) > maximum_candidates
+        or required_bytes > maximum_candidate_bytes
+    ):
+        raise ValueError("required_candidate_budget_exceeded")
+    retained: list[RankedContextCandidate] = []
+    retained_ids: set[str] = set()
+    used = 0
+    remaining_required_count = len(required_candidates)
+    remaining_required_bytes = required_bytes
+    for candidate in ordered:
+        if candidate.candidate_id in retained_ids:
+            continue
+        size = candidate.byte_end - candidate.byte_start
+        if candidate.required:
+            remaining_required_count -= 1
+            remaining_required_bytes -= size
+        elif (
+            len(retained) + 1 + remaining_required_count > maximum_candidates
+            or used + size + remaining_required_bytes > maximum_candidate_bytes
+            or (
+                candidate.relationship_parent_candidate_id is not None
+                and candidate.relationship_parent_candidate_id not in retained_ids
+            )
+        ):
+            continue
+        retained.append(candidate)
+        retained_ids.add(candidate.candidate_id)
+        used += size
+    return tuple(retained)
 
 
 @dataclass(frozen=True)
@@ -391,6 +895,7 @@ class GraphFindResult:
     unresolved_obligation_ids: tuple[str, ...] = ()
     unresolved_critical_obligation_ids: tuple[str, ...] = ()
     remaining_byte_budget: int = 0
+    relationship_supports: tuple[RelationshipSupport, ...] = ()
 
     def to_dict(self) -> dict[str, object]:
         """Serialize only ranked hits, exact pointers, and routing metadata."""
@@ -409,6 +914,7 @@ class GraphFindResult:
             "unresolved_obligation_ids": list(self.unresolved_obligation_ids),
             "unresolved_critical_obligation_ids": list(self.unresolved_critical_obligation_ids),
             "remaining_byte_budget": self.remaining_byte_budget,
+            "relationship_supports": [item.to_dict() for item in self.relationship_supports],
             "score_meaning": (
                 "deterministic_ranking_diagnostic_not_probability_authority_or_answer_confidence"
             ),
@@ -695,12 +1201,18 @@ def _expected_repository_tags(
             key=lambda item: (
                 _tag_priority(item.kind), item.value, item.byte_start or -1,
             ),
-        )[:_MAX_TAGS_PER_RECORD]
+        )
+        # Bound distinct retained identities, not repeated lexical occurrences.
+        # Keep the first deterministic representative for each identity.
+        retained = 0
         for tag in record_tags:
             identity = (tag.record_id, tag.kind.value, tag.value)
             if identity not in seen:
                 seen.add(identity)
                 tags.append(tag)
+                retained += 1
+                if retained == _MAX_TAGS_PER_RECORD:
+                    break
     tags.sort(key=lambda item: (item.value, item.kind.value, item.record_id, item.byte_start or -1))
     vocabulary = tuple(sorted({tag.value for tag in tags}))
     return tuple(tags), vocabulary
@@ -845,6 +1357,12 @@ def compile_prompt(
         canonical = _canonical(raw)
         if canonical and canonical not in _STOPWORDS and _looks_identifier(raw):
             lexical_candidates.append(PromptFacet(FacetKind.IDENTIFIER, canonical, 10, True))
+        if canonical and canonical not in _STOPWORDS and (_looks_identifier(raw) or "-" in raw):
+            lexical_candidates.extend(
+                PromptFacet(FacetKind.IDENTIFIER, part, 9)
+                for part in sorted(_identifier_parts(raw))
+                if part != canonical and part not in _STOPWORDS
+            )
     for word in content_words:
         if word not in _GENERIC:
             lexical_candidates.append(PromptFacet(FacetKind.ENTITY, word, 6))
@@ -866,10 +1384,30 @@ def compile_prompt(
         elif canonical:
             rejected.append(canonical)
 
+    balanced_lexical: list[PromptFacet] = []
+    clause_candidates: list[list[PromptFacet]] = []
+    for clause in _prompt_clauses(prompt, vocabulary):
+        clause_values = set(_words(clause))
+        for raw in _TOKEN.findall(clause):
+            clause_values.update(_identifier_parts(raw))
+        clause_candidates.append([
+            facet for facet in lexical_candidates
+            if facet.value in vocabulary and facet.value in clause_values
+        ])
+    for offset in range(max(map(len, clause_candidates), default=0)):
+        balanced_lexical.extend(
+            candidates[offset]
+            for candidates in clause_candidates
+            if offset < len(candidates)
+        )
+
     facets: list[PromptFacet] = []
     seen: set[tuple[FacetKind, str]] = set()
     required = [facet for facet in lexical_candidates if facet.required]
-    lexical = [facet for facet in lexical_candidates if not facet.required]
+    lexical = [
+        facet for facet in [*balanced_lexical, *lexical_candidates]
+        if not facet.required
+    ]
     typed = sorted(
         typed_candidates,
         key=lambda item: (-item.required, -item.weight, item.kind.value, item.value),
@@ -902,6 +1440,7 @@ def graph_find(
     proof_obligations: Sequence[ProofObligation] | None = None,
     channels: Sequence[str] = _CHANNEL_ORDER,
     expand_one_hop: bool = True,
+    source_bound_expansion: bool = False,
     maximum_results: int = 6,
     minimum_coverage_percent: float = 60.0,
     parallel: bool = True,
@@ -926,11 +1465,15 @@ def graph_find(
         reader,
         channels=channels,
         expand_one_hop=expand_one_hop,
+        source_bound_expansion=source_bound_expansion,
         maximum_results=maximum_results,
         minimum_coverage_percent=minimum_coverage_percent,
         parallel=parallel,
     )
-    if proof_obligations is None and result.reason == "prompt_facets_insufficient":
+    short_prompt = len([word for word in _words(prompt) if word not in _STOPWORDS]) < 3
+    if proof_obligations is None and (
+        result.reason == "prompt_facets_insufficient" or short_prompt
+    ):
         obligations = compile_proof_obligations(prompt, graph, index, snapshot, reader)
         facets = compile_prompt(
             prompt,
@@ -947,6 +1490,7 @@ def graph_find(
             reader,
             channels=channels,
             expand_one_hop=expand_one_hop,
+            source_bound_expansion=source_bound_expansion,
             maximum_results=maximum_results,
             minimum_coverage_percent=minimum_coverage_percent,
             parallel=parallel,
@@ -965,6 +1509,7 @@ def graph_find(
         unresolved_obligation_ids=result.unresolved_obligation_ids,
         unresolved_critical_obligation_ids=result.unresolved_critical_obligation_ids,
         remaining_byte_budget=result.remaining_byte_budget,
+        relationship_supports=result.relationship_supports,
     )
 
 
@@ -978,6 +1523,7 @@ def retrieve(
     *,
     channels: Sequence[str] = _CHANNEL_ORDER,
     expand_one_hop: bool = True,
+    source_bound_expansion: bool = False,
     maximum_results: int = 6,
     minimum_coverage_percent: float = 60.0,
     parallel: bool = True,
@@ -985,8 +1531,14 @@ def retrieve(
     """Retrieve a deterministic, bounded, source-verified evidence packet."""
 
     requested_channels = tuple(dict.fromkeys(channels))
+    if type(source_bound_expansion) is not bool:
+        raise TypeError("source_bound_expansion must be bool")
     if not requested_channels or any(channel not in _CHANNEL_ORDER for channel in requested_channels):
         raise ValueError("retrieval channels must use the closed channel vocabulary")
+    if source_bound_expansion:
+        requested_channels = tuple(channel for channel in requested_channels if channel != "graph")
+        if not requested_channels:
+            raise ValueError("source-bound expansion requires a source ranking channel")
     if type(maximum_results) is not int or not 1 <= maximum_results <= task.node_budget:
         raise ValueError("maximum_results must fit the task node budget")
     if not math.isfinite(minimum_coverage_percent) or not 0 <= minimum_coverage_percent <= 100:
@@ -1109,10 +1661,11 @@ def retrieve(
         record_id
         for record_id, _ in sorted(fused.items(), key=lambda item: (-item[1], item[0]))
     ]
-    seed_limit = max(1, maximum_results - 2) if expand_one_hop else maximum_results
+    legacy_expand = expand_one_hop and not source_bound_expansion
+    seed_limit = max(1, maximum_results - 2) if legacy_expand else maximum_results
     base = base_order[:seed_limit]
     expanded_from: dict[str, str] = {}
-    if expand_one_hop:
+    if legacy_expand:
         for edge in sorted(graph.edges, key=lambda item: (item.relation, item.edge_id)):
             if edge.relation not in _ALLOWED_RELATIONS:
                 continue
@@ -1199,6 +1752,34 @@ def retrieve(
         for obligation_id in unresolved_obligations
         if obligation_map[obligation_id].critical
     ))
+    relationship_supports: tuple[RelationshipSupport, ...] = ()
+    if source_bound_expansion and expand_one_hop:
+        support_by_seed = {}
+        selected_seeds = {hit.record_id for hit in hits if hit.hop == 0}
+        for edge in sorted(graph.edges, key=lambda item: (item.source_id, item.relation, item.edge_id)):
+            if edge.source_id not in selected_seeds or edge.source_id in support_by_seed:
+                continue
+            if edge.relation not in _ALLOWED_RELATIONS or not is_authenticated_eligible(
+                edge, task.allowed_sensitivities
+            ):
+                continue
+            if edge.source_coordinate is None or edge.target_coordinate is None:
+                continue
+            if edge.source_coordinate.snapshot_sha256 != snapshot.snapshot_sha256:
+                continue
+            if not is_authenticated_eligible(
+                record_map[edge.target_id], task.allowed_sensitivities
+            ):
+                continue
+            support_by_seed[edge.source_id] = RelationshipSupport(
+                edge.edge_id,
+                edge.relation,
+                edge.source_id,
+                edge.target_id,
+                edge.source_coordinate,
+                edge.target_coordinate,
+            )
+        relationship_supports = tuple(support_by_seed[key] for key in sorted(support_by_seed))
     return RetrievalResult(
         route="graph" if sufficient else "defer",
         reason="verified_tag_context_selected" if sufficient else "tag_context_insufficient",
@@ -1215,6 +1796,7 @@ def retrieve(
         unresolved_obligation_ids=unresolved_obligations,
         unresolved_critical_obligation_ids=unresolved_critical,
         remaining_byte_budget=max(0, task.byte_budget - len(context.encode("utf-8"))),
+        relationship_supports=relationship_supports,
     )
 
 
@@ -1553,7 +2135,11 @@ def _channel_scores(
     for tags in tags_by_record.values():
         document_frequency.update({tag.value for tag in tags})
     record_count = max(1, len(tags_by_record))
-    facet_map = {facet.value: facet for facet in facets.facets}
+    facet_map: dict[str, PromptFacet] = {}
+    for facet in facets.facets:
+        current = facet_map.get(facet.value)
+        if current is None or facet.weight > current.weight:
+            facet_map[facet.value] = facet
 
     if channel == "graph":
         relation_facets = {facet.value for facet in facets.facets if facet.kind is FacetKind.RELATION}
@@ -1946,18 +2532,20 @@ def _byte_bounds(content: str, start: int, end: int) -> tuple[int, int]:
     return len(content[:start].encode("utf-8")), len(content[:end].encode("utf-8"))
 
 
-def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[int, int]:
+def _complete_unit_bounds_with_status(
+    raw: bytes, path: str, start: int, end: int
+) -> tuple[int, int, bool]:
     """Find a bounded complete source unit around a verified anchor."""
 
     if not raw:
-        return 0, 0
+        return 0, 0, False
     line_start = raw.rfind(b"\n", 0, start) + 1
     line_end = raw.find(b"\n", end)
     line_end = len(raw) if line_end < 0 else line_end + 1
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
-        return _line_window(raw, start, end, 1200)
+        return (*_line_window(raw, start, end, 1200), False)
     lines = text.splitlines(keepends=True)
     offsets: list[int] = []
     position = 0
@@ -1988,7 +2576,11 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
                 if match and len(match.group(1)) <= heading_level:
                     finish = index
                     break
-            return offsets[heading_line], offsets[finish] if finish < len(offsets) else len(raw)
+            return offsets[heading_line], offsets[finish] if finish < len(offsets) else len(raw), True
+        return (*_paragraph_bounds(raw, lines, offsets, anchor_line), True)
+
+    if path.lower().endswith((".rst", ".txt")):
+        return (*_paragraph_bounds(raw, lines, offsets, anchor_line), True)
 
     config_suffixes = (".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf")
     is_config_path = path.lower().endswith(config_suffixes) or any(
@@ -2007,7 +2599,7 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
                     elif raw[index:index + 1] == close:
                         depth -= 1
                         if depth == 0:
-                            return opening, index + 1
+                            return opening, index + 1, True
         # Python or JavaScript mapping assignments use the same bounded brace
         # rule as JSON configuration, while scalar settings remain one block.
         opening = raw.find(b"{", line_start, line_end)
@@ -2019,7 +2611,7 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
                 elif raw[index:index + 1] == b"}":
                     depth -= 1
                     if depth == 0:
-                        return line_start, index + 1
+                        return line_start, index + 1, True
         indentation = len(lines[anchor_line]) - len(stripped)
         finish = anchor_line + 1
         while finish < len(lines):
@@ -2027,7 +2619,7 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
             if candidate.strip() and len(candidate) - len(candidate.lstrip()) <= indentation:
                 break
             finish += 1
-        return offsets[anchor_line], offsets[finish] if finish < len(offsets) else len(raw)
+        return offsets[anchor_line], offsets[finish] if finish < len(offsets) else len(raw), True
 
     declaration = None
     for index in range(anchor_line, -1, -1):
@@ -2048,7 +2640,7 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
                 if candidate_indent <= indentation:
                     break
             finish += 1
-        return offsets[begin], offsets[finish] if finish < len(offsets) else len(raw)
+        return offsets[begin], offsets[finish] if finish < len(offsets) else len(raw), True
 
     brace_declaration = None
     for index in range(anchor_line, -1, -1):
@@ -2066,20 +2658,103 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
                     depth -= 1
                     if depth == 0:
                         close_end = raw.find(b"\n", index)
-                        return offsets[brace_declaration], len(raw) if close_end < 0 else close_end + 1
+                        return offsets[brace_declaration], len(raw) if close_end < 0 else close_end + 1, True
 
-    return _line_window(raw, start, end, 1200)
+    return (*_line_window(raw, start, end, 1200), False)
+
+
+def _complete_unit_bounds(
+    raw: bytes, path: str, start: int, end: int
+) -> tuple[int, int]:
+    """Return the existing two-value complete-unit interface."""
+
+    return _complete_unit_bounds_with_status(raw, path, start, end)[:2]
+
+
+def _paragraph_bounds(
+    raw: bytes,
+    lines: Sequence[str],
+    offsets: Sequence[int],
+    anchor_line: int,
+) -> tuple[int, int]:
+    """Return the complete blank-line-delimited paragraph around an anchor."""
+
+    begin = anchor_line
+    while begin > 0 and lines[begin - 1].strip():
+        begin -= 1
+    finish = anchor_line + 1
+    while finish < len(lines) and lines[finish].strip():
+        finish += 1
+    return offsets[begin], offsets[finish] if finish < len(offsets) else len(raw)
+
+
+def _bounded_source_unit_bounds(
+    raw: bytes,
+    path: str,
+    start: int,
+    end: int,
+    maximum: int,
+) -> tuple[int, int, bool]:
+    """Return a bounded source unit and whether the returned unit is complete."""
+
+    unit_start, unit_end, complete = _complete_unit_bounds_with_status(
+        raw, path, start, end
+    )
+    if unit_end > unit_start and unit_end - unit_start <= maximum:
+        return unit_start, unit_end, complete
+    if path.lower().endswith((".md", ".rst", ".txt")):
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            text = ""
+        if text:
+            lines = text.splitlines(keepends=True)
+            offsets: list[int] = []
+            position = 0
+            anchor_line = 0
+            for index, line in enumerate(lines):
+                offsets.append(position)
+                line_end = position + len(line.encode("utf-8"))
+                if position <= start < line_end:
+                    anchor_line = index
+                position = line_end
+            paragraph_start, paragraph_end = _paragraph_bounds(
+                raw, lines, offsets, anchor_line
+            )
+            if paragraph_end - paragraph_start <= maximum:
+                return paragraph_start, paragraph_end, True
+    window_start, window_end = _line_window(raw, start, end, maximum)
+    return window_start, window_end, False
 
 
 def _line_window(raw: bytes, start: int, end: int, maximum: int) -> tuple[int, int]:
-    left = raw.rfind(b"\n", max(0, start - maximum // 2), start)
-    left = 0 if left < 0 else left + 1
-    right = raw.find(b"\n", end, min(len(raw), end + maximum // 2))
-    right = len(raw) if right < 0 else right
-    if right - left > maximum:
-        right = left + maximum
-        while right > end and (raw[right : right + 1] and raw[right] & 0b11000000 == 0b10000000):
-            right -= 1
+    """Return a UTF-8-aligned window containing the entire verified anchor.
+
+    An anchor larger than the byte budget has no admissible window. Return an
+    empty range so callers cannot mistake an unrelated prefix for evidence.
+    Source validity and authority remain the caller's responsibility.
+    """
+    if (type(start) is not int or type(end) is not int or type(maximum) is not int
+            or not 0 <= start < end <= len(raw) or maximum < 1):
+        raise ValueError("invalid source window bounds")
+    if end - start > maximum:
+        return start, start
+    # Verified anchors use character boundaries. Reject invalid anchors instead
+    # of moving the anchor, truncating it, or inventing a replacement range.
+    if (raw[start] & 0b11000000 == 0b10000000
+            or (end < len(raw) and raw[end] & 0b11000000 == 0b10000000)):
+        return start, start
+    available = maximum - (end - start)
+    lower = max(0, start - available // 2)
+    left = raw.rfind(b"\n", lower, start)
+    left = lower if left < 0 else left + 1
+    while left < start and raw[left] & 0b11000000 == 0b10000000:
+        left += 1
+    limit = min(len(raw), left + maximum)
+    right = raw.find(b"\n", end, limit)
+    right = limit if right < 0 else right
+    while right > end and right < len(raw) and raw[right] & 0b11000000 == 0b10000000:
+        right -= 1
     return left, right
 
 
@@ -2090,5 +2765,6 @@ __all__ = [
     "RepositoryTag", "RepositoryTagIndex", "RetrievalHit", "RetrievalResult",
     "TagKind", "build_repository_file_cards", "build_repository_tag_index",
     "compile_prompt", "compile_proof_obligations", "match_proof_obligation", "match_proof_obligations",
-    "graph_find", "retrieve", "retrieve_hybrid", "navigate", "compose_navigation_context",
+    "graph_find", "retrieve", "retrieve_hybrid", "ranked_candidates_from_retrieval",
+    "navigate", "compose_navigation_context",
 ]

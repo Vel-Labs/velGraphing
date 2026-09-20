@@ -30,6 +30,8 @@ EVIDENCE_USEFULNESS_RUBRIC = (
     ("direct_evidence", "Directly exhibits a requested implementation, test, dependency, contradiction, or limitation.", "This rating does not prove the full question has been answered."),
 )
 SCORE_CONSISTENCY_TOLERANCE = 0.021
+# Accept 0.99/1.01 rounded totals plus binary-float headroom; score consistency stays strict.
+PROBABILITY_SUM_TOLERANCE = 0.011
 MAX_CANDIDATES = 64
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_SOURCE_BYTES = 16 * 1024 * 1024
@@ -302,7 +304,8 @@ def parse_response(response: Any, packet: dict[str, Any], requested_model: str) 
         if legend != _rubric_legend():
             raise JevError("invalid_score_legend")
         probabilities = {key: _number(probabilities[key], 0, 1) for key in sorted(keys)}
-        if abs(sum(probabilities.values()) - 1) > 0.001:
+        probability_sum = math.fsum(probabilities.values())
+        if abs(probability_sum - 1) > PROBABILITY_SUM_TOLERANCE:
             raise JevError("invalid_probability_sum")
         score = _number(answer.get("score"), 0, 2)
         # Maximum 0.005 score rounding plus (0.005*1 + 0.005*2) weighted probability rounding and 0.001 headroom.
@@ -315,7 +318,7 @@ def parse_response(response: Any, packet: dict[str, Any], requested_model: str) 
                 "reported_score": round(score, 6),
                 "weighted_score": round(weighted_score, 6),
                 "absolute_difference": round(difference, 6),
-                "probability_sum": round(sum(probabilities.values()), 6),
+                "probability_sum": round(probability_sum, 6),
                 "probabilities": {key: round(value, 6) for key, value in probabilities.items()},
             })
         scores.append({"id": candidate["id"], "score": score,
