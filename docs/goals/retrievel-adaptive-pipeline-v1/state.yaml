@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T100
+active_task: T110
 
 tasks:
   - id: T010
@@ -520,7 +520,7 @@ tasks:
   - id: T100
     type: worker
     assignee: Worker
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Run one bounded canary through the exact installed final graph-find and Jev path, with source and request bindings and aggregate dollar accounting."
     allowed_files:
@@ -533,11 +533,23 @@ tasks:
       - "The source is private."
       - "The request hash, source snapshot, candidate set, or installed package identity changes after approval."
       - "The conservative aggregate spend would exceed USD 1.00."
-    receipt: null
+    receipt:
+      result: blocked
+      blocked_reason: "The exact installed command had no valid process-level TYPESAFE_API_KEY. It made zero provider calls and safely retained the verified baseline."
+      note: notes/T100-installed-canary.md
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T100-installed-canary.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Installed graph-find ranked-context plan and preview on the merged PR #15 public checkout"
+          status: pass
+        - cmd: "One exact evaluate invocation through the approved existing Terminal tab"
+          status: blocked
+      summary: "The installed package proved Graph relationship gain, Jev selection eligibility, source and request binding, change-impact incoming support, and safe fallback. The evaluate attempt stopped before transport with missing_or_invalid_api_key, attempted_calls=0, network_called=false, and the verified baseline retained. T110 offline freeze work is active while T100 awaits a valid process-level credential."
   - id: T110
     type: pm
     assignee: PM
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Freeze, execute, independently grade, and seal the redesigned four-arm time-to-correct study."
     inputs:
@@ -574,7 +586,7 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch contains only the current T091 acceptance and T100 activation update"
+  dirty_fingerprint: "custody branch contains the T100 safe-fallback receipt and T110 activation update"
   last_verification:
     result: pass
     task: T091
@@ -594,7 +606,7 @@ provider_budget:
   prior_live_calls: 46
   final_installed_path_live_calls: 0
   actual_spend_usd: null
-  conservative_committed_spend_usd: null
-  remaining_usd: null
+  conservative_committed_spend_usd: 0.253231104
+  remaining_usd: 0.746768896
   ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
   claim_boundary: "No Graph plus Jev correctness, speed, token, or cost claim is currently supported."
