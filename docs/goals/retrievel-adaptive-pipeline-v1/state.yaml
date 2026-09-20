@@ -552,7 +552,7 @@ tasks:
     status: active
     reasoning_hint: high
     objective: "Freeze, execute, independently grade, and seal the redesigned four-arm time-to-correct study."
-    current_phase: "phase_3b_lane_manifest_frozen_validation_repair"
+    current_phase: "phase_3b_live_execution_ready_credential_gate"
     implementation_thread: "01a0b0e4-21fa-7961-80d8-090e1c6728eb"
     implementation_branch: "codex/retrievel-four-arm-study-v1"
     implementation_base: "3bad9cbfa618e4a39789298a52a8d03d2afdb8f2"
@@ -591,8 +591,9 @@ tasks:
         - "C-02 is excluded."
       phase_1_boundary: "Freeze and validate only. No provider, answer, or grader call."
     active_execution:
-      run_id: "live-r1-24ace1d"
-      lane_manifest_sha256: "0c2b750f3e34f187485db4386a573aa5a7dc92b1c7ef75f97a045c6c64305bad"
+      run_id: "live-r1-93f6dd8"
+      controller_commit: "93f6dd8af0187e052317f93656fe13387aef6035"
+      lane_manifest_sha256: "8978c00edc17541020239d89ae35b6a1699ae485d5d23d6e2faa7a1e8bf4c6a7"
       answer_threads: 16
       grader_threads: 16
       unique_threads: 32
@@ -605,8 +606,8 @@ tasks:
         provider: 0
         answer: 0
         grader: 0
-      status: "frozen_pending_validate_cli_repair"
-      issue: "freeze-lanes produced a valid nondefault manifest, but validate --lane-manifest omitted its frozen run root and Python executable and rejected it. The implementation agent owns the bounded root-cause repair before execution."
+      status: "validated_pending_process_level_credential"
+      repaired_issue: "Commit 93f6dd8 fixed validate --lane-manifest by deriving and then checking the nondefault run root and absolute Python executable already frozen in the manifest argv. The final 32-lane manifest now validates through the public CLI."
     phase_receipts:
       - phase: "phase_1_benchmark_only_freeze"
         result: done
@@ -682,6 +683,21 @@ tasks:
           answer: 0
           grader: 0
         summary: "Accepted the thin phase-three adapter over the existing calibration custody helpers. It binds 32 fresh lane identities, exact invocation and manifest hashes, source revalidation, zero-retry provider custody, resumable receipts, full time-to-correct telemetry, the eight-call public-source budget, and a private result seal. A rejected 1,451-line standalone runner draft was removed before this candidate; no duplicate benchmark runtime remains."
+      - phase: "phase_3b_live_lane_freeze_preflight"
+        result: done
+        branch: "codex/retrievel-four-arm-study-v1"
+        commit: "93f6dd8af0187e052317f93656fe13387aef6035"
+        lane_manifest_sha256: "8978c00edc17541020239d89ae35b6a1699ae485d5d23d6e2faa7a1e8bf4c6a7"
+        validation:
+          - "45 focused controller and custody tests passed."
+          - "87 mapped consumers passed with one known unavailable-lane skip."
+          - "The actual 32-entry live manifest passed the public validate CLI with 16 Luna-medium answer lanes, 16 Astra-high grader lanes, and 32 unique thread IDs."
+          - "py_compile, git diff --check, and the clean-worktree check passed."
+        calls:
+          provider: 0
+          answer: 0
+          grader: 0
+        summary: "Accepted the bounded validate-CLI root-cause repair and froze fresh blind host-native lane identities against the repaired controller. Private bindings remain ignored. No repository content, treatment label, hidden rubric, provider call, answer request, or grader request was sent during lane creation."
     receipt: null
   - id: T999
     type: judge
