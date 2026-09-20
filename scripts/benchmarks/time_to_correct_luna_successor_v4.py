@@ -61,7 +61,7 @@ PROVIDER_TIMEOUT_SECONDS = 10
 ANSWER_TIMEOUT_SECONDS = 180
 GRADER_TIMEOUT_SECONDS = 120
 TRIAL_WALL_LIMIT_SECONDS = 600
-RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r12"
+RUN_ROOT = ".velgraphing-local/retrievel-t030-luna-successor-r13"
 LANE_ROLES = ("answer", "grader")
 LANE_MANIFEST_SCHEMA = "velgraphing-v4-luna-lane-manifest-v1"
 LANE_ENTRY_FIELDS = (
@@ -101,16 +101,62 @@ STOP_RULES = [
 ]
 CALL_AUTHORIZATION = {
     "maximum_cost_usd": 1.0,
-    "completed_prior_calls": 26,
+    "completed_prior_calls": 34,
     "planned_calls": 8,
-    "aggregate_authorized_calls": 34,
+    "aggregate_authorized_calls": 42,
     "price_usd_per_million_input_tokens": 0.042,
     "request_bytes_per_call_max": REQUEST_BYTES,
     "per_call_worst_case_usd": 0.005505024,
-    "prior_authorization_envelope_usd": 0.143130624,
+    "prior_authorization_envelope_usd": 0.187170816,
     "incremental_authorization_envelope_usd": 0.044040192,
-    "aggregate_authorization_envelope_usd": 0.187170816,
-    "authorization_remaining_usd": 0.812829184,
+    "aggregate_authorization_envelope_usd": 0.231211008,
+    "authorization_remaining_usd": 0.768788992,
+}
+
+CANDIDATE_ARTIFACT = {
+    "path": ".inputs/t030-luna-successor-ranked-candidates-2255d9e.json",
+    "sha256": "be5c4449581d46dab3aecc3e00dd8966cf8478ccabb174b98bec4741cace88dc",
+    "selector_commit": "2255d9e51bccc6132b58a8bb2fe4ec485a57a5c9",
+}
+PREVIEW_ARTIFACT = {
+    "path": ".inputs/t030-luna-successor-jev-preview-2255d9e.json",
+    "sha256": "5969bc6330868823412ae7b9abe774e0c4fd4f90182ac5626fb85caf033cb8db",
+    "adapter_commit": "2255d9e51bccc6132b58a8bb2fe4ec485a57a5c9",
+}
+LANE_MANIFEST_BINDING = {
+    "path": f"{RUN_ROOT}/lane-manifest.json",
+    "sha256": None,
+    "status": "pending_host_lane_allocation",
+    "entry_count": len(DISPATCH) * len(LANE_ROLES),
+    "answer_lanes": len(DISPATCH),
+    "grader_lanes": len(DISPATCH),
+}
+CONTROLLER_ARGV = [
+    "/usr/bin/env", "python3",
+    "scripts/benchmarks/time_to_correct_luna_successor_v4.py",
+    "run",
+    "--candidates", f"benchmarks/velgraphing-time-to-correct-v4/{CANDIDATE_ARTIFACT['path']}",
+    "--questions", "benchmarks/velgraphing-time-to-correct-v4/luna-successor-questions.json",
+    "--rubrics", "benchmarks/velgraphing-time-to-correct-v4/luna-successor-rubrics.json",
+    "--manifests-root", "benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests",
+    "--lanes-root", "../../benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4",
+    "--preview", f"benchmarks/velgraphing-time-to-correct-v4/{PREVIEW_ARTIFACT['path']}",
+    "--run-root", RUN_ROOT,
+    "--lane-manifest", f"{RUN_ROOT}/lane-manifest.json",
+    "--output", f"{RUN_ROOT}/result.json",
+]
+CONTROLLER = {
+    "cwd": "repository_root",
+    "argv": CONTROLLER_ARGV,
+    "argv_sha256": digest(canonical(CONTROLLER_ARGV)),
+}
+TELEMETRY_SCHEMA = {
+    "result_schema_version": "velgraphing-v4-luna-successor-result-v1",
+    "answer_response_contract_sha256": digest(canonical(ANSWER_RESPONSE_CONTRACT)),
+    "grader_response_contract_sha256": digest(canonical(GRADER_RESPONSE_CONTRACT)),
+    "usage_null_means_unavailable": True,
+    "completion_fields": ["model_calls_complete", "context_deliveries_complete"],
+    "execution_identity_required": True,
 }
 
 
@@ -234,26 +280,27 @@ def load_plan(path: Path = PLAN_PATH, *, expected_live_authorized: bool = False)
             "source_snapshots", "models", "limits", "dispatch_order",
             "arm_preflight", "stop_rules", "call_authorization", "run_root",
             "live_authorized", "provider_calls_executed", "lane_manifest_contract",
+            "lane_manifest", "controller", "telemetry_schema",
         }
-        or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v2"
+        or plan["schema_version"] != "velgraphing-v4-luna-successor-plan-v3"
         or plan["study_id"] != STUDY_ID
-        or plan["status"] != "live_authorized_lane_manifest_pending"
+        or plan["status"] != "frozen_lane_manifest_pending_live_authorization"
         or plan["run_root"] != RUN_ROOT
         or plan["live_authorized"] is not expected_live_authorized
         or plan["provider_calls_executed"] != 0
         or plan["dispatch_order"] != list(DISPATCH)
         or plan["source_snapshots"] != SNAPSHOTS
         or plan["lane_manifest_contract"] != LANE_MANIFEST_CONTRACT
-        or candidate != {
-            "path": ".inputs/t030-luna-successor-ranked-candidates-a14e1de.json",
-            "sha256": "9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61",
-            "selector_commit": "a14e1de9cdc93047b4ace523b594cd9f468d0c42",
-        }
-        or preview_artifact != {
-            "path": ".inputs/t030-luna-successor-jev-preview-a14e1de.json",
-            "sha256": "8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9",
-            "adapter_commit": "a14e1de9cdc93047b4ace523b594cd9f468d0c42",
-        }
+        or plan["lane_manifest"] != LANE_MANIFEST_BINDING
+        or plan["controller"] != CONTROLLER
+        or plan["telemetry_schema"] != TELEMETRY_SCHEMA
+        or expected_live_authorized and (
+            plan["lane_manifest"]["status"] != "frozen"
+            or type(plan["lane_manifest"]["sha256"]) is not str
+            or len(plan["lane_manifest"]["sha256"]) != 64
+        )
+        or candidate != CANDIDATE_ARTIFACT
+        or preview_artifact != PREVIEW_ARTIFACT
         or questions != {
             "path": "luna-successor-questions.json",
             "sha256": evaluator.LUNA_SUCCESSOR_QUESTION_REGISTRY_SHA256,
@@ -474,6 +521,9 @@ def preflight(
         raise SuccessorError("successor_artifact_identity_mismatch")
     runs = {(run["task_id"], run["route"]): run for run in artifact["runs"]}
     index = {f"{row['arm']}-{row['task_id']}": row for row in preview_value["index"]}
+    preview_records = {
+        f"{row['arm']}-{row['task_id']}": row for row in preview_value["records"]
+    }
     observed: list[dict[str, Any]] = []
     planned_calls = 0
     for task_id, arms in TASK_ARMS:
@@ -488,19 +538,23 @@ def preflight(
             if arm not in JEV_ARMS:
                 disposition = "treatment_off"
                 request_sha256 = None
+                preview_sha256 = None
             elif can_affect:
                 disposition = "planned"
                 request_sha256 = row["request_sha256"]
+                preview_sha256 = digest(canonical(preview_records[trial_id]))
                 planned_calls += 1
             else:
                 disposition = "skip_no_membership_effect"
                 request_sha256 = row["request_sha256"]
+                preview_sha256 = digest(canonical(preview_records[trial_id]))
             observed.append({
                 "trial_id": trial_id,
                 "task_id": task_id,
                 "arm": arm,
                 "route": route,
                 "pool_sha256": pools[arm],
+                "preview_sha256": preview_sha256,
                 "request_sha256": request_sha256,
                 "jev_call_could_affect_selection": can_affect,
                 "call_disposition": disposition,
@@ -522,6 +576,9 @@ def preflight(
         "provider_calls_executed": 0,
         "live_authorized": expected_live_authorized,
         "lane_manifest_contract_sha256": digest(canonical(LANE_MANIFEST_CONTRACT)),
+        "lane_manifest_binding_sha256": digest(canonical(LANE_MANIFEST_BINDING)),
+        "controller_argv_sha256": CONTROLLER["argv_sha256"],
+        "telemetry_schema_sha256": digest(canonical(TELEMETRY_SCHEMA)),
         "arm_preflight": observed,
     }
 
@@ -913,7 +970,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(canonical(preflight(*inputs)).decode())
             return 0
         root = _validated_run_root(arguments.run_root)
-        output = arguments.output
+        lane_manifest_path = arguments.lane_manifest
+        if not lane_manifest_path.is_absolute():
+            lane_manifest_path = ROOT / lane_manifest_path
+        lane_manifest_path = lane_manifest_path.resolve(strict=True)
+        output = arguments.output if arguments.output.is_absolute() else ROOT / arguments.output
         if (
             not output.is_absolute() or output.parent != root
             or output.name != "result.json" or output.exists() or output.is_symlink()
@@ -921,7 +982,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise SuccessorError("successor_output_invalid")
         result = run_successor(
             *inputs, root,
-            lane_manifest=_lane_manifest(arguments.lane_manifest, root),
+            lane_manifest=_lane_manifest(lane_manifest_path, root),
         )
         atomic_write(output, canonical(result))
         print(canonical({

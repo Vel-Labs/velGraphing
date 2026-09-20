@@ -1,16 +1,16 @@
 {
-  "schema_version": "velgraphing-v4-luna-successor-plan-v2",
+  "schema_version": "velgraphing-v4-luna-successor-plan-v3",
   "study_id": "velgraphing-v4-luna-four-task-successor-v1",
-  "status": "live_authorized_lane_manifest_pending",
+  "status": "frozen_lane_manifest_pending_live_authorization",
   "candidate_artifact": {
-    "path": ".inputs/t030-luna-successor-ranked-candidates-a14e1de.json",
-    "sha256": "9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61",
-    "selector_commit": "a14e1de9cdc93047b4ace523b594cd9f468d0c42"
+    "path": ".inputs/t030-luna-successor-ranked-candidates-2255d9e.json",
+    "sha256": "be5c4449581d46dab3aecc3e00dd8966cf8478ccabb174b98bec4741cace88dc",
+    "selector_commit": "2255d9e51bccc6132b58a8bb2fe4ec485a57a5c9"
   },
   "preview_artifact": {
-    "path": ".inputs/t030-luna-successor-jev-preview-a14e1de.json",
-    "sha256": "8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9",
-    "adapter_commit": "a14e1de9cdc93047b4ace523b594cd9f468d0c42"
+    "path": ".inputs/t030-luna-successor-jev-preview-2255d9e.json",
+    "sha256": "5969bc6330868823412ae7b9abe774e0c4fd4f90182ac5626fb85caf033cb8db",
+    "adapter_commit": "2255d9e51bccc6132b58a8bb2fe4ec485a57a5c9"
   },
   "question_registry": {
     "path": "luna-successor-questions.json",
@@ -45,6 +45,50 @@
     "thread_reuse": "forbidden",
     "argv_identity": "sha256_of_canonical_argv"
   },
+  "lane_manifest": {
+    "path": ".velgraphing-local/retrievel-t030-luna-successor-r13/lane-manifest.json",
+    "sha256": null,
+    "status": "pending_host_lane_allocation",
+    "entry_count": 32,
+    "answer_lanes": 16,
+    "grader_lanes": 16
+  },
+  "controller": {
+    "cwd": "repository_root",
+    "argv": [
+      "/usr/bin/env",
+      "python3",
+      "scripts/benchmarks/time_to_correct_luna_successor_v4.py",
+      "run",
+      "--candidates",
+      "benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-ranked-candidates-2255d9e.json",
+      "--questions",
+      "benchmarks/velgraphing-time-to-correct-v4/luna-successor-questions.json",
+      "--rubrics",
+      "benchmarks/velgraphing-time-to-correct-v4/luna-successor-rubrics.json",
+      "--manifests-root",
+      "benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests",
+      "--lanes-root",
+      "../../benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4",
+      "--preview",
+      "benchmarks/velgraphing-time-to-correct-v4/.inputs/t030-luna-successor-jev-preview-2255d9e.json",
+      "--run-root",
+      ".velgraphing-local/retrievel-t030-luna-successor-r13",
+      "--lane-manifest",
+      ".velgraphing-local/retrievel-t030-luna-successor-r13/lane-manifest.json",
+      "--output",
+      ".velgraphing-local/retrievel-t030-luna-successor-r13/result.json"
+    ],
+    "argv_sha256": "68b227c4421c7ed09c9c8e4f707688de32faccf396b673fe4f15d8246044699c"
+  },
+  "telemetry_schema": {
+    "result_schema_version": "velgraphing-v4-luna-successor-result-v1",
+    "answer_response_contract_sha256": "94f0ec4a1da728b185f8ccfe1b0054e718cf2ebc16179b6a12dcb5897e165bbf",
+    "grader_response_contract_sha256": "856123bc47978196784c49c1258f8f548f1a29ae4d787182ecf07bf5aed31882",
+    "usage_null_means_unavailable": true,
+    "completion_fields": ["model_calls_complete", "context_deliveries_complete"],
+    "execution_identity_required": true
+  },
   "limits": {
     "candidate_count": 64,
     "candidate_aggregate_bytes": 32768,
@@ -67,22 +111,22 @@
     "D-M-02", "A-M-02", "C-M-02", "B-M-02"
   ],
   "arm_preflight": [
-    {"trial_id":"A-S-01","task_id":"S-01","arm":"A","route":"direct","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"B-S-01","task_id":"S-01","arm":"B","route":"direct","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","request_sha256":"b73f66ae242e5bf5edceef8f6a612e1fe57fdf0bc77bc605430afb4d91dd268e","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"D-S-01","task_id":"S-01","arm":"D","route":"typed_graph","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","request_sha256":"b73f66ae242e5bf5edceef8f6a612e1fe57fdf0bc77bc605430afb4d91dd268e","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"C-S-01","task_id":"S-01","arm":"C","route":"typed_graph","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"B-D-01","task_id":"D-01","arm":"B","route":"direct","pool_sha256":"3c4a9ea12b9f6d49dfe14b791dbe465d72a7948fad95144059ebe55b9a1a71e2","request_sha256":"b63f730ae2e2290a3ab964c170c851c205b6ba28f1df53b9679ea25009a14277","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"C-D-01","task_id":"D-01","arm":"C","route":"typed_graph","pool_sha256":"efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"A-D-01","task_id":"D-01","arm":"A","route":"direct","pool_sha256":"3c4a9ea12b9f6d49dfe14b791dbe465d72a7948fad95144059ebe55b9a1a71e2","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"D-D-01","task_id":"D-01","arm":"D","route":"typed_graph","pool_sha256":"efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58","request_sha256":"ae0bde087faf70dd31d77f6887f5975d98bbe52996e37eb41c98f1ef7b4e47c3","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"C-L-01","task_id":"L-01","arm":"C","route":"typed_graph","pool_sha256":"66359cdcb5680f6f9c4294599ea0b7dc2016a367be98d733a3a42ace5ce830c8","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"D-L-01","task_id":"L-01","arm":"D","route":"typed_graph","pool_sha256":"66359cdcb5680f6f9c4294599ea0b7dc2016a367be98d733a3a42ace5ce830c8","request_sha256":"c5f0cd3e8ca288cf5dd46b357a712af40d64e4ec89235ee8b6553aa08c29e301","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"B-L-01","task_id":"L-01","arm":"B","route":"direct","pool_sha256":"66359cdcb5680f6f9c4294599ea0b7dc2016a367be98d733a3a42ace5ce830c8","request_sha256":"c5f0cd3e8ca288cf5dd46b357a712af40d64e4ec89235ee8b6553aa08c29e301","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"A-L-01","task_id":"L-01","arm":"A","route":"direct","pool_sha256":"66359cdcb5680f6f9c4294599ea0b7dc2016a367be98d733a3a42ace5ce830c8","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"D-M-02","task_id":"M-02","arm":"D","route":"typed_graph","pool_sha256":"033efd9549308eb02ccc3cdd64172239e3779019b6abcae5be3ff57428b00521","request_sha256":"87761a05e2f750763a81790531224f7930f9ad62905288e29eb45f30bc737f15","jev_call_could_affect_selection":true,"call_disposition":"planned"},
-    {"trial_id":"A-M-02","task_id":"M-02","arm":"A","route":"direct","pool_sha256":"033efd9549308eb02ccc3cdd64172239e3779019b6abcae5be3ff57428b00521","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"C-M-02","task_id":"M-02","arm":"C","route":"typed_graph","pool_sha256":"033efd9549308eb02ccc3cdd64172239e3779019b6abcae5be3ff57428b00521","request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
-    {"trial_id":"B-M-02","task_id":"M-02","arm":"B","route":"direct","pool_sha256":"033efd9549308eb02ccc3cdd64172239e3779019b6abcae5be3ff57428b00521","request_sha256":"87761a05e2f750763a81790531224f7930f9ad62905288e29eb45f30bc737f15","jev_call_could_affect_selection":true,"call_disposition":"planned"}
+    {"trial_id":"A-S-01","task_id":"S-01","arm":"A","route":"direct","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"B-S-01","task_id":"S-01","arm":"B","route":"direct","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":"f05b5e07de8d62f78b157b722f72c44f28eccd74b5b37688fb5535cc18edb86d","request_sha256":"b73f66ae242e5bf5edceef8f6a612e1fe57fdf0bc77bc605430afb4d91dd268e","jev_call_could_affect_selection":true,"call_disposition":"planned"},
+    {"trial_id":"D-S-01","task_id":"S-01","arm":"D","route":"typed_graph","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":"2d10f01ef4eaf512f8e4e241c5f0ea4b900471d56182d34b2a8c47485160953e","request_sha256":"b73f66ae242e5bf5edceef8f6a612e1fe57fdf0bc77bc605430afb4d91dd268e","jev_call_could_affect_selection":true,"call_disposition":"planned"},
+    {"trial_id":"C-S-01","task_id":"S-01","arm":"C","route":"typed_graph","pool_sha256":"846176db7a6b47e8fd2863ed07a70edafef27e7ebc12920f0eedc4c2791dede6","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"B-D-01","task_id":"D-01","arm":"B","route":"direct","pool_sha256":"3c4a9ea12b9f6d49dfe14b791dbe465d72a7948fad95144059ebe55b9a1a71e2","preview_sha256":"7cb7b0e47f8a4218334228d68cf24528fbd5c55782bd944de608f45140454369","request_sha256":"b63f730ae2e2290a3ab964c170c851c205b6ba28f1df53b9679ea25009a14277","jev_call_could_affect_selection":true,"call_disposition":"planned"},
+    {"trial_id":"C-D-01","task_id":"D-01","arm":"C","route":"typed_graph","pool_sha256":"efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"A-D-01","task_id":"D-01","arm":"A","route":"direct","pool_sha256":"3c4a9ea12b9f6d49dfe14b791dbe465d72a7948fad95144059ebe55b9a1a71e2","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"D-D-01","task_id":"D-01","arm":"D","route":"typed_graph","pool_sha256":"efa862132c59426bd823aa86e15eebfc43a1aa01923f28aa4a8536be7c1e6c58","preview_sha256":"a6dd110d2c38205548ff0a95295197698556ace98d02b9b58cb89f89486bb929","request_sha256":"ae0bde087faf70dd31d77f6887f5975d98bbe52996e37eb41c98f1ef7b4e47c3","jev_call_could_affect_selection":true,"call_disposition":"planned"},
+    {"trial_id":"C-L-01","task_id":"L-01","arm":"C","route":"typed_graph","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"D-L-01","task_id":"L-01","arm":"D","route":"typed_graph","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":"4a7f4d2d4714f91e5763ba1a6a9f775f370dadfd8581341748c8ab738ba20cc7","request_sha256":"77744dfef08364f18b61aebe7135141f2f6540ea53559f29d553c5a0549d09f3","jev_call_could_affect_selection":true,"call_disposition":"planned"},
+    {"trial_id":"B-L-01","task_id":"L-01","arm":"B","route":"direct","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":"0c90fc4ab25c92fed931511ff94ae817564604d2f2283a8152fe412a8a43b64b","request_sha256":"77744dfef08364f18b61aebe7135141f2f6540ea53559f29d553c5a0549d09f3","jev_call_could_affect_selection":true,"call_disposition":"planned"},
+    {"trial_id":"A-L-01","task_id":"L-01","arm":"A","route":"direct","pool_sha256":"01e779984ddb2d1673b47ad9fde16412934a24055f763cc640550749afb51ed7","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"D-M-02","task_id":"M-02","arm":"D","route":"typed_graph","pool_sha256":"09c5732db532631af44ab0379bcd3495ddc1148f3eb1aa792e241b479276e749","preview_sha256":"d90c55f586e4c3bcffe04f1fded2a0e0814e449df1c6c8c935cc7062c31e59ef","request_sha256":"e841d09580993e8103669f4bb20f3abf63fc80082dfdd73a9779cc33290b0117","jev_call_could_affect_selection":true,"call_disposition":"planned"},
+    {"trial_id":"A-M-02","task_id":"M-02","arm":"A","route":"direct","pool_sha256":"09c5732db532631af44ab0379bcd3495ddc1148f3eb1aa792e241b479276e749","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"C-M-02","task_id":"M-02","arm":"C","route":"typed_graph","pool_sha256":"09c5732db532631af44ab0379bcd3495ddc1148f3eb1aa792e241b479276e749","preview_sha256":null,"request_sha256":null,"jev_call_could_affect_selection":true,"call_disposition":"treatment_off"},
+    {"trial_id":"B-M-02","task_id":"M-02","arm":"B","route":"direct","pool_sha256":"09c5732db532631af44ab0379bcd3495ddc1148f3eb1aa792e241b479276e749","preview_sha256":"2a630dac5e8a611069a8e66228f8402a96cc66daf16058ced85dc980c28c869c","request_sha256":"e841d09580993e8103669f4bb20f3abf63fc80082dfdd73a9779cc33290b0117","jev_call_could_affect_selection":true,"call_disposition":"planned"}
   ],
   "stop_rules": [
     "stop_before_provider_if_live_authorized_is_not_true",
@@ -97,18 +141,18 @@
   ],
   "call_authorization": {
     "maximum_cost_usd": 1.0,
-    "completed_prior_calls": 26,
+    "completed_prior_calls": 34,
     "planned_calls": 8,
-    "aggregate_authorized_calls": 34,
+    "aggregate_authorized_calls": 42,
     "price_usd_per_million_input_tokens": 0.042,
     "request_bytes_per_call_max": 131072,
     "per_call_worst_case_usd": 0.005505024,
-    "prior_authorization_envelope_usd": 0.143130624,
+    "prior_authorization_envelope_usd": 0.187170816,
     "incremental_authorization_envelope_usd": 0.044040192,
-    "aggregate_authorization_envelope_usd": 0.187170816,
-    "authorization_remaining_usd": 0.812829184
+    "aggregate_authorization_envelope_usd": 0.231211008,
+    "authorization_remaining_usd": 0.768788992
   },
-  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r12",
-  "live_authorized": true,
+  "run_root": ".velgraphing-local/retrievel-t030-luna-successor-r13",
+  "live_authorized": false,
   "provider_calls_executed": 0
 }
