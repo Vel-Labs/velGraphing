@@ -1,90 +1,352 @@
-goal: retrievel-adaptive-pipeline-v1
-status: active
-proof_boundary: t030_closed_unresolved_r16_parent_operational_timeout_excluded
-milestones_complete: 2
-milestones_total: 5
-current_milestone: T040
-current_gate: branch_consolidation_and_review_preparation
-candidate_schema: velgraphing-ranked-candidates-v4-bound-v2
-candidate_identity:
-  repair_parent_commit: 3d4a979eae1db6a3d682caec1249c5e67d7bfbe4
-  validation_commit: 3fad08c698f2c8f4c6d47fad8dec0b63f9c0cc1d
-  recovery_commit: afaf40ec8b444e5f7ce3a71b29eb2c0d863c69fc
-  private_v2_seal_commit: 0b10598830496ab13addb54f77fc978490206868
-  luna_successor_implementation_commit: 717f378103f692586647ded6d45fe7c699ba77d5
-  luna_successor_rubric_repair_commit: a14e1de9cdc93047b4ace523b594cd9f468d0c42
-  luna_successor_lane_identity_parent_commit: ca5d029009fdf2e355abd2b8360273ddd61bf301
-  luna_successor_exact_candidate_audit_commit: 57ff3e4d7446761336ceb10193598796d96cf993
-  r3_live_authorization_commit: a7348ae352d52dc6d04b77e3a710a2e41845848a
-  r4_restart_commit: 48aaced64da8e81852fe08535ca136e0e7788c8d
-  r5_restart_commit: b2a09112698b12f8cac2819b15f3945c4b8cdd6d
-  final_luna_successor: direct_child_with_subject_fix_benchmark_normalize_handoff_for_r6
-  final_sha_record: parent_handoff_and_git_history
-exact_blocker: none
-next_milestone: T040
-provider:
-  name: typesafe_jev
+version: 2
+
+goal:
+  title: "retrieVEL adaptive pipeline V1"
+  slug: retrievel-adaptive-pipeline-v1
+  kind: existing_plan
+  tranche: "Land the review candidates, then implement and validate the source-bound multi-language graph and optional Jev pipeline through successive verified milestones."
+  status: active
+  oracle:
+    signal: "The installed product passes source-authority, relation-coverage, projection, live-provider, and end-to-end time-to-correct gates on the final merged candidate."
+    cadence: "After each Worker package and at each provider, benchmark, merge, and final-audit boundary."
+    final_proof: "A final independent audit maps current receipts, merged Git state, installed-path validation, aggregate provider spend, and a sealed four-arm result to the original owner outcome."
+  intake:
+    original_request: "Resume the goal with the updated graph, connector-node, Obsidian-mode, and Jev budget recommendations and keep the GoalBuddy record active."
+    interpreted_outcome: "Produce a community-ready source-bound repository graph whose task projections and optional Jev judgment improve accepted correctness, context efficiency, or wall-clock time without unsupported claims."
+    input_shape: existing_plan
+    audience: "VelGraphing maintainers and plugin adopters"
+    authority: approved
+    proof_type: metric
+    completion_proof: "Merged and installable product, source-bound multi-language relation coverage, exact live Jev canary, sealed four-arm correctness and wall-clock study, and independent final audit."
+    likely_misfire: "Treating a larger graph, a successful provider rerank, reduced request tokens, or a retrieval-only benchmark as proof of end-to-end value."
+    blind_spots_considered:
+      - "Cross-language relations require deterministic identity resolution after language-specific parsing."
+      - "Connector nodes are derived navigation identities and must not replace source or symbol authority."
+      - "Obsidian-style modes must be projections over one graph, not duplicated graph stores."
+      - "Provider authorization is a dollar ledger, not a fixed call count."
+      - "The prior 46 live calls did not exercise the exact final installed PR #11 path."
+    existing_plan_facts:
+      - "PR #11 is the product candidate and must merge first."
+      - "PR #12 is an evidence-only candidate stacked on PR #11 and must merge second after retargeting to main."
+      - "T030 is closed unresolved and remains historical evidence."
+      - "No Graph plus Jev performance claim is currently supported."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  exact_human_approval_can_terminal_wait: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  goal_pressure_requires_oracle: true
+  no_completion_on_weak_proof: true
+  slice_policy:
+    max_consecutive_tiny_tasks: 2
+    prefer_vertical_slices: true
+    judge_picks_largest_safe_slice: true
+    worker_completes_whole_slice: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+visual_board:
+  selected: none
+  local:
+    status: not_requested
+    url: null
+    command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
+
+active_task: T060
+
+tasks:
+  - id: T010
+    type: worker
+    assignee: Worker
+    status: done
+    objective: "Implement one deterministic route and optional Jev decision at the source-bound selection seam."
+    allowed_files:
+      - packages/core/selection.py
+      - packages/core/__init__.py
+      - plugins/graph-engineering/runtime/core/selection.py
+      - plugins/graph-engineering/runtime/core/__init__.py
+      - plugins/graph-engineering/runtime/.projection-state.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - tests/core/test_ranked_context_selection.py
+      - tests/skills/test_jev_skill.py
+      - scripts/benchmarks/time_to_correct_jev_v4.py
+      - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      - docs/goals/retrievel-adaptive-pipeline-v1/notes/T010-receipt.md
+    verify: []
+    stop_if: []
+    receipt:
+      result: done
+      note: notes/T010-receipt.md
+      changed_files:
+        - packages/core/selection.py
+        - packages/core/__init__.py
+        - plugins/graph-engineering/runtime/core/selection.py
+        - plugins/graph-engineering/runtime/core/__init__.py
+        - plugins/graph-engineering/runtime/.projection-state.json
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - tests/core/test_ranked_context_selection.py
+        - tests/skills/test_jev_skill.py
+        - scripts/benchmarks/time_to_correct_jev_v4.py
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T010-receipt.md
+      commands:
+        - cmd: "python -m unittest tests.core.test_ranked_context_selection -v"
+          status: pass
+        - cmd: "python -m unittest tests.skills.test_jev_skill -v"
+          status: pass
+        - cmd: "python3 scripts/package/verify_source_package_parity.py"
+          status: pass
+      summary: "Integrated route and selection seam completed with full, parity, and installed-runtime validation."
+  - id: T020
+    type: worker
+    assignee: Worker
+    status: done
+    objective: "Validate the installed binding path and retain the bounded live transport result."
+    allowed_files:
+      - docs/goals/retrievel-adaptive-pipeline-v1/notes/T020-offline-canary-prep.md
+      - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+    verify: []
+    stop_if: []
+    receipt:
+      result: done
+      note: notes/T020-offline-canary-prep.md
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T020-offline-canary-prep.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Installed planner and selector binding checks"
+          status: pass
+        - cmd: "python -m unittest tests.core.test_ranked_context_selection tests.skills.test_jev_skill -v"
+          status: pass
+        - cmd: "python -m unittest tests.parity.test_source_package_parity -v"
+          status: pass
+      summary: "Installed binding, source revalidation, budget enforcement, and one historical live selection effect were proved; usefulness was not."
+  - id: T030
+    type: pm
+    assignee: PM
+    status: blocked
+    objective: "Establish positive end-to-end Graph and Jev value with the prior four-arm study."
+    inputs:
+      - notes/T030-high-recall-evaluation.md
+      - notes/T030-retrieval-gate.md
+      - notes/T030-thealgorithms-import-canary-freeze.md
+    constraints:
+      - "Historical evidence only. Do not reopen the same benchmark design."
+    expected_output:
+      - "A truthful unresolved closure and a redesigned successor."
+    receipt:
+      result: blocked
+      blocked_reason: "The study found isolated relation retrieval value but did not establish repeatable end-to-end Graph or Jev value; the final exact installed product path was not exercised."
+      summary: "Closed unresolved after repeated infrastructure, harness, and candidate-design failures. Preserved for regression and hypothesis history."
+  - id: T040
+    type: pm
+    assignee: PM
+    status: done
+    objective: "Separate the product candidate and evidence candidate into reviewable pull requests."
+    inputs:
+      - "PR #11"
+      - "PR #12"
+    constraints:
+      - "Keep product and evidence scope separate."
+    expected_output:
+      - "Two mergeable pull requests with green CI and declared order."
+    receipt:
+      result: done
+      changed_files: []
+      commands:
+        - cmd: "gh pr view 11 --repo Vel-Labs/velGraphing --json state,mergeable,headRefOid,baseRefName,statusCheckRollup,url"
+          status: pass
+        - cmd: "gh pr view 12 --repo Vel-Labs/velGraphing --json state,mergeable,headRefOid,baseRefName,statusCheckRollup,url"
+          status: pass
+      summary: "PR #11 and PR #12 are open, mergeable, and green on Python 3.11 and 3.13. PR #11 is first; PR #12 remains stacked on it."
+  - id: T050
+    type: pm
+    assignee: PM
+    status: done
+    reasoning_hint: high
+    objective: "Merge PR #11, retarget and verify PR #12 against merged main, then merge PR #12 without changing either candidate's scope."
+    inputs:
+      - "PR #11 at 9d5eb85d503c85b8bca4db2342813af477c3e4b6"
+      - "PR #12 at 3489c4c91ba9f9e8fe80b1d8c460a8c6a0106a57"
+      - "T040 receipt"
+    constraints:
+      - "Preserve PR #11 product scope."
+      - "Preserve PR #12 evidence-only scope."
+      - "Stop before merge if GitHub reports conflict, failing required checks, or unexpected diff scope."
+    expected_output:
+      - "Merged PR #11 SHA"
+      - "PR #12 base and diff verification"
+      - "Merged PR #12 SHA"
+      - "Clean local synchronization plan"
+    receipt:
+      result: done
+      changed_files: []
+      commands:
+        - cmd: "gh pr merge 11 --repo Vel-Labs/velGraphing --merge --delete-branch=false"
+          status: pass
+        - cmd: "gh pr edit 12 --repo Vel-Labs/velGraphing --base main"
+          status: pass
+        - cmd: "gh pr diff 12 --repo Vel-Labs/velGraphing --name-only"
+          status: pass
+        - cmd: "gh pr merge 12 --repo Vel-Labs/velGraphing --merge --delete-branch=false"
+          status: pass
+        - cmd: "git fetch origin main"
+          status: pass
+      summary: "PR #11 merged first at 8e17f7a5fff3100369088caf6ab1f1c5506326a1. PR #12 was retargeted to main, retained its evidence-only file set, reused green checks from the content-identical product base, and merged second at 0539d2c8581f4304945e9631449a5e7d321494a2. origin/main is synchronized to the second merge."
+  - id: T060
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: medium
+    objective: "Move current Python-import and Markdown-link relation derivation behind one canonical core seam and return explicit supported, unresolved, and unsupported relation coverage."
+    allowed_files:
+      - packages/core/retrieval.py
+      - packages/core/__init__.py
+      - plugins/graph-engineering/skills/graph-find/scripts/graph_find.py
+      - plugins/graph-engineering/runtime/core/retrieval.py
+      - plugins/graph-engineering/runtime/core/__init__.py
+      - plugins/graph-engineering/runtime/.projection-state.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - tests/core/test_retrieval.py
+      - tests/skills/test_portable_skills.py
+    verify:
+      - "python -m unittest tests.core.test_retrieval tests.skills.test_portable_skills -v"
+      - "python3 scripts/package/project_portable_plugin.py"
+      - "python3 scripts/package/verify_source_package_parity.py"
+      - "git diff --check"
+    stop_if:
+      - "The work requires changing PR #11 or PR #12 before their merge."
+      - "A source-free or model-admitted edge would enter the graph."
+      - "Verification fails twice with the same signature and no changed hypothesis."
+    receipt: null
+  - id: T070
+    type: pm
+    assignee: PM
+    status: queued
+    objective: "Compile the next language-family adapter package from T060 coverage evidence, with exact files, fixtures, and consumer checks."
+    inputs:
+      - "T060 receipt"
+      - packages/core/javascript_coordinates.py
+    constraints:
+      - "Reuse the installed JavaScript parser before adding dependencies."
+      - "Add one language family per accepted package."
+    expected_output:
+      - "Largest safe Worker package for JavaScript and TypeScript relation derivation."
+    receipt: null
+  - id: T080
+    type: pm
+    assignee: PM
+    status: queued
+    objective: "Compile source-witnessed connector identity and cross-language resolution packages from accepted relation coverage."
+    inputs:
+      - "T060 and T070 receipts"
+    constraints:
+      - "Connector nodes remain derived and reversible."
+      - "Jev cannot admit identities or edges."
+    expected_output:
+      - "Connector identity contract"
+      - "Bounded resolver Worker package"
+    receipt: null
+  - id: T090
+    type: pm
+    assignee: PM
+    status: queued
+    objective: "Compile global, local, impact, connector, evidence, and unresolved projections over the accepted canonical graph."
+    inputs:
+      - "T080 receipt"
+    constraints:
+      - "Use one graph. Do not create duplicated graph stores."
+      - "Keep direct source fallback."
+    expected_output:
+      - "Projection Worker package and observable mode checks."
+    receipt: null
+  - id: T100
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Run one bounded canary through the exact installed final graph-find and Jev path, with source and request bindings and aggregate dollar accounting."
+    allowed_files:
+      - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      - docs/goals/retrievel-adaptive-pipeline-v1/notes
+    verify:
+      - "Installed path returns a source-revalidated result or the declared safe fallback."
+      - "Aggregate actual or conservative worst-case provider spend remains at or below USD 1.00."
+    stop_if:
+      - "The source is private."
+      - "The request hash, source snapshot, candidate set, or installed package identity changes after approval."
+      - "The conservative aggregate spend would exceed USD 1.00."
+    receipt: null
+  - id: T110
+    type: pm
+    assignee: PM
+    status: queued
+    reasoning_hint: high
+    objective: "Freeze, execute, independently grade, and seal the redesigned four-arm time-to-correct study."
+    inputs:
+      - "Accepted T060 through T100 receipts"
+    constraints:
+      - "Measure complete wall-clock time, accepted correctness, context discovery, answer production, all-model usage, provider spend, and failures."
+      - "Keep answer and grade lanes blind to treatment and hidden labels."
+      - "Do not publish provider performance details without a separate terms review."
+    expected_output:
+      - "Sealed result"
+      - "Reproducible command and environment receipt"
+      - "Supported or rejected product claims"
+    receipt: null
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Audit the full owner outcome and complete Parent lifecycle closeout."
+    inputs:
+      - "All task receipts"
+      - "Final Git and package identity"
+      - "Final installed-path and benchmark proof"
+      - "Relevant child-task history and fresh collaboration inventory"
+    constraints:
+      - "Do not implement."
+      - "Reject completion while required Worker work is queued or active."
+      - "Require full_outcome_complete: true before setting the goal done."
+    expected_output:
+      - "complete | not_complete"
+      - "full_outcome_complete: true | false"
+      - "Child lifecycle closeout receipt"
+      - "Missing evidence and next task if not complete"
+    receipt: null
+
+checks:
+  dirty_fingerprint: "custody branch contains only the active GoalBuddy v2 repair before its dedicated commit"
+  last_verification:
+    result: pass
+    task: T050
+    commands:
+      - "PR #11 merged to main at 8e17f7a5fff3100369088caf6ab1f1c5506326a1."
+      - "PR #12 retained evidence-only scope after retargeting and merged to main at 0539d2c8581f4304945e9631449a5e7d321494a2."
+
+provider_budget:
+  provider: typesafe_jev
   model: jev-1.13.0
   public_source_only: true
-  maximum_cost_usd: 1.00
-  authorized_call_total: 47
-  completed_call_total: 46
-  planned_successor_call_total: 0
-  unused_authorized_call_total: 1
-  request_bytes_per_call_max: 131072
-  price_as_of: 2026-09-19
-  price_usd_per_million_input_tokens: 0.042
-  output_token_price_usd: 0.00
-  successor_incremental_authorization_usd: 0.0
-  authorization_envelope_usd: unavailable
-  authorization_remaining_usd: unavailable
-  budget_status: t030_closed_no_further_benchmark_authorized
-  cost_telemetry: unavailable
-  actual_usage_boundary: ignored_local_only
-  public_results_boundary: separate_provider_permission_required
-  successor_live_authorized: false
-  successor_provider_calls_made: 0
-  calls_made: 46
-  non_provider_attempt_total: 1
-  last_private_result_sha256: b40d84af3b05d43adcb7bf70130762e8e644f87a1c401cb1bc0b633bbbd11a37
-  last_private_result_seal_sha256: 313038939aab0fe2882335d97520a48892e8cbcff166fbcebf3ec47656ad63c8
-  last_failure_class: r16_parent_operational_timeout_excluded
-  successor_candidate_sha256: 9f4f1a7c6f4ea466b594c17b8a4181e8df2188f231f93e4bf261fe7c7be17e61
-  successor_preview_sha256: 8cb17603172f1aa4f9faa82ca605ef564db812735c623d40278dd193196769a9
-  successor_lane_manifest_contract_sha256: 46e2e18a102b376cee5df40e7ba205c305a415a37e4e025addc39dc73319b4be
-  successor_run_root: .velgraphing-local/retrievel-t030-luna-successor-r16
-  r3_evidence_status: excluded_infrastructure_failure_no_result
-  r3_completed_successor_jev_calls: 1
-  r4_evidence_status: excluded_protocol_harness_boundary_no_result
-  r4_completed_successor_jev_calls: 4
-  r5_evidence_status: excluded_transport_encoding_failure_no_result
-  r5_completed_successor_jev_calls: 0
-  r5_persisted_transport_failures: 1
-  r12_evidence_status: latest_complete_16_trial_four_arm_result
-  r15_evidence_status: diagnostic_partial_only
-  r16_evidence_status: excluded_parent_operational_timeout_no_result
-  r16_tree_custody_sha256: 6f66583f2a620fce5e09d5c80d571425fa42d7e3683f18bd1f80db81062b06ad
-  r16_completed_successor_jev_calls: 0
-  r16_result_json: absent
-promotion_decision: rejected_unresolved
-claim_boundary: no_graph_jev_speed_quality_token_or_cost_claim
-tasks:
-  T010: complete
-  T020: complete
-  T030: closed_unresolved
-  T040: pending
-  T050: pending
-  T999: pending
-accepted_by: parent
-independent_audit:
-  status: historical_pass_current_successor_not_audited
-  candidate_commit: dc0fbcd4397e997645de49d831a8c6608f2f3df2
-  package_file_count: 87
-  package_candidate_sha256: 48b65ed3ba9d83e63b724ce2afb395f2fbda156d29adb1b9a194bd9c6564d941
-  npm_test_passed: 513
-  npm_test_expected_skipped: 1
-successor_review:
-  parent: passed_exact_candidate_audit
-  parent_audit_candidate_commit: 57ff3e4d7446761336ceb10193598796d96cf993
-  blind_rubric: repaired
-updated_at: 2026-09-20
+  aggregate_limit_usd: 1.00
+  call_count_is_budget: false
+  prior_live_calls: 46
+  final_installed_path_live_calls: 0
+  actual_spend_usd: null
+  conservative_committed_spend_usd: null
+  remaining_usd: null
+  ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
+  claim_boundary: "No Graph plus Jev correctness, speed, token, or cost claim is currently supported."
