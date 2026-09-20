@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T090
+active_task: T091
 
 tasks:
   - id: T010
@@ -417,7 +417,7 @@ tasks:
   - id: T090
     type: pm
     assignee: PM
-    status: active
+    status: done
     objective: "Compile global, local, impact, relation, evidence, and unresolved projections over the accepted canonical graph."
     inputs:
       - "T080 and T081 receipts"
@@ -427,6 +427,67 @@ tasks:
       - "Use existing edge identities as interstitial relation identities; do not invent connector nodes."
     expected_output:
       - "Projection Worker package and observable mode checks."
+    receipt:
+      result: done
+      changed_files: []
+      commands:
+        - cmd: "Inspect graph-find scan metadata, retrieval hits, relationship_supports, evidence, unresolved obligations, fallback paths, and ranked-context selection"
+          status: pass
+        - cmd: "Trace change-impact intent and reverse-relation handling through source-bound and legacy retrieval paths"
+          status: pass
+      summary: "Five proposed Obsidian-style views already exist without new storage: scan metadata and relation coverage provide global coverage; hits provide local scope; outgoing relationship_supports provide the relation view; evidence and ranked selection provide answer evidence; unresolved obligations and fallback paths provide the unresolved view. The concrete missing path is an incoming or backlink projection for change-impact prompts. Legacy retrieval recognizes reverse relations, but the accepted source-bound candidate path emits only outgoing supports. The next Worker package adds bounded incoming supports through the existing change-impact intent and exact edge coordinates."
+      worker_package:
+        objective: "Add a bounded source-verified incoming relationship projection for change-impact prompts and make it usable by ranked-context selection."
+        allowed_files:
+          - packages/core/retrieval.py
+          - packages/core/selection.py
+          - packages/core/__init__.py
+          - plugins/graph-engineering/skills/graph-find/SKILL.md
+          - plugins/graph-engineering/runtime/core/retrieval.py
+          - plugins/graph-engineering/runtime/core/selection.py
+          - plugins/graph-engineering/runtime/core/__init__.py
+          - plugins/graph-engineering/runtime/.projection-state.json
+          - plugins/graph-engineering/.codex-plugin/release-manifest.json
+          - tests/core/test_retrieval.py
+          - tests/core/test_ranked_context_selection.py
+          - tests/skills/test_portable_skills.py
+        verify:
+          - "python -m unittest tests.core.test_retrieval tests.core.test_ranked_context_selection tests.skills.test_portable_skills -v"
+          - "python3 scripts/package/project_portable_plugin.py twice"
+          - "python3 scripts/package/verify_source_package_parity.py"
+          - "git diff --check"
+        stop_if:
+          - "The package needs a new projection store, CLI mode, model classifier, or relation inference."
+          - "Incoming support cannot retain the original edge ID, exact endpoint coordinates, direction, and strongest sensitivity."
+          - "Direct ranking, required evidence, source custody, or fallback semantics would change."
+  - id: T091
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: medium
+    objective: "Add a bounded source-verified incoming relationship projection for change-impact prompts and make it usable by ranked-context selection."
+    allowed_files:
+      - packages/core/retrieval.py
+      - packages/core/selection.py
+      - packages/core/__init__.py
+      - plugins/graph-engineering/skills/graph-find/SKILL.md
+      - plugins/graph-engineering/runtime/core/retrieval.py
+      - plugins/graph-engineering/runtime/core/selection.py
+      - plugins/graph-engineering/runtime/core/__init__.py
+      - plugins/graph-engineering/runtime/.projection-state.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - tests/core/test_retrieval.py
+      - tests/core/test_ranked_context_selection.py
+      - tests/skills/test_portable_skills.py
+    verify:
+      - "python -m unittest tests.core.test_retrieval tests.core.test_ranked_context_selection tests.skills.test_portable_skills -v"
+      - "python3 scripts/package/project_portable_plugin.py twice"
+      - "python3 scripts/package/verify_source_package_parity.py"
+      - "git diff --check"
+    stop_if:
+      - "The package needs a new projection store, CLI mode, model classifier, or relation inference."
+      - "Incoming support cannot retain the original edge ID, exact endpoint coordinates, direction, and strongest sensitivity."
+      - "Direct ranking, required evidence, source custody, or fallback semantics would change."
     receipt: null
   - id: T100
     type: worker
