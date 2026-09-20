@@ -552,6 +552,10 @@ tasks:
     status: active
     reasoning_hint: high
     objective: "Freeze, execute, independently grade, and seal the redesigned four-arm time-to-correct study."
+    current_phase: "phase_1_benchmark_only_freeze"
+    implementation_thread: "01a0b0e4-21fa-7961-80d8-090e1c6728eb"
+    implementation_branch: "codex/retrievel-four-arm-study-v1"
+    implementation_base: "3bad9cbfa618e4a39789298a52a8d03d2afdb8f2"
     inputs:
       - "Accepted T060 through T100 receipts"
     constraints:
@@ -562,6 +566,30 @@ tasks:
       - "Sealed result"
       - "Reproducible command and environment receipt"
       - "Supported or rejected product claims"
+    active_freeze_contract:
+      tasks:
+        - "S-01 exact lookup"
+        - "D-01 relational dependency and duplicate behavior"
+        - "L-01 synthesis"
+        - "M-02 heterogeneous documents"
+      arms:
+        - "A Direct and Jev off"
+        - "B Direct and Jev on"
+        - "C Graph and Jev off"
+        - "D Graph and Jev on"
+      answer_model: "gpt-5.6-luna"
+      answer_reasoning: medium
+      grader_model: "gpt-6-astra"
+      grader_reasoning: high
+      answer_lanes: 16
+      grader_lanes: 16
+      maximum_jev_calls: 8
+      jev_retries: 0
+      rubric_corrections:
+        - "L-01 Kafka and batch ID content is diagnostic, not required."
+        - "D-01 requires duplicate-specific evidence; base-case detail is diagnostic unless the public question requests it."
+        - "C-02 is excluded."
+      phase_1_boundary: "Freeze and validate only. No provider, answer, or grader call."
     receipt: null
   - id: T999
     type: judge
