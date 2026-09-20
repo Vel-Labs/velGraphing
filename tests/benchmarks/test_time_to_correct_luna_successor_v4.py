@@ -150,21 +150,26 @@ class LunaSuccessorTests(unittest.TestCase):
             self.assertEqual(arms["A"]["pool_sha256"], arms["B"]["pool_sha256"])
             self.assertEqual(arms["C"]["pool_sha256"], arms["D"]["pool_sha256"])
 
-    def test_plan_is_source_free_and_waits_for_four_fresh_lanes(self) -> None:
+    def test_plan_is_source_free_and_frozen_to_four_fresh_lanes(self) -> None:
         plan = json.loads(mod.PLAN_PATH.read_text(encoding="utf-8"))
-        self.assertFalse(plan["live_authorized"])
+        self.assertTrue(plan["live_authorized"])
         self.assertEqual(plan["provider_calls_executed"], 0)
-        self.assertEqual(plan["status"], "frozen_lane_manifest_pending_live_authorization")
+        self.assertEqual(plan["status"], "live_authorized_lane_manifest_frozen")
         self.assertNotIn("excerpt", json.dumps(plan))
         self.assertEqual(plan["models"]["answer"], "gpt-5.6-luna")
         self.assertEqual(plan["models"]["grader"], "gpt-5.6-luna")
         self.assertEqual(plan["lane_manifest_contract"], mod.LANE_MANIFEST_CONTRACT)
-        self.assertEqual(plan["lane_manifest"], mod.LANE_MANIFEST_BINDING)
+        self.assertEqual(plan["lane_manifest"]["status"], "frozen")
+        self.assertEqual(len(plan["lane_manifest"]["sha256"]), 64)
         self.assertEqual(plan["continuation_import"], mod.CONTINUATION_IMPORT_BINDING)
         self.assertEqual(plan["continuation_import"]["pending_lane_slots"], list(mod.PENDING_LANE_SLOTS))
         self.assertEqual(plan["controller"], mod.CONTROLLER)
         self.assertEqual(plan["telemetry_schema"], mod.TELEMETRY_SCHEMA)
         self.assertEqual(plan["host_transport_contract"], mod.HOST_TRANSPORT_CONTRACT)
+        self.assertTrue(mod.load_plan(expected_live_authorized=True)["live_authorized"])
+        plan["live_authorized"] = False
+        plan["status"] = "frozen_lane_manifest_pending_live_authorization"
+        plan["lane_manifest"] = dict(mod.LANE_MANIFEST_BINDING)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "plan.json"
             path.write_text(json.dumps(plan), encoding="utf-8")
