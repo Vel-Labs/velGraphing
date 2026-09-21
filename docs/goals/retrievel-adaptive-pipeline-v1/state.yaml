@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T160
+active_task: T170
 
 tasks:
   - id: T010
@@ -1049,7 +1049,7 @@ tasks:
   - id: T160
     type: pm
     assignee: PM
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Create and freeze the 32 fresh blind lane identities and exact successor manifest without dispatching benchmark content."
     inputs:
@@ -1067,6 +1067,38 @@ tasks:
       - "Canonical ignored lane manifest and SHA"
       - "Exact request-set hash, call cap, USD reservation, Python executable, and claim boundary for final user re-acknowledgment"
       - "No benchmark answer, grader, or provider calls"
+    receipt:
+      result: done
+      changed_files: []
+      commands:
+        - cmd: "Read all 32 setup tasks and require the exact final response READY."
+          status: pass
+        - cmd: "python3 -B scripts/benchmarks/four_arm_study_v1.py freeze-lanes --root benchmarks/velgraphing-four-arm-study-v1 --bindings <ignored-bindings> --run-root <ignored-run-root> --python-executable /opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/bin/python3.14 --witness-custody <ignored-witness-custody>"
+          status: pass
+        - cmd: "Verify 32 unique entries, 16 Luna-medium answer lanes, 16 Astra-high grader lanes, and a manifest-only run root."
+          status: pass
+      summary: "Created and verified 32 clean blind lanes. One nonconforming A-L-01 answer setup lane and its unsolicited child were archived and replaced before freeze. The ignored canonical manifest SHA is 7c5eb412817c0b4b87c59b865f41ca5b7fa41f1ea6a25f72ba18d8cd7cadb4d7. No benchmark content, answer, grade, controller run, or provider call occurred."
+      spawned_tasks:
+        - T170
+  - id: T170
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Obtain one exact user re-acknowledgment for the frozen successor manifest, request set, provider cap, reservation, and claim boundary."
+    inputs:
+      - "Lane manifest SHA 7c5eb412817c0b4b87c59b865f41ca5b7fa41f1ea6a25f72ba18d8cd7cadb4d7"
+      - "Request byte set SHA af4e82819694af2846b26dd8dd5758836256ec077ee42b7b18fcab703f4b1e11"
+      - "Jev cap 8 and aggregate reservation USD 0.284922456"
+      - "Allowed claim oracle_assisted_fallback_ttc_under_frozen_contract"
+    constraints:
+      - "Do not mark the successor contract ready or run the controller before the exact re-acknowledgment."
+      - "One re-acknowledgment covers the complete run. Do not request approval per trial."
+      - "Do not claim Direct, Graph, Jev, or comparative retrieval performance from this diagnostic."
+    expected_output:
+      - "Exact user reply: APPROVE VG SUCCESSOR 7c5eb412 af4e8281 8 0.284922456 ORACLE-TTC"
+      - "Ready tracked successor contract bound to the frozen manifest"
+      - "One complete live successor controller run"
     receipt: null
   - id: T999
     type: judge
@@ -1091,16 +1123,16 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch records accepted successor contract 9c5079a and activates T160 fresh lane freeze"
+  dirty_fingerprint: "custody branch records T160 frozen successor lanes and waits at T170 exact user re-acknowledgment"
   last_verification:
     result: pass
-    task: T152
+    task: T160
     commands:
-      - "24 final focused tests passed."
-      - "Successor overlay and private custody validation passed."
-      - "Independent Luna final audit passed."
-      - "Benchmark and GoalBuddy branches are synchronized with origin."
-      - "No provider, answer, or grader call occurred."
+      - "All 32 accepted setup tasks replied exactly READY."
+      - "Lane manifest contains 32 unique task IDs with the frozen answer and grader model identities."
+      - "Lane manifest raw SHA is 7c5eb412817c0b4b87c59b865f41ca5b7fa41f1ea6a25f72ba18d8cd7cadb4d7."
+      - "Run root contains only lane-manifest.json."
+      - "No benchmark content, answer, grade, controller run, or provider call occurred."
 
 provider_budget:
   provider: typesafe_jev
