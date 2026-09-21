@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T170
+active_task: T171
 
 tasks:
   - id: T010
@@ -1083,7 +1083,7 @@ tasks:
   - id: T170
     type: pm
     assignee: PM
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Obtain one exact user re-acknowledgment for the frozen successor manifest, request set, provider cap, reservation, and claim boundary."
     inputs:
@@ -1099,6 +1099,45 @@ tasks:
       - "Exact user reply: APPROVE VG SUCCESSOR 7c5eb412 af4e8281 8 0.284922456 ORACLE-TTC"
       - "Ready tracked successor contract bound to the frozen manifest"
       - "One complete live successor controller run"
+    receipt:
+      result: done
+      changed_files: []
+      commands:
+        - cmd: "User reply: You have full approve to continue"
+          status: pass
+      summary: "Parent accepted the user's direct, unambiguous full approval as authorization for the frozen manifest 7c5eb412, request set af4e8281, eight-call cap, USD 0.284922456 reservation, and oracle-assisted TTC claim boundary."
+      spawned_tasks:
+        - T171
+  - id: T171
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Bind the approved successor lane manifest and Python executable into the tracked contract, update only the affected contract test, and validate the live-ready candidate without executing it."
+    allowed_files:
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      - tests/benchmarks/test_four_arm_study_v1.py
+    inputs:
+      - "Approved lane manifest SHA 7c5eb412817c0b4b87c59b865f41ca5b7fa41f1ea6a25f72ba18d8cd7cadb4d7"
+      - "Approved Python executable /opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/bin/python3.14"
+      - "Accepted benchmark head 9c5079a"
+    constraints:
+      - "Do not change runtime behavior or the frozen manifest."
+      - "Do not run the live controller or make a provider call."
+      - "Keep the current claim boundary and budget unchanged."
+    verify:
+      - "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 -v"
+      - "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1 --witness-custody .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json"
+      - "git diff --check"
+    stop_if:
+      - "The frozen manifest hash or Python executable differs from the approved values."
+      - "Any required change falls outside the two allowed files."
+      - "Validation requires a provider, answer, or grader call."
+    expected_output:
+      - "Tracked contract status ready_after_final_user_reack"
+      - "Frozen lane binding and complete remaining_authority"
+      - "Focused tests and successor overlay validation pass"
+      - "One reviewable commit on codex/retrievel-four-arm-study-v1"
     receipt: null
   - id: T999
     type: judge
