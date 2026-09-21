@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T280
+active_task: T290
 
 tasks:
   - id: T010
@@ -1940,7 +1940,7 @@ tasks:
   - id: T280
     type: pm
     assignee: PM
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Fold T270 into the benchmark branch and freeze a complete final-candidate R5 execution package."
     inputs:
@@ -1974,6 +1974,66 @@ tasks:
       - "Eight paired pools and 16 frozen trial plans"
       - "Thirty-two fresh host-native task identities"
       - "One independently audited freeze ready for live execution"
+    receipt:
+      result: done
+      note: notes/T280-r5-freeze.md
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/README.md
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - benchmarks/velgraphing-four-arm-study-v1/freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/preflight.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - scripts/benchmarks/four_arm_study_v1.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T280-r5-freeze.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Merge current product candidate and regenerate eight pools and 16 trial plans"
+          status: pass
+        - cmd: "Create and verify 32 fresh Luna and Astra task identities"
+          status: pass
+        - cmd: "Run 24 focused tests, historical and successor validation, projector, and clean package parity"
+          status: pass
+        - cmd: "Independent Luna high freeze and custody audit"
+          status: pass
+      summary: "Final-candidate R5 is frozen, pushed, and independently audited. D-01 has the required verified relationship delta. No external call ran; one exact post-freeze user reacknowledgement remains."
+      spawned_tasks:
+        - T290
+  - id: T290
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Execute and seal the final-candidate R5 four-arm study after one exact post-freeze user reacknowledgement."
+    inputs:
+      - "Benchmark head 307b2e77dda0af983b05de4cad0abf71be4b915c"
+      - "Run root successor-live-r5-6b9d120"
+      - "Request-byte-set SHA-256 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94"
+      - "Lane-manifest SHA-256 1953e1ed38206eb4142ad62ae5fe0682779bdcde031149e6b071e7f4fe15d02d"
+      - "Eight Jev calls, 758130 request bytes, and USD 0.359789241 aggregate reservation"
+      - "Python /opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/bin/python3.14"
+    constraints:
+      - "Obtain one user reacknowledgement of the exact frozen request set, eight-call cap, aggregate reservation, lane manifest, and Python executable."
+      - "After reacknowledgement, run the frozen 16 trials with no retries or answer repair."
+      - "Use exactly the frozen 16 Luna answer and 16 Astra grader task IDs and argv arrays."
+      - "Make at most eight Jev calls and stop at the first provider or lane failure."
+      - "Preserve public source custody, exact source fallback, failed-grade censoring, and historical R4."
+      - "Do not change the candidate, questions, rubrics, pools, model identities, dispatch order, or acceptance rules."
+      - "Do not publish provider-specific details beyond the authorized private result."
+    verify:
+      - "Record one terminal receipt for every trial, provider call, answer call, and grader call."
+      - "Record full wall clock, wall clock excluding operator approval, phase timings, context bytes, fallback, and available host usage."
+      - "Seal the result and reconcile every hash, count, source witness, call ledger, and budget entry."
+      - "Run an independent Luna final result audit before interpretation."
+    stop_if:
+      - "Exact post-freeze user reacknowledgement is absent."
+      - "The request set, manifest, Python executable, source snapshot, or benchmark head changes."
+      - "The first provider or lane failure occurs."
+    expected_output:
+      - "Sixteen terminal R5 trials"
+      - "Eight or fewer Jev calls with no retries"
+      - "One sealed R5 result and independent audit"
+      - "A supported comparison with explicit null and proof boundaries"
   - id: T999
     type: judge
     assignee: Judge
@@ -1997,16 +2057,16 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "T270 accepted ordered relation anchors; T280 freezes the complete final-candidate R5 execution package"
+  dirty_fingerprint: "T280 final-candidate freeze is pushed and audited; T290 awaits one exact post-freeze reack before live execution"
   last_verification:
     result: pass
-    task: T270
+    task: T280
     commands:
-      - "Generic ordered-import regression and retrieval and consumer suites passed."
-      - "Canonical and runtime projections, clean package parity, and isolated install passed."
+      - "Eight paired pools and 16 final-candidate trial plans passed validation."
       - "D-01 Graph contains one verified relationship candidate and differs from Direct."
-      - "Zero provider or model calls ran."
-      - "Independent Luna audit passed with no blocking issue."
+      - "Thirty-two fresh tasks returned exact READY with zero tool calls."
+      - "Focused, custody, projector, and clean package parity validation passed."
+      - "Independent Luna high freeze audit passed. No R5 external call ran."
 
 provider_budget:
   provider: typesafe_jev
@@ -2018,7 +2078,9 @@ provider_budget:
   final_installed_path_live_calls: 3
   four_arm_live_calls: 17
   actual_spend_usd: null
-  conservative_committed_spend_usd: 0.327947781
-  remaining_usd: 0.672052219
+  reserved_r5_live_calls: 8
+  reserved_r5_request_bytes: 758130
+  conservative_committed_spend_usd: 0.359789241
+  remaining_usd: 0.640210759
   ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
   claim_boundary: "Clean R4 supports only oracle-assisted fallback time-to-correct. T250 proves one exact installed Graph plus Jev mechanism with source-bound incoming relationship retention. Neither result proves comparative Graph plus Jev performance; T260 must run the final candidate."
