@@ -1938,6 +1938,13 @@ def compile_prompt(
 
     intents = _intent_facets(content_words)
     typed_candidates = [*intents, *_derived_facets(intents, content_words)]
+    if any(
+        left == "immediately" and right == "after"
+        for left, right in zip(words, words[1:])
+    ):
+        typed_candidates.append(
+            PromptFacet(FacetKind.OPERATION, "ordered-successor", 8)
+        )
 
     vocabulary = set(index.vocabulary)
     rejected: list[str] = []
@@ -2357,6 +2364,49 @@ def retrieve(
             eligible_edges.append(edge)
         direction_order = ("incoming", "outgoing") if change_impact else ("outgoing",)
         prompt_values = {facet.value for facet in facets.facets}
+        ordered_successor = any(
+            facet.kind is FacetKind.OPERATION and facet.value == "ordered-successor"
+            for facet in facets.facets
+        )
+        if ordered_successor and not change_impact:
+            for seed_id in sorted(selected_seeds):
+                anchors = [
+                    edge for edge in eligible_edges
+                    if edge.source_id == seed_id
+                    and _canonical(edge.source_coordinate.symbol) in prompt_values
+                ]
+                if len(anchors) != 1:
+                    continue
+                anchor = anchors[0]
+                successors = [
+                    edge for edge in eligible_edges
+                    if edge.source_id == seed_id
+                    and edge.relation == anchor.relation
+                    and edge.source_coordinate.source_path
+                    == anchor.source_coordinate.source_path
+                    and edge.source_coordinate.byte_start
+                    > anchor.source_coordinate.byte_start
+                ]
+                if not successors:
+                    continue
+                edge = min(
+                    successors,
+                    key=lambda item: (
+                        item.source_coordinate.byte_start,
+                        item.source_coordinate.byte_end,
+                        item.edge_id,
+                    ),
+                )
+                support_by_seed[seed_id] = RelationshipSupport(
+                    edge.edge_id,
+                    edge.relation,
+                    edge.source_id,
+                    edge.target_id,
+                    edge.source_coordinate,
+                    edge.target_coordinate,
+                    "outgoing",
+                    edge.sensitivity,
+                )
         for direction in direction_order:
             for symbol_matched in (True, False):
                 for edge in eligible_edges:

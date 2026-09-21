@@ -437,6 +437,103 @@ class SourceRelationDerivationTests(unittest.TestCase):
 
 
 class SourceBoundExpansionTests(unittest.TestCase):
+    def test_ordered_outgoing_relation_uses_next_verified_source_coordinate(self) -> None:
+        sources = {
+            "src/caller.py": (
+                b"from src.alpha import alpha\n"
+                b"from src.beta import beta\n"
+            ),
+            "src/alpha.py": b"def alpha():\n    return 1\n",
+            "src/beta.py": b"def beta():\n    return 2\n",
+        }
+        plain_graph, snapshot, reader = multi_source_fixture(sources)
+        graph = Graph(
+            plain_graph.records,
+            derive_source_relations(plain_graph, snapshot, Reader(sources)).edges,
+        )
+        index = build_repository_tag_index(graph, snapshot, reader)
+
+        def run(prompt: str, *, stable: bool = False) -> object:
+            facets = compile_prompt(prompt, index)
+            if stable:
+                facets = replace(
+                    facets,
+                    facets=tuple(
+                        facet for facet in facets.facets
+                        if not (
+                            facet.kind is FacetKind.OPERATION
+                            and facet.value == "ordered-successor"
+                        )
+                    ),
+                )
+            return retrieve(
+                graph,
+                task(node_budget=8, byte_budget=32_768),
+                index,
+                facets,
+                snapshot,
+                reader,
+                source_bound_expansion=True,
+                expand_one_hop=True,
+                maximum_results=8,
+            )
+
+        ordered = run(
+            "In src/caller.py, follow the imported dependency immediately after alpha"
+        )
+        ordinary = run("In src/caller.py, follow the imported alpha dependency")
+        support = ordered.relationship_supports[0]
+        self.assertEqual("beta", support.seed_coordinate.symbol)
+        self.assertEqual("src/beta.py", support.related_coordinate.source_path)
+        self.assertEqual(
+            b"beta",
+            sources["src/caller.py"][
+                support.seed_coordinate.byte_start:support.seed_coordinate.byte_end
+            ],
+        )
+        self.assertEqual(
+            b"beta",
+            sources["src/beta.py"][
+                support.related_coordinate.byte_start:support.related_coordinate.byte_end
+            ],
+        )
+        self.assertEqual("alpha", ordinary.relationship_supports[0].seed_coordinate.symbol)
+
+        candidates = ranked_candidates_from_retrieval(
+            graph,
+            task(node_budget=8, byte_budget=32_768),
+            snapshot,
+            reader,
+            ordered,
+            maximum_candidates=64,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        child = next(
+            candidate for candidate in candidates
+            if candidate.relationship_parent_candidate_id is not None
+        )
+        self.assertLessEqual(len(candidates), 64)
+        self.assertLessEqual(sum(item.byte_end - item.byte_start for item in candidates), 32_768)
+        self.assertLessEqual(child.byte_end - child.byte_start, 4096)
+        self.assertLess(
+            next(
+                index for index, candidate in enumerate(candidates)
+                if candidate.candidate_id == child.relationship_parent_candidate_id
+            ),
+            candidates.index(child),
+        )
+
+        for prompt in (
+            "In src/caller.py, follow the imported dependency immediately after missing",
+            "In src/caller.py, follow the imported dependency immediately after alpha and beta",
+        ):
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    run(prompt, stable=True).relationship_supports,
+                    run(prompt).relationship_supports,
+                )
+
     def test_bound_support_is_metadata_only_and_unbound_edges_do_not_support(self) -> None:
         sources = {
             "src/caller.py": b"from src.helper import helper\n\ndef call_helper():\n    return helper()\n",
