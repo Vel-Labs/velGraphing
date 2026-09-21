@@ -63,7 +63,7 @@ visual_board:
     url: null
     command: "node <skill-path>/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-release-v1"
 
-active_task: T030
+active_task: T040
 
 tasks:
   - id: T010
@@ -136,15 +136,18 @@ tasks:
   - id: T030
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: medium
     objective: "Build and validate the compatibility-preserving RetrieVel 0.2.0 release candidate package."
     allowed_files:
+      - README.md
       - .agents/plugins/marketplace.json
       - package.json
       - pyproject.toml
       - scripts/package/verify_source_package_parity.py
+      - scripts/benchmarks/four_arm_study_v1.py
       - tests/parity/test_source_package_parity.py
+      - tests/benchmarks/test_four_arm_study_v1.py
       - CONTRIBUTING.md
       - SECURITY.md
       - docs/integrations/ORCASTRATA_UMBRELLA_CATALOG.md
@@ -167,15 +170,67 @@ tasks:
       - "The package-ID migration boundary is ambiguous."
       - "A change requires renaming a frozen benchmark ID, .velgraphing-local path, command, import, schema, or repository URL."
       - "A generated runtime file would need a hand edit."
-    receipt: null
+    repair_context: "Source review showed README.md did not distinguish default body-free /graph-find output from explicit ranked-context planning. Parent added README.md to correct that claim. Full-suite release validation then showed the historical four-arm bundle reads the current release manifest instead of the manifest at its frozen product commit. Repair that historical binding without changing frozen study artifacts."
+    receipt:
+      result: done
+      commits:
+        - 064650c03e2b546c283829a821a29402263b5f00
+        - ddaa6da87d3106dd6c7cdf18a05c266cf4b09541
+      summary: "Prepared RetrieVel 0.2.0-rc.1, corrected its retrieval-path wording, and repaired historical study validation so it reads the package manifest at the frozen product commit."
+      package_candidate_sha256: 21f8b725d3f4f204d49f627cff31047bdf6bcd7c155b96ec61b80c3aba2bcad0
+      changed_files:
+        - README.md
+        - .agents/plugins/marketplace.json
+        - package.json
+        - pyproject.toml
+        - scripts/package/verify_source_package_parity.py
+        - tests/parity/test_source_package_parity.py
+        - CONTRIBUTING.md
+        - SECURITY.md
+        - docs/integrations/ORCASTRATA_UMBRELLA_CATALOG.md
+        - plugins/graph-engineering/.codex-plugin/plugin.json
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - plugins/graph-engineering/README.md
+        - plugins/graph-engineering/skills/graph-benchmark/SKILL.md
+        - plugins/graph-engineering/skills/graph-benchmark/templates/benchmark-report.md
+        - plugins/graph-engineering/skills/graph-jev/SKILL.md
+        - plugins/graph-engineering/skills/graph-jev/agents/openai.yaml
+        - plugins/graph-engineering/skills/graph-jev/references/usage.md
+        - scripts/benchmarks/four_arm_study_v1.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+      commands:
+        - cmd: "projector twice and release-manifest write/verify"
+          status: pass
+        - cmd: "six unittest discovery suites with the declared repository virtualenv"
+          status: pass
+        - cmd: "PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      validation:
+        - "projector: two passes, no generated runtime diff"
+        - "package parity: passed, 87 files"
+        - "scaffold: 11 passed"
+        - "core: 284 passed"
+        - "adapters: 18 passed"
+        - "skills: 37 passed"
+        - "benchmarks: 192 passed, 25 expected skips"
+        - "parity: 10 passed"
+        - "exact-commit Luna package audit: ACCEPT"
+      boundary: "No install, provider call, network action, push, or publication action. Historical benchmark artifacts and compatibility identifiers remain unchanged."
   - id: T040
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: medium
     objective: "Install the frozen candidate into an isolated environment and verify command discovery, offline behavior, one bounded live smoke, fallback, and removal."
-    allowed_files: []
-    verify: []
+    allowed_files:
+      - docs/goals/retrievel-release-v1/notes/T040-installed-path.md
+    verify:
+      - "install exact packaged candidate into an isolated CODEX_HOME"
+      - "verify command discovery and status without a provider key"
+      - "run one exact approved live smoke and verify safe fallback"
+      - "remove the isolated installation and confirm cleanup"
     stop_if:
       - "T030 has not frozen a package candidate."
       - "A live request lacks exact scope, hash, and budget authority."
