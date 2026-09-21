@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import sys
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -26,12 +27,150 @@ sys.path.insert(0, str(ROOT / "scripts/benchmarks"))
 
 import four_arm_study_v1 as study  # noqa: E402
 from time_to_correct_calibration import _v3_trial_measurement  # noqa: E402
-from time_to_correct_host import _answer_input, _grader_input  # noqa: E402
+from time_to_correct_host import (  # noqa: E402
+    _answer_input, _grader_input, run_process_trial,
+)
 
 CUSTODY = ROOT / study.SUCCESSOR_WITNESS_CUSTODY
 
 
 class FourArmPublicBoundaryTests(unittest.TestCase):
+    def test_installed_graph_find_trial_transports_complete_nonprovider_measurement(self) -> None:
+        local = ROOT / ".velgraphing-local"
+        local.mkdir(mode=0o700, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="t050-canary-", dir=local) as raw:
+            root = Path(raw)
+            lane = root / "lane"
+            (lane / "src").mkdir(parents=True)
+            (lane / "tests").mkdir()
+            (lane / "src/cancel.py").write_text(
+                "def cancel_task(task):\n    return task.cancel()\n",
+                encoding="utf-8",
+            )
+            (lane / "tests/test_cancel.py").write_text(
+                "def test_cancel_task(task):\n    assert cancel_task(task)\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "init", "-q", str(lane)], check=True)
+            subprocess.run(
+                ["git", "-C", str(lane), "add", "src/cancel.py", "tests/test_cancel.py"],
+                check=True,
+            )
+            sources = [
+                {"path": path.relative_to(lane).as_posix(),
+                 "byte_length": len(path.read_bytes()),
+                 "sha256": study.digest(path.read_bytes())}
+                for path in sorted(lane.rglob("*.py"))
+            ]
+            source_manifest = {
+                "sources": sources,
+                "snapshot_sha256": study._sha256({"sources": sources}),
+            }
+            run_root = root / "run"
+            run_root.mkdir()
+            installed = study._install_graph_find(run_root)
+            prompt = "Find cancel_task implementation and test behavior."
+            rubric = {
+                "required_facts": ["cancel_task"],
+                "critical_facts": ["cancel_task"],
+                "acceptable_spans": ["cancel_task"],
+            }
+            identity = {
+                "run_id": "t050-fixture", "trial_id": "C-S-01",
+                "task_id": "S-01", "arm": "C", "repository_id": "fixture",
+                "repository_commit": "a" * 40,
+                "source_snapshot_sha256": source_manifest["snapshot_sha256"],
+                "dirty_state_sha256": study.digest(b""),
+                "answer_model": "fixture-answer", "reasoning": "none",
+                "prompt_sha256": study.digest(prompt.encode()),
+                "rubric_sha256": study.digest(study.canonical(rubric)),
+                "rubric_version": "t050-fixture-v1", "answer_lane_id": "answer-C-S-01",
+            }
+            answer_code = (
+                "import json,sys; x=json.load(sys.stdin); e=x['evidence']; "
+                "a=' '.join(r['excerpt'] for r in e)+' '+' '.join('['+r['id']+']' for r in e); "
+                "sys.stdout.write(json.dumps({'schema_version':'velgraphing-answer-output-v1',"
+                "'answer_text':a,'usage':None,'model_calls_complete':False,"
+                "'context_deliveries_complete':True},sort_keys=True,separators=(',',':')))"
+            )
+            grader_code = (
+                "import json,sys; x=json.load(sys.stdin); fs=x['rubric']['required_facts']; "
+                "a=x['answer_text'].casefold(); d=[f.casefold() in a for f in fs]; n=len(fs); s=sum(d); "
+                "sys.stdout.write(json.dumps({'schema_version':'velgraphing-grader-output-v1',"
+                "'required_fact_score':s,'required_fact_maximum':n,"
+                "'critical_facts_exact':all(f.casefold() in a for f in x['rubric']['critical_facts']),"
+                "'unsupported_material_claims':0,'grader_id':'fixture-grader','usage':None,"
+                "'model_calls_complete':False},sort_keys=True,separators=(',',':')))"
+            )
+            trial = study.Trial(identity, study.Budget(0, 60_000_000_000), execution="fixture")
+
+            def prepare(current: study.Trial, _attempt: int) -> dict[str, object]:
+                current.not_applicable(
+                    "jev_preparation", "provider", "source_revalidation",
+                    "response_validation", "operator_approval", "fallback",
+                )
+                payload = study._installed_graph_payload(
+                    current, task_id="S-01", prompt=prompt, lane=lane,
+                    source_manifest=source_manifest, installed=installed,
+                )
+                current.coverage(source_operations=True)
+                return payload
+
+            result = run_process_trial(
+                trial, prepare,
+                answer_argv=[sys.executable, "-c", answer_code],
+                grader_argv=[sys.executable, "-c", grader_code],
+                cwd=ROOT, answer_timeout_s=10, grader_timeout_s=10,
+                grader_context=rubric, grader_model="fixture-grader",
+            )
+
+            self.assertEqual("passed", result["terminal_reason"], result["attempts"])
+            attempt = result["attempts"][0]
+            process_kinds = [row["kind"] for row in attempt["host_processes"]]
+            self.assertEqual(1, process_kinds.count("graph_find"))
+            self.assertEqual(1, process_kinds.count("answer"))
+            self.assertEqual(1, process_kinds.count("grader"))
+            self.assertTrue(attempt["coverage"]["source_operations"])
+            self.assertFalse(attempt["coverage"]["model_calls"])
+            self.assertFalse(result["usage_complete"])
+            self.assertGreater(len(attempt["source_operations"]), 0)
+            self.assertEqual("observed", result["phases"]["candidate_discovery"]["status"])
+            self.assertEqual("observed", result["phases"]["context_composition"]["status"])
+            self.assertEqual(
+                attempt["bindings"]["candidate_set_sha256"],
+                attempt["candidate_observation"]["candidate_set_sha256"],
+            )
+            self.assertEqual(
+                installed[1], attempt["bindings"]["graph_artifact_sha256"],
+            )
+            self.assertEqual(
+                "installed_graph_find_process",
+                attempt["candidate_observation"]["stage_clock"]["domain"],
+            )
+            self.assertLessEqual(
+                result["confirmed_time_to_correct_ns"], result["user_visible_wall_ns"],
+            )
+
+            changed_manifest = dict(source_manifest)
+            changed_manifest["snapshot_sha256"] = "0" * 64
+            mismatch_trial = study.Trial(
+                {**identity, "trial_id": "C-S-02", "task_id": "S-02",
+                 "answer_lane_id": "answer-C-S-02"},
+                study.Budget(0, 60_000_000_000), execution="fixture",
+            )
+            mismatch = mismatch_trial.run(
+                lambda current, _number: study._installed_graph_payload(
+                    current, task_id="S-02", prompt=prompt, lane=lane,
+                    source_manifest=changed_manifest, installed=installed,
+                ),
+                lambda *_args: None, lambda *_args: None,
+            )
+            self.assertEqual("measurement_error", mismatch["terminal_reason"])
+            self.assertEqual(
+                "installed_graph_find_binding_mismatch",
+                mismatch["attempts"][0]["failure_reason"],
+            )
+
     def test_tracked_historical_bundle_validates_without_private_custody(self) -> None:
         freeze, questions, rubrics = study.load_bundle()
         current_release = json.loads(

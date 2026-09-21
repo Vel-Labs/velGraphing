@@ -56,6 +56,7 @@ SUCCESSOR_WITNESS_CUSTODY = (
 )
 HISTORICAL_CONTROLLER_SHA256 = "79f42fbeee18c45731ec963102e31480bd4669f9f89cb1cedaccbbbcb2e8a21a"
 HISTORICAL_HOST_SHA256 = "4e89e9283870ca164a9a82fb93d65b60c9027b76d85ef5e99670d278e1fa1393"
+HISTORICAL_GRAPH_FIND_SHA256 = "5f62bbd9194250c177616ac9198ffc4b27d483b9a5ff1c2f5742e3e0e4505021"
 SUCCESSOR_RUBRICS_CONTROLLER_SHA256 = "d34fcec83e624908b340d923fe3d10094bceaa1a87be4e7a61a220991b19bcf6"
 SUCCESSOR_ARM_LABELS = {
     "A": "edge-disabled frozen-shortlist baseline; Jev off",
@@ -255,6 +256,7 @@ def _indexed_paths(root: Path) -> set[str]:
 
 def _scan_lane(
     lane: Path, manifest: Mapping[str, Any], *, derive_edges: bool,
+    source_observer: Any = None,
 ) -> tuple[Any, Any, Any, dict[str, object]]:
     if (
         not lane.is_absolute() or not lane.is_dir() or lane.is_symlink()
@@ -271,6 +273,7 @@ def _scan_lane(
         max(1, max(source["byte_length"] for source in manifest["sources"])),
         max(1, manifest["source_bytes"]),
         derive_edges=derive_edges,
+        source_observer=source_observer,
     )
     actual = {
         source.path: (source.byte_length, source.sha256) for source in snapshot.sources
@@ -317,6 +320,200 @@ def _packet(prompt: str, candidates: Sequence[Any]) -> dict[str, Any]:
         "query": prompt,
         "candidates": [candidate._packet_value() for candidate in candidates],
     })
+
+
+def _install_graph_find(run_root: Path) -> tuple[Path, str, str]:
+    """Materialize the manifest-bound plugin once, outside the measured trial."""
+    plugin_root = ROOT / "plugins/graph-engineering"
+    manifest_path = plugin_root / ".codex-plugin/release-manifest.json"
+    _, release = _read_json(manifest_path, "installed_adapter_invalid")
+    candidate_sha256 = release.get("candidate_sha256")
+    rows = release.get("files")
+    if not _is_sha256(candidate_sha256) or type(rows) is not list:
+        raise StudyError("installed_adapter_invalid")
+    installed_root = run_root / "installed-plugin/graph-engineering"
+    if installed_root.exists() and (installed_root.is_symlink() or not installed_root.is_dir()):
+        raise StudyError("installed_adapter_invalid")
+    if not installed_root.exists():
+        installed_root.mkdir(parents=True, mode=0o700)
+        for row in rows:
+            if type(row) is not dict or set(row) != {"path", "sha256", "size"}:
+                raise StudyError("installed_adapter_invalid")
+            relative = _safe_path(row["path"])
+            source = plugin_root.joinpath(*PurePosixPath(relative).parts)
+            if source.is_symlink() or not source.is_file():
+                raise StudyError("installed_adapter_invalid")
+            raw = source.read_bytes()
+            if len(raw) != row["size"] or digest(raw) != row["sha256"]:
+                raise StudyError("installed_adapter_invalid")
+            target = installed_root.joinpath(*PurePosixPath(relative).parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(raw)
+        (installed_root / ".codex-plugin").mkdir(parents=True, exist_ok=True)
+        (installed_root / ".codex-plugin/release-manifest.json").write_bytes(
+            manifest_path.read_bytes()
+        )
+    installed_manifest = installed_root / ".codex-plugin/release-manifest.json"
+    if not installed_manifest.is_file() or installed_manifest.read_bytes() != manifest_path.read_bytes():
+        raise StudyError("installed_adapter_invalid")
+    for row in rows:
+        target = installed_root.joinpath(*PurePosixPath(row["path"]).parts)
+        if target.is_symlink() or not target.is_file():
+            raise StudyError("installed_adapter_invalid")
+        raw = target.read_bytes()
+        if len(raw) != row["size"] or digest(raw) != row["sha256"]:
+            raise StudyError("installed_adapter_invalid")
+    adapter = installed_root / "skills/graph-find/scripts/graph_find.py"
+    adapter_sha256 = digest(adapter.read_bytes())
+    return adapter, candidate_sha256, adapter_sha256
+
+
+def _installed_graph_payload(
+    trial: Trial, *, task_id: str, prompt: str, lane: Path,
+    source_manifest: Mapping[str, Any], installed: tuple[Path, str, str],
+) -> dict[str, Any]:
+    adapter, candidate_sha256, adapter_sha256 = installed
+    argv = [
+        sys.executable, str(adapter), "--root", str(lane), "--prompt", prompt,
+        "--maximum-results", str(RETRIEVAL_NODE_LIMIT), "--byte-budget",
+        str(CANDIDATE_AGGREGATE_BYTE_BUDGET), "--ranked-context", "plan",
+        "--diagnostics",
+    ]
+    with trial.phase("candidate_discovery"):
+        completed = subprocess.run(
+            argv, cwd=str(ROOT),
+            env={"PATH": os.environ.get("PATH", os.defpath), "PYTHONIOENCODING": "utf-8",
+                 "PYTHONDONTWRITEBYTECODE": "1"},
+            capture_output=True, check=False, timeout=120,
+        )
+    trial.current.setdefault("host_processes", []).append({
+        "kind": "graph_find",
+        "argv_sha256": digest(canonical(argv)),
+        "input_sha256": digest(b""),
+        "stdout_sha256": digest(completed.stdout),
+        "stderr_sha256": digest(completed.stderr),
+        "exit_code": completed.returncode,
+        "timeout_limit_ns": 120_000_000_000,
+        "status": "completed" if completed.returncode == 0 else "failed",
+    })
+    if completed.returncode != 0:
+        raise MeasurementError("installed_graph_find_failed")
+    try:
+        payload = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        raise MeasurementError("installed_graph_find_invalid") from None
+    ranked = payload.get("ranked_context")
+    diagnostics = payload.get("diagnostics")
+    if type(ranked) is not dict or type(diagnostics) is not dict:
+        raise MeasurementError("installed_graph_find_invalid")
+    selection = ranked.get("selection")
+    context = selection.get("context") if type(selection) is dict else None
+    plan = ranked.get("plan")
+    identity = diagnostics.get("runtime_identity")
+    expected_snapshot = source_manifest.get("snapshot_sha256")
+    if (
+        ranked.get("mode") != "plan" or ranked.get("status") != "selected"
+        or type(selection) is not dict or selection.get("fail_closed") is not False
+        or selection.get("route") != "ranked"
+        or selection.get("source_revalidated") is not True
+        or type(context) is not dict or context.get("fail_closed") is not False
+        or type(plan) is not dict
+        or plan.get("candidate_set_sha256") != selection.get("candidate_set_sha256")
+        or context.get("candidate_set_sha256") != selection.get("candidate_set_sha256")
+        or context.get("source_snapshot_sha256") != expected_snapshot
+        or diagnostics.get("source_snapshot_sha256") != expected_snapshot
+        or type(identity) is not dict
+        or identity.get("candidate_sha256") != candidate_sha256
+        or identity.get("adapter_sha256") != adapter_sha256
+    ):
+        raise MeasurementError("installed_graph_find_binding_mismatch")
+    source_rows = source_manifest.get("sources")
+    sources = {row["path"]: row for row in source_rows if type(row) is dict}
+    selected_ids = context.get("selected_candidate_ids")
+    required_ids = context.get("required_candidate_ids")
+    spans = context.get("spans")
+    if (
+        type(selected_ids) is not list
+        or any(type(item) is not str or not item for item in selected_ids)
+        or len(selected_ids) != len(set(selected_ids))
+        or type(required_ids) is not list
+        or any(type(item) is not str or not item for item in required_ids)
+        or not set(required_ids).issubset(selected_ids)
+        or type(spans) is not list
+        or any(type(row) is not dict for row in spans)
+        or {row.get("candidate_id") for row in spans if type(row) is dict} != set(selected_ids)
+    ):
+        raise MeasurementError("installed_graph_find_evidence_invalid")
+    for span in spans:
+        source = sources.get(span.get("source_path"))
+        start, end = span.get("byte_start"), span.get("byte_end")
+        content = span.get("content")
+        if (
+            source is None or span.get("source_sha256") != source.get("sha256")
+            or type(start) is not int or type(end) is not int or start < 0
+            or end <= start or end > source.get("byte_length")
+            or type(content) is not str or len(content.encode("utf-8")) != end - start
+        ):
+            raise MeasurementError("installed_graph_find_evidence_invalid")
+    operations = diagnostics.get("source_operations")
+    stages = diagnostics.get("stage_ns")
+    if (
+        type(operations) is not list or type(stages) is not dict
+        or not {"scan", "graph_build", "retrieval", "selection"}.issubset(stages)
+        or any(type(value) is not int or value < 0 for value in stages.values())
+    ):
+        raise MeasurementError("installed_graph_find_diagnostics_invalid")
+    for index, operation in enumerate(operations):
+        if (
+            type(operation) is not dict
+            or operation.get("access") not in {"file_read", "memory_read"}
+            or type(operation.get("stage")) is not str
+            or not _is_sha256(operation.get("source_sha256"))
+            or type(operation.get("byte_count")) is not int
+            or operation["byte_count"] < 0
+        ):
+            raise MeasurementError("installed_graph_find_diagnostics_invalid")
+        trial.source(
+            operation["source_sha256"], 0, operation["byte_count"],
+            access=operation["access"], operation_id=f"graph-find-{index}",
+        )
+    trial.bind(
+        candidate_set_sha256=selection["candidate_set_sha256"],
+        graph_artifact_sha256=candidate_sha256,
+    )
+    evidence = []
+    with trial.phase("context_composition"):
+        for span in spans:
+            evidence.append({
+                "id": span["candidate_id"], "excerpt": span["content"],
+                "path": span["source_path"],
+                "source_sha256": span["source_sha256"],
+                "byte_start": span["byte_start"], "byte_end": span["byte_end"],
+            })
+    trial.current["candidate_observation"] = {
+        "route": "installed_graph_find", "task_id": task_id,
+        "candidate_set_sha256": selection["candidate_set_sha256"],
+        "candidate_count": plan.get("candidate_count"),
+        "selected_candidate_ids": selected_ids,
+        "required_candidate_ids": required_ids,
+        "source_snapshot_sha256": expected_snapshot,
+        "runtime_identity": identity,
+        "stage_clock": {
+            "name": "perf_counter_ns", "domain": "installed_graph_find_process",
+        },
+        "stage_ns": stages,
+        "source_read_count": len(operations),
+    }
+    trial.current["graph_observation"] = {
+        "record_count": payload.get("scan", {}).get("files_scanned"),
+        "edge_count": payload.get("scan", {}).get("edges_derived"),
+    }
+    return {
+        "schema_version": "velgraphing-answer-evidence-v3",
+        "question": prompt,
+        "citation_instruction": "Cite supporting evidence IDs as [cN].",
+        "evidence": evidence,
+    }
 
 
 def _pool(
@@ -843,7 +1040,9 @@ def _validate_freeze(
         binding = bindings.get(name)
         expected_sha256 = (
             HISTORICAL_HOST_SHA256
-            if name == "host" else digest((repo_root / expected_path).read_bytes())
+            if name == "host" else HISTORICAL_GRAPH_FIND_SHA256
+            if name == "graph_find_adapter"
+            else digest((repo_root / expected_path).read_bytes())
         )
         if (
             type(binding) is not dict
@@ -1778,78 +1977,167 @@ def _apply_verified_fallback_measured(
         return apply_verified_fallback(task_id, packet, order, contract, custody)
 
 
-def _selected_payload(trial: Trial, pool: Mapping[str, Any], lane: Path,
-                      manifest: Mapping[str, Any], observation: Mapping[str, Any] | None,
-                      approved_request_sha256: str | None,
-                      successor_ttc_contract: Mapping[str, Any] | None = None,
-                      successor_witness_custody: Mapping[str, Any] | None = None) -> dict[str, Any]:
-    route = pool["identity"]["route"]
+def _question_prompt(task_id: str) -> str:
+    _, questions = _read_json(DEFAULT_ROOT / "questions.json", "questions_invalid")
+    return next(row["prompt"] for row in questions["questions"] if row["id"] == task_id)
+
+
+def _discover_direct(trial: Trial, task_id: str, prompt: str, lane: Path,
+                     manifest: Mapping[str, Any]) -> dict[str, Any]:
+    read_number = 0
+
+    def scanned(_path: str, raw: bytes) -> None:
+        nonlocal read_number
+        trial.source(digest(raw), 0, len(raw), access="file_read",
+                     operation_id=f"direct-scan-{read_number}")
+        read_number += 1
+
     with trial.phase("candidate_discovery"):
-        if route == "graph":
-            with trial.phase("cold_graph_build"):
-                graph, snapshot, reader, metadata = _scan_lane(lane, manifest, derive_edges=True)
-        else:
-            trial.not_applicable("cold_graph_build")
-            graph, snapshot, reader, metadata = _scan_lane(lane, manifest, derive_edges=False)
-            graph = Graph(graph.records)
-    trial.not_applicable("warm_graph_load", "retrieval")
+        trial.not_applicable("cold_graph_build", "warm_graph_load")
+        graph, snapshot, reader, metadata = _scan_lane(
+            lane, manifest, derive_edges=False, source_observer=scanned,
+        )
+        graph = Graph(graph.records)
 
     class MeasuredReader:
         def read_bytes(self, path: str) -> bytes:
+            nonlocal read_number
             raw = reader.read_bytes(path)
-            trial.source(digest(raw), 0, len(raw),
-                         operation_id=f"selection-{len(trial.current['source_operations'])}")
+            trial.source(digest(raw), 0, len(raw), access="memory_read",
+                         operation_id=f"direct-memory-{read_number}")
+            read_number += 1
             return raw
 
         def is_symlink(self, path: str) -> bool:
             return reader.is_symlink(path)
 
-    prompt = pool["candidate_packet"]["query"]
+    measured_reader = MeasuredReader()
     terms = tuple(dict.fromkeys(
         token.casefold() for token in graph_find_adapter._TOKEN.findall(prompt)
     ))
+    retrieval_task = TaskSpec(
+        task_id, terms, node_budget=RETRIEVAL_NODE_LIMIT,
+        byte_budget=CANDIDATE_AGGREGATE_BYTE_BUDGET,
+        allowed_sensitivities=(Sensitivity.INTERNAL,),
+    )
+    selection_task = TaskSpec(
+        task_id, terms, node_budget=RETRIEVAL_NODE_LIMIT,
+        byte_budget=FINAL_CONTEXT_BYTE_BUDGET,
+        allowed_sensitivities=(Sensitivity.INTERNAL,),
+    )
+    with trial.phase("retrieval"):
+        index = build_repository_tag_index(graph, snapshot, measured_reader)
+        facets = compile_prompt(prompt, index)
+        retrieval = retrieve(
+            graph, retrieval_task, index, facets, snapshot, measured_reader,
+            channels=("exact", "sparse", "wiki"), expand_one_hop=False,
+            source_bound_expansion=False, maximum_results=RETRIEVAL_NODE_LIMIT,
+            minimum_coverage_percent=0.0, parallel=False,
+        )
+        if retrieval.reason == "prompt_facets_insufficient":
+            facets = compile_prompt(
+                prompt, index,
+                proof_obligations=compile_proof_obligations(
+                    prompt, graph, index, snapshot, measured_reader,
+                ),
+            )
+            retrieval = retrieve(
+                graph, retrieval_task, index, facets, snapshot, measured_reader,
+                channels=("exact", "sparse", "wiki"), expand_one_hop=False,
+                source_bound_expansion=False, maximum_results=RETRIEVAL_NODE_LIMIT,
+                minimum_coverage_percent=0.0, parallel=False,
+            )
+        if retrieval.fail_closed:
+            raise MeasurementError("direct_retrieval_failed_closed")
+        candidates = ranked_candidates_from_retrieval(
+            graph, selection_task, snapshot, measured_reader, retrieval,
+            maximum_candidates=CANDIDATE_LIMIT,
+            maximum_candidate_bytes=CANDIDATE_AGGREGATE_BYTE_BUDGET,
+            maximum_unit_bytes=CANDIDATE_UNIT_BYTE_BUDGET,
+        )
+        if not candidates:
+            raise MeasurementError("candidate_pool_empty")
+    packet = _packet(prompt, candidates)
+    candidate_set_sha256 = _sha256(packet["candidates"])
+    trial.bind(candidate_set_sha256=candidate_set_sha256)
+    trial.current["candidate_observation"] = {
+        "route": "direct", "candidate_set_sha256": candidate_set_sha256,
+        "candidate_count": len(candidates),
+        "baseline_order_sha256": digest(canonical([
+            row["id"] for row in packet["candidates"]
+        ])),
+        "source_snapshot_sha256": snapshot.snapshot_sha256,
+        "record_count": len(graph.records), "edge_count": 0,
+        "edge_expansion_status": "not_applicable",
+        "scan_complete": metadata["scan_complete"],
+    }
+    return {
+        "graph": graph, "snapshot": snapshot, "reader": measured_reader,
+        "task": selection_task, "candidates": candidates, "packet": packet,
+    }
+
+
+def _select_direct_payload(
+    trial: Trial, discovery: Mapping[str, Any], lane: Path,
+    observation: Mapping[str, Any] | None, approved_request_sha256: str | None,
+    successor_ttc_contract: Mapping[str, Any] | None = None,
+    successor_witness_custody: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
     with trial.phase("source_capture"):
         selected = select_ranked_context(
-            graph,
-            TaskSpec(pool["identity"]["task_id"], terms, node_budget=RETRIEVAL_NODE_LIMIT,
-                     byte_budget=FINAL_CONTEXT_BYTE_BUDGET,
-                     allowed_sensitivities=(Sensitivity.INTERNAL,)),
-            snapshot, MeasuredReader(), query=prompt, candidates=_ranked_candidates(pool),
+            discovery["graph"], discovery["task"], discovery["snapshot"],
+            discovery["reader"], query=discovery["packet"]["query"],
+            candidates=discovery["candidates"],
             approved_request_sha256=approved_request_sha256,
             jev_observation=observation,
             jev_enabled=observation is not None,
             jev_observation_qualified=observation is not None,
         )
-    frozen = pool["selection"]
-    if (
-        selected.route != "ranked" or selected.projection.fail_closed
-        or selected.candidate_set_sha256 != frozen["candidate_set_sha256"]
-        or (not selected.jev_decision.jev_observation_applied
-            and list(selected.projection.selected_candidate_ids)
-            != frozen["projection"]["selected_candidate_ids"])
-    ):
-        raise MeasurementError("frozen_selection_mismatch")
-    trial.current["candidate_observation"] = {
-        "candidate_packet_sha256": digest(canonical(pool["candidate_packet"])),
-        "baseline_order_sha256": digest(canonical([
-            row["id"] for row in pool["candidate_packet"]["candidates"]
-        ])),
-        "record_count": len(graph.records), "edge_count": len(graph.edges),
-        "route": route, "edge_expansion_status": "frozen_verified_pool",
-    }
-    by_id = {row["id"]: row for row in pool["candidate_packet"]["candidates"]}
+    if selected.route != "ranked" or selected.projection.fail_closed:
+        raise MeasurementError("direct_selection_failed_closed")
+    trial.current["candidate_observation"].update({
+        "selected_candidate_ids": list(selected.projection.selected_candidate_ids),
+        "required_candidate_ids": list(selected.projection.required_candidate_ids),
+        "selection_reason": selected.reason,
+        "selection_order_source": selected.order_source,
+    })
+    packet = discovery["packet"]
     order = list(selected.projection.selected_candidate_ids)
-    packet = {"schema_version": pool["candidate_packet"]["schema_version"],
-              "query": prompt, "candidates": [by_id[candidate_id] for candidate_id in order]}
     if successor_ttc_contract is not None:
         if successor_witness_custody is None:
             raise MeasurementError("source_witness_custody_missing")
         packet, order, receipt = _apply_verified_fallback_measured(
-            trial, pool["identity"]["task_id"], packet, order,
+            trial, discovery["task"].task_id, packet, order,
             successor_ttc_contract, successor_witness_custody,
         )
         trial.current["verified_fallback"] = receipt
-    return compose_answer_payload(trial, lane, packet, order)
+    return compose_answer_payload(
+        trial, lane, packet, order,
+    )
+
+
+def _selected_payload(trial: Trial, pool: Mapping[str, Any], lane: Path,
+                      manifest: Mapping[str, Any], observation: Mapping[str, Any] | None,
+                      approved_request_sha256: str | None,
+                      installed: tuple[Path, str, str] | None = None,
+                      direct_discovery: Mapping[str, Any] | None = None,
+                      successor_ttc_contract: Mapping[str, Any] | None = None,
+                      successor_witness_custody: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    route = pool["identity"]["route"]
+    if route == "graph":
+        if observation is not None or installed is None:
+            raise MeasurementError("installed_graph_find_jev_path_unavailable")
+        task_id = pool["identity"]["task_id"]
+        return _installed_graph_payload(
+            trial, task_id=task_id, prompt=_question_prompt(task_id), lane=lane,
+            source_manifest=manifest, installed=installed,
+        )
+    if direct_discovery is None:
+        raise MeasurementError("direct_discovery_missing")
+    return _select_direct_payload(
+        trial, direct_discovery, lane, observation, approved_request_sha256,
+        successor_ttc_contract, successor_witness_custody,
+    )
 
 
 def _trial_identity(freeze: Mapping[str, Any], registration: Mapping[str, Any],
@@ -1889,23 +2177,35 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
     identity = _trial_identity(
         freeze, registration, corpus_id, rubric, before["restricted_state_sha256"],
         freeze["study_id"] if execution == "observed" else "four-arm-qualification",
-        pool["candidate_packet"]["query"],
+        _question_prompt(registration["task_id"]),
     )
     trial = Trial(identity, Budget(0, 600_000_000_000), execution=execution)
     jev_on = registration["arm"] in {"B", "D"}
+    installed = _install_graph_find(run_root) if pool["identity"]["route"] == "graph" else None
 
     def prepare(current: Trial, _attempt: int) -> dict[str, Any]:
+        route = pool["identity"]["route"]
+        if route == "graph" and jev_on:
+            raise MeasurementError("installed_graph_find_jev_path_incomplete")
+        source_manifest = _load_manifest(ROOT / freeze["corpora"][corpus_id]["manifest"])
+        direct_discovery = None
+        if route == "direct":
+            direct_discovery = _discover_direct(
+                current, registration["task_id"], _question_prompt(registration["task_id"]),
+                lane, source_manifest,
+            )
         observation = None
         approved = None
         if jev_on:
             approved = pool["jev_preview"]["request_sha256"]
+            packet = direct_discovery["packet"]
             if execution == "observed":
                 with current.phase("operator_approval"):
                     if budget is None or registration["call_disposition"] != "planned":
                         raise MeasurementError("jev_request_not_approved")
                 receipt, call_number = budget.reserve(registration["trial_id"], approved)
                 observation = evaluate_live(
-                    current, ROOT, pool["candidate_packet"], lane,
+                    current, ROOT, packet, lane,
                     approved_request_sha256=approved, runtime_approved=True,
                     max_live_calls=budget.cap, call_number=call_number,
                     retain_packet_telemetry=True,
@@ -1916,21 +2216,21 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
                 if replay is None:
                     raise MeasurementError("fixture_request_mismatch")
                 observation = evaluate_offline(
-                    current, ROOT, pool["candidate_packet"], lane,
+                    current, ROOT, packet, lane,
                     envelope=dict(replay), retain_packet_telemetry=True,
                 )
-            jev_answer_payload(pool["candidate_packet"], observation)
+            jev_answer_payload(packet, observation)
             if observation["status"] == "fallback":
                 with current.phase("fallback"):
                     pass
         else:
             current.not_applicable(
-                "jev_preparation", "provider", "source_revalidation",
-                "response_validation", "operator_approval",
+                "jev_preparation", "provider", "response_validation",
+                "operator_approval",
             )
         payload = _selected_payload(current, pool, lane,
-                                    _load_manifest(ROOT / freeze["corpora"][corpus_id]["manifest"]),
-                                    observation, approved, successor_ttc_contract,
+                                    source_manifest, observation, approved, installed,
+                                    direct_discovery, successor_ttc_contract,
                                     successor_witness_custody)
         if current.current["phase_status"]["fallback"] == "missing":
             current.not_applicable("fallback")

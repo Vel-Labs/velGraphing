@@ -470,6 +470,44 @@ class PortableSkillTests(unittest.TestCase):
             fallback["ranked_context"]["selection"]["jev_decision"]["jev_observation_applied"]
         )
 
+    def test_graph_find_diagnostics_are_opt_in_and_measure_source_reads(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-diagnostics-") as raw:
+            root = Path(raw)
+            source = root / "src" / "cancel.py"
+            source.parent.mkdir()
+            source.write_text(
+                "def cancel_task(task):\n    return task.cancel()\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "src/cancel.py"], check=True)
+            command = [
+                sys.executable, str(script), "--root", str(root), "--prompt",
+                "find cancel_task implementation", "--ranked-context", "plan",
+            ]
+            plain = subprocess.run(command, text=True, capture_output=True, check=False)
+            measured = subprocess.run(
+                [*command, "--diagnostics"], text=True, capture_output=True,
+                check=False, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, plain.returncode, plain.stdout + plain.stderr)
+        self.assertEqual(0, measured.returncode, measured.stdout + measured.stderr)
+        plain_payload = json.loads(plain.stdout)
+        diagnostics = json.loads(measured.stdout)["diagnostics"]
+        self.assertNotIn("diagnostics", plain_payload)
+        self.assertEqual(
+            hashlib.sha256(script.read_bytes()).hexdigest(),
+            diagnostics["runtime_identity"]["adapter_sha256"],
+        )
+        self.assertTrue(diagnostics["runtime_identity"]["candidate_sha256"])
+        self.assertGreater(diagnostics["stage_ns"]["scan"], 0)
+        self.assertGreater(diagnostics["stage_ns"]["retrieval"], 0)
+        self.assertGreater(diagnostics["stage_ns"]["selection"], 0)
+        self.assertTrue(any(row["stage"] == "scan" for row in diagnostics["source_operations"]))
+        self.assertTrue(any(row["stage"] == "selection" for row in diagnostics["source_operations"]))
+
     def test_graph_find_rebuilds_from_current_tracked_bytes(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
         with tempfile.TemporaryDirectory(prefix="graph-find-fresh-") as raw:

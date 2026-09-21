@@ -13,6 +13,7 @@ import re
 import stat
 import subprocess
 import sys
+import time
 from typing import Callable, Sequence
 
 sys.dont_write_bytecode = True
@@ -206,12 +207,18 @@ def _read_regular(
 class SnapshotReader:
     """Read-only reader over the exact bytes captured for one snapshot."""
 
-    def __init__(self, root: Path, sources: dict[str, bytes]) -> None:
+    def __init__(self, root: Path, sources: dict[str, bytes], *,
+                 read_observer: Callable[[str, bytes], None] | None = None) -> None:
         self.root = root
         self.sources = sources
+        self.read_observer = read_observer
+        self.operation_stage = "retrieval"
 
     def read_bytes(self, project_relative_path: str) -> bytes:
-        return self.sources[project_relative_path]
+        raw = self.sources[project_relative_path]
+        if self.read_observer is not None:
+            self.read_observer(self.operation_stage, raw)
+        return raw
 
     def is_symlink(self, project_relative_path: str) -> bool:
         path = self.root.joinpath(*_safe_relative(project_relative_path).parts)
@@ -230,6 +237,7 @@ def _scan(
     *,
     derive_edges: bool = True,
     source_observer: Callable[[str, bytes], None] | None = None,
+    diagnostics: dict[str, object] | None = None,
 ) -> tuple[Graph, SourceSnapshotV4, SnapshotReader, dict[str, object]]:
     _repository_root(root)
     paths = _git(root, "ls-files", "-z", "--cached").split(b"\x00")
@@ -238,6 +246,7 @@ def _scan(
     total = 0
     skipped: list[dict[str, str]] = []
     sensitive_paths_excluded = 0
+    scan_started = time.perf_counter_ns()
     for encoded in sorted(item for item in paths if item):
         try:
             relative = _safe_relative(encoded.decode("utf-8", "strict"))
@@ -260,11 +269,29 @@ def _scan(
             continue
         if source_observer is not None:
             source_observer(relative.as_posix(), data)
+        if diagnostics is not None:
+            diagnostics.setdefault("source_operations", []).append({
+                "access": "file_read", "stage": "scan",
+                "source_sha256": hashlib.sha256(data).hexdigest(),
+                "byte_count": len(data),
+            })
         total += len(data)
         sources[relative.as_posix()] = data
+    if diagnostics is not None:
+        diagnostics.setdefault("stage_ns", {})["scan"] = time.perf_counter_ns() - scan_started
     if not sources:
         raise InputError("repository has no usable Git-tracked UTF-8 files")
-    reader = SnapshotReader(root, sources)
+    def observe_read(stage: str, raw: bytes) -> None:
+        if diagnostics is not None:
+            diagnostics.setdefault("source_operations", []).append({
+                "access": "memory_read", "stage": stage,
+                "source_sha256": hashlib.sha256(raw).hexdigest(),
+                "byte_count": len(raw),
+            })
+
+    reader = SnapshotReader(
+        root, sources, read_observer=observe_read if diagnostics is not None else None,
+    )
     snapshot = SourceSnapshotV4(
         tuple(
             SourceIdentityV4(path, len(data), hashlib.sha256(data).hexdigest())
@@ -287,7 +314,12 @@ def _scan(
         for path, data in sorted(sources.items())
     )
     source_graph = Graph(records)
+    graph_started = time.perf_counter_ns()
+    reader.operation_stage = "graph_build"
     relations = derive_source_relations(source_graph, snapshot, reader) if derive_edges else None
+    if diagnostics is not None:
+        diagnostics.setdefault("stage_ns", {})["graph_build"] = time.perf_counter_ns() - graph_started
+    reader.operation_stage = "retrieval"
     edges = relations.edges if relations is not None else ()
     reason_counts: dict[str, int] = {}
     for item in skipped:
@@ -416,7 +448,10 @@ def _ranked_context(
     jev_response: str | None,
     allow_network: bool,
     approved_request_sha256: str | None,
+    diagnostics: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    retrieval_started = time.perf_counter_ns()
+    reader.operation_stage = "retrieval"
     index = build_repository_tag_index(graph, snapshot, reader)
     facets = compile_prompt(prompt, index, semantic_candidates=semantic_candidates)
 
@@ -445,6 +480,10 @@ def _ranked_context(
         )
         direct = run(False)
     graph_result = run(True)
+    if diagnostics is not None:
+        diagnostics.setdefault("stage_ns", {})["retrieval"] = time.perf_counter_ns() - retrieval_started
+    selection_started = time.perf_counter_ns()
+    reader.operation_stage = "selection"
     try:
         direct_candidates = ranked_candidates_from_retrieval(
             graph,
@@ -478,6 +517,8 @@ def _ranked_context(
         )
     except (TypeError, ValueError, jev.JevError) as error:
         return _ranked_fallback(mode, str(error))
+    if diagnostics is not None:
+        diagnostics.setdefault("stage_ns", {})["selection"] = time.perf_counter_ns() - selection_started
 
     result: dict[str, object] = {
         "jev_observation": None,
@@ -558,6 +599,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--jev-response")
     parser.add_argument("--allow-network", action="store_true")
     parser.add_argument("--approve-request-sha256")
+    parser.add_argument("--diagnostics", action="store_true", help=argparse.SUPPRESS)
     arguments = parser.parse_args(argv)
     if not arguments.prompt.strip():
         parser.error("--prompt must be non-empty")
@@ -571,8 +613,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("network approval controls require --ranked-context evaluate")
     try:
         root = _canonical_root(arguments.root)
+        diagnostics: dict[str, object] = {"source_operations": [], "stage_ns": {}}
         graph, snapshot, reader, scan_metadata = _scan(
-            root, arguments.max_file_bytes, arguments.max_total_bytes
+            root, arguments.max_file_bytes, arguments.max_total_bytes,
+            diagnostics=diagnostics if arguments.diagnostics else None,
         )
         terms = tuple(sorted(set(token.casefold() for token in _TOKEN.findall(arguments.prompt))))
         task = TaskSpec(
@@ -582,6 +626,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             byte_budget=arguments.byte_budget,
             allowed_sensitivities=(Sensitivity.INTERNAL,),
         )
+        graph_started = time.perf_counter_ns()
+        reader.operation_stage = "retrieval"
         result = graph_find(
             graph,
             task,
@@ -593,6 +639,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             source_bound_expansion=True,
             maximum_results=arguments.maximum_results,
         )
+        if arguments.diagnostics:
+            diagnostics["stage_ns"]["graph_find"] = time.perf_counter_ns() - graph_started
         if scan_metadata["sensitive_paths_excluded"]:
             result = replace(result, route="defer", reason="sensitive_paths_excluded")
         elif not scan_metadata["scan_complete"]:
@@ -624,7 +672,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                     jev_response=arguments.jev_response,
                     allow_network=arguments.allow_network,
                     approved_request_sha256=arguments.approve_request_sha256,
+                    diagnostics=diagnostics if arguments.diagnostics else None,
                 )
+        if arguments.diagnostics:
+            snapshot_sha256 = snapshot.snapshot_sha256
+            plugin_root = next((parent for parent in Path(__file__).resolve().parents
+                                if (parent / ".codex-plugin" / "release-manifest.json").is_file()), None)
+            release = None
+            adapter_sha256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+            if plugin_root is not None:
+                release = json.loads(
+                    (plugin_root / ".codex-plugin" / "release-manifest.json").read_text(encoding="utf-8")
+                )
+            diagnostics["source_snapshot_sha256"] = snapshot_sha256
+            diagnostics["runtime_identity"] = {
+                "candidate_sha256": release.get("candidate_sha256") if release else None,
+                "adapter_sha256": adapter_sha256,
+            }
+            payload["diagnostics"] = diagnostics
         json.dump(payload, sys.stdout, sort_keys=True, separators=(",", ":"))
         sys.stdout.write("\n")
         return 0
