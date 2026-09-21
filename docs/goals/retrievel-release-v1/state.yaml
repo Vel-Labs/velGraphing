@@ -1,0 +1,280 @@
+version: 2
+
+goal:
+  title: "RetrieVel 0.2 Release"
+  slug: "retrievel-release-v1"
+  kind: existing_plan
+  tranche: "Complete identity and documentation, then package, installed-path, measurement, benchmark, audit, and release gates."
+  status: active
+  oracle:
+    signal: "A clean RetrieVel 0.2 candidate installs from packaged bytes, passes release checks, completes the bounded study with required telemetry, and survives independent audit without unsupported claims."
+    cadence: "after each Worker package and at final audit"
+    final_proof: "Exact candidate identity, package parity, clean-install receipt, installed-command smoke, frozen benchmark seal, independent audit, resolved findings, and release or merge-ready receipt."
+  intake:
+    original_request: "Begin the RetrieVel release work with parallel workflows and the supplied Luna implementation task; reduce legacy VelGraphing task clutter."
+    interpreted_outcome: "Produce a compatibility-preserving, evidence-honest RetrieVel 0.2 release candidate and complete the required product, measurement, benchmark, audit, and release gates."
+    input_shape: existing_plan
+    audience: "RetrieVel users, contributors, and release operators"
+    authority: approved
+    proof_type: test
+    completion_proof: "A clean installed candidate passes the full release oracle and final audit."
+    likely_misfire: "Rename documentation and pass source tests without proving packaged installation, complete telemetry, benchmark execution, or truthful public claims."
+    blind_spots_considered:
+      - "Display-name availability and trademark clearance are not yet proven."
+      - "The primary checkout is historical; release work must remain in the isolated branch."
+      - "Historical diagnostics have incomplete wall-time and answer/grader usage."
+      - "Provider-specific performance has a separate publication boundary."
+      - "Archived tasks and retained worktrees are lifecycle history, not release proof."
+    existing_plan_facts:
+      - "Use RetrieVel as the working public display name and 'formerly VelGraphing' as compatibility wording."
+      - "Keep graph-engineering, /graph-* commands, Python imports, schemas, and repository name stable for 0.2.x."
+      - "Run package, installed-path, measurement, cross-corpus benchmark, audit, and release gates in order."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  exact_human_approval_can_terminal_wait: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  goal_pressure_requires_oracle: true
+  no_completion_on_weak_proof: true
+  slice_policy:
+    max_consecutive_tiny_tasks: 2
+    prefer_vertical_slices: true
+    judge_picks_largest_safe_slice: true
+    worker_completes_whole_slice: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+visual_board:
+  selected: none
+  local:
+    status: not_requested
+    url: null
+    command: "node <skill-path>/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-release-v1"
+
+active_task: T030
+
+tasks:
+  - id: T010
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "Establish the compatibility-preserving RetrieVel identity and refresh the public documentation and benchmark index."
+    allowed_files:
+      - README.md
+      - docs/INDEX.md
+      - benchmarks/README.md
+      - CHANGELOG.md
+      - docs/architecture/PRODUCT_IDENTITY_AND_COMPATIBILITY.md
+    verify:
+      - "git diff --check"
+      - "bounded Markdown target existence check"
+      - "PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py"
+    stop_if:
+      - "The exact base is not ab229142e9a577c88d15bacd67d5bf36cd85e1ea."
+      - "A required change falls outside allowed_files."
+      - "A public claim requires private or incomplete evidence."
+      - "Another writer overlaps an allowed file."
+    receipt:
+      result: done
+      commit: c4f094a11e320bef90535c14db6a64b08e0eb529
+      summary: "Established the RetrieVel display-name and compatibility contract in five documentation paths without changing package or runtime bytes."
+      changed_files:
+        - README.md
+        - docs/INDEX.md
+        - benchmarks/README.md
+        - CHANGELOG.md
+        - docs/architecture/PRODUCT_IDENTITY_AND_COMPATIBILITY.md
+      commands:
+        - cmd: "git diff --check"
+          status: pass
+        - cmd: "bounded standard-library Markdown target existence check"
+          status: pass
+        - cmd: "PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py"
+          status: pass
+      validation:
+        - "git diff --check: passed"
+        - "14 internal Markdown targets: passed"
+        - "source/package parity: passed, 87 files, candidate f47d377d6a51d66cd6b790f5d4a900f41719877b84def61e08bc548a5673e4c1"
+      boundary: "No package version, installed metadata, runtime, provider, network, install, push, or publication action."
+  - id: T020
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit the identity and documentation candidate for compatibility, stale claims, broken links, and unsupported evidence language."
+    inputs:
+      - "T010 receipt"
+      - "T010 commit"
+    constraints:
+      - "Read-only."
+      - "Review the exact commit."
+    expected_output:
+      - "accept | repair"
+      - "blocking findings"
+      - "next Worker packet"
+    receipt:
+      result: done
+      decision: ACCEPT
+      summary: "Exact-commit Luna audit accepted c4f094a as a display-name-only compatibility change with no broken links or unsupported benchmark claims."
+      caveat: "README retrieval-path statements still require implementation-source confirmation during the package slice."
+      constraints_forward:
+        - "Preserve graph-engineering, /graph-* commands, imports, schemas, repository URLs, frozen benchmark IDs, and .velgraphing-local paths."
+        - "Keep provider-specific performance private without separate publication authority."
+  - id: T030
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: medium
+    objective: "Build and validate the compatibility-preserving RetrieVel 0.2.0 release candidate package."
+    allowed_files:
+      - .agents/plugins/marketplace.json
+      - package.json
+      - pyproject.toml
+      - scripts/package/verify_source_package_parity.py
+      - tests/parity/test_source_package_parity.py
+      - CONTRIBUTING.md
+      - SECURITY.md
+      - docs/integrations/ORCASTRATA_UMBRELLA_CATALOG.md
+      - plugins/graph-engineering/.codex-plugin/plugin.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - plugins/graph-engineering/README.md
+      - plugins/graph-engineering/skills/graph-benchmark/SKILL.md
+      - plugins/graph-engineering/skills/graph-benchmark/templates/benchmark-report.md
+      - plugins/graph-engineering/skills/graph-jev/SKILL.md
+      - plugins/graph-engineering/skills/graph-jev/agents/openai.yaml
+      - plugins/graph-engineering/skills/graph-jev/references/usage.md
+    verify:
+      - "python version parser accepts 0.2.0-rc.1 as a prerelease"
+      - "projector twice; second pass produces no tracked diff"
+      - "write and verify release manifest"
+      - "focused scaffold, skill, and parity tests"
+      - "git diff --check"
+    stop_if:
+      - "T020 has not accepted the identity contract."
+      - "The package-ID migration boundary is ambiguous."
+      - "A change requires renaming a frozen benchmark ID, .velgraphing-local path, command, import, schema, or repository URL."
+      - "A generated runtime file would need a hand edit."
+    receipt: null
+  - id: T040
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: medium
+    objective: "Install the frozen candidate into an isolated environment and verify command discovery, offline behavior, one bounded live smoke, fallback, and removal."
+    allowed_files: []
+    verify: []
+    stop_if:
+      - "T030 has not frozen a package candidate."
+      - "A live request lacks exact scope, hash, and budget authority."
+    receipt: null
+  - id: T050
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: medium
+    objective: "Repair the smallest remaining end-to-end measurement transport gap and prove one complete canary."
+    allowed_files: []
+    verify: []
+    stop_if:
+      - "The candidate identity or installed path is not frozen."
+      - "The repair would rewrite historical results."
+    receipt: null
+  - id: T060
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Freeze the expanded corpus and question matrix with independent rubrics, exact snapshots, telemetry, budget, and publication boundaries."
+    inputs:
+      - "T050 canary receipt"
+    constraints:
+      - "No answer, grader, or provider calls."
+    expected_output:
+      - "Frozen study contract"
+      - "Exact call ceiling and cost preview"
+      - "Execution-ready or rejected decision"
+    receipt: null
+  - id: T070
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: medium
+    objective: "Execute and seal the approved cross-corpus four-arm study with fresh answer and grader lanes."
+    allowed_files: []
+    verify: []
+    stop_if:
+      - "T060 is not execution-ready."
+      - "Provider approval, key environment, call cap, or budget binding is absent."
+    receipt: null
+  - id: T080
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Run independent product, evidence, package, and release audits and specify one bounded repair if required."
+    inputs:
+      - "Frozen T070 candidate and result"
+    constraints:
+      - "Read-only audit first."
+      - "No duplicate audit without a material candidate change."
+    expected_output:
+      - "accept | repair | reject"
+      - "Exact blocking findings"
+      - "Release claim boundary"
+    receipt: null
+  - id: T090
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: medium
+    objective: "Resolve accepted audit findings, run final release qualification, and prepare the merge and release receipt."
+    allowed_files: []
+    verify: []
+    stop_if:
+      - "T080 has not produced an accepted repair or release decision."
+      - "Publication authority is absent."
+    receipt: null
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Audit the complete goal against the release oracle and close collaboration and task lifecycle state."
+    inputs:
+      - "All task receipts"
+      - "Final candidate identity"
+      - "Release validation"
+      - "Current task and collaboration inventory"
+    constraints:
+      - "Do not implement."
+      - "Reject completion while required work remains queued or active."
+      - "Archive terminal non-persistent child tasks before completion."
+    expected_output:
+      - "complete | not_complete"
+      - "full_outcome_complete: true | false"
+      - "missing evidence"
+      - "final lifecycle receipt"
+    receipt: null
+
+checks:
+  dirty_fingerprint: "clean at ab229142e9a577c88d15bacd67d5bf36cd85e1ea before T010; board files then added by Parent"
+  last_verification:
+    result: pass
+    task: T020
+    commands:
+      - "git diff --check"
+      - "bounded Markdown target existence check"
+      - "PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py"
