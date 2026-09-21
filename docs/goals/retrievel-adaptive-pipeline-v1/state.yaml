@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T270
+active_task: T280
 
 tasks:
   - id: T010
@@ -1868,7 +1868,7 @@ tasks:
   - id: T270
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Resolve an ordered outgoing relation request by using the prompt-matched source coordinate as an anchor and selecting the next verified same-file relation edge."
     allowed_files:
@@ -1912,6 +1912,68 @@ tasks:
       - "One minimal generic ordered-relation repair and generated projection"
       - "Focused, consumer, package, projector, and installed-path evidence"
       - "One R5 D-01 Graph pool with the required source-bound relationship delta"
+    receipt:
+      result: done
+      note: notes/T270-ordered-relation-anchor.md
+      changed_files:
+        - packages/core/retrieval.py
+        - plugins/graph-engineering/runtime/core/retrieval.py
+        - plugins/graph-engineering/runtime/.projection-state.json
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - tests/core/test_retrieval.py
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T270-ordered-relation-anchor.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Run focused ordered-import regression and 80-test retrieval suite"
+          status: pass
+        - cmd: "Run 121-test consumer set and 47-test clean portable and Jev set"
+          status: pass
+        - cmd: "Project twice and verify clean 87-file package parity"
+          status: pass
+        - cmd: "Install isolated package and regenerate R5 D-01 pools with zero external calls"
+          status: pass
+        - cmd: "Independent Luna final audit of product diff and D-01 pool"
+          status: pass
+      summary: "Generic ordered-successor selection now resolves the verified import immediately after a unique prompt-symbol anchor. D-01 Direct and Graph pools differ by one source-bound quick_sort relationship candidate."
+      spawned_tasks:
+        - T280
+  - id: T280
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Fold T270 into the benchmark branch and freeze a complete final-candidate R5 execution package."
+    inputs:
+      - "Product head 6b9d120e74bb0b658d8623bd2ec37bb05096f6b1"
+      - "Package candidate f47d377d6a51d66cd6b790f5d4a900f41719877b84def61e08bc548a5673e4c1"
+      - "Local benchmark merge 84c7674549bdbc2312e268bfb4f3ea67a86305b1"
+      - "T270 D-01 pool proof"
+      - "Historical R4 result seal 884dbb95387ff6b49606c2303b2788cb6d80a573eaa5fd4a63571814074f5a54"
+    constraints:
+      - "Merge T270 into the benchmark branch with normal ancestry and preserve historical R4 bytes."
+      - "Regenerate all eight paired pools and 16 trial plans on the final package candidate."
+      - "Keep the frozen tasks, rubrics, model identities, dispatch order, acceptance rules, and no-retry policy unchanged."
+      - "Create 16 fresh Luna medium answer tasks and 16 fresh Astra high grader tasks with no inherited benchmark content."
+      - "Freeze exact task IDs, host arguments, Python executable, request hashes, request bytes, source snapshots, and aggregate budget."
+      - "Do not make provider, answer, or grader calls."
+      - "Do not change GoalBuddy state; Parent records acceptance."
+    verify:
+      - "Require D-01 Graph relationship_candidate_count greater than zero and a Direct-versus-Graph request delta."
+      - "Verify every candidate and exact source span against the frozen snapshot."
+      - "Verify historical R4 before and after hashes match."
+      - "Verify product ancestry, package manifest, projector idempotence, focused benchmark tests, and clean package parity."
+      - "Run an independent Luna freeze, identity, custody, and budget audit."
+      - "Push the benchmark branch only after the freeze audit passes."
+    stop_if:
+      - "Any historical R4 byte changes."
+      - "D-01 loses its verified relationship delta."
+      - "Any task, rubric, model, acceptance, source, or dispatch identity changes outside the new freeze bindings."
+      - "The freeze audit finds a custody, lane identity, request, or budget defect."
+    expected_output:
+      - "One pushed final-candidate benchmark head"
+      - "Eight paired pools and 16 frozen trial plans"
+      - "Thirty-two fresh host-native task identities"
+      - "One independently audited freeze ready for live execution"
   - id: T999
     type: judge
     assignee: Judge
@@ -1935,16 +1997,16 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "T260 stopped before live execution; T270 resolves ordered relation anchors without changing the frozen benchmark"
+  dirty_fingerprint: "T270 accepted ordered relation anchors; T280 freezes the complete final-candidate R5 execution package"
   last_verification:
-    result: blocked
-    task: T260
+    result: pass
+    task: T270
     commands:
-      - "Final product ancestry, package identity, and historical R4 custody passed."
-      - "Fresh R5 pool generation produced eight paired pools and planned eight Jev calls."
-      - "D-01 Graph and Direct were byte-identical with zero relationship candidates."
-      - "No provider, answer, or grader call ran."
-      - "Independent Luna review confirmed a valid benchmark gate and a generic ordered-relation product defect."
+      - "Generic ordered-import regression and retrieval and consumer suites passed."
+      - "Canonical and runtime projections, clean package parity, and isolated install passed."
+      - "D-01 Graph contains one verified relationship candidate and differs from Direct."
+      - "Zero provider or model calls ran."
+      - "Independent Luna audit passed with no blocking issue."
 
 provider_budget:
   provider: typesafe_jev
