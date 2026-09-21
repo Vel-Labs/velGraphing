@@ -6,7 +6,7 @@
     },
     "controller": {
       "path": "scripts/benchmarks/four_arm_study_v1.py",
-      "sha256": "515a1762712de5af558cf4364c7010295b985828031803493352eef2e3a781f9"
+      "sha256": "b68ffd10fc733df0eb21475657c6338b5be0d966da9f7d646357f415290c6177"
     },
     "host": {
       "path": "scripts/benchmarks/time_to_correct_host.py",
@@ -15,8 +15,8 @@
     "lane_manifest": {
       "entry_count": 32,
       "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
-      "sha256": null,
-      "status": "pending_parent_freeze"
+      "sha256": "c164f76c2e5a995661be6f534eb38e4b364c57e8592844da5f6e21fde7632382",
+      "status": "frozen"
     },
     "pool_bindings": {
       "direct:D-01": "d5ff853da5725875aa6fa812569ddc02a70b23352d8c59b27fecb79937609fb6",
@@ -37,7 +37,7 @@
     "successor_grader_response_contract_sha256": "dd517640475fe2219514ebee94a01182bbd74ff17adafeb5aa1348a3e0f6db2c",
     "successor_rubric": {
       "path": "successor-rubrics.json",
-      "sha256": "9a296e0a83f7d0fc17408679baa607743da1f79206d6cff4267c648a5cf506d8"
+      "sha256": "f851ba07b55cf9e520527021fc737f1f11f59803d29e24e60a771b0328c35f69"
     }
   },
   "classification": {
@@ -57,19 +57,41 @@
   },
   "fact_witness_map_sha256": "430aaebf981f370b6a8005168252d2676a3a361c0d705b7faa43479c87a5b5ad",
   "fallback_allowlist_sha256": "75e4c72c5a3b945a8bd1cfdbb994341cd185060ce33450c23357fe0f8583d122",
+  "provider_budget_authority": {
+    "currency": "USD",
+    "total_authorized_usd": "1.0000",
+    "operator_reported_spend_to_date_usd": "0.0969",
+    "operator_reported_calls_to_date": 108,
+    "operator_reported_tokens_to_date": 2371440,
+    "remaining_authorized_usd": "0.9031",
+    "max_additional_spend_usd": "0.9031",
+    "source": "operator_provided_typesafe_account_truth",
+    "provider_verified": false,
+    "historical_reservation_reconciliation": {
+      "amount_usd": "0.359789241",
+      "basis": "historical_request_byte_based_total_reservation",
+      "status": "retired_historical_only",
+      "counts_as_spend": false,
+      "charged": false,
+      "subtract_again_from_remaining_budget": false,
+      "attributable_to_operator_reported_account_level_spend": false
+    }
+  },
   "remaining_authority": {
-    "absolute_python_executable": null,
+    "absolute_python_executable": "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python",
     "answer_thread_ids": 16,
     "exact_host_argv_arrays": 32,
     "final_user_reack": [
       "request_byte_set_sha256",
       "eight_call_cap",
-      "max_live_provider_budget_usd",
+      "total_authorized_provider_budget_usd",
+      "operator_reported_spend_to_date_usd",
+      "max_additional_provider_spend_usd",
       "lane_manifest_sha256",
       "absolute_python_executable"
     ],
     "grader_thread_ids": 16,
-    "lane_manifest_sha256": null,
+    "lane_manifest_sha256": "c164f76c2e5a995661be6f534eb38e4b364c57e8592844da5f6e21fde7632382",
     "live_lanes_created": 0
   },
   "result_contract": {
@@ -101,7 +123,7 @@
     "token_policy": "host_reported_only_never_estimate_from_bytes"
   },
   "schema_version": "velgraphing-four-arm-successor-ttc-v1",
-  "status": "pending_lane_manifest_and_final_user_reack",
+  "status": "frozen_pending_final_user_reack",
   "trial_policy": {
     "answer_calls_per_dispatch": 1,
     "answer_repairs": 0,

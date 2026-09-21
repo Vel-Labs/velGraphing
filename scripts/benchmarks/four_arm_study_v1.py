@@ -61,7 +61,29 @@ SUCCESSOR_WITNESS_CUSTODY = (
     "successor-ttc-witness-custody.json"
 )
 LOCAL_POOL_ARTIFACT = ".velgraphing-local/velgraphing-four-arm-study-v1/phase-2-pools.json"
-MAX_LIVE_PROVIDER_BUDGET_USD = Decimal("1.00")
+PROVIDER_BUDGET_AUTHORITY = {
+    "currency": "USD",
+    "total_authorized_usd": "1.0000",
+    "operator_reported_spend_to_date_usd": "0.0969",
+    "operator_reported_calls_to_date": 108,
+    "operator_reported_tokens_to_date": 2_371_440,
+    "remaining_authorized_usd": "0.9031",
+    "max_additional_spend_usd": "0.9031",
+    "source": "operator_provided_typesafe_account_truth",
+    "provider_verified": False,
+    "historical_reservation_reconciliation": {
+        "amount_usd": "0.359789241",
+        "basis": "historical_request_byte_based_total_reservation",
+        "status": "retired_historical_only",
+        "counts_as_spend": False,
+        "charged": False,
+        "subtract_again_from_remaining_budget": False,
+        "attributable_to_operator_reported_account_level_spend": False,
+    },
+}
+MAX_ADDITIONAL_PROVIDER_SPEND_USD = Decimal(
+    PROVIDER_BUDGET_AUTHORITY["max_additional_spend_usd"]
+)
 HISTORICAL_CONTROLLER_SHA256 = "79f42fbeee18c45731ec963102e31480bd4669f9f89cb1cedaccbbbcb2e8a21a"
 HISTORICAL_HOST_SHA256 = "4e89e9283870ca164a9a82fb93d65b60c9027b76d85ef5e99670d278e1fa1393"
 HISTORICAL_GRAPH_FIND_SHA256 = "5f62bbd9194250c177616ac9198ffc4b27d483b9a5ff1c2f5742e3e0e4505021"
@@ -1476,8 +1498,9 @@ def _validate_successor_ttc_contract(
         set(value) != {
             "schema_version", "status", "classification", "trial_policy",
             "verifier_policy", "verifier_policy_sha256", "fact_witness_map_sha256",
-            "fallback_allowlist_sha256", "witness_custody_sha256", "bindings",
-            "result_contract", "remaining_authority",
+            "fallback_allowlist_sha256", "witness_custody_sha256",
+            "provider_budget_authority", "bindings", "result_contract",
+            "remaining_authority",
         }
         or value.get("schema_version") != "velgraphing-four-arm-successor-ttc-v1"
         or value.get("status") not in {
@@ -1509,6 +1532,8 @@ def _validate_successor_ttc_contract(
         }
     ):
         raise StudyError("successor_ttc_contract_invalid")
+    if value.get("provider_budget_authority") != PROVIDER_BUDGET_AUTHORITY:
+        raise StudyError("successor_provider_budget_authority_invalid")
     verifier = value.get("verifier_policy")
     if (
         verifier != {
@@ -1660,7 +1685,9 @@ def _validate_successor_ttc_contract(
         "lane_manifest_sha256": None,
         "final_user_reack": [
             "request_byte_set_sha256", "eight_call_cap",
-            "max_live_provider_budget_usd",
+            "total_authorized_provider_budget_usd",
+            "operator_reported_spend_to_date_usd",
+            "max_additional_provider_spend_usd",
             "lane_manifest_sha256", "absolute_python_executable",
         ],
         "live_lanes_created": 0,
@@ -1671,7 +1698,6 @@ def _validate_successor_ttc_contract(
             "absolute_python_executable"
         ),
         "lane_manifest_sha256": lane_binding.get("sha256"),
-        "live_lanes_created": 32,
     })
     ready_authority = dict(frozen_authority)
     ready_authority["final_user_reack"] = []
@@ -2224,7 +2250,7 @@ def _build_successor_freeze(
     }
     return {
         "schema_version": SUCCESSOR_FREEZE_SCHEMA,
-        "status": "frozen_pending_fresh_lane_manifest_and_final_user_reack",
+        "status": "frozen_pending_final_user_reack",
         "study_id": freeze["study_id"],
         "bindings": {
             "historical_freeze_sha256": digest(
@@ -2271,7 +2297,10 @@ def _build_successor_freeze(
             "live_lanes_created": 0,
             "execution_ready": False,
             "final_user_reack_required": True,
-            "max_live_provider_budget_usd": str(MAX_LIVE_PROVIDER_BUDGET_USD),
+            "provider_budget_authority": contract["provider_budget_authority"],
+            "max_additional_provider_spend_usd": str(
+                MAX_ADDITIONAL_PROVIDER_SPEND_USD
+            ),
             "provider_spend_authorized": False,
         },
         "telemetry_schema": freeze["telemetry_schema"],
@@ -3006,8 +3035,13 @@ def _seal(run_root: Path, freeze: Mapping[str, Any], registrations: Mapping[str,
         })
     else:
         budget.update({
-            "max_live_provider_budget_usd": str(MAX_LIVE_PROVIDER_BUDGET_USD),
-            "budget_semantics": "authorized_maximum_not_cost_estimate",
+            "provider_budget_authority": (
+                successor_ttc_contract["provider_budget_authority"]
+            ),
+            "max_additional_provider_spend_usd": str(
+                MAX_ADDITIONAL_PROVIDER_SPEND_USD
+            ),
+            "budget_semantics": "operator_reported_remaining_authority_not_provider_verified",
         })
     value = {
         "schema_version": (
@@ -3088,20 +3122,20 @@ def _seal(run_root: Path, freeze: Mapping[str, Any], registrations: Mapping[str,
     return value
 
 
-def _validate_approved_provider_budget(approved: str | None) -> None:
+def _validate_approved_additional_provider_spend(approved: str | None) -> None:
     try:
         approved_cap_usd = Decimal(approved) if approved is not None else None
     except ArithmeticError:
         approved_cap_usd = None
-    if approved_cap_usd != MAX_LIVE_PROVIDER_BUDGET_USD:
-        raise MeasurementError("live_provider_budget_ceiling_not_approved")
+    if approved_cap_usd != MAX_ADDITIONAL_PROVIDER_SPEND_USD:
+        raise MeasurementError("max_additional_provider_spend_not_approved")
 
 
 def run_study(benchmark_root: Path, pool_path: Path, lane_root: Path, run_root: Path,
               manifest_path: Path, custody_path: Path, *, allow_live_jev: bool,
               approved_cap: int | None,
               approved_request_set: str | None,
-              approved_max_live_provider_budget_usd: str | None,
+              approved_max_additional_provider_spend_usd: str | None,
               approved_manifest: str | None, approved_python: str | None) -> dict[str, Any]:
     freeze, _, _ = load_bundle(benchmark_root, ROOT)
     rubrics = load_successor_rubrics(benchmark_root, ROOT)
@@ -3119,7 +3153,9 @@ def run_study(benchmark_root: Path, pool_path: Path, lane_root: Path, run_root: 
         or approved_request_set != REQUEST_BYTE_SET_SHA256
     ):
         raise MeasurementError("live_jev_not_approved")
-    _validate_approved_provider_budget(approved_max_live_provider_budget_usd)
+    _validate_approved_additional_provider_spend(
+        approved_max_additional_provider_spend_usd,
+    )
     root = validate_run_root(str(run_root))
     if manifest_path != root / "lane-manifest.json":
         raise MeasurementError("lane_manifest_path_invalid")
@@ -3273,7 +3309,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     run.add_argument("--allow-live-jev", action="store_true")
     run.add_argument("--approved-max-live-jev-calls", type=int)
     run.add_argument("--approved-request-byte-set-sha256")
-    run.add_argument("--approved-max-live-provider-budget-usd")
+    run.add_argument("--approved-max-additional-provider-spend-usd")
     run.add_argument("--approved-lane-manifest-sha256")
     run.add_argument("--approved-python-executable")
     qualification = subparsers.add_parser("qualify")
@@ -3387,8 +3423,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 allow_live_jev=arguments.allow_live_jev,
                 approved_cap=arguments.approved_max_live_jev_calls,
                 approved_request_set=arguments.approved_request_byte_set_sha256,
-                approved_max_live_provider_budget_usd=(
-                    arguments.approved_max_live_provider_budget_usd
+                approved_max_additional_provider_spend_usd=(
+                    arguments.approved_max_additional_provider_spend_usd
                 ),
                 approved_manifest=arguments.approved_lane_manifest_sha256,
                 approved_python=arguments.approved_python_executable,

@@ -67,11 +67,19 @@ request-byte set, pool hashes, and private witness-custody digests. It does not
 rewrite `freeze.json`, `preflight.json`, or sealed results. It records eight
 planned Jev calls, zero retries, and zero executed answer, grader, Jev, or
 provider calls. It does not create answer or grader tasks, freeze lane IDs,
-authorize provider spend, or make the study execution-ready. The maximum live
-provider budget is USD 1.00, independent of request-byte counts. This is a
-spend authorization ceiling, not an estimated cost or predicted charge. Final
-user re-ack must approve this exact ceiling. Request bytes identify the frozen
-request set only.
+authorize provider spend, or make the study execution-ready. The operator
+reports a TypeSafe account total of USD 1.0000, spend to date of USD 0.0969
+across 108 calls and 2,371,440 tokens, and USD 0.9031 remaining. This account
+snapshot is operator-provided and not provider-verified. The maximum additional
+spend for this batch is USD 0.9031. It is an authority limit, not a cost
+estimate. The eight-call cap and zero retries are separate batch controls.
+Final user re-ack must confirm this financial snapshot and maximum additional
+amount. Request bytes identify the frozen request set only. The historical
+USD 0.359789241 byte-based `total_reservation_usd` is retired and historical-only.
+It is not spend or a charge, must not be subtracted again, and is not
+attributable to the operator-reported USD 0.0969 account-level spend. Successor
+planning uses USD 0.9031 remaining and maximum additional spend, with the
+separate eight-call and zero-retry batch controls.
 
 The successor TTC contract adds a deterministic pre-answer source-completeness
 check. It uses only selected evidence identities and a frozen private fact-witness
@@ -133,10 +141,39 @@ The prep command scans the pinned lanes again and verifies the generated pool
 SHA-256 against the successor preflight before it writes the ignored artifact.
 It creates no lanes and makes no model or provider call.
 
+## T070 authority-only lane freeze
+
+After pool and custody validation, freeze the 32-entry lane manifest from the
+ignored `lane-bindings.json` under the selected ignored run root:
+
+```sh
+python3 -B scripts/benchmarks/four_arm_study_v1.py \
+  freeze-lanes --root benchmarks/velgraphing-four-arm-study-v1 \
+  --bindings "$RUN_ROOT/lane-bindings.json" \
+  --run-root "$RUN_ROOT" --python-executable "$PYTHON" \
+  --witness-custody "$WITNESS_CUSTODY"
+```
+
+The 32 unique identifiers are planned nested task names: one Luna answer lane
+and one Astra grader lane for each trial. This freeze creates only the manifest.
+It does not create nested tasks. `live_lanes_created` remains zero, and
+`execution_ready` remains false. After this manifest is frozen, successor freeze
+status is `frozen_pending_final_user_reack`; a fresh lane manifest is no longer
+pending. The frozen contract still requires final user
+re-ack for the request-byte-set hash, eight-call cap, USD 1.0000 total budget,
+operator-reported USD 0.0969 spend-to-date, USD 0.9031 maximum additional
+spend, manifest hash, and absolute Python executable. The spend snapshot is
+operator-provided and not provider-verified. The eight-call cap and zero retries
+remain separate batch controls.
+
 The successor `run` command uses
-`--approved-max-live-provider-budget-usd 1.00` only after final user re-ack.
+`--approved-max-additional-provider-spend-usd 0.9031` only after final user re-ack.
 Do not use the historical `--approved-budget-usd` value for successor
 execution. The old request-byte reservation fields remain historical-only.
+The historical USD 0.359789241 `total_reservation_usd` is not spend, not charged,
+must not be subtracted again, and is not part of the operator-reported USD
+0.0969 account-level spend. It does not reduce the successor USD 0.9031
+remaining/max-additional authority.
 
 ## Jev budget and skip rule
 
@@ -217,9 +254,10 @@ serializes an equivalent canonical lane draft before the existing attestation
 flow. The historical T300 request-byte set, eight-call cap, reservation,
 manifest hash, and Python executable apply only to that earlier private
 boundary. This T060 successor has separate pending authority. It requires final
-user re-ack for its request-byte-set hash, eight-call cap, USD 1.00 maximum
-live provider spend, lane-manifest hash, and Python executable. No lane or
-provider call is authorized by this package.
+user re-ack for its request-byte-set hash, eight-call cap, operator-reported
+account budget snapshot, USD 0.9031 maximum additional provider spend,
+lane-manifest hash, and Python executable. No lane or provider call is
+authorized by this package.
 
 Provider performance details remain private unless separate provider permission
 authorizes publication. This restriction applies to future results as well as

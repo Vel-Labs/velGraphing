@@ -11,7 +11,7 @@
       },
       "controller": {
         "path": "scripts/benchmarks/four_arm_study_v1.py",
-        "sha256": "515a1762712de5af558cf4364c7010295b985828031803493352eef2e3a781f9"
+        "sha256": "b68ffd10fc733df0eb21475657c6338b5be0d966da9f7d646357f415290c6177"
       },
       "host": {
         "path": "scripts/benchmarks/time_to_correct_host.py",
@@ -41,8 +41,8 @@
       "openchain-reference-material": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
       "thealgorithms-python": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
     },
-    "successor_rubric_sha256": "9a296e0a83f7d0fc17408679baa607743da1f79206d6cff4267c648a5cf506d8",
-    "successor_ttc_core_sha256": "3d0cfb83689ff13be9c1984ecb62ef99e634f2e0dc5056f95ae3089efe7d5a1c",
+    "successor_rubric_sha256": "f851ba07b55cf9e520527021fc737f1f11f59803d29e24e60a771b0328c35f69",
+    "successor_ttc_core_sha256": "811cbb9091e8a8b072ed3ddc0ed4ac2d67d577f256eb380c72fc4715feb97af1",
     "witness_custody_sha256": "e042c9ee45c7fcc9e36a7ad693b7f77106f12dd94f06756b9e8ae19e276be38b"
   },
   "claim_boundary": {
@@ -72,8 +72,28 @@
     "jev_retries": 0,
     "lane_reuse": false,
     "live_lanes_created": 0,
-    "max_live_provider_budget_usd": "1.00",
+    "max_additional_provider_spend_usd": "0.9031",
     "planned_jev_calls": 8,
+    "provider_budget_authority": {
+      "currency": "USD",
+      "historical_reservation_reconciliation": {
+        "amount_usd": "0.359789241",
+        "attributable_to_operator_reported_account_level_spend": false,
+        "basis": "historical_request_byte_based_total_reservation",
+        "charged": false,
+        "counts_as_spend": false,
+        "status": "retired_historical_only",
+        "subtract_again_from_remaining_budget": false
+      },
+      "max_additional_spend_usd": "0.9031",
+      "operator_reported_calls_to_date": 108,
+      "operator_reported_spend_to_date_usd": "0.0969",
+      "operator_reported_tokens_to_date": 2371440,
+      "provider_verified": false,
+      "remaining_authorized_usd": "0.9031",
+      "source": "operator_provided_typesafe_account_truth",
+      "total_authorized_usd": "1.0000"
+    },
     "provider_calls_executed": 0,
     "provider_spend_authorized": false,
     "task_retries": 0
@@ -112,7 +132,7 @@
     "token_policy": "host_reported_only_never_estimate_from_bytes"
   },
   "schema_version": "velgraphing-four-arm-successor-freeze-v1",
-  "status": "frozen_pending_fresh_lane_manifest_and_final_user_reack",
+  "status": "frozen_pending_final_user_reack",
   "study_id": "velgraphing-four-arm-study-v1",
   "telemetry_schema": {
     "failure": [

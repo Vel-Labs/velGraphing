@@ -335,7 +335,7 @@ tasks:
     receipt:
       result: done
       commit: c5aa657eedd49423faed8407d4b7ac01fa92153f
-      summary: "Frozen a separate current-candidate successor study for four tasks by four arms. It binds the 0.2.0-rc.1 package, current controller, corrected rubrics, pinned snapshots, eight source-bound pools, private witness custody, request-byte set, complete telemetry contract, an independent USD 1.00 live-spend ceiling, and explicit non-public provider boundaries. Execution remains disabled until fresh lanes and final exact user re-ack exist."
+      summary: "Frozen a separate current-candidate successor study for four tasks by four arms. Its original USD 1.00 maximum-additional figure was superseded by T070 operator-provided TypeSafe account truth: USD 1.0000 total, USD 0.0969 reported spent across 108 calls and 2,371,440 tokens, and USD 0.9031 remaining and maximum additional spend. This account snapshot is not provider-verified. The T070 receipt records the refreshed freeze. Execution remains disabled pending final exact user re-ack."
       changed_files:
         - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
         - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
@@ -378,13 +378,18 @@ tasks:
     objective: "Execute and seal the approved cross-corpus four-arm study with fresh answer and grader lanes."
     allowed_files:
       - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
       - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
       - scripts/benchmarks/four_arm_study_v1.py
       - tests/benchmarks/test_four_arm_study_v1.py
+      - docs/goals/retrievel-release-v1/notes/T060-study-freeze.md
       - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
+      - docs/goals/retrievel-release-v1/state.yaml
     verify:
       - "freeze a unique 32-entry fresh lane manifest and bind its exact hash and Python executable"
-      - "obtain final exact user re-ack for request-byte-set hash, eight-call cap, USD 1.00 maximum live provider spend, lane-manifest hash, and Python executable"
+      - "obtain final exact user re-ack for request-byte-set hash, eight-call cap, total authorized USD 1.0000, operator-reported spend-to-date USD 0.0969, maximum additional spend USD 0.9031, lane-manifest hash, and Python executable"
       - "execute serially with one answer and one independent grader per trial, zero retries, and at most eight Jev calls"
       - "seal the private source-free result and retain complete timing, correctness, usage missingness, and failure classifications"
       - "run focused validation and git diff --check"

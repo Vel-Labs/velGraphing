@@ -770,8 +770,15 @@ class FourArmStudyTests(unittest.TestCase):
         self.assertEqual(self.successor["arm_labels"], study.SUCCESSOR_ARM_LABELS)
 
     def test_successor_freeze_binds_current_candidate_and_pending_authority(self) -> None:
+        generated = study._build_successor_freeze(
+            self.freeze, self.successor, self.ttc, 8, BENCHMARK, ROOT,
+        )
+        self.assertEqual(generated, self.successor_freeze)
         bindings = self.successor_freeze["bindings"]
         policy = self.successor_freeze["execution_policy"]
+        self.assertEqual(
+            self.successor_freeze["status"], "frozen_pending_final_user_reack",
+        )
         self.assertEqual(
             bindings["package_candidate"]["candidate_sha256"],
             json.loads((ROOT / "plugins/graph-engineering/.codex-plugin/release-manifest.json")
@@ -789,10 +796,14 @@ class FourArmStudyTests(unittest.TestCase):
         self.assertEqual(policy["grader_tasks_created"], 0)
         self.assertEqual(policy["live_lanes_created"], 0)
         self.assertFalse(policy["execution_ready"])
-        self.assertEqual(policy["max_live_provider_budget_usd"], "1.00")
+        self.assertEqual(policy["max_additional_provider_spend_usd"], "0.9031")
+        self.assertEqual(
+            policy["provider_budget_authority"],
+            self.ttc["provider_budget_authority"],
+        )
         self.assertFalse(policy["provider_spend_authorized"])
         self.assertIn(
-            "max_live_provider_budget_usd",
+            "max_additional_provider_spend_usd",
             self.ttc["remaining_authority"]["final_user_reack"],
         )
         self.assertNotIn(
@@ -821,13 +832,35 @@ class FourArmStudyTests(unittest.TestCase):
                 self.freeze, BENCHMARK,
             )
 
-    def test_live_provider_budget_is_independent_and_requires_exact_cap(self) -> None:
-        self.assertEqual(study.MAX_LIVE_PROVIDER_BUDGET_USD, Decimal("1.00"))
+    def test_additional_provider_spend_uses_unverified_operator_account_truth(self) -> None:
+        authority = self.ttc["provider_budget_authority"]
+        self.assertEqual(study.MAX_ADDITIONAL_PROVIDER_SPEND_USD, Decimal("0.9031"))
+        self.assertEqual(authority["total_authorized_usd"], "1.0000")
+        self.assertEqual(authority["operator_reported_spend_to_date_usd"], "0.0969")
+        self.assertEqual(authority["operator_reported_calls_to_date"], 108)
+        self.assertEqual(authority["operator_reported_tokens_to_date"], 2_371_440)
+        self.assertEqual(authority["remaining_authorized_usd"], "0.9031")
+        self.assertEqual(authority["source"], "operator_provided_typesafe_account_truth")
+        self.assertFalse(authority["provider_verified"])
+        self.assertEqual(authority["historical_reservation_reconciliation"], {
+            "amount_usd": "0.359789241",
+            "basis": "historical_request_byte_based_total_reservation",
+            "status": "retired_historical_only",
+            "counts_as_spend": False,
+            "charged": False,
+            "subtract_again_from_remaining_budget": False,
+            "attributable_to_operator_reported_account_level_spend": False,
+        })
+        self.assertEqual(
+            Decimal(authority["operator_reported_spend_to_date_usd"])
+            + Decimal(authority["remaining_authorized_usd"]),
+            Decimal(authority["total_authorized_usd"]),
+        )
         with self.assertRaisesRegex(
-            study.MeasurementError, "live_provider_budget_ceiling_not_approved",
+            study.MeasurementError, "max_additional_provider_spend_not_approved",
         ):
-            study._validate_approved_provider_budget("0.359789241")
-        study._validate_approved_provider_budget("1.00")
+            study._validate_approved_additional_provider_spend("1.00")
+        study._validate_approved_additional_provider_spend("0.9031")
 
     def test_pool_hash_mismatch_blocks_preparation_and_lane_creation(self) -> None:
         expected = study.digest(b"frozen-source-bound-pools")
@@ -864,7 +897,7 @@ class FourArmStudyTests(unittest.TestCase):
                             Path(directory) / "run", Path(directory) / "lane-manifest.json",
                             CUSTODY, allow_live_jev=True, approved_cap=8,
                             approved_request_set=study.REQUEST_BYTE_SET_SHA256,
-                            approved_max_live_provider_budget_usd="1.00",
+                            approved_max_additional_provider_spend_usd="0.9031",
                             approved_manifest="0" * 64,
                             approved_python=sys.executable,
                         )
@@ -1066,11 +1099,19 @@ class FourArmStudyTests(unittest.TestCase):
                 successor_ttc_contract=self.ttc, successor_rubrics=self.successor,
             )
         self.assertEqual(sealed["classification"], "oracle_assisted_fallback_ttc")
-        self.assertEqual(sealed["budget"]["max_live_provider_budget_usd"], "1.00")
+        self.assertEqual(
+            sealed["budget"]["max_additional_provider_spend_usd"], "0.9031",
+        )
+        self.assertEqual(
+            sealed["budget"]["provider_budget_authority"][
+                "operator_reported_spend_to_date_usd"
+            ],
+            "0.0969",
+        )
         self.assertNotIn("total_reservation_usd", sealed["budget"])
         self.assertEqual(
             sealed["budget"]["budget_semantics"],
-            "authorized_maximum_not_cost_estimate",
+            "operator_reported_remaining_authority_not_provider_verified",
         )
         with tempfile.TemporaryDirectory(dir=local) as directory:
             historical = study._seal(
@@ -1138,7 +1179,12 @@ class FourArmStudyTests(unittest.TestCase):
 
     def test_successor_contract_refuses_stale_bindings_and_pending_manifest(self) -> None:
         self.assertEqual(
-            self.ttc["status"], "pending_lane_manifest_and_final_user_reack",
+            self.ttc["status"], "frozen_pending_final_user_reack",
+        )
+        self.assertEqual(self.ttc["remaining_authority"]["live_lanes_created"], 0)
+        self.assertEqual(
+            self.ttc["remaining_authority"]["lane_manifest_sha256"],
+            self.ttc["bindings"]["lane_manifest"]["sha256"],
         )
         with self.assertRaisesRegex(study.StudyError, "successor_lane_manifest_not_ready"):
             study.validate_successor_execution_bindings(self.ttc, self.freeze)
@@ -1156,6 +1202,9 @@ class FourArmStudyTests(unittest.TestCase):
             "request_set": lambda value: value["bindings"].update(
                 request_byte_set_sha256="0" * 64
             ),
+            "provider_budget_authority": lambda value: value[
+                "provider_budget_authority"
+            ].update(max_additional_spend_usd="1.0000"),
             "manifest": lambda value: value["bindings"]["lane_manifest"].update(
                 sha256="0" * 64
             ),
