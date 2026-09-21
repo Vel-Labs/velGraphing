@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T192
+active_task: T200
 
 tasks:
   - id: T010
@@ -1398,7 +1398,7 @@ tasks:
   - id: T192
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Bind the strict r3 lane manifest into the tracked successor contract and validate the exact execution identity."
     allowed_files:
@@ -1419,6 +1419,38 @@ tasks:
     expected_output:
       - "Ready contract bound to r3 manifest"
       - "One reviewable commit"
+    receipt:
+      result: done
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      commands:
+        - cmd: "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 -v"
+          status: pass
+        - cmd: "Validate exact strict r3 manifest against ready contract"
+          status: pass
+      summary: "Accepted and pushed 4f07ef8. The ready contract binds strict r3 manifest 7ce65963 and all 32 verified non-delegating tasks."
+      spawned_tasks:
+        - T200
+  - id: T200
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Execute the strict r3 live study, service each bound lane directly, and seal the result or stop at the first new fail-closed reason."
+    inputs:
+      - "Benchmark head 4f07ef8"
+      - "Strict r3 run root successor-live-r3-d6d79bc"
+      - "Manifest 7ce6596315b92f7f33b1314ed96d3fda05f05591499ca2a3b9296baa1bdb1dba"
+      - "Unchanged request set and approved TypeSafe budget"
+    constraints:
+      - "Follow the frozen dispatch order."
+      - "Every lane must execute directly with no delegation."
+      - "No provider, answer, or grader retry."
+      - "Stop at the first new contract failure."
+    expected_output:
+      - "Sixteen terminal trial receipts and one result seal"
+      - "At most eight Jev calls"
+      - "Measured correctness, TTC, wall time, fallback, and usage missingness"
     receipt: null
   - id: T999
     type: judge
