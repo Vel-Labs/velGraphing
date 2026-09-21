@@ -63,7 +63,7 @@ visual_board:
     url: null
     command: "node <skill-path>/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-release-v1"
 
-active_task: T060
+active_task: T070
 
 tasks:
   - id: T010
@@ -311,7 +311,7 @@ tasks:
   - id: T060
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Freeze the smallest current-candidate successor study with four task types, four arms, independent rubrics, exact snapshots, telemetry, an eight-call maximum, and explicit claim boundaries."
     allowed_files:
@@ -332,15 +332,62 @@ tasks:
       - "The successor freeze would rewrite the historical freeze or sealed results."
       - "The current source snapshots or private witness custody cannot be reproduced exactly."
       - "Any command would invoke an answer, grader, provider, credential, or network path."
-    receipt: null
+    receipt:
+      result: done
+      commit: c5aa657eedd49423faed8407d4b7ac01fa92153f
+      summary: "Frozen a separate current-candidate successor study for four tasks by four arms. It binds the 0.2.0-rc.1 package, current controller, corrected rubrics, pinned snapshots, eight source-bound pools, private witness custody, request-byte set, complete telemetry contract, an independent USD 1.00 live-spend ceiling, and explicit non-public provider boundaries. Execution remains disabled until fresh lanes and final exact user re-ack exist."
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+        - scripts/benchmarks/four_arm_study_v1.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+        - docs/goals/retrievel-release-v1/notes/T060-study-freeze.md
+      commands:
+        - cmd: "freeze-successor against pinned local v4 lanes"
+          status: pass
+        - cmd: "prepare-successor-execution and exact local pool SHA verification"
+          status: pass
+        - cmd: "validate-successor-overlay"
+          status: pass
+        - cmd: "focused benchmark unittest discovery"
+          status: pass
+        - cmd: "clean-export six-suite validation on c5aa657eedd49423faed8407d4b7ac01fa92153f"
+          status: pass
+        - cmd: "clean-export source/package parity"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      validation:
+        - "successor matrix: 16 trials, 8 pools, 8 planned Jev calls, 0 retries, 0 answer/grader/provider calls"
+        - "focused benchmark suite: 31 passed, 2 expected path-local skips"
+        - "clean exact-commit suite: scaffold 11, core 284, adapters 18, skills 38, benchmarks 196 with 28 expected skips, parity 10"
+        - "package parity: passed, 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+        - "independent Luna T060 re-audit: ACCEPT"
+      freeze_sha256: 36438e19c2e51a723825a921f3457e1127e1e5744424eb9526ab743a79bea56b
+      preflight_sha256: e9439a7ee7c173d41d93afb932a3a08d5342d667ac261def5ce8e8d8b6df88df
+      pool_artifact_sha256: 3721b7378848d024e073cfa67bce44249b62551835ce236c22837119fee16d7b
+      boundary: "Historical freeze, preflight, and sealed results are unchanged. No lane task, provider call, credential access, network call, push, or publication occurred."
   - id: T070
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: medium
     objective: "Execute and seal the approved cross-corpus four-arm study with fresh answer and grader lanes."
-    allowed_files: []
-    verify: []
+    allowed_files:
+      - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      - scripts/benchmarks/four_arm_study_v1.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
+    verify:
+      - "freeze a unique 32-entry fresh lane manifest and bind its exact hash and Python executable"
+      - "obtain final exact user re-ack for request-byte-set hash, eight-call cap, USD 1.00 maximum live provider spend, lane-manifest hash, and Python executable"
+      - "execute serially with one answer and one independent grader per trial, zero retries, and at most eight Jev calls"
+      - "seal the private source-free result and retain complete timing, correctness, usage missingness, and failure classifications"
+      - "run focused validation and git diff --check"
     stop_if:
       - "T060 is not execution-ready."
       - "Provider approval, key environment, call cap, or budget binding is absent."
@@ -399,8 +446,8 @@ checks:
   dirty_fingerprint: "clean at ab229142e9a577c88d15bacd67d5bf36cd85e1ea before T010; board files then added by Parent"
   last_verification:
     result: pass
-    task: T060
+    task: T070
     commands:
-      - "clean-export six-suite validation on a496154e8e51b357e5c988d6a6354b5154a9e731"
+      - "clean-export six-suite validation on c5aa657eedd49423faed8407d4b7ac01fa92153f"
       - "clean-export source/package parity on candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
-      - "independent Luna observed-host re-audit: ACCEPT"
+      - "independent Luna T060 re-audit: ACCEPT"
