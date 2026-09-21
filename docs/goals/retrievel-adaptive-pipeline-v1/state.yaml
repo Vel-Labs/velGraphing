@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T171
+active_task: T180
 
 tasks:
   - id: T010
@@ -1111,7 +1111,7 @@ tasks:
   - id: T171
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Bind the approved successor lane manifest and Python executable into the tracked contract, update only the affected contract test, and validate the live-ready candidate without executing it."
     allowed_files:
@@ -1138,6 +1138,44 @@ tasks:
       - "Frozen lane binding and complete remaining_authority"
       - "Focused tests and successor overlay validation pass"
       - "One reviewable commit on codex/retrievel-four-arm-study-v1"
+    receipt:
+      result: done
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - tests/benchmarks/test_four_arm_study_v1.py
+      commands:
+        - cmd: "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 -v"
+          status: pass
+        - cmd: "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1 --witness-custody .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json"
+          status: pass
+        - cmd: "Validate the exact private manifest against the ready tracked contract."
+          status: pass
+        - cmd: "git diff HEAD^ --check"
+          status: pass
+      summary: "Accepted and pushed benchmark commit 591557b. The tracked contract now binds the approved manifest, absolute Python executable, 32 live lanes, empty re-ack list, and unchanged request, budget, and claim controls."
+      spawned_tasks:
+        - T180
+  - id: T180
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Execute the approved frozen successor study once, resume its exact host-bound lanes, and seal the private result without retries or scope expansion."
+    inputs:
+      - "Live-ready benchmark commit 591557b"
+      - "Private lane manifest SHA 7c5eb412817c0b4b87c59b865f41ca5b7fa41f1ea6a25f72ba18d8cd7cadb4d7"
+      - "Approved request set af4e82819694af2846b26dd8dd5758836256ec077ee42b7b18fcab703f4b1e11"
+      - "Eight Jev calls and USD 0.284922456 reservation"
+    constraints:
+      - "Use only the frozen manifest, source lanes, pools, custody, Python executable, and request identities."
+      - "Do not retry a provider, answer, or grader call."
+      - "Stop fail-closed on identity, authority, source, budget, or execution error."
+      - "Keep the result private until independent validation and claim review complete."
+    expected_output:
+      - "Sixteen terminal trial receipts"
+      - "At most eight observed Jev calls"
+      - "One sealed private result.json or an exact fail-closed receipt"
+      - "Measured correctness, TTC, wall time, fallback invocations, and host-reported usage missingness"
     receipt: null
   - id: T999
     type: judge
