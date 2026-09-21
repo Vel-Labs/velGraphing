@@ -524,6 +524,27 @@ if "response_contract" in payload:''').replace(
         self.assertNotIn("secret-value", str(result))
         self.assertEqual(result["attempts"][0]["host_processes"][0]["status"], "failed")
 
+    def test_contract_invalid_answer_still_records_the_completed_model_call(self):
+        invalid = ANSWER_UNKNOWN_USAGE_CODE.replace(
+            "velgraphing-answer-output-v1", "velgraphing-response-contract-v1",
+        )
+        result = self.run_host(invalid)
+        attempt = result["attempts"][0]
+        self.assertEqual(result["terminal_reason"], "measurement_error")
+        self.assertEqual(attempt["failure_stage"], "answer")
+        self.assertEqual(attempt["failure_reason"], "invalid_answer_output")
+        self.assertEqual([row["kind"] for row in attempt["model_calls"]], ["answer"])
+
+    def test_malformed_usage_still_records_the_completed_model_call(self):
+        malformed = ANSWER_CODE.replace('"input_tokens": 10', '"input_tokens": -1')
+        result = self.run_host(malformed)
+        attempt = result["attempts"][0]
+        self.assertEqual(result["terminal_reason"], "measurement_error")
+        self.assertEqual(attempt["failure_reason"], "invalid_integer")
+        self.assertEqual(len(attempt["model_calls"]), 1)
+        self.assertEqual(attempt["model_calls"][0]["kind"], "answer")
+        self.assertEqual(attempt["model_calls"][0]["provenance"], "unavailable")
+
     def test_shell_string_is_rejected(self):
         trial = Trial(identity(), Budget(0, 5_000_000_000), execution="fixture")
         with self.assertRaisesRegex(MeasurementError, "invalid_process_argv"):

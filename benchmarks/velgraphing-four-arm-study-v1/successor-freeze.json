@@ -11,11 +11,11 @@
       },
       "controller": {
         "path": "scripts/benchmarks/four_arm_study_v1.py",
-        "sha256": "057fe81d91cc36134518e8d50d7df99b24847123157520955e1472f0d00ba14e"
+        "sha256": "cda15b5ad5b42eb8ab26486725cbcd567f1ffa2dd3503564b5e55f23f36791ee"
       },
       "host": {
         "path": "scripts/benchmarks/time_to_correct_host.py",
-        "sha256": "4e89e9283870ca164a9a82fb93d65b60c9027b76d85ef5e99670d278e1fa1393"
+        "sha256": "7bcea2f8907b003d9b4709561d181e37f6782fdb69dd4d905d16e76eaa77fc05"
       }
     },
     "package_candidate": {
@@ -41,8 +41,8 @@
       "openchain-reference-material": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
       "thealgorithms-python": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
     },
-    "successor_rubric_sha256": "4058aeb08655a507a89e1a89228b3b73092dbdd6a0dae357d8b77cdb6bd8a6a6",
-    "successor_ttc_core_sha256": "cc13e4ae0ef9f1f2f808e0813e0f3253e16b3f80bc426a1f32dcd01608324f6d",
+    "successor_rubric_sha256": "82fb04d57113e3032d16b07382642f8ce0ad7546df67c0447f6edf42d8460eda",
+    "successor_ttc_core_sha256": "2a3ef6609b4b8f7c8fae6a8675e2f7d3447c802c17dacefea9d74bdb9d081f9d",
     "witness_custody_sha256": "e042c9ee45c7fcc9e36a7ad693b7f77106f12dd94f06756b9e8ae19e276be38b"
   },
   "claim_boundary": {

@@ -558,14 +558,18 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 patch.object(study, "_load_manifest", return_value=source_manifest),
                 patch.object(study, "_question_prompt", return_value="alpha_evidence_00"),
                 patch.object(study.subprocess, "run", side_effect=fail_live_graph),
-                self.assertRaises(study.MeasurementError),
             ):
-                study.execute_trial(
+                failed_result = study.execute_trial(
                     freeze, failed_registration, live_pool, rubric, lane_root,
                     failed_run_root, failed_manifest,
                     study.digest(study.canonical(failed_manifest)),
                     execution="observed", budget=failed_budget,
                 )
+            self.assertEqual("measurement_error", failed_result["terminal_reason"])
+            self.assertEqual(
+                "installed_graph_find_failed",
+                failed_result["attempts"][0]["failure_reason"],
+            )
             self.assertEqual(1, len(failed_graph_calls))
             failed_receipt_path = failed_run_root / "jev-calls" / f"{failed_id}.json"
             failed_receipt = json.loads(failed_receipt_path.read_text(encoding="utf-8"))
@@ -609,14 +613,14 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 patch.object(study, "_load_manifest", return_value=source_manifest),
                 patch.object(study, "_question_prompt", return_value="alpha_evidence_00"),
                 patch.object(study.subprocess, "run", side_effect=mismatch_live_graph),
-                self.assertRaises(study.MeasurementError),
             ):
-                study.execute_trial(
+                mismatch_result = study.execute_trial(
                     freeze, mismatch_registration, live_pool, rubric, lane_root,
                     mismatch_run_root, mismatch_manifest,
                     study.digest(study.canonical(mismatch_manifest)),
                     execution="observed", budget=mismatch_budget,
                 )
+            self.assertEqual("measurement_error", mismatch_result["terminal_reason"])
             self.assertEqual(1, len(mismatch_graph_calls))
             mismatch_receipt = json.loads(
                 (mismatch_run_root / "jev-calls" / f"{mismatch_id}.json")

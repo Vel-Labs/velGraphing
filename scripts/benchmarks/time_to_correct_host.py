@@ -429,6 +429,22 @@ def run_process_trial(
         raw = canonical(payload)
         t.context(raw, kind="answer_request")
         output = _invoke(t, "answer", answer_command, payload, cwd, answer_timeout)
+        usage = output.get("usage")
+        if usage is not None and (
+            type(usage) is not dict or set(usage) != USAGE_KEYS
+            or usage.get("model") != t.identity["answer_model"]
+        ):
+            _record_usage(t, "answer", None, attempt, t.identity["answer_model"])
+            raise MeasurementError(
+                "answer_model_mismatch"
+                if type(usage) is dict and set(usage) == USAGE_KEYS
+                else "invalid_process_usage"
+            )
+        try:
+            _record_usage(t, "answer", usage, attempt, t.identity["answer_model"])
+        except MeasurementError:
+            _record_usage(t, "answer", None, attempt, t.identity["answer_model"])
+            raise
         expected = {
             "schema_version", "answer_text", "usage", "model_calls_complete",
             "context_deliveries_complete",
@@ -456,12 +472,6 @@ def run_process_trial(
                 raise MeasurementError("answer_evidence_citation_missing")
             if any(candidate_id not in allowed for candidate_id in cited):
                 raise MeasurementError("answer_evidence_citation_invalid")
-        if output["usage"] is not None:
-            if type(output["usage"]) is not dict or set(output["usage"]) != USAGE_KEYS:
-                raise MeasurementError("invalid_process_usage")
-            if output["usage"]["model"] != t.identity["answer_model"]:
-                raise MeasurementError("answer_model_mismatch")
-        _record_usage(t, "answer", output["usage"], attempt, t.identity["answer_model"])
         t._attempt()["answer_boundary"] = {
             "model_calls_complete": output["model_calls_complete"],
             "context_deliveries_complete": output["context_deliveries_complete"],
@@ -480,6 +490,22 @@ def run_process_trial(
         if grader_context is not None:
             t.context(canonical(payload), kind="tool_message")
         output = _invoke(t, "grader", grader_command, payload, cwd, grader_timeout)
+        usage = output.get("usage")
+        if usage is not None and (
+            type(usage) is not dict or set(usage) != USAGE_KEYS
+            or grader_model is not None and usage.get("model") != grader_model
+        ):
+            _record_usage(t, "grader", None, attempt, grader_model or "unknown-grader")
+            raise MeasurementError(
+                "grader_model_mismatch"
+                if type(usage) is dict and set(usage) == USAGE_KEYS
+                else "invalid_process_usage"
+            )
+        try:
+            _record_usage(t, "grader", usage, attempt, grader_model or "unknown-grader")
+        except MeasurementError:
+            _record_usage(t, "grader", None, attempt, grader_model or "unknown-grader")
+            raise
         expected = {
             "schema_version", "required_fact_score", "required_fact_maximum",
             "critical_facts_exact", "unsupported_material_claims", "grader_id",
@@ -500,15 +526,6 @@ def run_process_trial(
             raise MeasurementError("grader_execution_identity_mismatch")
         if expected_grader_id is not None and output["grader_id"] != expected_grader_id:
             raise MeasurementError("grader_id_mismatch")
-        if (
-            grader_model is not None
-            and output["usage"] is not None
-            and output["usage"].get("model") != grader_model
-        ):
-            raise MeasurementError("grader_model_mismatch")
-        _record_usage(
-            t, "grader", output["usage"], attempt, grader_model or "unknown-grader"
-        )
         if grader_identity is not None:
             t._attempt()["grader_boundary"] = {"execution_identity": grader_identity}
         answer_boundary = t._attempt().get("answer_boundary", {})

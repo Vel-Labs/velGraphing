@@ -163,3 +163,30 @@ Validation after the repair:
 - Successor overlay: passed with `execution_ready: true`.
 - Historical bundle plus replacement lane manifest: passed.
 - Provider, answer, grader, and Jev calls: zero.
+
+## Contract-invalid lane continuation repair
+
+The live R2 execution completed `A-S-01` at 5/5 and retained `B-S-01` at 4/5.
+The `B-S-01` Jev path returned a safe fallback with
+`provider_or_adapter_error`, zero reported attempted calls, and no retry.
+
+The `C-S-01` answer lane then returned
+`velgraphing-response-contract-v1` where the frozen response contract required
+`velgraphing-answer-output-v1`. Parent retained the exact invalid response. It
+did not rewrite the field or request an unapproved answer repair. The R2
+controller stopped because it could not retain a contract-invalid lane as a
+failed trial and continue.
+
+The R3 repair records a completed model call before response-contract
+validation. Invalid response or usage telemetry remains a failed trial, with
+usage marked unavailable when needed. A failed trial now returns to the serial
+controller for retention and successor dispatch. A passing trial still requires
+exactly one answer call and one grader call. No retry rule changed.
+
+R3 uses fresh task names and the ignored run root
+`.velgraphing-local/velgraphing-four-arm-study-v1/retrievel-0.2.0-rc1-t070-r3`.
+Its lane manifest SHA-256 is
+`0a11bb06ca7477cdb9c6dc18fc49022ac7215867cb509b02f928a88e47357c69`.
+Focused host and four-arm validation passed 52 tests with 2 expected
+machine-local skips. The request set, eight-call cap, and zero-retry rule remain
+unchanged.

@@ -397,9 +397,9 @@ tasks:
       - "T060 is not execution-ready."
       - "Provider approval, key environment, call cap, or budget binding is absent."
     receipt:
-      result: launch_repair_ready_for_handoff_probe
-      candidate_commit: 06cd219
-      summary: "Repaired a successor packet-shape defect that stopped before answer dispatch, refreshed the frozen bindings, and retained zero executed calls."
+      result: r3_failure_continuation_ready
+      candidate_commit: 405b792
+      summary: "Retained the R2 live evidence, repaired contract-invalid lane accounting and continuation, and froze fresh R3 task identities without retries."
       changed_files:
         - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
         - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
@@ -411,7 +411,7 @@ tasks:
         - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
         - docs/goals/retrievel-release-v1/state.yaml
       commands:
-        - cmd: "approve-successor with request hash 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94, 8 Jev calls, USD 0.9031, manifest 290be76aa609690572523ce9feb198e5d485dcab36b2a0333a5bdc2bd83b6c65, and the approved Python executable"
+        - cmd: "approve-successor with request hash 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94, 8 Jev calls, USD 0.9031, manifest 0a11bb06ca7477cdb9c6dc18fc49022ac7215867cb509b02f928a88e47357c69, and the approved Python executable"
           status: pass
         - cmd: "validate-successor-overlay"
           status: pass
@@ -420,16 +420,18 @@ tasks:
         - cmd: "git diff --check"
           status: pass
       validation:
-        - "33 benchmark tests passed, 2 skipped"
+        - "52 host and benchmark tests passed, 2 skipped"
         - "execution_ready: true; provider_spend_authorized: true; final_user_reack: []"
         - "answer, grader, Jev, and provider executed calls remain zero; retries remain zero"
         - "actual 64-candidate S-01 pool produced an exact 11-candidate answer packet"
+        - "contract-invalid answer and malformed usage each retain one completed answer-call receipt and continue as failed trials"
+        - "R2 retained A-S-01 passed 5/5, B-S-01 failed 4/5, and the exact invalid C-S-01 response; no retry was issued"
         - "historical freeze.json and preflight.json remain unchanged"
         - "package parity refused private_or_machine_path on ignored __pycache__; no package files changed"
-      successor_ttc_contract_canonical_sha256: 5a409a6c101b054a65b95e1a813b1635dd5feb42393b3f2efe914d58160278f3
-      successor_freeze_sha256: fdad0cdd6bb6e051ec0a71454747d759524006c0c2c3a255aa8dfc5813265a08
-      successor_preflight_sha256: e9b60becc853988033ea353d0d823994562525f103845b55366b595b0924b1f4
-      boundary: "Launch repair and offline re-freeze only. No model, provider, network, credential, task creation, benchmark execution, push, or release action."
+      successor_ttc_contract_canonical_sha256: c029a325931db5c126888e214e83864abb9d6391dff7a525b6f1d756e4ee5f52
+      successor_freeze_sha256: 8ba835a2761cab1cec316d553996fdc56685237a29007bc8ec645cd1a2c6ee98
+      successor_preflight_sha256: 5281a43097d4a5f210077f86b48040803bc870f642b01490f0f5f948aa0ef9c4
+      boundary: "R2 made two answer calls, two grader calls, and one Jev-path fallback reporting zero attempted provider calls. R3 is re-frozen but not launched. No retry, push, or release action occurred."
   - id: T080
     type: judge
     assignee: Judge

@@ -9,11 +9,11 @@
   "implementation_bindings": {
     "controller": {
       "path": "scripts/benchmarks/four_arm_study_v1.py",
-      "sha256": "057fe81d91cc36134518e8d50d7df99b24847123157520955e1472f0d00ba14e"
+      "sha256": "cda15b5ad5b42eb8ab26486725cbcd567f1ffa2dd3503564b5e55f23f36791ee"
     },
     "host": {
       "path": "scripts/benchmarks/time_to_correct_host.py",
-      "sha256": "4e89e9283870ca164a9a82fb93d65b60c9027b76d85ef5e99670d278e1fa1393"
+      "sha256": "7bcea2f8907b003d9b4709561d181e37f6782fdb69dd4d905d16e76eaa77fc05"
     },
     "successor_grader_response_contract_sha256": "dd517640475fe2219514ebee94a01182bbd74ff17adafeb5aa1348a3e0f6db2c"
   },

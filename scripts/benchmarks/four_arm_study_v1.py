@@ -3110,11 +3110,10 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
     if len(result["attempts"]) != 1:
         raise MeasurementError("study_retry_forbidden")
     calls = [row.get("kind") for row in result["attempts"][0].get("model_calls", [])]
-    if calls.count("answer") != 1 or calls.count("grader") != 1:
-        raise MeasurementError(
-            result["attempts"][0].get("failure_reason")
-            or "single_answer_grade_required"
-        )
+    if result["terminal_reason"] == "passed" and (
+        calls.count("answer") != 1 or calls.count("grader") != 1
+    ):
+        raise MeasurementError("single_answer_grade_required")
     return result
 
 
