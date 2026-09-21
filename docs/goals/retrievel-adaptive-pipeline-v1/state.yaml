@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T151
+active_task: T152
 
 tasks:
   - id: T010
@@ -943,7 +943,7 @@ tasks:
   - id: T151
     type: worker
     assignee: Worker
-    status: active
+    status: blocked
     reasoning_hint: medium
     objective: "Repair the successor TTC package so oracle custody, claim boundaries, and fallback timing are exact."
     allowed_files:
@@ -977,6 +977,57 @@ tasks:
       - "Tracked source-free successor contract plus ignored hash-bound custody artifact"
       - "Focused validation and independent-audit-ready receipt"
       - "No live calls"
+    receipt:
+      result: blocked
+      blocked_reason: "Independent Luna audit found that tracked README commands omit the required witness-custody argument and that the protocol retains two exact source paths despite its no-concrete-oracle-path claim."
+      changed_files:
+        - scripts/benchmarks/four_arm_study_v1.py
+        - scripts/benchmarks/time_to_correct_calibration.py
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - tests/benchmarks/test_four_arm_study_v1.py
+        - .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json
+      commands:
+        - cmd: "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 tests.benchmarks.test_time_to_correct_calibration -v"
+          status: pass
+        - cmd: "python3 scripts/benchmarks/four_arm_study_v1.py validate --root benchmarks/velgraphing-four-arm-study-v1"
+          status: pass
+        - cmd: "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1 --witness-custody .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json"
+          status: pass
+        - cmd: "Independent Luna audit of 7d87052"
+          status: fail
+      summary: "Local unpushed commit 7d87052 closes the oracle-custody, claim-boundary, and fallback-timing defects. It remains unaccepted because the operator README cannot execute the required custody path and the protocol's literal-path wording conflicts with its custody rule."
+      spawned_tasks:
+        - T152
+  - id: T152
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: low
+    objective: "Align the tracked operator commands and protocol wording with the accepted successor custody boundary."
+    allowed_files:
+      - benchmarks/velgraphing-four-arm-study-v1/README.md
+      - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - tests/benchmarks/test_four_arm_study_v1.py
+    verify:
+      - "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 -v"
+      - "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1 --witness-custody .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json"
+      - "git diff --check"
+    stop_if:
+      - "The repair requires code or custody changes."
+      - "Any tracked exact oracle source path, span, candidate ID, or fact-map join remains."
+      - "The documented commands cannot be validated without a live/model/provider call."
+    constraints:
+      - "Define one private WITNESS_CUSTODY variable for the exact ignored canonical path."
+      - "Pass --witness-custody to every successor freeze and live-run command that requires it."
+      - "Rephrase the two historical relationship examples without exact custody source paths."
+      - "Add one focused regression that detects missing custody arguments or exact oracle paths in tracked operator documents."
+      - "Amend local unpushed commit 7d87052 if practical. Do not push."
+    expected_output:
+      - "One clean local benchmark-only commit"
+      - "Executable source-free tracked operator instructions"
+      - "Focused validation and final-audit-ready receipt"
+      - "No live calls"
     receipt: null
   - id: T999
     type: judge
@@ -1001,14 +1052,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch records the rejected T150 oracle-custody candidate and activates T151 bounded repair"
+  dirty_fingerprint: "custody branch records the code-correct but documentation-blocked T151 candidate and activates T152 operator-contract repair"
   last_verification:
     result: blocked
-    task: T150
+    task: T151
     commands:
-      - "50 focused tests and both offline validators passed under python3."
-      - "Independent Luna audit blocked tracked oracle data and inaccurate fallback phase timing."
-      - "Commit 7a3f8b6 remains local and unpushed pending T151 repair."
+      - "55 focused tests and historical plus successor validators passed."
+      - "Independent Luna audit passed oracle custody, claim boundary, fallback timing, blindness, and source limits."
+      - "The audit blocked only the missing README custody flag and two literal protocol paths."
+      - "Commit 7d87052 remains local and unpushed pending T152 repair."
       - "No provider, answer, or grader call occurred."
 
 provider_budget:
