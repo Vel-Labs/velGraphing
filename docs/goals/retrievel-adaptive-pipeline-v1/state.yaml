@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T220
+active_task: T230
 
 tasks:
   - id: T010
@@ -1564,7 +1564,7 @@ tasks:
   - id: T220
     type: pm
     assignee: PM
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Rebuild and execute one exact current installed-package Graph plus Jev canary on public source."
     allowed_files:
@@ -1596,6 +1596,65 @@ tasks:
       - "One installed-path live canary receipt"
       - "One provider call or a verified pre-transport fallback"
       - "Current package and request identity, usage, latency, and source revalidation"
+    receipt:
+      result: done
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T220-installed-canary.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Install current 0.1.6 candidate in an isolated workspace-local Codex home"
+          status: pass
+        - cmd: "Prove installed-runtime imports and source-package identity"
+          status: pass
+        - cmd: "Run installed graph-find and ranked planner against public origin/main 3bad9cb"
+          status: rejected
+      summary: "Fresh installed runtime found four verified relationship supports, but the capped graph shortlist retained no relationship child and selected Direct. No provider call occurred."
+      spawned_tasks:
+        - T230
+  - id: T230
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Preserve a verified relationship child in the capped graph shortlist when its source unit is admitted, then rerun the installed canary preflight."
+    allowed_files:
+      - packages/core/retrieval.py
+      - plugins/graph-engineering/runtime/core/retrieval.py
+      - plugins/graph-engineering/runtime/.projection-state.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - tests/core/test_retrieval.py
+      - tests/core/test_ranked_context_selection.py
+      - tests/skills/test_portable_skills.py
+      - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      - docs/goals/retrievel-adaptive-pipeline-v1/notes/T230-relationship-retention.md
+    inputs:
+      - "T220 installed canary receipt"
+      - "Public source origin/main 3bad9cb"
+      - "Installed candidate ad2d9b4002df3164035e85335e6d483977fc7675719b7fb353be2cbe881e08b2"
+      - "Four verified relationship supports, 46 Direct candidates, 46 Graph candidates, and zero retained relationship children"
+    constraints:
+      - "Fix the shared shortlist root cause, not the canary prompt or result."
+      - "Prioritize only source-bound relationship units already validated by retrieval."
+      - "Preserve required evidence, parent-before-child ordering, byte and count caps, custody, and Direct default behavior."
+      - "Do not add a new graph store, scanner, provider policy, or routing abstraction."
+      - "Project canonical changes; do not hand-edit generated runtime files."
+      - "Do not access credentials or make a provider call."
+      - "Do not edit GoalBuddy state; Parent records acceptance."
+    verify:
+      - "Add one regression that fails when an admitted relationship parent or child is crowded out only by lower-priority optional units."
+      - "Run focused retrieval and ranked-context tests."
+      - "Run portable skill and source-package parity tests."
+      - "Run projector twice and verify idempotence."
+      - "Reinstall the candidate in an isolated workspace-local Codex home."
+      - "Rerun the public installed canary preflight and require Graph route plus at least one verified relationship child."
+    stop_if:
+      - "The repair requires weakening custody, required-evidence, or budget checks."
+      - "The exact public query has no relationship support whose source coordinate can bind an admitted unit."
+      - "The installed preflight still selects Direct after one root-cause repair."
+    expected_output:
+      - "One minimal canonical repair and generated projection"
+      - "Focused, consumer, parity, and projector-idempotence evidence"
+      - "A fresh installed preflight packet or an exact remaining product blocker"
     receipt: null
   - id: T999
     type: judge
@@ -1620,16 +1679,16 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "clean R4 is sealed and audited; T220 rebuilds the current installed-package canary"
+  dirty_fingerprint: "T220 rejected a Direct-only installed preview; T230 repairs graph relationship retention before any live call"
   last_verification:
     result: pass
-    task: T210
+    task: T220
     commands:
-      - "Clean R4 controller exited 0 and sealed result 884dbb95387ff6b49606c2303b2788cb6d80a573eaa5fd4a63571814074f5a54."
-      - "All 16 result receipts, 16 answer calls, 16 grader calls, and 8 Jev calls reconcile."
-      - "No retries occurred and all four fallback appends were source verified."
-      - "Independent Luna seal audit returned PASS."
-      - "Both goal and benchmark worktrees were clean after the ignored result was sealed."
+      - "Fresh isolated 0.1.6 install matched current candidate ad2d9b4 and imported installed runtime modules."
+      - "Public source was frozen at origin/main 3bad9cb with snapshot dbd9ff89."
+      - "Installed graph-find returned Graph with four verified relationship supports."
+      - "Ranked planning retained no relationship child and failed closed to Direct."
+      - "No credential, provider call, request approval, retry, or budget charge occurred."
 
 provider_budget:
   provider: typesafe_jev
