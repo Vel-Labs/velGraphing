@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T230
+active_task: T240
 
 tasks:
   - id: T010
@@ -1614,7 +1614,7 @@ tasks:
   - id: T230
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Preserve a verified relationship child in the capped graph shortlist when its source unit is admitted, then rerun the installed canary preflight."
     allowed_files:
@@ -1655,6 +1655,70 @@ tasks:
       - "One minimal canonical repair and generated projection"
       - "Focused, consumer, parity, and projector-idempotence evidence"
       - "A fresh installed preflight packet or an exact remaining product blocker"
+    receipt:
+      result: done
+      changed_files:
+        - packages/core/retrieval.py
+        - plugins/graph-engineering/runtime/core/retrieval.py
+        - plugins/graph-engineering/runtime/.projection-state.json
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - tests/core/test_retrieval.py
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T230-relationship-retention.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Merge origin/main 3bad9cb into the goal branch and resolve the product layers"
+          status: pass
+        - cmd: "Run focused, consumer, full-core, benchmark-host, portable, Jev, parity, and projector checks"
+          status: pass
+        - cmd: "Run one exact installed live request and revalidate it through the merged selector"
+          status: pass
+      summary: "Merged PR #13-#15 product history, retained verified relationship bundles before the cap, and completed one exact live transport and selection diagnostic. Jev removed both unrelated outgoing graph children, exposing query-to-relation alignment as the next product defect."
+      spawned_tasks:
+        - T240
+  - id: T240
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Select prompt-symbol-aligned incoming supports for change-impact queries before stable outgoing fallback."
+    allowed_files:
+      - packages/core/retrieval.py
+      - plugins/graph-engineering/runtime/core/retrieval.py
+      - plugins/graph-engineering/runtime/.projection-state.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - tests/core/test_retrieval.py
+      - tests/skills/test_portable_skills.py
+      - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      - docs/goals/retrievel-adaptive-pipeline-v1/notes/T240-symbol-aligned-impact.md
+    inputs:
+      - "Merged candidate 653f74b1ed990af0e1383fa86a7475acf7d4eaf10649d3cc11539dcbb658ddff"
+      - "T230 installed live diagnostic"
+      - "Existing verified derive_source_relations import edges"
+      - "Exact public prompt: what changes if derive_source_relations changes"
+    constraints:
+      - "Add the common changes inflection to the existing change-impact intent; do not add a new intent system."
+      - "Rank only already-verified eligible relationship supports by exact canonical prompt-symbol match before stable edge identity."
+      - "Preserve incoming-before-outgoing policy for change impact and outgoing-only policy otherwise."
+      - "Preserve one support per selected seed, custody, sensitivity, count caps, byte caps, and deterministic order."
+      - "Do not add new relation types, crawlers, stores, provider policies, or routing versions."
+      - "Project canonical changes; do not hand-edit runtime."
+      - "Do not access credentials or make a provider call."
+      - "Do not edit GoalBuddy state; Parent records acceptance."
+    verify:
+      - "Add one regression for natural-language changes classification."
+      - "Add one regression where a matching incoming symbol beats an unrelated stable incoming edge for the same seed."
+      - "Run focused retrieval and portable graph-find tests."
+      - "Run consumer, parity, and projector-idempotence checks."
+      - "Install the candidate in an isolated workspace-local Codex home."
+      - "Rerun the exact public preflight and require at least one incoming derive_source_relations support and a Graph shortlist child bound to it."
+    stop_if:
+      - "The exact edge is absent after current relation derivation."
+      - "The repair requires inferred or non-source-bound relationships."
+      - "The installed preflight still selects only unrelated supports."
+    expected_output:
+      - "One minimal intent and verified-support ordering repair"
+      - "Focused, consumer, parity, projector, and installed-path evidence"
+      - "One fresh exact request packet for Parent review, with no provider call"
     receipt: null
   - id: T999
     type: judge
@@ -1679,16 +1743,16 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "T220 rejected a Direct-only installed preview; T230 repairs graph relationship retention before any live call"
+  dirty_fingerprint: "T230 merged main and retained relationship bundles; T240 aligns change-impact support to the named prompt symbol"
   last_verification:
     result: pass
-    task: T220
+    task: T230
     commands:
-      - "Fresh isolated 0.1.6 install matched current candidate ad2d9b4 and imported installed runtime modules."
-      - "Public source was frozen at origin/main 3bad9cb with snapshot dbd9ff89."
-      - "Installed graph-find returned Graph with four verified relationship supports."
-      - "Ranked planning retained no relationship child and failed closed to Direct."
-      - "No credential, provider call, request approval, retry, or budget charge occurred."
+      - "origin/main 3bad9cb is an ancestor of merge 77acbc6."
+      - "Merged focused, consumer, full-core, host, portable, Jev, parity, and projector checks passed."
+      - "Fresh installed merged package candidate is 653f74b1 with installed-only imports."
+      - "One exact live request returned a valid rerank in 711.284 ms with source revalidation and no retry."
+      - "Merged selection safely applied the bound response but selected no unrelated relationship child."
 
 provider_budget:
   provider: typesafe_jev
@@ -1697,10 +1761,10 @@ provider_budget:
   aggregate_limit_usd: 1.00
   call_count_is_budget: false
   prior_live_calls: 46
-  final_installed_path_live_calls: 1
+  final_installed_path_live_calls: 2
   four_arm_live_calls: 17
   actual_spend_usd: null
-  conservative_committed_spend_usd: 0.320575227
-  remaining_usd: 0.679424773
+  conservative_committed_spend_usd: 0.324229437
+  remaining_usd: 0.675770563
   ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
-  claim_boundary: "Clean R4 supports only oracle-assisted fallback time-to-correct under its frozen contract; it does not support a Direct, Graph, Jev, comparative retrieval, all-model token, or cost claim."
+  claim_boundary: "Clean R4 supports only oracle-assisted fallback time-to-correct. T230 additionally proves one exact installed live transport and safe rerank diagnostic, not useful change-impact retrieval or comparative Graph plus Jev performance."
