@@ -35,7 +35,7 @@ CUSTODY = ROOT / study.SUCCESSOR_WITNESS_CUSTODY
 
 
 class FourArmPublicBoundaryTests(unittest.TestCase):
-    def test_installed_graph_find_trial_transports_complete_nonprovider_measurement(self) -> None:
+    def test_installed_graph_find_trial_supports_graph_off_and_d_on_replay(self) -> None:
         local = ROOT / ".velgraphing-local"
         local.mkdir(mode=0o700, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="t050-canary-", dir=local) as raw:
@@ -44,14 +44,19 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             lane_root = root / "lanes"
             lane = lane_root / corpus_id
             (lane / "src").mkdir(parents=True)
-            (lane / "src/cancel.py").write_text(
+            fixture_source = (
                 'FRESH_GRAPH_MARKER = "fresh-source-evidence"\n'
-                "def cancel_task(task):\n    return task.cancel()\n",
-                encoding="utf-8",
+                "def cancel_task(task):\n    return task.cancel()\n"
             )
+            (lane / "src/cancel.py").write_text(fixture_source, encoding="utf-8")
+            (lane / "src/evidence.py").write_text("\n".join(
+                f"def alpha_evidence_{index:02d}():\n"
+                f"    return 'FRESH_GRAPH_MARKER rerank candidate {index} {'x' * 1900}'"
+                for index in range(14)
+            ) + "\n", encoding="utf-8")
             subprocess.run(["git", "init", "-q", str(lane)], check=True)
             subprocess.run(
-                ["git", "-C", str(lane), "add", "src/cancel.py"],
+                ["git", "-C", str(lane), "add", "src"],
                 check=True,
             )
             sources = [
@@ -185,6 +190,168 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             self.assertLessEqual(
                 result["confirmed_time_to_correct_ns"], result["user_visible_wall_ns"],
             )
+
+            # Preview the installed adapter outside the measured execute_trial.
+            preview_command = [
+                sys.executable, str(installed[0]), "--root", str(lane), "--prompt",
+                "alpha_evidence_00",
+                "--maximum-results", str(study.RETRIEVAL_NODE_LIMIT), "--byte-budget",
+                str(study.CANDIDATE_AGGREGATE_BYTE_BUDGET),
+                "--ranked-context", "preview", "--diagnostics",
+            ]
+            preview_env = {
+                "PATH": os.environ.get("PATH", os.defpath),
+                "PYTHONIOENCODING": "utf-8",
+                "PYTHONDONTWRITEBYTECODE": "1",
+            }
+            preview_result = subprocess.run(
+                preview_command, cwd=str(study.ROOT), env=preview_env,
+                capture_output=True, check=False, timeout=120,
+            )
+            self.assertEqual(0, preview_result.returncode, preview_result.stderr)
+            preview_payload = json.loads(preview_result.stdout.decode("utf-8"))[
+                "ranked_context"
+            ]
+            preview = preview_payload["jev_preview"]
+            self.assertIsNotNone(preview, preview_payload)
+            required_ids = preview_payload["selection"]["context"][
+                "required_candidate_ids"
+            ]
+            self.assertTrue(required_ids)
+            request = preview["request"]
+            optional_ids = [
+                candidate["id"] for candidate in request["state"]["candidates"]
+                if candidate["id"] not in required_ids
+            ]
+            preferred_id = optional_ids[-1] if optional_ids else None
+            answers = {}
+            for index, candidate in enumerate(request["state"]["candidates"]):
+                name = f"candidate_{index}"
+                criteria = request["questions"][name]["criteria"]
+                preferred = candidate["id"] == preferred_id
+                answers[name] = {
+                    "type": "score",
+                    "probabilities": {
+                        "0": 0.0 if preferred else 1.0,
+                        "1": 0.0,
+                        "2": 1.0 if preferred else 0.0,
+                    },
+                    "legend": {str(i): value for i, value in enumerate(criteria)},
+                    "score": 2.0 if preferred else 0.0,
+                    "confidence": 1.0,
+                }
+            replay = {
+                "schema_version": "velgraphing-jev-replay-v1",
+                "request_sha256": preview["request_sha256"],
+                "response": {
+                    "model": request["model"],
+                    "answers": answers,
+                    "usage": {"input_tokens": 123, "output_tokens": 17},
+                },
+            }
+            d_trial_id = "D-S-01"
+            d_registration = {
+                **registration, "trial_id": d_trial_id, "arm": "D",
+            }
+            d_pool = {
+                **pool,
+                "identity": {"route": "graph", "task_id": "S-01"},
+                "jev_preview": {"request_sha256": preview["request_sha256"]},
+            }
+            d_manifest = {"entries": [
+                {**row, "trial_id": d_trial_id}
+                for row in process_manifest["entries"]
+            ]}
+            d_manifest["entries"][0]["thread_id"] = "answer-d-fixture"
+            d_manifest["entries"][1]["thread_id"] = "grader-d-fixture"
+            graph_calls = []
+            original_run = subprocess.run
+
+            def record_graph_run(*args, **kwargs):
+                command = args[0]
+                if len(command) > 1 and Path(command[1]) == installed[0]:
+                    graph_calls.append((list(command), dict(kwargs.get("env", {}))))
+                return original_run(*args, **kwargs)
+
+            with (
+                patch.object(study, "verify_lane", return_value=([], before)) as d_verify,
+                patch.object(study, "revalidate_lane") as d_revalidate,
+                patch.object(study, "_load_manifest", return_value=source_manifest),
+                patch.object(study, "_question_prompt", return_value="alpha_evidence_00"),
+                patch.object(study.subprocess, "run", side_effect=record_graph_run),
+            ):
+                d_result = study.execute_trial(
+                    freeze, d_registration, d_pool, rubric, lane_root, run_root,
+                    d_manifest, study.digest(study.canonical(d_manifest)),
+                    execution="fixture", replay=replay,
+                )
+                d_verify.assert_called_once()
+                d_revalidate.assert_called_once()
+                with self.assertRaisesRegex(
+                    study.MeasurementError, "fixture_request_mismatch",
+                ):
+                    study.execute_trial(
+                        freeze, d_registration, d_pool, rubric, lane_root, run_root,
+                        d_manifest, study.digest(study.canonical(d_manifest)),
+                        execution="fixture",
+                        replay={**replay, "request_sha256": "0" * 64},
+                    )
+                with self.assertRaisesRegex(
+                    study.MeasurementError, "installed_graph_find_jev_live_unavailable",
+                ):
+                    study.execute_trial(
+                        freeze, d_registration, d_pool, rubric, lane_root, run_root,
+                        d_manifest, study.digest(study.canonical(d_manifest)),
+                        execution="observed", replay=replay,
+                    )
+
+            self.assertEqual(1, len(graph_calls))
+            graph_argv, graph_env = graph_calls[0]
+            self.assertNotIn("--allow-network", graph_argv)
+            self.assertNotIn("--approve-request-sha256", graph_argv)
+            self.assertIn("--ranked-context", graph_argv)
+            self.assertEqual("replay", graph_argv[graph_argv.index("--ranked-context") + 1])
+            self.assertIn("--jev-mode", graph_argv)
+            self.assertEqual("rerank", graph_argv[graph_argv.index("--jev-mode") + 1])
+            self.assertIn("--jev-response", graph_argv)
+            self.assertIn("--diagnostics", graph_argv)
+            self.assertNotIn("TYPESAFE_API_KEY", graph_env)
+            self.assertEqual("passed", d_result["terminal_reason"], d_result["attempts"])
+            d_attempt = d_result["attempts"][0]
+            d_process_kinds = [row["kind"] for row in d_attempt["host_processes"]]
+            self.assertEqual(1, d_process_kinds.count("graph_find"))
+            self.assertEqual(1, d_process_kinds.count("answer"))
+            self.assertEqual(1, d_process_kinds.count("grader"))
+            d_observation = d_attempt["jev_observation"]
+            self.assertEqual("replay", d_observation["execution"])
+            self.assertEqual("reranked", d_observation["status"])
+            self.assertEqual(preview["request_sha256"], d_observation["request_sha256"])
+            self.assertEqual(0, d_observation["attempted_calls"])
+            self.assertTrue(d_observation["source_revalidated"])
+            self.assertEqual("reranked", d_observation["order_source"])
+            self.assertTrue(d_observation["jev_source_revalidated"])
+            self.assertEqual(preview["request_bytes"], d_observation["request_bytes"])
+            self.assertEqual(
+                {"input_tokens": 123, "output_tokens": 17},
+                d_observation["replayed_usage"],
+            )
+            self.assertTrue(
+                set(required_ids).issubset(
+                    d_attempt["candidate_observation"]["selected_candidate_ids"],
+                ),
+            )
+            self.assertNotIn(
+                "fresh-source-evidence", json.dumps(d_observation, sort_keys=True),
+            )
+            jev_usage = [row for row in d_attempt["model_calls"] if row["kind"] == "jev"]
+            self.assertEqual([], jev_usage)
+            self.assertFalse(d_attempt["coverage"]["model_calls"])
+            self.assertFalse(d_result["usage_complete"])
+            d_measurement = _v3_trial_measurement(d_registration, d_result)
+            self.assertEqual(preview["request_bytes"], d_measurement["jev_request_bytes"])
+            self.assertEqual(0, d_measurement["provider_calls"])
+            self.assertIsNone(d_measurement["provider_input_tokens"])
+            self.assertIsNone(d_measurement["provider_output_tokens"])
 
             changed_manifest = dict(source_manifest)
             changed_manifest["snapshot_sha256"] = "0" * 64

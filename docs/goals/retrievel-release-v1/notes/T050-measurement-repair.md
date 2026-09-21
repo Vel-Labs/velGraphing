@@ -1,17 +1,19 @@
 # T050 Measurement Repair
 
 Date: 2026-09-21
-Status: Graph/off production-path canary and clean-export release validation passed; Graph/on remains incomplete.
+Status: Graph/off production-path canary and clean-export release validation passed. Graph/on fixture replay passed. Live/provider Graph/on remains unmeasured and fail-closed.
 
 ## Candidate and scope
 
 - Worktree: `codex/retrievel-0.2.0-rc1`, starting commit `c92ee975f7f931eb96880817ccc4a44a33d05091`.
+- Replay-only continuation base: `e6cbb3812f1174b68fe84716664609da16633c01`.
 - Packaged candidate SHA-256: `112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107`.
 - Packaged Graph Find adapter SHA-256: `3370c1dea98f3b778f628a7dc100cc8c638d3a419464439d1639c295a58aa0fe`.
 - The controller stages the manifest-listed plugin bytes under the ignored run root. Graph/off trials invoke that installed `graph_find.py` once during `Trial.prepare`.
 - Graph Find supplies the candidate set, selected source-bound spans, snapshot identity, and child-process diagnostics. The controller binds the candidate-set and package hashes, records each scan and memory read, and converts returned spans into the existing answer evidence payload.
 - Direct retrieval now runs inside `Trial.prepare`. Its dynamic candidate packet feeds Jev and selection.
-- Graph/on remains fail-closed with `installed_graph_find_jev_path_incomplete`. Preview, approval, and final reranked selection telemetry are not implemented in this slice.
+- Graph/on uses the installed Graph Find command with a request-bound replay file staged under the ignored run root. It accepts fixture or replay execution only. Observed/live Graph/on fails closed with `installed_graph_find_jev_live_unavailable`.
+- Replay validation binds the approved request hash, requires `execution=replay`, `status=reranked`, zero attempted calls, source revalidation, a reranked fresh selection, and preserved required candidates. It stores request size and replay token counts only in the source-free replay observation. Provider token fields remain empty because replay makes no provider call. Overall model-call coverage stays incomplete.
 - Historical freeze and preflight files were not changed. The historical Graph Find binding remains pinned to its original hash. Default Graph Find output remains unchanged unless `--diagnostics` is supplied.
 - No network call or credential access occurred.
 
@@ -28,6 +30,8 @@ Status: Graph/off production-path canary and clean-export release validation pas
 
 - The final timer correction ends child `graph_build` after the returned `Graph(records, edges)` is constructed. The interval includes snapshot construction, source records, typed relation derivation, and final graph validation. It remains labeled with the installed subprocess clock. The parent `cold_graph_build` phase remains missing.
 - A retained `execute_trial` Graph/off test runs exactly one installed Graph Find process, one answer process, and one independent grader process. The answer rejects a poisoned frozen-pool sentinel and requires the fresh source marker. The grader passes only when that marker reaches its input. Model-call coverage and usage remain incomplete.
+- The production Graph/on replay test runs an installed preview before the measured trial to build the exact request-bound fixture response. The measured D/on trial runs one installed Graph Find process, one answer process, and one grader process. It records zero attempted Jev calls, a reranked source-revalidated observation, and preserved required candidates. The answer rejects the frozen-pool sentinel. A mismatched replay hash fails before another child process starts. Observed/live Graph/on remains fail-closed. The graph child receives no network flags and its environment omits `TYPESAFE_API_KEY`.
+- The requested benchmark test command passed after this continuation: 28 tests ran, 24 skipped because private witness custody or frozen corpus lanes are unavailable. No network call or credential access occurred.
 - The worktree manifest writer refused the ignored plugin `.pyc`. An export from tracked HEAD with only the authorized Graph Find source change overlaid was built under ignored `.velgraphing-local`. The projector and manifest write/verify passed for 87 files and candidate `112a9b2d...`. Only the generated release manifest was copied back. The ignored bytecode was not changed.
 - After the final timer correction, the focused benchmark file passed: 28 tests passed, 24 skipped. Skips require private witness custody or frozen corpus lanes. The single `graph_find_diagnostics` test passed.
 - Commands used the declared shared virtualenv: `PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python -m unittest discover -s tests/skills -p test_portable_skills.py -k graph_find_diagnostics` and `PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python -m unittest discover -s tests/benchmarks -p test_four_arm_study_v1.py`.
@@ -39,4 +43,4 @@ Status: Graph/off production-path canary and clean-export release validation pas
 
 ## Remaining boundary
 
-This is a local process-boundary canary, not a live model or Jev result. Graph/on Jev remains incomplete. No historical result or freeze was rewritten.
+This is a local process-boundary canary, not a live model or Jev result. Fixture replay does not establish provider usage coverage or comparative benchmark results. No historical result or freeze was rewritten.
