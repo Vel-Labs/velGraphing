@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T181
+active_task: T182
 
 tasks:
   - id: T010
@@ -1189,7 +1189,7 @@ tasks:
   - id: T181
     type: worker
     assignee: Worker
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Repair the answer citation boundary so the visible cN instruction, model-visible evidence IDs, citation validator, and grader evidence map use the same deterministic aliases."
     allowed_files:
@@ -1219,6 +1219,58 @@ tasks:
       - "Citation and grader mapping accept only those visible aliases"
       - "Updated exact host bindings"
       - "Focused regression tests and one reviewable commit"
+    receipt:
+      result: blocked
+      blocked_reason: "The minimal shared-host repair changes the bound host digest. The historical controller constant and successor rubric binding are outside T181 ownership and fail closed."
+      changed_files:
+        - scripts/benchmarks/time_to_correct_host.py
+        - benchmarks/velgraphing-four-arm-study-v1/freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - tests/benchmarks/test_time_to_correct_host.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+      commands:
+        - cmd: "python3 -m unittest tests.benchmarks.test_time_to_correct_host -v"
+          status: pass
+        - cmd: "python3 -m unittest tests.benchmarks.test_time_to_correct_host tests.benchmarks.test_four_arm_study_v1 -v"
+          status: blocked
+      summary: "The c1 alias repair is implemented in the five authorized files and the host-only suite passes 17 tests. Integration correctly refuses stale controller and successor-rubric host bindings. No live call occurred."
+      spawned_tasks:
+        - T182
+  - id: T182
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Complete the cN citation repair by updating the exact controller and successor-rubric binding cascade, then validate the integrated benchmark candidate."
+    allowed_files:
+      - scripts/benchmarks/time_to_correct_host.py
+      - scripts/benchmarks/four_arm_study_v1.py
+      - benchmarks/velgraphing-four-arm-study-v1/freeze.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      - tests/benchmarks/test_time_to_correct_host.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+    inputs:
+      - "T181 five-file working diff"
+      - "New host SHA 4e89e9283870ca164a9a82fb93d65b60c9027b76d85ef5e99670d278e1fa1393"
+      - "Fail-closed historical host constant and successor-rubric bindings"
+    constraints:
+      - "Continue from the retained T181 diff. Do not revert it."
+      - "Update only digest and contract fields that are direct consequences of the host repair."
+      - "Do not change retrieval, provider requests, budget, rubric facts, claim boundary, manifest binding, or retry policy."
+      - "Do not run the live controller or any model/provider call."
+    verify:
+      - "python3 -m unittest tests.benchmarks.test_time_to_correct_host tests.benchmarks.test_four_arm_study_v1 -v"
+      - "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1 --witness-custody .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json"
+      - "git diff --check"
+    stop_if:
+      - "Any required change extends beyond the seven allowed files."
+      - "The request-byte set, rubric facts, candidate identities, or provider policy changes."
+    expected_output:
+      - "Integrated citation alias repair"
+      - "All direct binding hashes current"
+      - "Combined focused tests and successor overlay validation pass"
+      - "One reviewable commit"
     receipt: null
   - id: T999
     type: judge
