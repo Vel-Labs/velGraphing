@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T191
+active_task: T192
 
 tasks:
   - id: T010
@@ -1366,7 +1366,7 @@ tasks:
   - id: T191
     type: pm
     assignee: PM
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Replace the lane pool with strictly non-delegating fresh tasks, verify every setup turn contains no tool call, and freeze a third clean manifest before another live attempt."
     inputs:
@@ -1384,6 +1384,41 @@ tasks:
       - "One ignored clean r3 manifest with 32 unique identities"
       - "Tracked contract rotated to the r3 manifest"
       - "Zero provider, answer, or grader calls during setup"
+    receipt:
+      result: done
+      changed_files: []
+      commands:
+        - cmd: "Create and inspect 32 strict setup tasks"
+          status: pass
+        - cmd: "Freeze successor-live-r3-d6d79bc lane manifest"
+          status: pass
+      summary: "All 32 replacement setup turns completed with exact READY and no model tool call. The ignored r3 manifest contains 32 unique identities and SHA 7ce6596315b92f7f33b1314ed96d3fda05f05591499ca2a3b9296baa1bdb1dba. No benchmark content or provider/model execution occurred."
+      spawned_tasks:
+        - T192
+  - id: T192
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Bind the strict r3 lane manifest into the tracked successor contract and validate the exact execution identity."
+    allowed_files:
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+    inputs:
+      - "Strict r3 manifest SHA 7ce6596315b92f7f33b1314ed96d3fda05f05591499ca2a3b9296baa1bdb1dba"
+      - "Ignored run root successor-live-r3-d6d79bc"
+    constraints:
+      - "Change only both manifest SHA values."
+      - "Preserve all other contract fields."
+      - "Do not run a model, provider, or controller."
+    verify:
+      - "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 -v"
+      - "Validate the exact r3 manifest against the ready contract."
+      - "git diff --check"
+    stop_if:
+      - "Any field other than the two manifest SHA values must change."
+    expected_output:
+      - "Ready contract bound to r3 manifest"
+      - "One reviewable commit"
     receipt: null
   - id: T999
     type: judge
