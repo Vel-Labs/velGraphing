@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T260
+active_task: T270
 
 tasks:
   - id: T010
@@ -1812,7 +1812,7 @@ tasks:
   - id: T260
     type: pm
     assignee: PM
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Bind the final integrated product candidate to a fresh four-arm confirmation study without changing the historical R4 result."
     inputs:
@@ -1848,6 +1848,70 @@ tasks:
       - "Sixteen terminal trial receipts and one sealed result"
       - "Eight or fewer Jev calls under the aggregate USD 1 ledger"
       - "A comparative report that states supported results and explicit null claims"
+    receipt:
+      result: blocked
+      note: notes/T260-final-candidate-freeze-blocker.md
+      blocked_reason: "The regenerated D-01 Graph pool contains no relationship delta. Exact-symbol support selection consumes the caller seed with merge_sort instead of resolving the verified import immediately after that anchor."
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T260-final-candidate-freeze-blocker.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Merge the final product branch into the benchmark branch and verify R4 custody"
+          status: pass
+        - cmd: "Regenerate eight paired R5 candidate pools and preflight all 16 arms"
+          status: rejected
+        - cmd: "Independent Luna audit of the D-01 relationship gate and selection semantics"
+          status: revise
+      summary: "The normal product fold-in and package custody passed, but the D-01 Graph pool became identical to Direct. No live work ran. The valid benchmark gate exposed missing ordered-relation resolution in product retrieval."
+      spawned_tasks:
+        - T270
+  - id: T270
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Resolve an ordered outgoing relation request by using the prompt-matched source coordinate as an anchor and selecting the next verified same-file relation edge."
+    allowed_files:
+      - packages/core/retrieval.py
+      - plugins/graph-engineering/runtime/core/retrieval.py
+      - plugins/graph-engineering/runtime/.projection-state.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - tests/core/test_retrieval.py
+      - tests/skills/test_portable_skills.py
+      - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      - docs/goals/retrievel-adaptive-pipeline-v1/notes/T270-ordered-relation-anchor.md
+    inputs:
+      - "T260 blocked R5 preflight"
+      - "Frozen D-01 prompt and corrected rubric"
+      - "Existing verified import edges with exact source and target coordinates"
+      - "Current one-support-per-seed relationship policy"
+    constraints:
+      - "Recognize the ordered request from generic prompt semantics; do not hardcode D-01, corpus names, paths, merge_sort, or quick_sort."
+      - "Use only already-authenticated eligible edges and exact source coordinates from the same snapshot."
+      - "Select the next same-file edge with the same relation after the unique prompt-symbol anchor."
+      - "Keep one support per seed, parent-before-child selection, Direct behavior, custody, sensitivity, and all byte and count caps."
+      - "Ordinary exact-symbol prompts must keep selecting the named symbol."
+      - "Missing or ambiguous ordered anchors must fail closed to the existing stable policy without inventing a relation."
+      - "Do not add relation types, graph stores, scanners, providers, routing versions, or benchmark exceptions."
+      - "Project canonical changes; do not hand-edit runtime files."
+      - "Do not access credentials, make provider calls, or change the frozen question or rubric."
+      - "Do not edit GoalBuddy state; Parent records acceptance."
+    verify:
+      - "Add a synthetic ordered-import regression where a query for the dependency immediately after alpha selects beta."
+      - "Assert the relationship child and parent use exact source-bound coordinates and remain under existing caps."
+      - "Assert an ordinary exact-symbol prompt still selects alpha."
+      - "Assert missing and ambiguous ordered anchors do not fabricate a relationship."
+      - "Run focused retrieval and portable tests, consumer tests, projector twice, and clean package parity."
+      - "Install the candidate in an isolated workspace-local Codex home."
+      - "Regenerate R5 D-01 and require a nonzero relationship candidate and a Direct-versus-Graph delta."
+    stop_if:
+      - "The ordered relation cannot be resolved from verified same-file source coordinates."
+      - "The repair needs raw model inference, oracle labels, or a benchmark-specific exception."
+      - "An ordinary exact-symbol or change-impact regression changes unexpectedly."
+    expected_output:
+      - "One minimal generic ordered-relation repair and generated projection"
+      - "Focused, consumer, package, projector, and installed-path evidence"
+      - "One R5 D-01 Graph pool with the required source-bound relationship delta"
   - id: T999
     type: judge
     assignee: Judge
@@ -1871,16 +1935,16 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "T250 final product candidate accepted; T260 folds it into a fresh final-candidate four-arm study"
+  dirty_fingerprint: "T260 stopped before live execution; T270 resolves ordered relation anchors without changing the frozen benchmark"
   last_verification:
-    result: pass
-    task: T250
+    result: blocked
+    task: T260
     commands:
-      - "Exact declaration-name token coordinates passed focused and consumer tests."
-      - "Clean portable, Jev, package parity, and projector idempotence passed."
-      - "Fresh installed preflight retained the exact incoming relationship under the unchanged cap."
-      - "One exact live Jev call reranked the Graph shortlist and preserved parent-child integrity."
-      - "Independent Luna audit passed with no blocking finding."
+      - "Final product ancestry, package identity, and historical R4 custody passed."
+      - "Fresh R5 pool generation produced eight paired pools and planned eight Jev calls."
+      - "D-01 Graph and Direct were byte-identical with zero relationship candidates."
+      - "No provider, answer, or grader call ran."
+      - "Independent Luna review confirmed a valid benchmark gate and a generic ordered-relation product defect."
 
 provider_budget:
   provider: typesafe_jev
