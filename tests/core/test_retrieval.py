@@ -19,6 +19,7 @@ from packages.core import (
     PromptFacetSet,
     ProofObligation,
     Provenance,
+    RetrievalHit,
     Sensitivity,
     SourceCoordinate,
     SourceIdentityV4,
@@ -190,6 +191,83 @@ def obligated_facets(*obligations: ProofObligation, count: int = 8) -> PromptFac
 
 
 class SourceRelationDerivationTests(unittest.TestCase):
+    def test_python_declaration_names_are_exact_and_large_body_can_plan_graph(self) -> None:
+        sources = {
+            "src/z_caller.py": (
+                "from src.a_target import Café, async_large, large\n"
+            ).encode("utf-8"),
+            "src/a_target.py": (
+                b"def large():\n    value = 0\n"
+                + b"    value += 1\n" * 300
+                + b"    return value\n\n"
+                + b"async def async_large():\n    return 1\n\n"
+                + "class Café:\n    pass\n".encode("utf-8")
+            ),
+        }
+        plain_graph, snapshot, reader = multi_source_fixture(sources)
+        relations = derive_source_relations(plain_graph, snapshot, Reader(sources))
+        edges = {edge.target_coordinate.symbol: edge for edge in relations.edges}
+        target = sources["src/a_target.py"]
+        self.assertEqual({"large", "async_large", "Café"}, set(edges))
+        for symbol, edge in edges.items():
+            coordinate = edge.target_coordinate
+            self.assertEqual(symbol.encode("utf-8"), target[coordinate.byte_start:coordinate.byte_end])
+            self.assertEqual("python_declaration", coordinate.entity_kind)
+            self.assertEqual(
+                "declaration" if symbol == "Café" else "definition",
+                coordinate.occurrence_role,
+            )
+
+        graph = Graph(plain_graph.records, relations.edges)
+        index = build_repository_tag_index(graph, snapshot, reader)
+        prompt = "what changes if large changes"
+        facets = compile_prompt(prompt, index)
+        impact_task = task(query_terms=("changes", "large"), node_budget=1)
+
+        def run(expand_one_hop: bool):
+            return retrieve(
+                graph, impact_task, index, facets, snapshot, reader,
+                source_bound_expansion=True,
+                expand_one_hop=expand_one_hop,
+                maximum_results=1,
+            )
+
+        direct = ranked_candidates_from_retrieval(
+            graph, impact_task, snapshot, reader, run(False),
+            maximum_candidates=64,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        graph_candidates = ranked_candidates_from_retrieval(
+            graph, impact_task, snapshot, reader, run(True),
+            maximum_candidates=64,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        child = next(
+            candidate for candidate in graph_candidates
+            if candidate.relationship_parent_candidate_id is not None
+        )
+        parent_index = next(
+            index for index, candidate in enumerate(graph_candidates)
+            if candidate.candidate_id == child.relationship_parent_candidate_id
+        )
+        self.assertLess(parent_index, graph_candidates.index(child))
+        self.assertLessEqual(child.byte_end - child.byte_start, 4096)
+        self.assertEqual(edges["large"].edge_id, child.relationship_edge_id)
+        self.assertEqual(
+            "graph",
+            plan_ranked_context(
+                graph,
+                impact_task,
+                snapshot,
+                reader,
+                query=prompt,
+                direct_candidates=direct,
+                graph_candidates=graph_candidates,
+            ).route,
+        )
+
     def test_derivation_is_source_bound_and_reports_explicit_coverage(self) -> None:
         sources = {
             "src/caller.py": (
@@ -359,10 +437,108 @@ class SourceRelationDerivationTests(unittest.TestCase):
 
 
 class SourceBoundExpansionTests(unittest.TestCase):
+    def test_ordered_outgoing_relation_uses_next_verified_source_coordinate(self) -> None:
+        sources = {
+            "src/caller.py": (
+                b"from src.alpha import alpha\n"
+                b"from src.beta import beta\n"
+            ),
+            "src/alpha.py": b"def alpha():\n    return 1\n",
+            "src/beta.py": b"def beta():\n    return 2\n",
+        }
+        plain_graph, snapshot, reader = multi_source_fixture(sources)
+        graph = Graph(
+            plain_graph.records,
+            derive_source_relations(plain_graph, snapshot, Reader(sources)).edges,
+        )
+        index = build_repository_tag_index(graph, snapshot, reader)
+
+        def run(prompt: str, *, stable: bool = False) -> object:
+            facets = compile_prompt(prompt, index)
+            if stable:
+                facets = replace(
+                    facets,
+                    facets=tuple(
+                        facet for facet in facets.facets
+                        if not (
+                            facet.kind is FacetKind.OPERATION
+                            and facet.value == "ordered-successor"
+                        )
+                    ),
+                )
+            return retrieve(
+                graph,
+                task(node_budget=8, byte_budget=32_768),
+                index,
+                facets,
+                snapshot,
+                reader,
+                source_bound_expansion=True,
+                expand_one_hop=True,
+                maximum_results=8,
+            )
+
+        ordered = run(
+            "In src/caller.py, follow the imported dependency immediately after alpha"
+        )
+        ordinary = run("In src/caller.py, follow the imported alpha dependency")
+        support = ordered.relationship_supports[0]
+        self.assertEqual("beta", support.seed_coordinate.symbol)
+        self.assertEqual("src/beta.py", support.related_coordinate.source_path)
+        self.assertEqual(
+            b"beta",
+            sources["src/caller.py"][
+                support.seed_coordinate.byte_start:support.seed_coordinate.byte_end
+            ],
+        )
+        self.assertEqual(
+            b"beta",
+            sources["src/beta.py"][
+                support.related_coordinate.byte_start:support.related_coordinate.byte_end
+            ],
+        )
+        self.assertEqual("alpha", ordinary.relationship_supports[0].seed_coordinate.symbol)
+
+        candidates = ranked_candidates_from_retrieval(
+            graph,
+            task(node_budget=8, byte_budget=32_768),
+            snapshot,
+            reader,
+            ordered,
+            maximum_candidates=64,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        child = next(
+            candidate for candidate in candidates
+            if candidate.relationship_parent_candidate_id is not None
+        )
+        self.assertLessEqual(len(candidates), 64)
+        self.assertLessEqual(sum(item.byte_end - item.byte_start for item in candidates), 32_768)
+        self.assertLessEqual(child.byte_end - child.byte_start, 4096)
+        self.assertLess(
+            next(
+                index for index, candidate in enumerate(candidates)
+                if candidate.candidate_id == child.relationship_parent_candidate_id
+            ),
+            candidates.index(child),
+        )
+
+        for prompt in (
+            "In src/caller.py, follow the imported dependency immediately after missing",
+            "In src/caller.py, follow the imported dependency immediately after alpha and beta",
+        ):
+            with self.subTest(prompt=prompt):
+                self.assertEqual(
+                    run(prompt, stable=True).relationship_supports,
+                    run(prompt).relationship_supports,
+                )
+
     def test_bound_support_is_metadata_only_and_unbound_edges_do_not_support(self) -> None:
         sources = {
             "src/caller.py": b"from src.helper import helper\n\ndef call_helper():\n    return helper()\n",
             "src/helper.py": b"def helper():\n    return 1\n",
+            "src/noise.py": b"def alpha_noise():\n    return '" + b"x" * 512 + b"'\n",
         }
         plain_graph, snapshot, reader = multi_source_fixture(sources)
         records = plain_graph.record_map()
@@ -474,6 +650,44 @@ class SourceBoundExpansionTests(unittest.TestCase):
             candidate.relationship_parent_candidate_id is not None
             for candidate in valid_candidates
         ))
+        crowded = replace(
+            enabled,
+            hits=(
+                RetrievalHit(
+                    "repo:src/noise.py", "src/noise.py", 2,
+                    ("exact",), ("alpha",), 0,
+                ),
+                *enabled.hits,
+            ),
+        )
+        broad = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader, crowded,
+            maximum_candidates=64,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        child = next(
+            candidate for candidate in broad
+            if candidate.relationship_parent_candidate_id is not None
+        )
+        parent = next(
+            candidate for candidate in broad
+            if candidate.candidate_id == child.relationship_parent_candidate_id
+        )
+        relationship_bytes = sum(
+            candidate.byte_end - candidate.byte_start for candidate in (parent, child)
+        )
+        constrained = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader, crowded,
+            maximum_candidates=64,
+            maximum_candidate_bytes=relationship_bytes,
+            maximum_unit_bytes=4096,
+        )
+        self.assertEqual(constrained, (parent, child))
+        self.assertEqual(
+            sum(candidate.byte_end - candidate.byte_start for candidate in constrained),
+            relationship_bytes,
+        )
         with self.assertRaisesRegex(ValueError, "duplicate_relationship_support"):
             ranked_candidates_from_retrieval(
                 graph, task(), snapshot, reader,
@@ -689,15 +903,27 @@ class SourceBoundExpansionTests(unittest.TestCase):
         sources = {
             "src/a_definition.py": (
                 b"from src.b_dependency import dependency\n\n"
-                b"def helper():\n    return dependency()\n"
+                b"def helper():\n    return dependency()\n\n"
+                b"def unrelated():\n    return dependency()\n"
             ),
+            "src/a_unrelated.py": b"from src.a_definition import unrelated\n",
             "src/b_dependency.py": b"def dependency():\n    return 1\n",
             "src/z_importer.py": b"from src.a_definition import helper\n",
         }
         plain_graph, snapshot, reader = multi_source_fixture(sources)
+        derived = derive_source_relations(plain_graph, snapshot, Reader(sources)).edges
         graph = Graph(
             plain_graph.records,
-            derive_source_relations(plain_graph, snapshot, Reader(sources)).edges,
+            tuple(
+                replace(
+                    edge,
+                    edge_id={
+                        "unrelated": "edge:0-unrelated",
+                        "helper": "edge:1-helper",
+                    }.get(edge.source_coordinate.symbol, edge.edge_id),
+                )
+                for edge in derived
+            ),
         )
         index = build_repository_tag_index(graph, snapshot, reader)
         obligation = ProofObligation(
@@ -709,7 +935,8 @@ class SourceBoundExpansionTests(unittest.TestCase):
             ordinary_facets,
             facets=(
                 PromptFacet(FacetKind.INTENT, "change-impact", 8),
-                *ordinary_facets.facets[1:],
+                PromptFacet(FacetKind.IDENTIFIER, "helper", 10, True),
+                *ordinary_facets.facets[2:],
             ),
         )
 
@@ -729,6 +956,7 @@ class SourceBoundExpansionTests(unittest.TestCase):
         )
         self.assertEqual(1, len(impact.relationship_supports))
         self.assertEqual("incoming", impact.relationship_supports[0].direction)
+        self.assertEqual("helper", impact.relationship_supports[0].seed_coordinate.symbol)
         self.assertEqual(
             "repo:src/z_importer.py", impact.relationship_supports[0].target_record_id
         )
@@ -982,6 +1210,17 @@ class TagIndexTests(unittest.TestCase):
             facet for facet in facets.facets if facet.value == "token-expiry"
         )
         self.assertFalse(token_expiry.required)
+
+    def test_changes_compiles_to_change_impact(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = compile_prompt(
+            "what changes if derive_source_relations changes", index
+        )
+        self.assertIn(
+            (FacetKind.INTENT, "change-impact"),
+            {(facet.kind, facet.value) for facet in facets.facets},
+        )
 
     def test_prompt_excludes_common_generic_words(self) -> None:
         graph, snapshot, reader = fixture()

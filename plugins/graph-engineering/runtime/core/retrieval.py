@@ -13,11 +13,13 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from enum import Enum
 import hashlib
+import io
 import json
 import math
 from pathlib import PurePosixPath
 import posixpath
 import re
+import tokenize
 from typing import TYPE_CHECKING, Iterable, Mapping, Sequence
 from urllib.parse import unquote
 
@@ -943,7 +945,16 @@ def ranked_candidates_from_retrieval(
     ordered: list[RankedContextCandidate] = list(required)
     for candidate in required:
         ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
-    for candidate in [*completion, *optional]:
+    nonrequired = [*completion, *optional]
+    relationship_parents = [
+        candidate for candidate in nonrequired
+        if supports_by_parent.get(candidate.candidate_id)
+    ]
+    other_optional = [
+        candidate for candidate in nonrequired
+        if not supports_by_parent.get(candidate.candidate_id)
+    ]
+    for candidate in [*relationship_parents, *other_optional]:
         ordered.append(candidate)
         ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
 
@@ -1212,6 +1223,39 @@ def _relation_ast_range(data: bytes, node: ast.AST) -> tuple[int, int] | None:
         return None
 
 
+def _relation_declaration_name_ranges(
+    data: bytes,
+) -> dict[tuple[int, str, str], tuple[int, int]]:
+    """Return exact UTF-8 byte ranges for Python declaration-name tokens."""
+
+    text = data.decode("utf-8")
+    lines = text.splitlines(keepends=True)
+    offsets: list[int] = []
+    position = 0
+    for line in lines:
+        offsets.append(position)
+        position += len(line.encode("utf-8"))
+    try:
+        tokens = tuple(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (IndentationError, tokenize.TokenError):
+        return {}
+    ranges: dict[tuple[int, str, str], tuple[int, int]] = {}
+    for index, token in enumerate(tokens[:-1]):
+        if token.type != tokenize.NAME or token.string not in {"class", "def"}:
+            continue
+        name = tokens[index + 1]
+        if name.type != tokenize.NAME or name.start[0] != token.start[0]:
+            continue
+        line = lines[name.start[0] - 1]
+        start = offsets[name.start[0] - 1] + len(
+            line[:name.start[1]].encode("utf-8")
+        )
+        end = offsets[name.end[0] - 1] + len(line[:name.end[1]].encode("utf-8"))
+        if data[start:end].decode("utf-8") == name.string:
+            ranges[(token.start[0], token.string, name.string)] = (start, end)
+    return ranges
+
+
 def _relation_module_name(path: str) -> str | None:
     if not path.endswith(".py"):
         return None
@@ -1322,11 +1366,13 @@ def derive_source_relations(
                 counts["python_imports"]["unsupported"] += 1
                 continue
             trees[path] = tree
+            declaration_names = _relation_declaration_name_ranges(data)
             by_name: dict[str, list[SourceCoordinate]] = {}
             for node in tree.body:
                 if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                     continue
-                bounds = _relation_ast_range(data, node)
+                keyword = "class" if isinstance(node, ast.ClassDef) else "def"
+                bounds = declaration_names.get((node.lineno, keyword, node.name))
                 if bounds is None or bounds[0] >= bounds[1]:
                     continue
                 by_name.setdefault(node.name, []).append(
@@ -1892,6 +1938,13 @@ def compile_prompt(
 
     intents = _intent_facets(content_words)
     typed_candidates = [*intents, *_derived_facets(intents, content_words)]
+    if any(
+        left == "immediately" and right == "after"
+        for left, right in zip(words, words[1:])
+    ):
+        typed_candidates.append(
+            PromptFacet(FacetKind.OPERATION, "ordered-successor", 8)
+        )
 
     vocabulary = set(index.vocabulary)
     rejected: list[str] = []
@@ -2310,26 +2363,78 @@ def retrieve(
                 continue
             eligible_edges.append(edge)
         direction_order = ("incoming", "outgoing") if change_impact else ("outgoing",)
-        for direction in direction_order:
-            for edge in eligible_edges:
-                if direction == "incoming":
-                    if edge.relation not in _REVERSE_RELATIONS:
-                        continue
-                    seed_id, related_id = edge.target_id, edge.source_id
-                else:
-                    seed_id, related_id = edge.source_id, edge.target_id
-                if seed_id not in selected_seeds or seed_id in support_by_seed:
+        prompt_values = {facet.value for facet in facets.facets}
+        ordered_successor = any(
+            facet.kind is FacetKind.OPERATION and facet.value == "ordered-successor"
+            for facet in facets.facets
+        )
+        if ordered_successor and not change_impact:
+            for seed_id in sorted(selected_seeds):
+                anchors = [
+                    edge for edge in eligible_edges
+                    if edge.source_id == seed_id
+                    and _canonical(edge.source_coordinate.symbol) in prompt_values
+                ]
+                if len(anchors) != 1:
                     continue
+                anchor = anchors[0]
+                successors = [
+                    edge for edge in eligible_edges
+                    if edge.source_id == seed_id
+                    and edge.relation == anchor.relation
+                    and edge.source_coordinate.source_path
+                    == anchor.source_coordinate.source_path
+                    and edge.source_coordinate.byte_start
+                    > anchor.source_coordinate.byte_start
+                ]
+                if not successors:
+                    continue
+                edge = min(
+                    successors,
+                    key=lambda item: (
+                        item.source_coordinate.byte_start,
+                        item.source_coordinate.byte_end,
+                        item.edge_id,
+                    ),
+                )
                 support_by_seed[seed_id] = RelationshipSupport(
                     edge.edge_id,
                     edge.relation,
-                    seed_id,
-                    related_id,
+                    edge.source_id,
+                    edge.target_id,
                     edge.source_coordinate,
                     edge.target_coordinate,
-                    direction,
+                    "outgoing",
                     edge.sensitivity,
                 )
+        for direction in direction_order:
+            for symbol_matched in (True, False):
+                for edge in eligible_edges:
+                    if direction == "incoming":
+                        if edge.relation not in _REVERSE_RELATIONS:
+                            continue
+                        seed_id, related_id = edge.target_id, edge.source_id
+                        seed_coordinate = edge.target_coordinate
+                    else:
+                        seed_id, related_id = edge.source_id, edge.target_id
+                        seed_coordinate = edge.source_coordinate
+                    assert seed_coordinate is not None
+                    if (
+                        _canonical(seed_coordinate.symbol) in prompt_values
+                    ) is not symbol_matched:
+                        continue
+                    if seed_id not in selected_seeds or seed_id in support_by_seed:
+                        continue
+                    support_by_seed[seed_id] = RelationshipSupport(
+                        edge.edge_id,
+                        edge.relation,
+                        seed_id,
+                        related_id,
+                        edge.source_coordinate,
+                        edge.target_coordinate,
+                        direction,
+                        edge.sensitivity,
+                    )
         relationship_supports = tuple(support_by_seed[key] for key in sorted(support_by_seed))
     return RetrievalResult(
         route="graph" if sufficient else "defer",
@@ -2886,7 +2991,7 @@ def _intent_facets(words: Sequence[str]) -> list[PromptFacet]:
     groups = (
         ("locate", {"find", "locate", "owner", "owns", "where", "which"}),
         ("trace", {"flow", "how", "path", "trace"}),
-        ("change-impact", {"affect", "break", "change", "impact", "migration"}),
+        ("change-impact", {"affect", "break", "change", "changes", "impact", "migration"}),
         ("validate", {"build", "package", "release", "test", "verify"}),
         ("authority", {"authority", "credential", "permission", "privacy", "publish", "safe", "safety"}),
     )
