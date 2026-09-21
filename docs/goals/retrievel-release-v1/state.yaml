@@ -309,19 +309,29 @@ tasks:
         - "independent Luna observed-host re-audit: ACCEPT"
       remaining: "No accepted live adapter or provider result exists. T040 remains blocked on exact current smoke approval and a credential-bearing operator process. T060 must freeze the successor study before T070 can request bounded live authority."
   - id: T060
-    type: judge
-    assignee: Judge
+    type: worker
+    assignee: Worker
     status: active
     reasoning_hint: high
-    objective: "Freeze the expanded corpus and question matrix with independent rubrics, exact snapshots, telemetry, budget, and publication boundaries."
-    inputs:
-      - "T050 canary receipt"
-    constraints:
-      - "No answer, grader, or provider calls."
-    expected_output:
-      - "Frozen study contract"
-      - "Exact call ceiling and cost preview"
-      - "Execution-ready or rejected decision"
+    objective: "Freeze the smallest current-candidate successor study with four task types, four arms, independent rubrics, exact snapshots, telemetry, an eight-call maximum, and explicit claim boundaries."
+    allowed_files:
+      - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+      - scripts/benchmarks/four_arm_study_v1.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - docs/goals/retrievel-release-v1/notes/T060-study-freeze.md
+    verify:
+      - "bind the current controller, installed package candidate, source snapshots, corrected rubrics, pool hashes, request-byte set, and private witness custody"
+      - "prove four tasks by four arms, fresh-lane requirements, at most eight Jev calls, zero retries, and no provider-specific publication authority"
+      - "validate from the pinned local v4 corpus lanes without answer, grader, provider, credential, or network calls"
+      - "run focused benchmark tests and git diff --check"
+    stop_if:
+      - "The successor freeze would rewrite the historical freeze or sealed results."
+      - "The current source snapshots or private witness custody cannot be reproduced exactly."
+      - "Any command would invoke an answer, grader, provider, credential, or network path."
     receipt: null
   - id: T070
     type: worker
