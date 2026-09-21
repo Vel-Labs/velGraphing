@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T240
+active_task: T250
 
 tasks:
   - id: T010
@@ -1678,7 +1678,7 @@ tasks:
   - id: T240
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Select prompt-symbol-aligned incoming supports for change-impact queries before stable outgoing fallback."
     allowed_files:
@@ -1719,6 +1719,71 @@ tasks:
       - "One minimal intent and verified-support ordering repair"
       - "Focused, consumer, parity, projector, and installed-path evidence"
       - "One fresh exact request packet for Parent review, with no provider call"
+    receipt:
+      result: done
+      changed_files:
+        - packages/core/retrieval.py
+        - plugins/graph-engineering/runtime/core/retrieval.py
+        - plugins/graph-engineering/runtime/.projection-state.json
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - tests/core/test_retrieval.py
+        - tests/skills/test_portable_skills.py
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T240-symbol-aligned-impact.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Run targeted natural-language intent and exact symbol-support regressions"
+          status: pass
+        - cmd: "Run retrieval, helper, JavaScript, ranked, portable, Jev, parity, and projector checks"
+          status: pass
+        - cmd: "Run fresh installed exact public preflight"
+          status: pass
+      summary: "Natural-language changes now activates change impact and verified incoming supports prefer an exact prompt-symbol match. The correct derive_source_relations edge is selected, but its whole-function coordinate exceeds the 4,096-byte candidate cap."
+      spawned_tasks:
+        - T250
+  - id: T250
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Bind Python relation targets to exact declaration-name anchors so long declarations can produce bounded source-verified relationship candidates."
+    allowed_files:
+      - packages/core/retrieval.py
+      - plugins/graph-engineering/runtime/core/retrieval.py
+      - plugins/graph-engineering/runtime/.projection-state.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - tests/core/test_retrieval.py
+      - tests/skills/test_portable_skills.py
+      - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      - docs/goals/retrievel-adaptive-pipeline-v1/notes/T250-declaration-anchors.md
+    inputs:
+      - "T240 selected incoming derive_source_relations support"
+      - "Current whole-function coordinate bytes 50515 through 63217"
+      - "Existing 4,096-byte candidate-unit cap and unchanged selection custody contract"
+    constraints:
+      - "Use an exact source-bound declaration-name token for Python relation targets."
+      - "Keep full source content authoritative; the relation anchor is navigation metadata only."
+      - "Do not weaken selection custody or raise the 4,096-byte cap."
+      - "Do not infer callers, add relation types, or change JavaScript and Markdown coordinate policy."
+      - "Preserve deterministic UTF-8 byte offsets for functions, async functions, and classes."
+      - "Project canonical changes; do not hand-edit runtime."
+      - "Do not access credentials or make a provider call."
+      - "Do not edit GoalBuddy state; Parent records acceptance."
+    verify:
+      - "Add one regression for a named import of a Python declaration larger than 4,096 bytes."
+      - "Assert the edge target coordinate covers exactly the declaration name in source bytes."
+      - "Assert the bounded relationship candidate contains that coordinate and stays within 4,096 bytes."
+      - "Run relation, retrieval, ranked selection, portable, Jev, parity, and projector checks."
+      - "Install the candidate in an isolated workspace-local Codex home."
+      - "Rerun the original public prompt and require an incoming derive_source_relations child in a Graph shortlist."
+      - "Build one fresh exact Jev preview for Parent review without a provider call."
+    stop_if:
+      - "Python syntax cannot produce an exact declaration-name byte range without heuristic inference."
+      - "Any existing consumer requires the edge coordinate to cover the full declaration body."
+      - "The installed preflight still cannot bind the exact incoming child under the cap."
+    expected_output:
+      - "One precise Python relation-anchor repair and generated projection"
+      - "Focused, consumer, parity, projector, and installed-path evidence"
+      - "One fresh exact request packet for Parent review, with no provider call"
     receipt: null
   - id: T999
     type: judge
@@ -1743,16 +1808,16 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "T230 merged main and retained relationship bundles; T240 aligns change-impact support to the named prompt symbol"
+  dirty_fingerprint: "T240 selects the correct incoming symbol; T250 replaces whole-body relation coordinates with exact declaration-name anchors"
   last_verification:
     result: pass
-    task: T230
+    task: T240
     commands:
-      - "origin/main 3bad9cb is an ancestor of merge 77acbc6."
-      - "Merged focused, consumer, full-core, host, portable, Jev, parity, and projector checks passed."
-      - "Fresh installed merged package candidate is 653f74b1 with installed-only imports."
-      - "One exact live request returned a valid rerank in 711.284 ms with source revalidation and no retry."
-      - "Merged selection safely applied the bound response but selected no unrelated relationship child."
+      - "Natural-language changes activates the existing change-impact intent."
+      - "Exact verified prompt-symbol support wins before stable unrelated edge order."
+      - "Focused and consumer tests, clean parity, and projector idempotence passed."
+      - "Fresh installed preflight selected incoming derive_source_relations supports."
+      - "No provider call occurred because the whole-function coordinate exceeds the candidate-unit cap."
 
 provider_budget:
   provider: typesafe_jev
