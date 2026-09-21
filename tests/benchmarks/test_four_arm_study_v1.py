@@ -138,10 +138,10 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 },
             }
             process_manifest = {"entries": [
-                {"trial_id": trial_id, "role": "answer", "thread_id": "answer-fixture",
+                {"trial_id": trial_id, "role": "answer", "thread_id": "answer_fixture",
                  "model": "fixture-answer", "reasoning": "none",
                  "argv": [sys.executable, "-c", answer_code]},
-                {"trial_id": trial_id, "role": "grader", "thread_id": "grader-fixture",
+                {"trial_id": trial_id, "role": "grader", "thread_id": "grader_fixture",
                  "model": "fixture-grader", "reasoning": "none",
                  "argv": [sys.executable, "-c", grader_code]},
             ]}
@@ -263,8 +263,8 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 {**row, "trial_id": d_trial_id}
                 for row in process_manifest["entries"]
             ]}
-            d_manifest["entries"][0]["thread_id"] = "answer-d-fixture"
-            d_manifest["entries"][1]["thread_id"] = "grader-d-fixture"
+            d_manifest["entries"][0]["thread_id"] = "answer_d_fixture"
+            d_manifest["entries"][1]["thread_id"] = "grader_d_fixture"
             graph_calls = []
             replay_child_output = []
             original_run = subprocess.run
@@ -376,11 +376,11 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             live_observation["replayed_usage"] = None
 
             answer_identity = {
-                "trial_id": live_id, "role": "answer", "thread_id": "answer-d-live",
+                "trial_id": live_id, "role": "answer", "thread_id": "answer_d_live",
                 "model": "fixture-answer", "reasoning": "none",
             }
             grader_identity = {
-                "trial_id": live_id, "role": "grader", "thread_id": "grader-d-live",
+                "trial_id": live_id, "role": "grader", "thread_id": "grader_d_live",
                 "model": "fixture-grader", "reasoning": "none",
             }
             observed_answer_code = answer_code.replace(
@@ -526,7 +526,7 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             failed_registration = {**live_registration, "trial_id": failed_id}
             failed_manifest = {"entries": [
                 {**row, "trial_id": failed_id,
-                 "thread_id": f"{row['role']}-d-failed"}
+                 "thread_id": f"{row['role']}_d_failed"}
                 for row in live_manifest["entries"]
             ]}
             failed_run_root = root / "failed-run"
@@ -1181,6 +1181,12 @@ class FourArmStudyTests(unittest.TestCase):
         self.assertEqual(
             self.ttc["status"], "frozen_pending_final_user_reack",
         )
+        self.assertEqual(
+            self.ttc["bindings"]["lane_manifest"]["thread_id_semantics"],
+            study.THREAD_ID_SEMANTICS,
+        )
+        self.assertEqual(self.ttc["remaining_authority"]["answer_task_names"], 16)
+        self.assertEqual(self.ttc["remaining_authority"]["grader_task_names"], 16)
         self.assertEqual(self.ttc["remaining_authority"]["live_lanes_created"], 0)
         self.assertEqual(
             self.ttc["remaining_authority"]["lane_manifest_sha256"],
@@ -1208,6 +1214,10 @@ class FourArmStudyTests(unittest.TestCase):
             "manifest": lambda value: value["bindings"]["lane_manifest"].update(
                 sha256="0" * 64
             ),
+            "manifest_thread_id_semantics": lambda value: value[
+                "bindings"]["lane_manifest"].update(
+                    thread_id_semantics="opaque_host_id",
+                ),
             "custody": lambda value: value.update(witness_custody_sha256="0" * 64),
         }
         for name, mutate in mutations.items():
@@ -1262,7 +1272,7 @@ class FourArmStudyTests(unittest.TestCase):
                 entries.append({
                     "trial_id": trial_id,
                     "role": role,
-                    "thread_id": f"thread-{role}-{trial_id}",
+                    "thread_id": f"thread_{role}_{trial_id.lower().replace('-', '_')}",
                     "model": binding["model"],
                     "reasoning": binding["reasoning"],
                     "argv": argv,
@@ -1280,6 +1290,13 @@ class FourArmStudyTests(unittest.TestCase):
         grader["model"] = "gpt-5.6-luna"
         with self.assertRaisesRegex(study.StudyError, "lane_manifest_invalid"):
             study.validate_lane_manifest(manifest, self.freeze)
+        for invalid_name in ("T070_r1_luna_answer_a_s_01", "t070-r1-luna-answer-a-s-01"):
+            invalid = self.lane_manifest()
+            invalid["entries"][0]["thread_id"] = invalid_name
+            with self.subTest(thread_id=invalid_name), self.assertRaisesRegex(
+                study.StudyError, "lane_manifest_invalid",
+            ):
+                study.validate_lane_manifest(invalid, self.freeze)
 
     def test_validate_cli_accepts_frozen_manifest_runtime_binding(self) -> None:
         local = ROOT / ".velgraphing-local"
@@ -1290,12 +1307,27 @@ class FourArmStudyTests(unittest.TestCase):
                 "schema_version": "velgraphing-four-arm-lane-bindings-v1",
                 "bindings": [{
                     "trial_id": trial_id,
-                    "answer_thread_id": f"answer-{trial_id}",
-                    "grader_thread_id": f"grader-{trial_id}",
+                    "answer_thread_id": f"answer_{trial_id.lower().replace('-', '_')}",
+                    "grader_thread_id": f"grader_{trial_id.lower().replace('-', '_')}",
                 } for trial_id in study.DISPATCH],
             }
+            invalid_bindings = deepcopy(bindings)
+            invalid_bindings["bindings"][0]["answer_thread_id"] = "T070-r1-answer-A-S-01"
+            invalid_manifest = root / "invalid-lane-manifest.json"
+            with self.assertRaisesRegex(study.StudyError, "lane_bindings_invalid"):
+                study.freeze_lane_manifest(
+                    invalid_bindings, self.freeze, invalid_manifest, sys.executable,
+                )
+            self.assertFalse(invalid_manifest.exists())
             manifest = root / "lane-manifest.json"
-            study.freeze_lane_manifest(bindings, self.freeze, manifest, sys.executable)
+            manifest.write_text("stale", encoding="utf-8")
+            with self.assertRaisesRegex(study.StudyError, "handoff_file_exists"):
+                study.freeze_lane_manifest(bindings, self.freeze, manifest, sys.executable)
+            self.assertEqual(manifest.read_text(encoding="utf-8"), "stale")
+            study.freeze_lane_manifest(
+                bindings, self.freeze, manifest, sys.executable,
+                replace_existing=True,
+            )
             output = StringIO()
             with redirect_stdout(output):
                 self.assertEqual(study.main([

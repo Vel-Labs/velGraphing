@@ -43,31 +43,35 @@ required before execution.
 - Run root: `/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-0.2.0-rc1/.velgraphing-local/velgraphing-four-arm-study-v1/retrievel-0.2.0-rc1-t070-r1`.
 - Python executable: `/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python`.
 - Canonical lane-name mapping: `/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-0.2.0-rc1/.velgraphing-local/velgraphing-four-arm-study-v1/retrievel-0.2.0-rc1-t070-r1/lane-bindings.json`.
-- Lane-name mapping SHA-256: `e0f4306296e7c5ed7d5f5c6f7017fc32705af191cf7b00b9b50f0054542a8ad3`.
+- Lane-name mapping SHA-256: `8957d586f1c931757a40a825ba38cda43fe4c6adf5c05cd7bb4d9de33f81432e`.
 - Frozen lane manifest: `/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.worktrees/retrievel-0.2.0-rc1/.velgraphing-local/velgraphing-four-arm-study-v1/retrievel-0.2.0-rc1-t070-r1/lane-manifest.json`.
-- Manifest SHA-256: `c164f76c2e5a995661be6f534eb38e4b364c57e8592844da5f6e21fde7632382`.
+- Manifest SHA-256: `57d444a0a8ea252433e5d69140c9677685878c9956576dd55a1c2df05406a0fa`.
 - Entry counts: 32 total; 16 Luna answer lanes and 16 Astra grader lanes.
-- Naming pattern: `T070-r1-Luna-answer-<trial-id>` and `T070-r1-Astra-grader-<trial-id>`.
+- Naming pattern: `t070_r1_luna_answer_<trial-id>` and
+  `t070_r1_astra_grader_<trial-id>`. Convert trial letters to lowercase and
+  trial-ID hyphens to underscores.
 - All 32 planned identifiers are unique and follow the frozen dispatch order.
 
-The manifest contains planned task-name identifiers. It does not contain
-opaque IDs returned by task creation because no task was created. If execution
-requires actual host thread IDs, Parent must replace the planned values, freeze
-a new manifest, and request re-ack for its new hash before execution.
+The manifest's `thread_id` field stores a canonical collaboration `task_name`,
+not an opaque host-issued thread ID. Before response capture or attestation,
+Parent must verify that `spawn_agent` returned a `task_name` that exactly
+matches the planned manifest name. Keep any opaque host ID separate. A
+mismatch stops capture and attestation; any corrected name requires a new
+manifest and final re-ack for its new hash. No task was created for this freeze.
 
 ## Bound artifacts
 
 - Request-byte-set SHA-256: `80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94`.
 - Per-batch Jev cap: 8 calls; retries: 0.
 - Maximum additional provider spend: USD `0.9031`.
-- Successor freeze SHA-256: `647bfac827ee4e419bc28d9ccb9a58c8b306fed0828608d76ad1ec9b981291d1`.
-- Successor preflight SHA-256: `442582de7241c84cde93c38efb0151cb2d77a9561ae0510b2ece164bd54d2f45`.
+- Successor freeze SHA-256: `ed86110272cb4d8dfad853245698b82a2daca1b6cd17fe341db7406fe98d2a5b`.
+- Successor preflight SHA-256: `dffaf31f8dde051223b7ccf86f2b2b90fa5f271fb46693037e061cb415f0fdbf`.
 - Ignored pool artifact SHA-256: `3721b7378848d024e073cfa67bce44249b62551835ce236c22837119fee16d7b`.
-- Controller SHA-256: `b68ffd10fc733df0eb21475657c6338b5be0d966da9f7d646357f415290c6177`.
-- Successor rubric canonical SHA-256: `f851ba07b55cf9e520527021fc737f1f11f59803d29e24e60a771b0328c35f69`.
-- Successor rubric file SHA-256: `9f2a2acf353a3dce56e648145c862a63daf2b4ea545689efa3635f5840cd1bae`.
-- Successor TTC contract canonical SHA-256: `7f283dce4adfb8e0cd366df38f0b7311e9ddcec8a7c72f606b671952ad9dacf2`.
-- Successor TTC contract file SHA-256: `4a715c8538428f276de93deea4e0eb0f9213809aaf2b88b02b8fbdf31dea09fe`.
+- Controller SHA-256: `505099f791674f3c007873429c5fa35f737c295cf6821be89122a7f127776a33`.
+- Successor rubric canonical SHA-256: `5bcdbf640ef88067db6162c7b937a9976b355c9cd933df2440c51793c16e4e6d`.
+- Successor rubric file SHA-256: `66acba6c5cdec5c970f417ec457e39a40bdef31065611fa464f5e9de5d2b4cc2`.
+- Successor TTC contract canonical SHA-256: `6ea6382a0b8c1be0135be410b2d3bb7dad66d025c78257f7a8fc98d456fd1305`.
+- Successor TTC contract file SHA-256: `6395345ed8c299eea41d45a76e575d305da9423f84dd3e7507b45c54e73e32df`.
 - Contract status: `frozen_pending_final_user_reack`.
 - Remaining re-ack fields: request-byte-set hash; eight-call cap; total budget; operator-reported spend-to-date; maximum additional spend; manifest hash; Python executable.
 
@@ -79,14 +83,18 @@ a new manifest, and request re-ack for its new hash before execution.
   earlier T070 preparation and regenerated the ignored pool file. This refresh
   left that file unchanged; `freeze-successor --refresh` rederived the pools
   from the pinned lanes and matched the same bound pool SHA.
-- Earlier T070 `freeze-lanes` with the specified run root, Python path,
-  bindings, pool, and custody: passed. It froze 32 unique manifest entries.
+- `freeze-lanes --refresh` with the specified run root, Python path, updated
+  bindings, pool, and custody: passed. It replaced the prior planned-name
+  manifest and froze 32 unique canonical task names; it created no tasks.
 - `validate-successor-overlay`: passed. It reports eight planned Jev calls,
   the frozen manifest hash, zero live lanes created, and `execution_ready: false`.
-- Direct manifest validation from T070: passed; 32 entries, 32 unique planned
-  IDs, 16 answer lanes, and 16 grader lanes. This refresh preserved its SHA.
+- Historical `validate --lane-manifest`: passed. Direct binding checks passed:
+  32 names match their answer/grader bindings exactly, are unique, and use only
+  lowercase ASCII letters, digits, and underscores. The contract SHA matches
+  the regenerated manifest.
 - Focused benchmark tests: 31 passed, 2 skipped. Coverage now checks the
-  frozen-manifest status and the historical-reservation reconciliation.
+  canonical task-name rule, refresh overwrite guard, manifest semantics, and
+  historical-reservation reconciliation.
 - `git diff --check`: passed.
 - GoalBuddy `state.yaml` syntax check with Ruby YAML: passed.
 - `run --help`: passed; it exposes `--approved-max-additional-provider-spend-usd`.
@@ -106,8 +114,7 @@ a new manifest, and request re-ack for its new hash before execution.
 - `tests/benchmarks/test_four_arm_study_v1.py`
 - `docs/goals/retrievel-release-v1/notes/T060-study-freeze.md`
 - `docs/goals/retrievel-release-v1/notes/T070-study-execution.md`
-- `docs/goals/retrievel-release-v1/state.yaml`: corrected the superseded T060
-  budget summary and T070 re-ack requirements.
 
-The ignored custody copy and regenerated pool remain local. The ignored T070
-run root contains only `lane-bindings.json` and `lane-manifest.json`.
+`docs/goals/retrievel-release-v1/state.yaml` had pre-existing local changes and
+was not changed in this repair. The ignored T070 run root contains the updated
+`lane-bindings.json` and regenerated `lane-manifest.json`.

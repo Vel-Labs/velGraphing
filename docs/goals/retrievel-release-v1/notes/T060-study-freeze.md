@@ -47,8 +47,9 @@ manifest; it did not create nested tasks. See
   it is not provider-verified. Final user re-ack is pending.
 - Original T060 successor freeze SHA-256, superseded by the T070 financial refresh: `36438e19c2e51a723825a921f3457e1127e1e5744424eb9526ab743a79bea56b`.
 - Original T060 successor preflight SHA-256, superseded by the T070 financial refresh: `e9439a7ee7c173d41d93afb932a3a08d5342d667ac261def5ce8e8d8b6df88df`.
-- T070 financial-refresh freeze/preflight hashes (`4db4a59625d4266657c2ee0b51301fa93244ccd5e7e8b2e861693620f00042c1` / `2fa8e9a7b26797c416f97c2d2b38da474725b2fa16843163efa588029ed22f04`) were superseded by the status and reservation reconciliation refresh (`647bfac827ee4e419bc28d9ccb9a58c8b306fed0828608d76ad1ec9b981291d1` / `442582de7241c84cde93c38efb0151cb2d77a9561ae0510b2ece164bd54d2f45`).
-- Current T070 controller SHA-256: `b68ffd10fc733df0eb21475657c6338b5be0d966da9f7d646357f415290c6177`; successor rubric canonical SHA-256: `f851ba07b55cf9e520527021fc737f1f11f59803d29e24e60a771b0328c35f69`; TTC contract canonical SHA-256: `7f283dce4adfb8e0cd366df38f0b7311e9ddcec8a7c72f606b671952ad9dacf2`.
+- T070 financial-refresh freeze/preflight hashes (`4db4a59625d4266657c2ee0b51301fa93244ccd5e7e8b2e861693620f00042c1` / `2fa8e9a7b26797c416f97c2d2b38da474725b2fa16843163efa588029ed22f04`) were superseded by the reservation/status refresh (`647bfac827ee4e419bc28d9ccb9a58c8b306fed0828608d76ad1ec9b981291d1` / `442582de7241c84cde93c38efb0151cb2d77a9561ae0510b2ece164bd54d2f45`), then the canonical task-name binding refresh (`ed86110272cb4d8dfad853245698b82a2daca1b6cd17fe341db7406fe98d2a5b` / `dffaf31f8dde051223b7ccf86f2b2b90fa5f271fb46693037e061cb415f0fdbf`).
+- Current T070 manifest SHA-256: `57d444a0a8ea252433e5d69140c9677685878c9956576dd55a1c2df05406a0fa`; lane-name mapping SHA-256: `8957d586f1c931757a40a825ba38cda43fe4c6adf5c05cd7bb4d9de33f81432e`.
+- Current T070 controller SHA-256: `505099f791674f3c007873429c5fa35f737c295cf6821be89122a7f127776a33`; successor rubric canonical SHA-256: `5bcdbf640ef88067db6162c7b937a9976b355c9cd933df2440c51793c16e4e6d`; TTC contract canonical SHA-256: `6ea6382a0b8c1be0135be410b2d3bb7dad66d025c78257f7a8fc98d456fd1305`.
 - Regenerated ignored pool SHA-256: `3721b7378848d024e073cfa67bce44249b62551835ce236c22837119fee16d7b`.
 
 The contract retains the oracle-assisted fallback TTC claim only. It grants no

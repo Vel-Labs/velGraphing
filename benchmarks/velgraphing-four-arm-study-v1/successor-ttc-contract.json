@@ -6,7 +6,7 @@
     },
     "controller": {
       "path": "scripts/benchmarks/four_arm_study_v1.py",
-      "sha256": "b68ffd10fc733df0eb21475657c6338b5be0d966da9f7d646357f415290c6177"
+      "sha256": "505099f791674f3c007873429c5fa35f737c295cf6821be89122a7f127776a33"
     },
     "host": {
       "path": "scripts/benchmarks/time_to_correct_host.py",
@@ -15,8 +15,9 @@
     "lane_manifest": {
       "entry_count": 32,
       "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
-      "sha256": "c164f76c2e5a995661be6f534eb38e4b364c57e8592844da5f6e21fde7632382",
-      "status": "frozen"
+      "sha256": "57d444a0a8ea252433e5d69140c9677685878c9956576dd55a1c2df05406a0fa",
+      "status": "frozen",
+      "thread_id_semantics": "canonical_collaboration_task_name_not_opaque_host_id"
     },
     "pool_bindings": {
       "direct:D-01": "d5ff853da5725875aa6fa812569ddc02a70b23352d8c59b27fecb79937609fb6",
@@ -37,7 +38,7 @@
     "successor_grader_response_contract_sha256": "dd517640475fe2219514ebee94a01182bbd74ff17adafeb5aa1348a3e0f6db2c",
     "successor_rubric": {
       "path": "successor-rubrics.json",
-      "sha256": "f851ba07b55cf9e520527021fc737f1f11f59803d29e24e60a771b0328c35f69"
+      "sha256": "5bcdbf640ef88067db6162c7b937a9976b355c9cd933df2440c51793c16e4e6d"
     }
   },
   "classification": {
@@ -79,7 +80,7 @@
   },
   "remaining_authority": {
     "absolute_python_executable": "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python",
-    "answer_thread_ids": 16,
+    "answer_task_names": 16,
     "exact_host_argv_arrays": 32,
     "final_user_reack": [
       "request_byte_set_sha256",
@@ -90,8 +91,8 @@
       "lane_manifest_sha256",
       "absolute_python_executable"
     ],
-    "grader_thread_ids": 16,
-    "lane_manifest_sha256": "c164f76c2e5a995661be6f534eb38e4b364c57e8592844da5f6e21fde7632382",
+    "grader_task_names": 16,
+    "lane_manifest_sha256": "57d444a0a8ea252433e5d69140c9677685878c9956576dd55a1c2df05406a0fa",
     "live_lanes_created": 0
   },
   "result_contract": {

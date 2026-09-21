@@ -166,6 +166,20 @@ spend, manifest hash, and absolute Python executable. The spend snapshot is
 operator-provided and not provider-verified. The eight-call cap and zero retries
 remain separate batch controls.
 
+For compatibility with the frozen handoff schema, each manifest `thread_id`
+stores the canonical collaboration `task_name`, not an opaque host-issued
+thread ID. Names use only lowercase ASCII letters, digits, and underscores.
+Before response capture or attestation, Parent must verify that
+`spawn_agent` returned a `task_name` that exactly matches the planned manifest
+name. Keep any opaque host ID separate from the manifest. On mismatch, stop
+before capture or attestation. A corrected name requires a new manifest and
+final re-ack for its hash.
+
+If an authorized correction must replace an existing planned manifest, rerun
+`freeze-lanes` with `--refresh`. This only replaces the manifest file. It does
+not create nested tasks. Regenerate the successor contract, freeze, and
+preflight, then obtain final re-ack for the new manifest and artifact hashes.
+
 The successor `run` command uses
 `--approved-max-additional-provider-spend-usd 0.9031` only after final user re-ack.
 Do not use the historical `--approved-budget-usd` value for successor

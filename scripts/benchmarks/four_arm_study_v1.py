@@ -12,6 +12,7 @@ import math
 import os
 from pathlib import Path
 from pathlib import PurePosixPath
+import re
 import subprocess
 import sys
 import tempfile
@@ -60,6 +61,8 @@ SUCCESSOR_WITNESS_CUSTODY = (
     ".velgraphing-local/velgraphing-four-arm-study-v1/"
     "successor-ttc-witness-custody.json"
 )
+COLLABORATION_TASK_NAME_RE = re.compile(r"[a-z0-9_]+\Z")
+THREAD_ID_SEMANTICS = "canonical_collaboration_task_name_not_opaque_host_id"
 LOCAL_POOL_ARTIFACT = ".velgraphing-local/velgraphing-four-arm-study-v1/phase-2-pools.json"
 PROVIDER_BUDGET_AUTHORITY = {
     "currency": "USD",
@@ -236,6 +239,14 @@ def _safe_path(value: object) -> str:
     ):
         raise StudyError("source_manifest_invalid")
     return value
+
+
+def _is_collaboration_task_name(value: object) -> bool:
+    """Validate the handoff's legacy thread_id field as a canonical task_name."""
+    return (
+        type(value) is str
+        and COLLABORATION_TASK_NAME_RE.fullmatch(value) is not None
+    )
 
 
 def _load_manifest(path: Path) -> dict[str, Any]:
@@ -1620,6 +1631,7 @@ def _validate_successor_ttc_contract(
             "entry_count": 32,
             "sha256": None,
             "status": "pending_parent_freeze",
+            "thread_id_semantics": THREAD_ID_SEMANTICS,
         }
         or not pending and (
             lane_binding.get("schema_version")
@@ -1627,6 +1639,7 @@ def _validate_successor_ttc_contract(
             or lane_binding.get("entry_count") != 32
             or not _is_sha256(lane_binding.get("sha256"))
             or lane_binding.get("status") != "frozen"
+            or lane_binding.get("thread_id_semantics") != THREAD_ID_SEMANTICS
         )
     ):
         raise StudyError("successor_ttc_binding_invalid")
@@ -1678,8 +1691,8 @@ def _validate_successor_ttc_contract(
     }:
         raise StudyError("successor_result_contract_invalid")
     pending_authority = {
-        "answer_thread_ids": 16,
-        "grader_thread_ids": 16,
+        "answer_task_names": 16,
+        "grader_task_names": 16,
         "exact_host_argv_arrays": 32,
         "absolute_python_executable": None,
         "lane_manifest_sha256": None,
@@ -1933,7 +1946,7 @@ def validate_lane_manifest(value: Mapping[str, Any], freeze: Mapping[str, Any], 
         if (
             key not in expected or key in observed or type(role) is not dict
             or row["model"] != role["model"] or row["reasoning"] != role["reasoning"]
-            or type(row["thread_id"]) is not str or not row["thread_id"]
+            or not _is_collaboration_task_name(row["thread_id"])
             or row["thread_id"] in threads
             or argv != expected_argv
             or row["argv_sha256"] != _sha256(argv)
@@ -1961,7 +1974,8 @@ def lane_argv(trial_id: str, role: str, repo_root: Path = ROOT, *,
 
 
 def freeze_lane_manifest(bindings: Mapping[str, Any], freeze: Mapping[str, Any],
-                         destination: Path, python_executable: str | Path) -> str:
+                         destination: Path, python_executable: str | Path, *,
+                         replace_existing: bool = False) -> str:
     rows = bindings.get("bindings")
     if (
         set(bindings) != {"schema_version", "bindings"}
@@ -1975,7 +1989,7 @@ def freeze_lane_manifest(bindings: Mapping[str, Any], freeze: Mapping[str, Any],
             type(row) is not dict
             or set(row) != {"trial_id", "answer_thread_id", "grader_thread_id"}
             or row.get("trial_id") not in DISPATCH or row["trial_id"] in by_trial
-            or any(type(row.get(key)) is not str or not row[key]
+            or any(not _is_collaboration_task_name(row.get(key))
                    for key in ("answer_thread_id", "grader_thread_id"))
         ):
             raise StudyError("lane_bindings_invalid")
@@ -1992,6 +2006,7 @@ def freeze_lane_manifest(bindings: Mapping[str, Any], freeze: Mapping[str, Any],
             )
             entries.append({
                 "trial_id": trial_id, "role": role,
+                # The frozen handoff field stores task_name, not host thread ID.
                 "thread_id": by_trial[trial_id][f"{role}_thread_id"],
                 "model": contract["model"], "reasoning": contract["reasoning"],
                 "argv": argv, "argv_sha256": _sha256(argv),
@@ -2002,8 +2017,13 @@ def freeze_lane_manifest(bindings: Mapping[str, Any], freeze: Mapping[str, Any],
         manifest, freeze, python_executable=python_executable,
         run_root=destination.parent,
     )
+    if replace_existing and (
+        destination.is_symlink()
+        or destination.exists() and not destination.is_file()
+    ):
+        raise StudyError("lane_manifest_path_invalid")
     try:
-        atomic_write(destination, canonical(manifest))
+        atomic_write(destination, canonical(manifest), replace=replace_existing)
     except HandoffError as error:
         raise StudyError(str(error)) from None
     return digest(canonical(manifest))
@@ -3299,6 +3319,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     lanes.add_argument("--run-root", type=Path, required=True)
     lanes.add_argument("--python-executable", type=Path, required=True)
     lanes.add_argument("--witness-custody", type=Path, required=True)
+    lanes.add_argument("--refresh", action="store_true")
     run = subparsers.add_parser("run")
     run.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     run.add_argument("--pool-artifact", type=Path, required=True)
@@ -3412,6 +3433,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = freeze_lane_manifest(
                 bindings, freeze, run_root / "lane-manifest.json",
                 arguments.python_executable,
+                replace_existing=arguments.refresh,
             )
             print(json.dumps({"lane_manifest_sha256": result}, sort_keys=True))
             return 0
