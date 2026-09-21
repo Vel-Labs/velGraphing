@@ -34,9 +34,40 @@ CUSTODY = ROOT / study.SUCCESSOR_WITNESS_CUSTODY
 class FourArmPublicBoundaryTests(unittest.TestCase):
     def test_tracked_historical_bundle_validates_without_private_custody(self) -> None:
         freeze, questions, rubrics = study.load_bundle()
+        current_release = json.loads(
+            (ROOT / "plugins/graph-engineering/.codex-plugin/release-manifest.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertNotEqual(
+            freeze["product"]["package_candidate_sha256"],
+            current_release["candidate_sha256"],
+        )
         self.assertEqual(tuple(freeze["tasks"]), study.TASKS)
         self.assertEqual(len(questions["questions"]), 4)
         self.assertEqual(len(rubrics["tasks"]), 4)
+
+    def test_tampered_historical_product_bindings_fail_closed(self) -> None:
+        freeze, _, _ = study.load_bundle()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("questions", "rubrics", "preflight"):
+                shutil.copy(BENCHMARK / f"{name}.json", root / f"{name}.json")
+            for field, value in (
+                ("commit", "0" * 40),
+                ("package_candidate_sha256", "0" * 64),
+                ("package_name", "renamed-package"),
+                ("package_version", "0.2.0"),
+            ):
+                with self.subTest(field=field):
+                    changed = deepcopy(freeze)
+                    changed["product"][field] = value
+                    (root / "freeze.json").write_text(
+                        json.dumps(changed), encoding="utf-8",
+                    )
+                    with self.assertRaisesRegex(
+                        study.StudyError, "package_binding_invalid",
+                    ):
+                        study.load_bundle(root, ROOT)
 
     def test_successor_overlay_fails_closed_without_private_custody(self) -> None:
         with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(

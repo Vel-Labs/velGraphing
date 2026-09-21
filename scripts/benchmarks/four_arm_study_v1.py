@@ -783,14 +783,26 @@ def _validate_freeze(
     if prompt_bindings != expected_prompts:
         raise StudyError("prompt_binding_invalid")
     product = freeze.get("product")
-    release_path = repo_root / "plugins/graph-engineering/.codex-plugin/release-manifest.json"
-    _, release = _read_json(release_path, "package_binding_invalid")
     if (
         type(product) is not dict
         or not _is_ancestor(repo_root, product.get("commit"))
+    ):
+        raise StudyError("package_binding_invalid")
+    release_path = "plugins/graph-engineering/.codex-plugin/release-manifest.json"
+    try:
+        release_raw = _git(
+            repo_root, "show", f"{product['commit']}:{release_path}",
+        )
+        release = json.loads(release_raw.decode("utf-8"))
+    except (StudyError, UnicodeError, json.JSONDecodeError):
+        raise StudyError("package_binding_invalid") from None
+    release_package = release.get("package") if type(release) is dict else None
+    if (
+        type(release) is not dict
+        or type(release_package) is not dict
         or product.get("package_candidate_sha256") != release.get("candidate_sha256")
-        or product.get("package_name") != release.get("package", {}).get("name")
-        or product.get("package_version") != release.get("package", {}).get("version")
+        or product.get("package_name") != release_package.get("name")
+        or product.get("package_version") != release_package.get("version")
     ):
         raise StudyError("package_binding_invalid")
     corpora = freeze.get("corpora")
