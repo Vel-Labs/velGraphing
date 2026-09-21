@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T182
+active_task: T183
 
 tasks:
   - id: T010
@@ -1239,7 +1239,7 @@ tasks:
   - id: T182
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Complete the cN citation repair by updating the exact controller and successor-rubric binding cascade, then validate the integrated benchmark candidate."
     allowed_files:
@@ -1271,6 +1271,53 @@ tasks:
       - "All direct binding hashes current"
       - "Combined focused tests and successor overlay validation pass"
       - "One reviewable commit"
+    receipt:
+      result: done
+      changed_files:
+        - scripts/benchmarks/time_to_correct_host.py
+        - scripts/benchmarks/four_arm_study_v1.py
+        - benchmarks/velgraphing-four-arm-study-v1/freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - tests/benchmarks/test_time_to_correct_host.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+      commands:
+        - cmd: "python3 -m unittest tests.benchmarks.test_time_to_correct_host tests.benchmarks.test_four_arm_study_v1 -v"
+          status: pass
+        - cmd: "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1 --witness-custody .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json"
+          status: pass
+        - cmd: "git diff HEAD^ --check"
+          status: pass
+      summary: "Accepted and pushed 4e9d1b0. The model-visible answer evidence now uses deterministic c1..cN aliases while internal source identities remain unchanged. The exact controller, host, rubric, freeze, and TTC bindings are current."
+      spawned_tasks:
+        - T183
+  - id: T183
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Rotate the tracked successor contract from the consumed manifest to the clean replacement manifest and validate the exact execution binding."
+    allowed_files:
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+    inputs:
+      - "Replacement A-S-01 answer lane 01a0c22e-b6b1-7ef0-9240-1a7d7ff9f869"
+      - "Clean replacement manifest SHA f5183a491b17c1a39c621b1843aefba9c4e206ef97c80bdaf3fca2372cf51b5e"
+      - "Clean run root successor-live-r2-4e9d1b0"
+    constraints:
+      - "Change only both manifest SHA fields in the tracked contract."
+      - "Preserve all other ready authority, request, budget, rubric, and claim bindings."
+      - "Do not execute a model or provider call."
+    verify:
+      - "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 -v"
+      - "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1 --witness-custody .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json"
+      - "Validate the exact private replacement manifest against the ready contract."
+      - "git diff --check"
+    stop_if:
+      - "Any field other than the two manifest SHA values must change."
+      - "The replacement manifest fails an execution identity check."
+    expected_output:
+      - "Ready contract bound to f5183a491b17c1a39c621b1843aefba9c4e206ef97c80bdaf3fca2372cf51b5e"
+      - "Focused validation and one reviewable commit"
     receipt: null
   - id: T999
     type: judge
