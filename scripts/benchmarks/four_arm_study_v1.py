@@ -376,11 +376,16 @@ def _installed_graph_payload(
     run_root: Path | None = None,
     replay_envelope: Mapping[str, Any] | None = None,
     approved_request_sha256: str | None = None,
+    live_request_sha256: str | None = None,
+    live_request_bytes: int | None = None,
 ) -> dict[str, Any]:
     adapter, candidate_sha256, adapter_sha256 = installed
     replay_dir = None
     replay_bytes = None
     replay_path = None
+    live = live_request_sha256 is not None
+    if live and replay_envelope is not None:
+        raise MeasurementError("installed_graph_find_jev_mode_invalid")
     ranked_mode = "plan"
     argv = [
         sys.executable, str(adapter), "--root", str(lane), "--prompt", prompt,
@@ -404,6 +409,14 @@ def _installed_graph_payload(
         replay_dir = tempfile.TemporaryDirectory(prefix="graph-find-replay-", dir=run_root)
         replay_path = Path(replay_dir.name) / "response.json"
         ranked_mode = "replay"
+    elif live:
+        if (
+            not _is_sha256(live_request_sha256)
+            or type(live_request_bytes) is not int or live_request_bytes <= 0
+            or run_root is None or not run_root.is_dir()
+        ):
+            raise MeasurementError("installed_graph_find_jev_live_invalid")
+        ranked_mode = "evaluate"
     else:
         ranked_mode = "plan"
     try:
@@ -411,13 +424,28 @@ def _installed_graph_payload(
             replay_path.write_bytes(replay_bytes)
             argv.extend(["--ranked-context", "replay", "--jev-mode", "rerank",
                          "--jev-response", str(replay_path), "--diagnostics"])
+        elif live:
+            argv.extend([
+                "--ranked-context", "evaluate", "--jev-mode", "rerank",
+                "--allow-network", "--approve-request-sha256", live_request_sha256,
+                "--diagnostics",
+            ])
         else:
             argv.extend(["--ranked-context", "plan", "--diagnostics"])
+        child_env = {
+            "PATH": os.environ.get("PATH", os.defpath),
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+        if live:
+            api_key = os.environ.get("TYPESAFE_API_KEY")
+            if type(api_key) is not str or not api_key:
+                raise MeasurementError("installed_graph_find_jev_live_unavailable")
+            child_env["TYPESAFE_API_KEY"] = api_key
         with trial.phase("candidate_discovery"):
             completed = subprocess.run(
                 argv, cwd=str(ROOT),
-                env={"PATH": os.environ.get("PATH", os.defpath), "PYTHONIOENCODING": "utf-8",
-                     "PYTHONDONTWRITEBYTECODE": "1"},
+                env=child_env,
                 capture_output=True, check=False, timeout=120,
             )
     finally:
@@ -482,6 +510,7 @@ def _installed_graph_payload(
         or {row.get("candidate_id") for row in spans if type(row) is dict} != set(selected_ids)
     ):
         raise MeasurementError("installed_graph_find_evidence_invalid")
+    live_observation = None
     if replay_envelope is not None:
         observation = ranked.get("jev_observation")
         replayed_usage = observation.get("replayed_usage") if type(observation) is dict else None
@@ -547,6 +576,84 @@ def _installed_graph_payload(
             "order_source": selection["order_source"],
             "jev_source_revalidated": selection["jev_source_revalidated"],
         })
+    elif live:
+        observation = ranked.get("jev_observation")
+        live_observation = observation
+        jev_order = observation.get("order") if type(observation) is dict else None
+        baseline_order = observation.get("baseline_order") if type(observation) is dict else None
+        jev_required = observation.get("required_ids") if type(observation) is dict else None
+        jev_usage = observation.get("usage") if type(observation) is dict else None
+        elapsed_ms = observation.get("elapsed_ms") if type(observation) is dict else None
+        attempted_calls = observation.get("attempted_calls") if type(observation) is dict else None
+        jev_decision = selection.get("jev_decision")
+        if (
+            type(observation) is not dict
+            or observation.get("mode") != "rerank"
+            or observation.get("execution") != "live"
+            or observation.get("request_sha256") != live_request_sha256
+            or observation.get("candidate_set_sha256") != selection.get("candidate_set_sha256")
+            or type(attempted_calls) is not int or attempted_calls not in {0, 1}
+            or type(ranked.get("network_called")) is not bool
+            or ranked.get("network_called") != (attempted_calls == 1)
+            or type(observation.get("request_bytes")) is not int
+            or observation["request_bytes"] != live_request_bytes
+            or type(elapsed_ms) not in (int, float)
+            or not math.isfinite(elapsed_ms) or elapsed_ms < 0
+            or type(jev_order) is not list
+            or any(type(item) is not str or not item for item in jev_order)
+            or len(jev_order) != len(set(jev_order))
+            or type(baseline_order) is not list
+            or any(type(item) is not str or not item for item in baseline_order)
+            or len(baseline_order) != len(set(baseline_order))
+            or set(jev_order) != set(baseline_order)
+            or type(jev_required) is not list
+            or any(type(item) is not str or not item for item in jev_required)
+            or len(jev_required) != len(set(jev_required))
+            or set(jev_required) != set(required_ids)
+            or type(jev_decision) is not dict
+        ):
+            raise MeasurementError("installed_graph_find_jev_binding_mismatch")
+        if observation.get("status") == "reranked":
+            if (
+                attempted_calls != 1
+                or observation.get("source_revalidated") is not True
+                or selection.get("order_source") != "reranked"
+                or selection.get("jev_source_revalidated") is not True
+                or jev_decision.get("jev_observation_applied") is not True
+                or not set(required_ids).issubset(jev_order)
+                or not set(required_ids).issubset(selected_ids)
+                or not set(selected_ids).issubset(jev_order)
+            ):
+                raise MeasurementError("installed_graph_find_jev_binding_mismatch")
+        elif observation.get("status") == "fallback":
+            selected_set = set(selected_ids)
+            baseline_selected_order = [
+                candidate_id for candidate_id in baseline_order
+                if candidate_id in selected_set
+            ]
+            if (
+                selection.get("order_source") != "baseline"
+                or selection.get("jev_source_revalidated") is not False
+                or jev_decision.get("jev_observation_applied") is not False
+                or jev_order != baseline_order
+                or baseline_selected_order != selected_ids
+                or not set(required_ids).issubset(selected_ids)
+            ):
+                raise MeasurementError("installed_graph_find_jev_binding_mismatch")
+        else:
+            raise MeasurementError("installed_graph_find_jev_binding_mismatch")
+        if jev_usage is not None and (
+            type(jev_usage) is not dict
+            or set(jev_usage) != {"input_tokens", "output_tokens"}
+            or any(type(value) is not int or value < 0 for value in jev_usage.values())
+        ):
+            raise MeasurementError("installed_graph_find_jev_usage_invalid")
+        if observation.get("replayed_usage") is not None:
+            raise MeasurementError("installed_graph_find_jev_usage_invalid")
+        resolved_model = observation.get("resolved_model")
+        if resolved_model is not None and (type(resolved_model) is not str or not resolved_model):
+            raise MeasurementError("installed_graph_find_jev_usage_invalid")
+        trial.bind(request_sha256=live_request_sha256)
     for span in spans:
         source = sources.get(span.get("source_path"))
         start, end = span.get("byte_start"), span.get("byte_end")
@@ -580,6 +687,32 @@ def _installed_graph_payload(
             operation["source_sha256"], 0, operation["byte_count"],
             access=operation["access"], operation_id=f"graph-find-{index}",
         )
+    if live_observation is not None:
+        usage = live_observation.get("usage")
+        trial.current["jev_observation"] = {
+            key: live_observation.get(key) for key in (
+                "mode", "status", "reason", "execution", "baseline_order", "order",
+                "required_ids", "candidate_set_sha256", "request_sha256",
+                "source_revalidated", "resolved_model", "scores", "elapsed_ms",
+                "attempted_calls", "usage", "request_bytes", "source_bytes_verified",
+                "rubric_version",
+            )
+        }
+        trial.current["jev_observation"].update({
+            "measurement_execution": "live",
+            "order_source": selection["order_source"],
+            "jev_source_revalidated": selection["jev_source_revalidated"],
+        })
+        trial.usage(
+            f"jev-{trial.current['attempt_id']}", "jev",
+            provenance="provider_reported" if usage is not None else "unavailable",
+            model=live_observation.get("resolved_model") or jev.DEFAULT_MODEL,
+            input_tokens=usage["input_tokens"] if usage is not None else None,
+            output_tokens=usage["output_tokens"] if usage is not None else None,
+        )
+        if live_observation.get("status") == "fallback":
+            with trial.phase("fallback"):
+                pass
     trial.bind(
         candidate_set_sha256=selection["candidate_set_sha256"],
         graph_artifact_sha256=candidate_sha256,
@@ -603,7 +736,8 @@ def _installed_graph_payload(
         "runtime_identity": identity,
         "process_scope": (
             "installed_graph_find_entire_process_including_jev"
-            if replay_envelope is not None else "installed_graph_find_entire_process"
+            if replay_envelope is not None or live
+            else "installed_graph_find_entire_process"
         ),
         "stage_clock": {
             "name": "perf_counter_ns", "domain": "installed_graph_find_process",
@@ -2231,6 +2365,8 @@ def _selected_payload(trial: Trial, pool: Mapping[str, Any], lane: Path,
                       successor_ttc_contract: Mapping[str, Any] | None = None,
                       successor_witness_custody: Mapping[str, Any] | None = None,
                       replay_envelope: Mapping[str, Any] | None = None,
+                      live_request_sha256: str | None = None,
+                      live_request_bytes: int | None = None,
                       run_root: Path | None = None) -> dict[str, Any]:
     route = pool["identity"]["route"]
     if route == "graph":
@@ -2242,6 +2378,8 @@ def _selected_payload(trial: Trial, pool: Mapping[str, Any], lane: Path,
             source_manifest=manifest, installed=installed, run_root=run_root,
             replay_envelope=replay_envelope,
             approved_request_sha256=approved_request_sha256,
+            live_request_sha256=live_request_sha256,
+            live_request_bytes=live_request_bytes,
         )
     if direct_discovery is None:
         raise MeasurementError("direct_discovery_missing")
@@ -2293,17 +2431,25 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
     trial = Trial(identity, Budget(0, 600_000_000_000), execution=execution)
     jev_on = registration["arm"] in {"B", "D"}
     route = pool["identity"]["route"]
-    graph_jev_replay = route == "graph" and jev_on
-    if graph_jev_replay:
-        if execution == "observed":
-            raise MeasurementError("installed_graph_find_jev_live_unavailable")
+    graph_jev = route == "graph" and jev_on
+    graph_jev_live = graph_jev and execution == "observed"
+    graph_jev_replay = graph_jev and not graph_jev_live
+    live_request_bytes = None
+    if graph_jev:
         preview = pool.get("jev_preview")
         approved = preview.get("request_sha256") if type(preview) is dict else None
-        if (
-            replay is None or not _is_sha256(approved)
-            or type(replay) is not dict
-            or replay.get("request_sha256") != approved
-        ):
+        if not _is_sha256(approved):
+            raise MeasurementError("fixture_request_mismatch")
+        if graph_jev_live:
+            if replay is not None:
+                raise MeasurementError("fixture_request_mismatch")
+            live_request_bytes = preview.get("request_bytes")
+            if type(live_request_bytes) is not int or live_request_bytes <= 0:
+                raise MeasurementError("installed_graph_find_jev_live_invalid")
+            if budget is None or registration.get("call_disposition") != "planned":
+                raise MeasurementError("jev_request_not_approved")
+        elif (replay is None or type(replay) is not dict
+              or replay.get("request_sha256") != approved):
             raise MeasurementError("fixture_request_mismatch")
     else:
         approved = None
@@ -2319,8 +2465,14 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
                 lane, source_manifest,
             )
         observation = None
+        reserved_receipt = None
         if graph_jev_replay:
             current.not_applicable("operator_approval", "provider")
+        elif graph_jev_live:
+            with current.phase("operator_approval"):
+                reserved_receipt, _call_number = budget.reserve(
+                    registration["trial_id"], approved,
+                )
         elif jev_on:
             request_sha256 = pool["jev_preview"]["request_sha256"]
             packet = direct_discovery["packet"]
@@ -2358,7 +2510,13 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
                                     direct_discovery, successor_ttc_contract,
                                     successor_witness_custody,
                                     replay_envelope=replay if graph_jev_replay else None,
+                                    live_request_sha256=approved if graph_jev_live else None,
+                                    live_request_bytes=live_request_bytes,
                                     run_root=run_root)
+        if graph_jev_live:
+            if reserved_receipt is None:
+                raise MeasurementError("jev_call_ledger_invalid")
+            budget.complete(reserved_receipt, current.current["jev_observation"])
         if current.current["phase_status"]["fallback"] == "missing":
             current.not_applicable("fallback")
         current.coverage(source_operations=True)

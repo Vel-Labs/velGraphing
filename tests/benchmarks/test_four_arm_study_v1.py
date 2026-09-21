@@ -265,13 +265,17 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             d_manifest["entries"][0]["thread_id"] = "answer-d-fixture"
             d_manifest["entries"][1]["thread_id"] = "grader-d-fixture"
             graph_calls = []
+            replay_child_output = []
             original_run = subprocess.run
 
             def record_graph_run(*args, **kwargs):
                 command = args[0]
                 if len(command) > 1 and Path(command[1]) == installed[0]:
                     graph_calls.append((list(command), dict(kwargs.get("env", {}))))
-                return original_run(*args, **kwargs)
+                completed = original_run(*args, **kwargs)
+                if len(command) > 1 and Path(command[1]) == installed[0]:
+                    replay_child_output.append(completed.stdout)
+                return completed
 
             with (
                 patch.object(study, "verify_lane", return_value=([], before)) as d_verify,
@@ -295,14 +299,6 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                         d_manifest, study.digest(study.canonical(d_manifest)),
                         execution="fixture",
                         replay={**replay, "request_sha256": "0" * 64},
-                    )
-                with self.assertRaisesRegex(
-                    study.MeasurementError, "installed_graph_find_jev_live_unavailable",
-                ):
-                    study.execute_trial(
-                        freeze, d_registration, d_pool, rubric, lane_root, run_root,
-                        d_manifest, study.digest(study.canonical(d_manifest)),
-                        execution="observed", replay=replay,
                     )
 
             self.assertEqual(1, len(graph_calls))
@@ -352,6 +348,280 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             self.assertEqual(0, d_measurement["provider_calls"])
             self.assertIsNone(d_measurement["provider_input_tokens"])
             self.assertIsNone(d_measurement["provider_output_tokens"])
+
+            # This is a controller/subprocess-contract simulation, not live
+            # adapter or transport coverage. It shapes a replay result as a live
+            # observation and intercepts the installed child. No provider call occurs.
+            live_id = "D-S-02"
+            live_registration = {
+                **d_registration, "trial_id": live_id,
+                "call_disposition": "planned",
+            }
+            live_pool = {
+                **d_pool,
+                "jev_preview": {
+                    "request_sha256": preview["request_sha256"],
+                    "request_bytes": preview["request_bytes"],
+                },
+            }
+            live_payload = json.loads(replay_child_output[0].decode("utf-8"))
+            live_ranked = live_payload["ranked_context"]
+            live_observation = live_ranked["jev_observation"]
+            live_ranked["mode"] = "evaluate"
+            live_ranked["network_called"] = True
+            live_observation["execution"] = "live"
+            live_observation["attempted_calls"] = 1
+            live_observation["usage"] = live_observation["replayed_usage"]
+            live_observation["replayed_usage"] = None
+
+            answer_identity = {
+                "trial_id": live_id, "role": "answer", "thread_id": "answer-d-live",
+                "model": "fixture-answer", "reasoning": "none",
+            }
+            grader_identity = {
+                "trial_id": live_id, "role": "grader", "thread_id": "grader-d-live",
+                "model": "fixture-grader", "reasoning": "none",
+            }
+            observed_answer_code = answer_code.replace(
+                "'context_deliveries_complete':True}",
+                "'context_deliveries_complete':True,'execution_identity':"
+                f"{json.dumps(answer_identity, sort_keys=True)}}}",
+            )
+            observed_grader_code = grader_code.replace(
+                "'model_calls_complete':False}",
+                "'model_calls_complete':False,'execution_identity':"
+                f"{json.dumps(grader_identity, sort_keys=True)}}}",
+            ).replace("'grader_id':'fixture-grader'", f"'grader_id':'grader-{live_id}'")
+            live_manifest = {"entries": [
+                {**d_manifest["entries"][0], **answer_identity,
+                 "argv": [sys.executable, "-c", observed_answer_code]},
+                {**d_manifest["entries"][1], **grader_identity,
+                 "argv": [sys.executable, "-c", observed_grader_code]},
+            ]}
+            live_run_root = root / "live-run"
+            live_run_root.mkdir()
+            live_installed = study._install_graph_find(live_run_root)
+            fake_api_key = "test-only-graph-find-key"
+            observed_graph_calls = []
+            child_key_presence = []
+            expected_live_children = {
+                tuple(row["argv"]): row["role"] for row in live_manifest["entries"]
+            }
+
+            def simulate_live_graph(*args, **kwargs):
+                command = list(args[0])
+                environment = kwargs.get("env", {})
+                if len(command) > 1 and Path(command[1]) == live_installed[0]:
+                    child_key_presence.append(("graph_find", "TYPESAFE_API_KEY" in environment))
+                    observed_graph_calls.append((
+                        list(command), set(environment),
+                        environment.get("TYPESAFE_API_KEY") == fake_api_key,
+                    ))
+                    return subprocess.CompletedProcess(
+                        command, 0,
+                        json.dumps(live_payload, sort_keys=True, separators=(",", ":")).encode(),
+                        b"",
+                    )
+                if "--allow-network" in command:
+                    raise AssertionError("unhandled network-enabled child process")
+                role = expected_live_children.get(tuple(command))
+                if role is None:
+                    raise AssertionError(f"unexpected child process: {command!r}")
+                child_key_presence.append((role, "TYPESAFE_API_KEY" in environment))
+                return original_run(*args, **kwargs)
+
+            live_budget = study.LiveJevBudget(live_run_root, 1)
+            with (
+                patch.object(study.os, "environ", {
+                    "PATH": os.defpath, "TYPESAFE_API_KEY": fake_api_key,
+                }),
+                patch.object(study, "verify_lane", return_value=([], before)),
+                patch.object(study, "revalidate_lane") as live_revalidate,
+                patch.object(study, "_load_manifest", return_value=source_manifest),
+                patch.object(study, "_question_prompt", return_value="alpha_evidence_00"),
+                patch.object(study.subprocess, "run", side_effect=simulate_live_graph),
+            ):
+                live_result = study.execute_trial(
+                    freeze, live_registration, live_pool, rubric, lane_root,
+                    live_run_root, live_manifest,
+                    study.digest(study.canonical(live_manifest)),
+                    execution="observed", budget=live_budget,
+                )
+                live_revalidate.assert_called_once()
+
+            self.assertEqual(1, len(observed_graph_calls))
+            live_argv, live_env_keys, key_matched = observed_graph_calls[0]
+            self.assertEqual({
+                "PATH", "PYTHONIOENCODING", "PYTHONDONTWRITEBYTECODE",
+                "TYPESAFE_API_KEY",
+            }, live_env_keys)
+            self.assertTrue(key_matched)
+            self.assertNotIn(fake_api_key, live_argv)
+            self.assertIn("--ranked-context", live_argv)
+            self.assertEqual("evaluate", live_argv[live_argv.index("--ranked-context") + 1])
+            self.assertIn("--jev-mode", live_argv)
+            self.assertEqual("rerank", live_argv[live_argv.index("--jev-mode") + 1])
+            self.assertIn("--allow-network", live_argv)
+            self.assertIn("--approve-request-sha256", live_argv)
+            self.assertEqual(
+                preview["request_sha256"],
+                live_argv[live_argv.index("--approve-request-sha256") + 1],
+            )
+            self.assertIn("--diagnostics", live_argv)
+            self.assertNotIn("--jev-response", live_argv)
+            self.assertEqual(
+                [("graph_find", True), ("answer", False), ("grader", False)],
+                child_key_presence,
+            )
+            self.assertEqual("passed", live_result["terminal_reason"])
+            live_attempt = live_result["attempts"][0]
+            live_process_kinds = [row["kind"] for row in live_attempt["host_processes"]]
+            self.assertEqual(1, live_process_kinds.count("graph_find"))
+            self.assertEqual(1, live_process_kinds.count("answer"))
+            self.assertEqual(1, live_process_kinds.count("grader"))
+            self.assertEqual("live", live_attempt["jev_observation"]["execution"])
+            self.assertEqual("reranked", live_attempt["jev_observation"]["status"])
+            self.assertEqual(
+                preview["request_sha256"], live_attempt["bindings"]["request_sha256"],
+            )
+            self.assertEqual(1, live_attempt["jev_observation"]["attempted_calls"])
+            self.assertTrue(live_attempt["jev_observation"]["source_revalidated"])
+            self.assertEqual(
+                "installed_graph_find_entire_process_including_jev",
+                live_attempt["candidate_observation"]["process_scope"],
+            )
+            self.assertEqual("reranked", live_attempt["jev_observation"]["order_source"])
+            self.assertTrue(live_attempt["jev_observation"]["jev_source_revalidated"])
+            self.assertEqual(
+                preview["request_bytes"], live_attempt["jev_observation"]["request_bytes"],
+            )
+            self.assertTrue(set(required_ids).issubset(
+                live_attempt["candidate_observation"]["selected_candidate_ids"],
+            ))
+            live_jev_calls = [
+                call for call in live_attempt["model_calls"] if call["kind"] == "jev"
+            ]
+            self.assertEqual(1, len(live_jev_calls))
+            self.assertEqual("provider_reported", live_jev_calls[0]["provenance"])
+            self.assertEqual(123, live_jev_calls[0]["input_tokens"])
+            self.assertEqual(17, live_jev_calls[0]["output_tokens"])
+            self.assertFalse(live_attempt["coverage"]["model_calls"])
+            self.assertEqual("missing", live_result["phases"]["provider"]["status"])
+            self.assertFalse(live_result["usage_complete"])
+            live_measurement = _v3_trial_measurement(live_registration, live_result)
+            self.assertIsNone(live_measurement["provider_input_tokens"])
+            self.assertIsNone(live_measurement["provider_output_tokens"])
+            self.assertEqual(1, live_measurement["provider_calls"])
+            live_receipt_path = live_run_root / "jev-calls" / f"{live_id}.json"
+            live_receipt = json.loads(live_receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual("consumed", live_receipt["status"])
+            self.assertEqual(1, live_receipt["attempted_calls"])
+            self.assertEqual("reranked", live_receipt["provider_status"])
+            self.assertNotIn(fake_api_key, json.dumps(live_result, sort_keys=True))
+            self.assertNotIn(fake_api_key, live_receipt_path.read_text(encoding="utf-8"))
+
+            # A failed child cannot consume the reservation as a confirmed call.
+            failed_id = "D-S-03"
+            failed_registration = {**live_registration, "trial_id": failed_id}
+            failed_manifest = {"entries": [
+                {**row, "trial_id": failed_id,
+                 "thread_id": f"{row['role']}-d-failed"}
+                for row in live_manifest["entries"]
+            ]}
+            failed_run_root = root / "failed-run"
+            failed_run_root.mkdir()
+            failed_installed = study._install_graph_find(failed_run_root)
+            failed_graph_calls = []
+            expected_failed_children = {
+                tuple(row["argv"]): row["role"] for row in failed_manifest["entries"]
+            }
+
+            def fail_live_graph(*args, **kwargs):
+                command = list(args[0])
+                if len(command) > 1 and Path(command[1]) == failed_installed[0]:
+                    failed_graph_calls.append(list(command))
+                    return subprocess.CompletedProcess(command, 1, b"", b"child failed")
+                if "--allow-network" in command:
+                    raise AssertionError("unhandled network-enabled child process")
+                if tuple(command) not in expected_failed_children:
+                    raise AssertionError(f"unexpected child process: {command!r}")
+                return original_run(*args, **kwargs)
+
+            failed_budget = study.LiveJevBudget(failed_run_root, 1)
+            with (
+                patch.object(study.os, "environ", {
+                    "PATH": os.defpath, "TYPESAFE_API_KEY": fake_api_key,
+                }),
+                patch.object(study, "verify_lane", return_value=([], before)),
+                patch.object(study, "revalidate_lane"),
+                patch.object(study, "_load_manifest", return_value=source_manifest),
+                patch.object(study, "_question_prompt", return_value="alpha_evidence_00"),
+                patch.object(study.subprocess, "run", side_effect=fail_live_graph),
+                self.assertRaises(study.MeasurementError),
+            ):
+                study.execute_trial(
+                    freeze, failed_registration, live_pool, rubric, lane_root,
+                    failed_run_root, failed_manifest,
+                    study.digest(study.canonical(failed_manifest)),
+                    execution="observed", budget=failed_budget,
+                )
+            self.assertEqual(1, len(failed_graph_calls))
+            failed_receipt_path = failed_run_root / "jev-calls" / f"{failed_id}.json"
+            failed_receipt = json.loads(failed_receipt_path.read_text(encoding="utf-8"))
+            self.assertEqual("reserved_unknown_if_consumed", failed_receipt["status"])
+            self.assertIsNone(failed_receipt["attempted_calls"])
+            self.assertNotIn(fake_api_key, failed_receipt_path.read_text(encoding="utf-8"))
+
+            # A live response must report the preview's exact request size.
+            mismatch_id = "D-S-04"
+            mismatch_run_root = root / "mismatch-run"
+            mismatch_run_root.mkdir()
+            mismatch_installed = study._install_graph_find(mismatch_run_root)
+            mismatched_live_payload = deepcopy(live_payload)
+            mismatched_live_payload["ranked_context"]["jev_observation"]["request_bytes"] += 1
+            mismatch_graph_calls = []
+
+            def mismatch_live_graph(*args, **kwargs):
+                command = list(args[0])
+                if len(command) > 1 and Path(command[1]) == mismatch_installed[0]:
+                    mismatch_graph_calls.append(command)
+                    return subprocess.CompletedProcess(
+                        command, 0,
+                        json.dumps(mismatched_live_payload, sort_keys=True,
+                                   separators=(",", ":")).encode(),
+                        b"",
+                    )
+                raise AssertionError(f"unexpected child after request-size mismatch: {command!r}")
+
+            mismatch_registration = {**live_registration, "trial_id": mismatch_id}
+            mismatch_manifest = {"entries": [
+                {**row, "trial_id": mismatch_id}
+                for row in live_manifest["entries"]
+            ]}
+            mismatch_budget = study.LiveJevBudget(mismatch_run_root, 1)
+            with (
+                patch.object(study.os, "environ", {
+                    "PATH": os.defpath, "TYPESAFE_API_KEY": fake_api_key,
+                }),
+                patch.object(study, "verify_lane", return_value=([], before)),
+                patch.object(study, "revalidate_lane"),
+                patch.object(study, "_load_manifest", return_value=source_manifest),
+                patch.object(study, "_question_prompt", return_value="alpha_evidence_00"),
+                patch.object(study.subprocess, "run", side_effect=mismatch_live_graph),
+                self.assertRaises(study.MeasurementError),
+            ):
+                study.execute_trial(
+                    freeze, mismatch_registration, live_pool, rubric, lane_root,
+                    mismatch_run_root, mismatch_manifest,
+                    study.digest(study.canonical(mismatch_manifest)),
+                    execution="observed", budget=mismatch_budget,
+                )
+            self.assertEqual(1, len(mismatch_graph_calls))
+            mismatch_receipt = json.loads(
+                (mismatch_run_root / "jev-calls" / f"{mismatch_id}.json")
+                .read_text(encoding="utf-8"),
+            )
+            self.assertEqual("reserved_unknown_if_consumed", mismatch_receipt["status"])
 
             changed_manifest = dict(source_manifest)
             changed_manifest["snapshot_sha256"] = "0" * 64
