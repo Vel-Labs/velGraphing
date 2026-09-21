@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T183
+active_task: T190
 
 tasks:
   - id: T010
@@ -1294,7 +1294,7 @@ tasks:
   - id: T183
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Rotate the tracked successor contract from the consumed manifest to the clean replacement manifest and validate the exact execution binding."
     allowed_files:
@@ -1318,6 +1318,41 @@ tasks:
     expected_output:
       - "Ready contract bound to f5183a491b17c1a39c621b1843aefba9c4e206ef97c80bdaf3fca2372cf51b5e"
       - "Focused validation and one reviewable commit"
+    receipt:
+      result: done
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      commands:
+        - cmd: "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 -v"
+          status: pass
+        - cmd: "Validate exact replacement manifest against ready contract"
+          status: pass
+        - cmd: "git diff HEAD^ --check"
+          status: pass
+      summary: "Accepted and pushed d6d79bc. The live-ready contract now binds the clean replacement manifest f5183a49 and the fresh A-S-01 answer lane."
+      spawned_tasks:
+        - T190
+  - id: T190
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Execute the clean approved successor run after the citation-boundary repair, then seal or fail closed without replaying any completed model call."
+    inputs:
+      - "Benchmark head d6d79bc"
+      - "Clean run root successor-live-r2-4e9d1b0"
+      - "Replacement manifest f5183a491b17c1a39c621b1843aefba9c4e206ef97c80bdaf3fca2372cf51b5e"
+      - "Unchanged request set af4e82819694af2846b26dd8dd5758836256ec077ee42b7b18fcab703f4b1e11"
+      - "Eight Jev calls and USD 0.284922456 reservation"
+    constraints:
+      - "Use the frozen replacement manifest and exact approved controls."
+      - "Do not reuse the consumed r1 lane or run root."
+      - "No model or provider retry within this run."
+      - "Stop fail-closed on a new harness, identity, authority, source, or budget defect."
+    expected_output:
+      - "Sixteen terminal trial receipts"
+      - "At most eight observed Jev calls"
+      - "One sealed private result.json or an exact new fail-closed receipt"
     receipt: null
   - id: T999
     type: judge
