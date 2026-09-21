@@ -503,6 +503,7 @@ class PortableSkillTests(unittest.TestCase):
         )
         self.assertTrue(diagnostics["runtime_identity"]["candidate_sha256"])
         self.assertGreater(diagnostics["stage_ns"]["scan"], 0)
+        self.assertGreater(diagnostics["stage_ns"]["graph_build"], 0)
         self.assertGreater(diagnostics["stage_ns"]["retrieval"], 0)
         self.assertGreater(diagnostics["stage_ns"]["selection"], 0)
         self.assertTrue(any(row["stage"] == "scan" for row in diagnostics["source_operations"]))

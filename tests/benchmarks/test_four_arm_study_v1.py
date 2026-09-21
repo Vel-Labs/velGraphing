@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT / "scripts/benchmarks"))
 import four_arm_study_v1 as study  # noqa: E402
 from time_to_correct_calibration import _v3_trial_measurement  # noqa: E402
 from time_to_correct_host import (  # noqa: E402
-    _answer_input, _grader_input, run_process_trial,
+    _answer_input, _grader_input,
 )
 
 CUSTODY = ROOT / study.SUCCESSOR_WITNESS_CUSTODY
@@ -40,20 +40,18 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
         local.mkdir(mode=0o700, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="t050-canary-", dir=local) as raw:
             root = Path(raw)
-            lane = root / "lane"
+            corpus_id = "fixture-corpus"
+            lane_root = root / "lanes"
+            lane = lane_root / corpus_id
             (lane / "src").mkdir(parents=True)
-            (lane / "tests").mkdir()
             (lane / "src/cancel.py").write_text(
+                'FRESH_GRAPH_MARKER = "fresh-source-evidence"\n'
                 "def cancel_task(task):\n    return task.cancel()\n",
-                encoding="utf-8",
-            )
-            (lane / "tests/test_cancel.py").write_text(
-                "def test_cancel_task(task):\n    assert cancel_task(task)\n",
                 encoding="utf-8",
             )
             subprocess.run(["git", "init", "-q", str(lane)], check=True)
             subprocess.run(
-                ["git", "-C", str(lane), "add", "src/cancel.py", "tests/test_cancel.py"],
+                ["git", "-C", str(lane), "add", "src/cancel.py"],
                 check=True,
             )
             sources = [
@@ -63,66 +61,98 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 for path in sorted(lane.rglob("*.py"))
             ]
             source_manifest = {
+                "schema_version": "velgraphing-corpus-source-manifest-v1",
+                "repository": corpus_id,
+                "commit": "a" * 40,
+                "includes": ["**"],
+                "excludes": [],
                 "sources": sources,
+                "source_count": len(sources),
+                "source_bytes": sum(row["byte_length"] for row in sources),
                 "snapshot_sha256": study._sha256({"sources": sources}),
+                "skipped": [],
             }
             run_root = root / "run"
             run_root.mkdir()
-            installed = study._install_graph_find(run_root)
-            prompt = "Find cancel_task implementation and test behavior."
+            prompt = "Find FRESH_GRAPH_MARKER and the cancel_task implementation."
             rubric = {
-                "required_facts": ["cancel_task"],
-                "critical_facts": ["cancel_task"],
-                "acceptable_spans": ["cancel_task"],
-            }
-            identity = {
-                "run_id": "t050-fixture", "trial_id": "C-S-01",
-                "task_id": "S-01", "arm": "C", "repository_id": "fixture",
-                "repository_commit": "a" * 40,
-                "source_snapshot_sha256": source_manifest["snapshot_sha256"],
-                "dirty_state_sha256": study.digest(b""),
-                "answer_model": "fixture-answer", "reasoning": "none",
-                "prompt_sha256": study.digest(prompt.encode()),
-                "rubric_sha256": study.digest(study.canonical(rubric)),
-                "rubric_version": "t050-fixture-v1", "answer_lane_id": "answer-C-S-01",
+                "rubric_version": "t050-fixture-v2",
+                "required_facts": [{"ask_id": "fresh", "fact": "FRESH_GRAPH_MARKER"}],
+                "critical_facts": ["FRESH_GRAPH_MARKER"],
+                "acceptable_spans": ["FRESH_GRAPH_MARKER"],
             }
             answer_code = (
-                "import json,sys; x=json.load(sys.stdin); e=x['evidence']; "
+                "import json,sys; x=json.load(sys.stdin); raw=json.dumps(x); "
+                "assert 'FRESH_GRAPH_MARKER' in raw; "
+                "assert 'PRECOMPUTED_POOL_LEAK_SENTINEL' not in raw; e=x['evidence']; "
                 "a=' '.join(r['excerpt'] for r in e)+' '+' '.join('['+r['id']+']' for r in e); "
                 "sys.stdout.write(json.dumps({'schema_version':'velgraphing-answer-output-v1',"
                 "'answer_text':a,'usage':None,'model_calls_complete':False,"
                 "'context_deliveries_complete':True},sort_keys=True,separators=(',',':')))"
             )
             grader_code = (
-                "import json,sys; x=json.load(sys.stdin); fs=x['rubric']['required_facts']; "
-                "a=x['answer_text'].casefold(); d=[f.casefold() in a for f in fs]; n=len(fs); s=sum(d); "
+                "import json,sys; x=json.load(sys.stdin); "
+                "fs=x['rubric']['required_facts']; a=x['answer_text'].casefold(); "
+                "d=[f.casefold() in a for f in fs]; n=len(fs); s=sum(d); "
                 "sys.stdout.write(json.dumps({'schema_version':'velgraphing-grader-output-v1',"
                 "'required_fact_score':s,'required_fact_maximum':n,"
                 "'critical_facts_exact':all(f.casefold() in a for f in x['rubric']['critical_facts']),"
                 "'unsupported_material_claims':0,'grader_id':'fixture-grader','usage':None,"
                 "'model_calls_complete':False},sort_keys=True,separators=(',',':')))"
             )
-            trial = study.Trial(identity, study.Budget(0, 60_000_000_000), execution="fixture")
-
-            def prepare(current: study.Trial, _attempt: int) -> dict[str, object]:
-                current.not_applicable(
-                    "jev_preparation", "provider", "source_revalidation",
-                    "response_validation", "operator_approval", "fallback",
+            trial_id = "C-S-01"
+            freeze = {
+                "study_id": "t050-fixture",
+                "corpora": {corpus_id: {
+                    "commit": "a" * 40,
+                    "snapshot_sha256": source_manifest["snapshot_sha256"],
+                    "manifest": "benchmarks/velgraphing-corpus-pilot-v1/fixture.json",
+                }},
+                "lane_identity_contract": {
+                    "answer": {"model": "fixture-answer", "reasoning": "none"},
+                },
+                "implementation_bindings": {
+                    "grader_response_contract_sha256": study.digest(
+                        study.canonical(study.GRADER_RESPONSE_CONTRACT),
+                    ),
+                },
+            }
+            registration = {
+                "trial_id": trial_id, "task_id": "S-01", "arm": "C",
+                "call_disposition": "skip_no_membership_effect",
+                "selection_decision_sha256": study.digest(b"fixture-decision"),
+            }
+            pool = {
+                "corpus": corpus_id,
+                "pool_sha256": study.digest(b"fixture-pool"),
+                "identity": {"route": "graph", "task_id": "S-01"},
+                "candidate_packet": {
+                    "query": prompt,
+                    "candidates": [{"id": "stale", "excerpt": "PRECOMPUTED_POOL_LEAK_SENTINEL"}],
+                },
+            }
+            process_manifest = {"entries": [
+                {"trial_id": trial_id, "role": "answer", "thread_id": "answer-fixture",
+                 "model": "fixture-answer", "reasoning": "none",
+                 "argv": [sys.executable, "-c", answer_code]},
+                {"trial_id": trial_id, "role": "grader", "thread_id": "grader-fixture",
+                 "model": "fixture-grader", "reasoning": "none",
+                 "argv": [sys.executable, "-c", grader_code]},
+            ]}
+            before = {"restricted_state_sha256": "c" * 64}
+            with (
+                patch.object(study, "verify_lane", return_value=([], before)) as verify,
+                patch.object(study, "revalidate_lane") as revalidate,
+                patch.object(study, "_load_manifest", return_value=source_manifest),
+                patch.object(study, "_question_prompt", return_value=prompt),
+            ):
+                result = study.execute_trial(
+                    freeze, registration, pool, rubric, lane_root, run_root,
+                    process_manifest, study.digest(study.canonical(process_manifest)),
+                    execution="fixture",
                 )
-                payload = study._installed_graph_payload(
-                    current, task_id="S-01", prompt=prompt, lane=lane,
-                    source_manifest=source_manifest, installed=installed,
-                )
-                current.coverage(source_operations=True)
-                return payload
-
-            result = run_process_trial(
-                trial, prepare,
-                answer_argv=[sys.executable, "-c", answer_code],
-                grader_argv=[sys.executable, "-c", grader_code],
-                cwd=ROOT, answer_timeout_s=10, grader_timeout_s=10,
-                grader_context=rubric, grader_model="fixture-grader",
-            )
+                verify.assert_called_once()
+                revalidate.assert_called_once()
 
             self.assertEqual("passed", result["terminal_reason"], result["attempts"])
             attempt = result["attempts"][0]
@@ -134,12 +164,15 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             self.assertFalse(attempt["coverage"]["model_calls"])
             self.assertFalse(result["usage_complete"])
             self.assertGreater(len(attempt["source_operations"]), 0)
+            self.assertEqual("installed_graph_find", attempt["candidate_observation"]["route"])
             self.assertEqual("observed", result["phases"]["candidate_discovery"]["status"])
             self.assertEqual("observed", result["phases"]["context_composition"]["status"])
+            self.assertEqual("missing", result["phases"]["cold_graph_build"]["status"])
             self.assertEqual(
                 attempt["bindings"]["candidate_set_sha256"],
                 attempt["candidate_observation"]["candidate_set_sha256"],
             )
+            installed = study._install_graph_find(run_root)
             self.assertEqual(
                 installed[1], attempt["bindings"]["graph_artifact_sha256"],
             )
@@ -147,6 +180,8 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 "installed_graph_find_process",
                 attempt["candidate_observation"]["stage_clock"]["domain"],
             )
+            self.assertGreater(attempt["candidate_observation"]["stage_ns"]["graph_build"], 0)
+            self.assertTrue(attempt["grade"]["passed"])
             self.assertLessEqual(
                 result["confirmed_time_to_correct_ns"], result["user_visible_wall_ns"],
             )
@@ -154,7 +189,7 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             changed_manifest = dict(source_manifest)
             changed_manifest["snapshot_sha256"] = "0" * 64
             mismatch_trial = study.Trial(
-                {**identity, "trial_id": "C-S-02", "task_id": "S-02",
+                {**result["identity"], "trial_id": "C-S-02", "task_id": "S-02",
                  "answer_lane_id": "answer-C-S-02"},
                 study.Budget(0, 60_000_000_000), execution="fixture",
             )

@@ -292,6 +292,7 @@ def _scan(
     reader = SnapshotReader(
         root, sources, read_observer=observe_read if diagnostics is not None else None,
     )
+    graph_started = time.perf_counter_ns()
     snapshot = SourceSnapshotV4(
         tuple(
             SourceIdentityV4(path, len(data), hashlib.sha256(data).hexdigest())
@@ -314,7 +315,6 @@ def _scan(
         for path, data in sorted(sources.items())
     )
     source_graph = Graph(records)
-    graph_started = time.perf_counter_ns()
     reader.operation_stage = "graph_build"
     relations = derive_source_relations(source_graph, snapshot, reader) if derive_edges else None
     if diagnostics is not None:
