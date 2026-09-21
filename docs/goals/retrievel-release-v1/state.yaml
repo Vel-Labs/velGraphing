@@ -63,7 +63,7 @@ visual_board:
     url: null
     command: "node <skill-path>/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-release-v1"
 
-active_task: T040
+active_task: T050
 
 tasks:
   - id: T010
@@ -221,7 +221,7 @@ tasks:
   - id: T040
     type: worker
     assignee: Worker
-    status: active
+    status: blocked
     reasoning_hint: medium
     objective: "Install the frozen candidate into an isolated environment and verify command discovery, offline behavior, one bounded live smoke, fallback, and removal."
     allowed_files:
@@ -234,15 +234,40 @@ tasks:
     stop_if:
       - "T030 has not frozen a package candidate."
       - "A live request lacks exact scope, hash, and budget authority."
-    receipt: null
+    receipt:
+      result: blocked
+      summary: "The exact candidate passed isolated install, discovery, offline replay, failure fallback, package-byte verification, removal, and cleanup. The exact synthetic live request is ready but requires operator approval and a credential-bearing process."
+      changed_files:
+        - docs/goals/retrievel-release-v1/notes/T040-installed-path.md
+      commands:
+        - cmd: "isolated local marketplace install and package-byte verification"
+          status: pass
+        - cmd: "installed runtime status, replay, missing-key fallback, and malformed-response fallback"
+          status: pass
+        - cmd: "isolated plugin removal and CODEX_HOME cleanup"
+          status: pass
+      request_sha256: 747673913325bd4d5992f6c05c38cfaf123e76adc8f55bfa0e5f5bc66a42d829
+      blocker: "No exact operator approval for this request hash, and TYPESAFE_API_KEY is absent from the isolated process."
+      boundary: "No provider or network call occurred."
   - id: T050
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: medium
     objective: "Repair the smallest remaining end-to-end measurement transport gap and prove one complete canary."
-    allowed_files: []
-    verify: []
+    allowed_files:
+      - plugins/graph-engineering/skills/graph-find/scripts/graph_find.py
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - scripts/benchmarks/four_arm_study_v1.py
+      - tests/skills/test_portable_skills.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - docs/goals/retrievel-release-v1/notes/T050-measurement-repair.md
+    verify:
+      - "prove the installed graph-find path runs during Trial.prepare instead of before the timed trial"
+      - "transport scan, graph build or expansion, selection, source-read, fallback, candidate, context-byte, Jev, answer, grader, and accepted-correctness measurements into the existing Trial schema"
+      - "run one credential-free installed-path trial through an accepted grader result with complete non-provider telemetry"
+      - "project packaged bytes, regenerate and verify the release manifest, and run focused skill and benchmark tests"
+      - "run the full repository suite once after the repaired candidate is frozen"
     stop_if:
       - "The candidate identity or installed path is not frozen."
       - "The repair would rewrite historical results."
