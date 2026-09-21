@@ -317,10 +317,11 @@ def _scan(
     source_graph = Graph(records)
     reader.operation_stage = "graph_build"
     relations = derive_source_relations(source_graph, snapshot, reader) if derive_edges else None
-    if diagnostics is not None:
-        diagnostics.setdefault("stage_ns", {})["graph_build"] = time.perf_counter_ns() - graph_started
     reader.operation_stage = "retrieval"
     edges = relations.edges if relations is not None else ()
+    final_graph = Graph(records, edges)
+    if diagnostics is not None:
+        diagnostics.setdefault("stage_ns", {})["graph_build"] = time.perf_counter_ns() - graph_started
     reason_counts: dict[str, int] = {}
     for item in skipped:
         reason = item["reason"]
@@ -346,7 +347,7 @@ def _scan(
             else []
         ),
     }
-    return Graph(records, edges), snapshot, reader, metadata
+    return final_graph, snapshot, reader, metadata
 
 
 def _positive_bounded(value: str, label: str, ceiling: int) -> int:
