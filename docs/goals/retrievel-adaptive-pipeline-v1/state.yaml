@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T180
+active_task: T181
 
 tasks:
   - id: T010
@@ -1158,7 +1158,7 @@ tasks:
   - id: T180
     type: pm
     assignee: PM
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Execute the approved frozen successor study once, resume its exact host-bound lanes, and seal the private result without retries or scope expansion."
     inputs:
@@ -1176,6 +1176,49 @@ tasks:
       - "At most eight observed Jev calls"
       - "One sealed private result.json or an exact fail-closed receipt"
       - "Measured correctness, TTC, wall time, fallback invocations, and host-reported usage missingness"
+    receipt:
+      result: blocked
+      blocked_reason: "The first answer followed the visible [cN] citation instruction, but the host exposed hash IDs and rejected [c1] before grader dispatch."
+      changed_files: []
+      commands:
+        - cmd: "Approved controller run against successor-live-r1-9c5079a"
+          status: fail
+      summary: "Fail-closed before any Jev or grader call. One A-S-01 Luna answer call completed but its response was rejected by the contradictory host citation contract. The controller wrote no completed trial or result seal. The consumed answer lane and run root will not be reused."
+      spawned_tasks:
+        - T181
+  - id: T181
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Repair the answer citation boundary so the visible cN instruction, model-visible evidence IDs, citation validator, and grader evidence map use the same deterministic aliases."
+    allowed_files:
+      - scripts/benchmarks/time_to_correct_host.py
+      - benchmarks/velgraphing-four-arm-study-v1/freeze.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      - tests/benchmarks/test_time_to_correct_host.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+    inputs:
+      - "Fail-closed A-S-01 request and response receipt"
+      - "Existing instruction: Cite supporting evidence IDs as [cN]."
+      - "Current host binding and successor contract"
+    constraints:
+      - "Fix the shared host boundary, not the individual answer or lane prompt."
+      - "Preserve internal source-bound candidate identities and coordinates."
+      - "Do not change retrieval, Jev requests, budget, rubric, claim boundary, or retry policy."
+      - "Do not run the live controller or make provider, answer, or grader calls."
+    verify:
+      - "python3 -m unittest tests.benchmarks.test_time_to_correct_host tests.benchmarks.test_four_arm_study_v1 -v"
+      - "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1 --witness-custody .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json"
+      - "git diff --check"
+    stop_if:
+      - "The repair requires changing candidate membership, source coordinates, Jev request bytes, rubric, or provider policy."
+      - "The fix cannot be expressed at the shared host input boundary."
+    expected_output:
+      - "Model-visible evidence IDs c1 through cN"
+      - "Citation and grader mapping accept only those visible aliases"
+      - "Updated exact host bindings"
+      - "Focused regression tests and one reviewable commit"
     receipt: null
   - id: T999
     type: judge
