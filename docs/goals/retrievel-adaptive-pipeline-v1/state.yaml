@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T210
+active_task: T220
 
 tasks:
   - id: T010
@@ -1529,7 +1529,7 @@ tasks:
   - id: T210
     type: pm
     assignee: PM
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute the clean r4 study and seal it, with explicit JSON transport instructions and no retries."
     inputs:
@@ -1546,6 +1546,56 @@ tasks:
       - "Sixteen terminal trials and one result seal"
       - "Eight or fewer r4 Jev calls"
       - "Final metric and usage report"
+    receipt:
+      result: done
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T210-r4-sealed-result.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Execute the frozen clean R4 controller and all 32 host lanes"
+          status: pass
+        - cmd: "Validate the canonical result, 16 receipt hashes, provider ledger, source witnesses, and Git custody"
+          status: pass
+        - cmd: "Independent Luna seal audit"
+          status: pass
+      summary: "Sealed clean R4 result 884dbb95 with 16 terminal trials, 8 Jev calls, 0 retries, 9 passes, 7 failures, and the narrow oracle-assisted fallback claim only."
+      spawned_tasks:
+        - T220
+  - id: T220
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Rebuild and execute one exact current installed-package Graph plus Jev canary on public source."
+    allowed_files:
+      - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      - docs/goals/retrievel-adaptive-pipeline-v1/notes/T220-installed-canary.md
+    inputs:
+      - "Installed graph-engineering-local 0.1.6 package"
+      - "Current merged public VelGraphing source"
+      - "T100 installed-canary history"
+      - "Process-local TYPESAFE_API_KEY in the existing Terminal tab"
+    constraints:
+      - "Use the installed package path, not canonical source modules."
+      - "Regenerate package, source, candidate, query, and request hashes before the call."
+      - "Use public source only."
+      - "Use at most one Jev call and no retry."
+      - "Do not read, print, copy, or persist the credential."
+      - "Parent performs the live call and owns the GoalBuddy record."
+    verify:
+      - "Confirm installed package identity and source-package parity."
+      - "Confirm Graph route and source-bound candidate membership."
+      - "Preview and bind the exact Jev request without network access."
+      - "Revalidate every returned source pointer after the live call."
+      - "Record provider status, usage, latency, selection outcome, and safe fallback."
+    stop_if:
+      - "Installed package identity is not 0.1.6 or does not match the current release manifest."
+      - "The preview cannot bind exact public-source and request identity."
+      - "The first provider attempt fails after network transport begins."
+    expected_output:
+      - "One installed-path live canary receipt"
+      - "One provider call or a verified pre-transport fallback"
+      - "Current package and request identity, usage, latency, and source revalidation"
     receipt: null
   - id: T999
     type: judge
@@ -1570,16 +1620,16 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch records T160 frozen successor lanes and waits at T170 exact user re-acknowledgment"
+  dirty_fingerprint: "clean R4 is sealed and audited; T220 rebuilds the current installed-package canary"
   last_verification:
     result: pass
-    task: T160
+    task: T210
     commands:
-      - "All 32 accepted setup tasks replied exactly READY."
-      - "Lane manifest contains 32 unique task IDs with the frozen answer and grader model identities."
-      - "Lane manifest raw SHA is 7c5eb412817c0b4b87c59b865f41ca5b7fa41f1ea6a25f72ba18d8cd7cadb4d7."
-      - "Run root contains only lane-manifest.json."
-      - "No benchmark content, answer, grade, controller run, or provider call occurred."
+      - "Clean R4 controller exited 0 and sealed result 884dbb95387ff6b49606c2303b2788cb6d80a573eaa5fd4a63571814074f5a54."
+      - "All 16 result receipts, 16 answer calls, 16 grader calls, and 8 Jev calls reconcile."
+      - "No retries occurred and all four fallback appends were source verified."
+      - "Independent Luna seal audit returned PASS."
+      - "Both goal and benchmark worktrees were clean after the ignored result was sealed."
 
 provider_budget:
   provider: typesafe_jev
@@ -1589,9 +1639,9 @@ provider_budget:
   call_count_is_budget: false
   prior_live_calls: 46
   final_installed_path_live_calls: 1
-  four_arm_live_calls: 9
+  four_arm_live_calls: 17
   actual_spend_usd: null
-  conservative_committed_spend_usd: 0.288883875
-  remaining_usd: 0.711116125
+  conservative_committed_spend_usd: 0.320575227
+  remaining_usd: 0.679424773
   ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
-  claim_boundary: "No Graph plus Jev correctness, speed, token, or cost claim is currently supported."
+  claim_boundary: "Clean R4 supports only oracle-assisted fallback time-to-correct under its frozen contract; it does not support a Direct, Graph, Jev, comparative retrieval, all-model token, or cost claim."
