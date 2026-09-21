@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T200
+active_task: T201
 
 tasks:
   - id: T010
@@ -1434,7 +1434,7 @@ tasks:
   - id: T200
     type: pm
     assignee: PM
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Execute the strict r3 live study, service each bound lane directly, and seal the result or stop at the first new fail-closed reason."
     inputs:
@@ -1451,6 +1451,36 @@ tasks:
       - "Sixteen terminal trial receipts and one result seal"
       - "At most eight Jev calls"
       - "Measured correctness, TTC, wall time, fallback, and usage missingness"
+    receipt:
+      result: blocked
+      blocked_reason: "C-S-01 answer draft contained a valid JSON object followed by literal backslash-n characters and failed canonical transport normalization."
+      changed_files: []
+      commands:
+        - cmd: "Strict r3 controller run"
+          status: fail
+      summary: "A-S-01 and B-S-01 completed and passed. B-S-01 consumed one Jev request with provider-reported usage of 34,194 input tokens and 1,018 output tokens. C-S-01 produced one answer draft but no accepted response or grader call. No result seal exists. The invalid draft will not be rewritten or reused."
+      spawned_tasks:
+        - T201
+  - id: T201
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Replace the five r3 tasks exposed to benchmark content, strengthen the draft-format instruction, freeze an r4 manifest, and preserve the remaining 27 blind tasks."
+    inputs:
+      - "Consumed A-S-01 answer and grader tasks"
+      - "Consumed B-S-01 answer and grader tasks"
+      - "Consumed C-S-01 answer task"
+      - "Unexposed C-S-01 grader and remaining 26 tasks"
+    constraints:
+      - "Replacement setup prohibits delegation and tool use and contains no benchmark content."
+      - "Live handoff must state that a normal trailing newline is allowed but literal backslash-n outside JSON is forbidden."
+      - "Do not reuse r3 completed receipts, responses, or consumed tasks."
+      - "Do not make a provider call during lane setup or freeze."
+    expected_output:
+      - "Five verified fresh replacement tasks"
+      - "One clean r4 manifest with 32 unique task identities"
+      - "Ready tracked contract bound to r4"
     receipt: null
   - id: T999
     type: judge
@@ -1493,10 +1523,10 @@ provider_budget:
   aggregate_limit_usd: 1.00
   call_count_is_budget: false
   prior_live_calls: 46
-  final_installed_path_live_calls: 0
-  four_arm_live_calls: 8
+  final_installed_path_live_calls: 1
+  four_arm_live_calls: 9
   actual_spend_usd: null
-  conservative_committed_spend_usd: 0.284922456
-  remaining_usd: 0.715077544
+  conservative_committed_spend_usd: 0.288883875
+  remaining_usd: 0.711116125
   ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
   claim_boundary: "No Graph plus Jev correctness, speed, token, or cost claim is currently supported."
