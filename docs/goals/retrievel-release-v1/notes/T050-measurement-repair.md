@@ -1,7 +1,7 @@
 # T050 Measurement Repair
 
 Date: 2026-09-21
-Status: Graph/off production-path canary passed; the full focused skills suite is blocked by ignored bytecode in the worktree.
+Status: Graph/off production-path canary and clean-export release validation passed; Graph/on remains incomplete.
 
 ## Candidate and scope
 
@@ -31,10 +31,12 @@ Status: Graph/off production-path canary passed; the full focused skills suite i
 - The worktree manifest writer refused the ignored plugin `.pyc`. An export from tracked HEAD with only the authorized Graph Find source change overlaid was built under ignored `.velgraphing-local`. The projector and manifest write/verify passed for 87 files and candidate `112a9b2d...`. Only the generated release manifest was copied back. The ignored bytecode was not changed.
 - After the final timer correction, the focused benchmark file passed: 28 tests passed, 24 skipped. Skips require private witness custody or frozen corpus lanes. The single `graph_find_diagnostics` test passed.
 - Commands used the declared shared virtualenv: `PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python -m unittest discover -s tests/skills -p test_portable_skills.py -k graph_find_diagnostics` and `PYTHONDONTWRITEBYTECODE=1 /Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python -m unittest discover -s tests/benchmarks -p test_four_arm_study_v1.py`.
-- Focused portable-skill suite: 32 tests; 1 failure and 1 error because `scripts/__pycache__/graph_find.cpython-314.pyc` appears as an unexpected package resource and is not UTF-8. The changed diagnostics test passed alone. The ignored `.pyc` was left untouched.
-- The earlier full six-suite run was on the prior candidate, before this follow-up. Scaffold: 11 passed. Core: 284 passed. Adapters: 18 passed. Skills: 38 passed. Benchmarks: 193 passed, 25 skipped. Parity reported 3 failures and 8 errors because ignored `packages/core/__pycache__/*.pyc` entered its scan input. No full suite was rerun for this bounded follow-up.
-- `git diff --check` passed before this follow-up commit.
+- The contaminated worktree still contains ignored test bytecode. Parent therefore validated the exact commit from an automatically removed clean tracked export under `.velgraphing-local`; no ignored source-tree file was changed or copied into the export.
+- Exact-candidate clean suite: scaffold 11 passed; core 284 passed; adapters 18 passed; skills 38 passed; benchmarks 193 passed with 25 expected private-data skips; parity 10 passed.
+- Exact-candidate package verification passed for 87 files and candidate `112a9b2d...`.
+- Independent Luna re-audit of commit `c7301d83b3dd92d676e48bbc86ae00403c52feca` returned `ACCEPT`. It confirmed full child graph-build timing, the production `execute_trial` path, no frozen-pool evidence leakage, one Graph Find process, one answer process, one independent grader process, a separate child clock domain, and no fabricated parent `cold_graph_build` phase.
+- `git show --check` passed for the bounded commits.
 
 ## Remaining boundary
 
-This is a local process-boundary canary, not a live model or Jev result. Graph/on Jev remains incomplete. The prior full release check was not green because parity encountered ignored bytecode. No historical result or freeze was rewritten.
+This is a local process-boundary canary, not a live model or Jev result. Graph/on Jev remains incomplete. No historical result or freeze was rewritten.

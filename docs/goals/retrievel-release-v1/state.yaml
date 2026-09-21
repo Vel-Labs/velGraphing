@@ -271,7 +271,19 @@ tasks:
     stop_if:
       - "The candidate identity or installed path is not frozen."
       - "The repair would rewrite historical results."
-    receipt: null
+    receipt:
+      result: partial
+      commits:
+        - d1c8512196b1047c9443c75feb855ef03fbb0399
+        - c4d362fa67c28ab73982a62eb036a8dc507dc308
+        - c7301d83b3dd92d676e48bbc86ae00403c52feca
+      summary: "Graph/off now performs fresh installed-path discovery inside Trial.prepare, transports source-bound evidence through one answer and one independent grader, measures complete child graph construction in a separate clock domain, and passes independent audit. Graph/on remains fail-closed and keeps T050 active."
+      package_candidate_sha256: 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107
+      validation:
+        - "clean exact-candidate suite: scaffold 11, core 284, adapters 18, skills 38, benchmarks 193 with 25 expected skips, parity 10"
+        - "package parity: passed, 87 files"
+        - "independent Luna measurement audit: ACCEPT"
+      remaining: "Implement installed Graph/on preview, approval binding, one-call evaluate or replay, reranked source-bound context, and provider telemetry without changing historical results."
   - id: T060
     type: judge
     assignee: Judge
@@ -353,8 +365,8 @@ checks:
   dirty_fingerprint: "clean at ab229142e9a577c88d15bacd67d5bf36cd85e1ea before T010; board files then added by Parent"
   last_verification:
     result: pass
-    task: T020
+    task: T050
     commands:
-      - "git diff --check"
-      - "bounded Markdown target existence check"
-      - "PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py"
+      - "clean-export six-suite validation on c7301d83b3dd92d676e48bbc86ae00403c52feca"
+      - "clean-export source/package parity on candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+      - "independent Luna measurement audit: ACCEPT"
