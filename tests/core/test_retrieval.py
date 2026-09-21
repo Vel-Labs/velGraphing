@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 import hashlib
 import unittest
+from unittest.mock import patch
 
 import packages.core.retrieval as retrieval_module
 from packages.core import (
@@ -30,11 +31,15 @@ from packages.core import (
     build_repository_file_cards,
     compile_prompt,
     compile_proof_obligations,
+    derive_source_relations,
     graph_find,
+    is_authenticated_eligible,
     navigate,
+    plan_ranked_context,
     ranked_candidates_from_retrieval,
     retrieve,
     retrieve_hybrid,
+    select_ranked_context,
 )
 
 
@@ -183,6 +188,175 @@ def obligated_facets(*obligations: ProofObligation, count: int = 8) -> PromptFac
         tuple(PromptFacet(FacetKind.ENTITY, f"facet-{index}", 1) for index in range(count)),
         proof_obligations=obligations,
     )
+
+
+class SourceRelationDerivationTests(unittest.TestCase):
+    def test_derivation_is_source_bound_and_reports_explicit_coverage(self) -> None:
+        sources = {
+            "src/caller.py": (
+                b"import src.helper\n"
+                b"from src.helper import helper\n"
+                b"from src.helper import *\n"
+                b"from missing import absent\n"
+            ),
+            "src/helper.py": b"def helper():\n    return 1\n",
+            "README.md": (
+                b"# Start\n"
+                b"[guide](docs/guide.md#install)\n"
+                b"[missing](docs/missing.md#install)\n"
+                b"[external](https://example.com/page#install)\n"
+                b"[plain](docs/guide.md)\n"
+            ),
+            "docs/guide.md": b"# Install\nUse helper.\n",
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+
+        first = derive_source_relations(graph, snapshot, reader)
+        second = derive_source_relations(graph, snapshot, Reader(sources))
+
+        self.assertEqual(first, second)
+        self.assertEqual(
+            {edge.relation for edge in first.edges},
+            {"imports", "links_to_heading"},
+        )
+        self.assertEqual(
+            [item.to_dict() for item in first.coverage],
+            [
+                {
+                    "relation": "imports",
+                    "supported": "javascript_tree_sitter_static_relative_named_direct_export",
+                    "resolved": 0,
+                    "unresolved": 0,
+                    "unsupported": 0,
+                },
+                {
+                    "relation": "imports",
+                    "supported": "python_ast_from_import_named_top_level_declaration",
+                    "resolved": 1,
+                    "unresolved": 1,
+                    "unsupported": 2,
+                },
+                {
+                    "relation": "links_to_heading",
+                    "supported": "markdown_relative_path_fragment_unique_atx_heading",
+                    "resolved": 1,
+                    "unresolved": 1,
+                    "unsupported": 2,
+                },
+            ],
+        )
+        Graph(graph.records, first.edges)
+
+        restricted_records = tuple(
+            replace(record, sensitivity=Sensitivity.RESTRICTED)
+            if record.provenance.path == "src/helper.py"
+            else record
+            for record in graph.records
+        )
+        restricted = derive_source_relations(
+            Graph(restricted_records), snapshot, Reader(sources)
+        )
+        import_edge = next(edge for edge in restricted.edges if edge.relation == "imports")
+        self.assertIs(import_edge.sensitivity, Sensitivity.RESTRICTED)
+        self.assertFalse(is_authenticated_eligible(import_edge, (Sensitivity.INTERNAL,)))
+        self.assertTrue(is_authenticated_eligible(import_edge, (Sensitivity.RESTRICTED,)))
+
+        poisoned = replace(
+            graph.records[0],
+            content=graph.records[0].content + "# changed\n",
+        )
+        with self.assertRaisesRegex(ValueError, "relation source custody mismatch"):
+            derive_source_relations(
+                Graph((poisoned, *graph.records[1:])), snapshot, Reader(sources)
+            )
+
+    def test_javascript_named_relative_import_resolves_to_unique_direct_export(self) -> None:
+        sources = {
+            "src/caller.js": (
+                b"import { helper as alias } from './helper.js';\n"
+                b"import { missing } from './helper.js';\n"
+                b"import fallback from './helper.js';\n"
+                b"import { external } from 'package';\n"
+            ),
+            "src/helper.js": b"export function helper() { return 1; }\n",
+        }
+        graph, snapshot, _ = multi_source_fixture(sources)
+        graph = Graph(tuple(
+            replace(record, sensitivity=Sensitivity.RESTRICTED)
+            if record.provenance.path == "src/helper.js"
+            else record
+            for record in graph.records
+        ))
+
+        result = derive_source_relations(graph, snapshot, Reader(sources))
+
+        edge = self.assert_single_javascript_edge(result)
+        self.assertIs(edge.sensitivity, Sensitivity.RESTRICTED)
+        self.assertEqual(b"helper", sources[edge.source_coordinate.source_path][edge.source_coordinate.byte_start:edge.source_coordinate.byte_end])
+        self.assertEqual(
+            b"function helper() { return 1; }",
+            sources[edge.target_coordinate.source_path][edge.target_coordinate.byte_start:edge.target_coordinate.byte_end],
+        )
+        coverage = next(item for item in result.coverage if item.supported.startswith("javascript_"))
+        self.assertEqual((1, 1, 2), (coverage.resolved, coverage.unresolved, coverage.unsupported))
+
+    def test_javascript_relation_parser_failures_are_explicit(self) -> None:
+        graph, snapshot, reader = single_source_fixture(
+            b"import { broken from './broken.js';", "src/broken.js"
+        )
+        with self.assertRaisesRegex(ValueError, "javascript_parse_error:src/broken.js"):
+            derive_source_relations(graph, snapshot, reader)
+
+        graph, snapshot, reader = single_source_fixture(
+            b"export function helper() {}", "src/helper.js"
+        )
+        with patch("packages.core.javascript_coordinates.Parser", None):
+            with self.assertRaisesRegex(ValueError, "javascript_parser_unavailable"):
+                derive_source_relations(graph, snapshot, reader)
+
+    def test_javascript_target_path_and_export_must_each_be_unique(self) -> None:
+        sources = {
+            "src/caller.js": (
+                b"import { helper } from './helper';\n"
+                b"import { duplicate } from './duplicates.js';\n"
+            ),
+            "src/helper.js": b"export function helper() {}\n",
+            "src/helper/index.js": b"export function helper() {}\n",
+            "src/duplicates.js": (
+                b"export function duplicate() {}\n"
+                b"export function duplicate() {}\n"
+            ),
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+
+        result = derive_source_relations(graph, snapshot, reader)
+
+        self.assertEqual((), result.edges)
+        coverage = next(item for item in result.coverage if item.supported.startswith("javascript_"))
+        self.assertEqual((0, 2, 0), (coverage.resolved, coverage.unresolved, coverage.unsupported))
+
+    def test_javascript_uppercase_suffix_preserves_exact_paths(self) -> None:
+        sources = {
+            "src/CALLER.JS": b"import { helper } from './helper.JS';\n",
+            "src/helper.JS": b"export function helper() {}\n",
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+
+        edge = self.assert_single_javascript_edge(
+            derive_source_relations(graph, snapshot, reader)
+        )
+
+        self.assertEqual("src/CALLER.JS", edge.source_coordinate.source_path)
+        self.assertEqual("src/helper.JS", edge.target_coordinate.source_path)
+
+    def assert_single_javascript_edge(self, result: object) -> GraphEdge:
+        edges = getattr(result, "edges")
+        self.assertEqual(1, len(edges))
+        edge = edges[0]
+        self.assertEqual("imports", edge.relation)
+        self.assertEqual("javascript_import", edge.source_coordinate.entity_kind)
+        self.assertEqual("javascript_export_declaration", edge.target_coordinate.entity_kind)
+        return edge
 
 
 class SourceBoundExpansionTests(unittest.TestCase):
@@ -368,6 +542,236 @@ class SourceBoundExpansionTests(unittest.TestCase):
                 maximum_unit_bytes=4096,
             )
 
+    def test_change_impact_adds_one_verified_incoming_support_and_optional_child(self) -> None:
+        sources = {
+            "src/caller.py": (
+                b"from src.helper import helper\n\n"
+                b"def use_helper():\n    return helper()\n"
+            ),
+            "src/helper.py": b"def helper():\n    return 1\n",
+            "src/root.py": b"from src.caller import use_helper\n",
+        }
+        plain_graph, snapshot, reader = multi_source_fixture(sources)
+        records = tuple(
+            replace(record, sensitivity=Sensitivity.RESTRICTED)
+            if record.provenance.path == "src/caller.py"
+            else record
+            for record in plain_graph.records
+        )
+        source_graph = Graph(records)
+        graph = Graph(
+            records,
+            derive_source_relations(source_graph, snapshot, Reader(sources)).edges,
+        )
+        index = build_repository_tag_index(graph, snapshot, reader)
+        obligation = ProofObligation(
+            "helper", AuthorityClass.RUNTIME,
+            source_hints=("src/helper.py",), anchor_hints=("helper",),
+        )
+
+        def facets(intent: str) -> PromptFacetSet:
+            return PromptFacetSet(
+                "f" * 64,
+                (
+                    PromptFacet(FacetKind.INTENT, intent, 8),
+                    *(PromptFacet(FacetKind.ENTITY, f"facet-{index}", 1) for index in range(7)),
+                ),
+                proof_obligations=(obligation,),
+            )
+
+        impact_task = task(allowed_sensitivities=(Sensitivity.PUBLIC, Sensitivity.RESTRICTED))
+        arguments = (graph, impact_task, index)
+        baseline = retrieve(
+            *arguments, facets("trace"), snapshot, reader,
+            source_bound_expansion=True, expand_one_hop=True,
+        )
+        impact = retrieve(
+            *arguments, facets("change-impact"), snapshot, reader,
+            source_bound_expansion=True, expand_one_hop=True,
+        )
+
+        primary_fields = (
+            "route", "reason", "hits", "evidence", "spans", "context", "context_bytes",
+            "facet_coverage_percent", "channel_rankings", "recommended_fallback_paths",
+            "fail_closed", "covered_obligation_ids", "unresolved_obligation_ids",
+            "unresolved_critical_obligation_ids", "remaining_byte_budget",
+        )
+        self.assertEqual(
+            tuple(getattr(impact, field) for field in primary_fields),
+            tuple(getattr(baseline, field) for field in primary_fields),
+        )
+        self.assertEqual((), baseline.relationship_supports)
+        self.assertEqual(1, len(impact.relationship_supports))
+        support = impact.relationship_supports[0]
+        self.assertEqual("incoming", support.direction)
+        self.assertEqual("repo:src/helper.py", support.seed_record_id)
+        self.assertEqual("repo:src/caller.py", support.target_record_id)
+        self.assertIs(Sensitivity.RESTRICTED, support.sensitivity)
+        payload = support.to_dict()
+        self.assertEqual("src/caller.py", payload["source_coordinate"]["source_path"])
+        self.assertEqual("src/helper.py", payload["target_coordinate"]["source_path"])
+        self.assertEqual("src/helper.py", payload["seed_coordinate"]["source_path"])
+        self.assertEqual("src/caller.py", payload["related_coordinate"]["source_path"])
+
+        candidates = ranked_candidates_from_retrieval(
+            graph, impact_task, snapshot, reader, impact,
+            maximum_candidates=8,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        children = [item for item in candidates if item.relationship_parent_candidate_id]
+        self.assertEqual(1, len(children))
+        child = children[0]
+        parent_index = next(
+            index for index, item in enumerate(candidates)
+            if item.candidate_id == child.relationship_parent_candidate_id
+        )
+        self.assertLess(parent_index, candidates.index(child))
+        self.assertEqual("incoming", child.relationship_direction)
+        self.assertEqual(support.edge_id, child.relationship_edge_id)
+        self.assertEqual("repo:src/caller.py", child.record_id)
+
+        direct_candidates = ranked_candidates_from_retrieval(
+            graph, impact_task, snapshot, reader, baseline,
+            maximum_candidates=8,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        plan = plan_ranked_context(
+            graph,
+            impact_task,
+            snapshot,
+            reader,
+            query="change impact for helper",
+            direct_candidates=direct_candidates,
+            graph_candidates=candidates,
+        )
+        selected = select_ranked_context(
+            graph,
+            impact_task,
+            snapshot,
+            reader,
+            query="change impact for helper",
+            candidates=plan.candidates,
+        )
+        required_ids = tuple(
+            item.candidate_id for item in direct_candidates if item.required
+        )
+        self.assertEqual("graph", plan.route)
+        self.assertEqual("ranked", selected.route)
+        self.assertFalse(child.required)
+        self.assertLess(
+            selected.projection.selected_candidate_ids.index(
+                child.relationship_parent_candidate_id
+            ),
+            selected.projection.selected_candidate_ids.index(child.candidate_id),
+        )
+        self.assertEqual(required_ids, selected.projection.required_candidate_ids)
+        self.assertLessEqual(len(candidates), 8)
+        self.assertLessEqual(
+            sum(item.byte_end - item.byte_start for item in candidates), 32_768
+        )
+        self.assertLessEqual(
+            selected.projection.serialized_byte_count, impact_task.byte_budget
+        )
+
+        stripped_child = replace(
+            child,
+            relationship_edge_id=None,
+            relationship_direction=None,
+            relationship_relation=None,
+            relationship_sensitivity=None,
+        )
+        stripped = tuple(
+            stripped_child if item.candidate_id == child.candidate_id else item
+            for item in plan.candidates
+        )
+        rejected = select_ranked_context(
+            graph,
+            impact_task,
+            snapshot,
+            reader,
+            query="change impact for helper",
+            candidates=stripped,
+        )
+        self.assertEqual("defer", rejected.route)
+        self.assertEqual("relationship_candidate_custody_mismatch", rejected.reason)
+
+        def build(changed: object) -> None:
+            ranked_candidates_from_retrieval(
+                graph, impact_task, snapshot, reader,
+                replace(impact, relationship_supports=(changed,)),
+                maximum_candidates=8,
+                maximum_candidate_bytes=32_768,
+                maximum_unit_bytes=4096,
+            )
+
+        with self.assertRaises(ValueError):
+            replace(support, direction="sideways")
+        forged = (
+            replace(support, direction="outgoing"),
+            replace(support, source_coordinate=support.target_coordinate),
+            replace(
+                support,
+                source_coordinate=replace(
+                    support.source_coordinate, snapshot_sha256="0" * 64
+                ),
+            ),
+            replace(support, sensitivity=Sensitivity.PUBLIC),
+        )
+        for changed in forged:
+            with self.subTest(changed=changed), self.assertRaisesRegex(
+                ValueError, "relationship_support_custody_mismatch"
+            ):
+                build(changed)
+
+    def test_change_impact_prioritizes_incoming_before_outgoing_fallback(self) -> None:
+        sources = {
+            "src/a_definition.py": (
+                b"from src.b_dependency import dependency\n\n"
+                b"def helper():\n    return dependency()\n"
+            ),
+            "src/b_dependency.py": b"def dependency():\n    return 1\n",
+            "src/z_importer.py": b"from src.a_definition import helper\n",
+        }
+        plain_graph, snapshot, reader = multi_source_fixture(sources)
+        graph = Graph(
+            plain_graph.records,
+            derive_source_relations(plain_graph, snapshot, Reader(sources)).edges,
+        )
+        index = build_repository_tag_index(graph, snapshot, reader)
+        obligation = ProofObligation(
+            "helper", AuthorityClass.RUNTIME,
+            source_hints=("src/a_definition.py",), anchor_hints=("helper",),
+        )
+        ordinary_facets = obligated_facets(obligation)
+        impact_facets = replace(
+            ordinary_facets,
+            facets=(
+                PromptFacet(FacetKind.INTENT, "change-impact", 8),
+                *ordinary_facets.facets[1:],
+            ),
+        )
+
+        ordinary = retrieve(
+            graph, task(), index, ordinary_facets, snapshot, reader,
+            source_bound_expansion=True, expand_one_hop=True,
+        )
+        impact = retrieve(
+            graph, task(), index, impact_facets, snapshot, reader,
+            source_bound_expansion=True, expand_one_hop=True,
+        )
+
+        self.assertEqual("outgoing", ordinary.relationship_supports[0].direction)
+        self.assertEqual(
+            "repo:src/b_dependency.py",
+            ordinary.relationship_supports[0].target_record_id,
+        )
+        self.assertEqual(1, len(impact.relationship_supports))
+        self.assertEqual("incoming", impact.relationship_supports[0].direction)
+        self.assertEqual(
+            "repo:src/z_importer.py", impact.relationship_supports[0].target_record_id
+        )
 
 class ProofObligationCompilerTests(unittest.TestCase):
     def test_compilation_is_deterministic_and_caps_behavioral_units(self) -> None:

@@ -7,16 +7,21 @@ proof that an answer is complete.
 
 from __future__ import annotations
 
+import ast
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from enum import Enum
 import hashlib
+import json
 import math
+from pathlib import PurePosixPath
 import posixpath
 import re
 from typing import TYPE_CHECKING, Iterable, Mapping, Sequence
+from urllib.parse import unquote
 
+from .javascript_coordinates import JavaScriptCoordinateProvider
 from .jev import (
     MAX_CANDIDATES,
     MAX_EXCERPT_BYTES,
@@ -24,10 +29,21 @@ from .jev import (
     JevError,
     canonical as jev_canonical,
 )
-from .models import Graph, GraphRecord, Sensitivity, TaskSpec, is_authenticated_eligible
+from .models import (
+    Admission,
+    Freshness,
+    Graph,
+    GraphEdge,
+    GraphRecord,
+    Provenance,
+    Sensitivity,
+    TaskSpec,
+    TrustClass,
+    is_authenticated_eligible,
+)
 from .routing_v4 import SourceReaderV4, SourceSnapshotV4, _read_verified_source_bytes
-from .selection import AssistResult, ContextSpan, assist
-from .source_coordinates import SourceCoordinate
+from .selection import _REVERSE_RELATIONS, AssistResult, ContextSpan, assist
+from .source_coordinates import SourceCoordinate, source_snapshot
 
 if TYPE_CHECKING:
     from .selection import RankedContextCandidate
@@ -43,6 +59,8 @@ _IMPORT = re.compile(
     r"(?m)(?:\bfrom\s+[\"']([^\"']+)[\"']|\brequire\s*\(\s*[\"']([^\"']+)[\"']|\bimport\s+(?:[^\n;]*?\s+from\s+)?[\"']([^\"']+)[\"'])"
 )
 _MARKDOWN_LINK = re.compile(rb"\[([^\]\r\n]+)\]\(([^)\r\n]+)\)")
+_RELATION_MARKDOWN_HEADING = re.compile(r"(?m)^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
+_RELATION_MARKDOWN_LINK = re.compile(r"\[[^\]\n]+\]\(([^)\n]+)\)")
 
 _STOPWORDS = frozenset(
     {
@@ -72,13 +90,6 @@ _ALLOWED_RELATIONS = frozenset(
         "packages_manifest", "packages_source_tree", "persists_audit_for_panel", "produces",
         "publishes_section_selection", "reads", "requires_authority", "routes", "specifies_scoring_reference",
         "supports", "tested_by", "tests", "uses", "writes",
-    }
-)
-_REVERSE_RELATIONS = frozenset(
-    {
-        "calls", "consumes", "declares", "depends_on", "describes", "documents",
-        "implements", "imports", "packages", "produces", "supports", "tested_by",
-        "tests", "uses",
     }
 )
 _CHANNEL_ORDER = ("exact", "sparse", "wiki", "graph")
@@ -389,15 +400,88 @@ class RelationshipSupport:
     target_record_id: str
     source_coordinate: SourceCoordinate
     target_coordinate: SourceCoordinate
+    direction: str = "outgoing"
+    sensitivity: Sensitivity = Sensitivity.PUBLIC
+
+    def __post_init__(self) -> None:
+        if self.direction not in {"incoming", "outgoing"}:
+            raise ValueError("relationship support direction is unsupported")
+        if not isinstance(self.sensitivity, Sensitivity):
+            raise TypeError("relationship support sensitivity is unsupported")
+
+    @property
+    def seed_coordinate(self) -> SourceCoordinate:
+        return self.source_coordinate if self.direction == "outgoing" else self.target_coordinate
+
+    @property
+    def related_coordinate(self) -> SourceCoordinate:
+        return self.target_coordinate if self.direction == "outgoing" else self.source_coordinate
 
     def to_dict(self) -> dict[str, object]:
         return {
             "edge_id": self.edge_id,
             "relation": self.relation,
+            "direction": self.direction,
             "seed_record_id": self.seed_record_id,
             "target_record_id": self.target_record_id,
+            "related_record_id": self.target_record_id,
+            "sensitivity": self.sensitivity.value,
             "source_coordinate": self.source_coordinate.to_dict(),
             "target_coordinate": self.target_coordinate.to_dict(),
+            "seed_coordinate": self.seed_coordinate.to_dict(),
+            "related_coordinate": self.related_coordinate.to_dict(),
+        }
+
+
+@dataclass(frozen=True)
+class SourceRelationCoverage:
+    """Deterministic outcome counts for one explicitly supported relation form."""
+
+    relation: str
+    supported: str
+    resolved: int
+    unresolved: int
+    unsupported: int
+
+    def __post_init__(self) -> None:
+        if not self.relation or not self.supported:
+            raise ValueError("relation coverage identity must be non-empty")
+        if any(type(value) is not int or value < 0 for value in (
+            self.resolved, self.unresolved, self.unsupported,
+        )):
+            raise ValueError("relation coverage counts must be non-negative integers")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "relation": self.relation,
+            "supported": self.supported,
+            "resolved": self.resolved,
+            "unresolved": self.unresolved,
+            "unsupported": self.unsupported,
+        }
+
+
+@dataclass(frozen=True)
+class SourceRelationResult:
+    """Source-bound edges and explicit coverage from the canonical relation seam."""
+
+    edges: tuple[GraphEdge, ...]
+    coverage: tuple[SourceRelationCoverage, ...]
+
+    def __post_init__(self) -> None:
+        if any(type(edge) is not GraphEdge for edge in self.edges):
+            raise TypeError("source relation edges must contain GraphEdge values")
+        if any(type(item) is not SourceRelationCoverage for item in self.coverage):
+            raise TypeError("source relation coverage must contain SourceRelationCoverage values")
+        if tuple(sorted(self.edges, key=lambda edge: edge.edge_id)) != self.edges:
+            raise ValueError("source relation edges must be deterministically ordered")
+        if tuple(sorted(self.coverage, key=lambda item: (item.relation, item.supported))) != self.coverage:
+            raise ValueError("source relation coverage must be deterministically ordered")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "edges": [edge.to_dict() for edge in self.edges],
+            "coverage": [item.to_dict() for item in self.coverage],
         }
 
 
@@ -467,6 +551,10 @@ def ranked_candidates_from_retrieval(
         *,
         required: bool,
         parent_id: str | None = None,
+        relationship_edge_id: str | None = None,
+        relationship_direction: str | None = None,
+        relationship_relation: str | None = None,
+        relationship_sensitivity: Sensitivity | None = None,
     ) -> RankedContextCandidate:
         record = records.get(record_id)
         source = sources.get(path)
@@ -499,6 +587,8 @@ def ranked_candidates_from_retrieval(
         return RankedContextCandidate(
             hashlib.sha256(jev_canonical(identity)).hexdigest(),
             path, digest, start, end, required, record_id, parent_id,
+            relationship_edge_id, relationship_direction, relationship_relation,
+            relationship_sensitivity,
         )
 
     required: list[RankedContextCandidate] = []
@@ -765,32 +855,43 @@ def ranked_candidates_from_retrieval(
         edge = edges.get(support.edge_id)
         seed = records.get(support.seed_record_id)
         target = records.get(support.target_record_id)
-        coordinate = support.target_coordinate
-        source_coordinate = support.source_coordinate
-        seed_source = sources.get(source_coordinate.source_path)
-        seed_raw = source_bytes.get(source_coordinate.source_path)
+        coordinate = support.related_coordinate
+        seed_coordinate = support.seed_coordinate
+        seed_source = sources.get(seed_coordinate.source_path)
+        seed_raw = source_bytes.get(seed_coordinate.source_path)
         source = sources.get(coordinate.source_path)
         raw = source_bytes.get(coordinate.source_path)
+        expected_source_id = support.seed_record_id if support.direction == "outgoing" else support.target_record_id
+        expected_target_id = support.target_record_id if support.direction == "outgoing" else support.seed_record_id
+        sensitivity_rank = {
+            Sensitivity.PUBLIC: 0,
+            Sensitivity.INTERNAL: 1,
+            Sensitivity.RESTRICTED: 2,
+        }
         if (
             edge is None
-            or edge.source_id != support.seed_record_id
-            or edge.target_id != support.target_record_id
+            or edge.source_id != expected_source_id
+            or edge.target_id != expected_target_id
             or edge.relation != support.relation
-            or edge.source_coordinate != source_coordinate
-            or edge.target_coordinate != coordinate
+            or edge.source_coordinate != support.source_coordinate
+            or edge.target_coordinate != support.target_coordinate
+            or edge.sensitivity is not support.sensitivity
+            or seed is None
+            or target is None
+            or edge.sensitivity is not max(
+                (seed.sensitivity, target.sensitivity), key=sensitivity_rank.__getitem__
+            )
             or edge.relation not in _ALLOWED_RELATIONS
             or not is_authenticated_eligible(edge, task.allowed_sensitivities)
-            or source_coordinate.snapshot_sha256 != snapshot.snapshot_sha256
+            or seed_coordinate.snapshot_sha256 != snapshot.snapshot_sha256
             or coordinate.snapshot_sha256 != snapshot.snapshot_sha256
-            or seed is None
             or seed_source is None
             or seed_raw is None
-            or seed.provenance.path != source_coordinate.source_path
-            or seed.provenance.sha256 != source_coordinate.source_sha256
-            or seed_source.sha256 != source_coordinate.source_sha256
+            or seed.provenance.path != seed_coordinate.source_path
+            or seed.provenance.sha256 != seed_coordinate.source_sha256
+            or seed_source.sha256 != seed_coordinate.source_sha256
             or seed.content.encode("utf-8") != seed_raw
-            or not 0 <= source_coordinate.byte_start < source_coordinate.byte_end <= len(seed_raw)
-            or target is None
+            or not 0 <= seed_coordinate.byte_start < seed_coordinate.byte_end <= len(seed_raw)
             or source is None
             or raw is None
             or target.provenance.path != coordinate.source_path
@@ -805,10 +906,10 @@ def ranked_candidates_from_retrieval(
             (
                 item for item in primary
                 if item.record_id == support.seed_record_id
-                and item.source_path == source_coordinate.source_path
-                and item.source_sha256 == source_coordinate.source_sha256
-                and item.byte_start <= source_coordinate.byte_start
-                and source_coordinate.byte_end <= item.byte_end
+                and item.source_path == seed_coordinate.source_path
+                and item.source_sha256 == seed_coordinate.source_sha256
+                and item.byte_start <= seed_coordinate.byte_start
+                and seed_coordinate.byte_end <= item.byte_end
             ),
             None,
         )
@@ -825,6 +926,10 @@ def ranked_candidates_from_retrieval(
                 support.target_record_id, coordinate.source_path,
                 coordinate.source_sha256, start, end, required=False,
                 parent_id=parent.candidate_id,
+                relationship_edge_id=support.edge_id,
+                relationship_direction=support.direction,
+                relationship_relation=support.relation,
+                relationship_sensitivity=support.sensitivity,
             )
         except JevError as error:
             if str(error) == "unsupported_source_type":
@@ -1075,6 +1180,419 @@ def build_repository_tag_index(
     source_bytes = _read_verified_source_bytes(snapshot, reader)
     tags, vocabulary = _expected_repository_tags(graph, snapshot, source_bytes)
     return RepositoryTagIndex(tags, vocabulary, snapshot.snapshot_sha256)
+
+
+def _relation_coordinate(
+    snapshot_sha256: str,
+    path: str,
+    data: bytes,
+    byte_start: int,
+    byte_end: int,
+    entity_kind: str,
+    occurrence_role: str,
+    symbol: str,
+) -> SourceCoordinate:
+    return SourceCoordinate(
+        snapshot_sha256,
+        path,
+        hashlib.sha256(data).hexdigest(),
+        byte_start,
+        byte_end,
+        1 + data[:byte_start].count(b"\n"),
+        1 + data[: byte_end - 1].count(b"\n"),
+        entity_kind,
+        occurrence_role,
+        symbol,
+    )
+
+
+def _relation_ast_range(data: bytes, node: ast.AST) -> tuple[int, int] | None:
+    line = getattr(node, "lineno", None)
+    end_line = getattr(node, "end_lineno", None)
+    column = getattr(node, "col_offset", None)
+    end_column = getattr(node, "end_col_offset", None)
+    if None in (line, end_line, column, end_column):
+        return None
+    starts = [0]
+    starts.extend(index + 1 for index, value in enumerate(data) if value == 10)
+    try:
+        return starts[line - 1] + column, starts[end_line - 1] + end_column
+    except IndexError:
+        return None
+
+
+def _relation_module_name(path: str) -> str | None:
+    if not path.endswith(".py"):
+        return None
+    parts = path[:-3].split("/")
+    if parts[-1] == "__init__":
+        parts.pop()
+    return ".".join(parts) or None
+
+
+def _relation_resolved_module(source_path: str, node: ast.ImportFrom) -> str | None:
+    if not node.module:
+        return None
+    if not node.level:
+        return node.module
+    package = source_path[:-3].split("/")[:-1]
+    if source_path.endswith("/__init__.py"):
+        package = source_path[:-12].split("/")
+    keep = len(package) - node.level + 1
+    if not package or keep <= 0:
+        return None
+    return ".".join([*package[:keep], *node.module.split(".")])
+
+
+def _relation_heading_slug(value: str) -> str:
+    value = re.sub(r"[`*_~]", "", value.casefold())
+    value = re.sub(r"[^\w\s-]", "", value)
+    return re.sub(r"[-\s]+", "-", value).strip("-")
+
+
+def _relation_markdown_headings(text: str) -> list[tuple[str, int, int]]:
+    headings: list[tuple[str, int, int]] = []
+    fence: tuple[str, int] | None = None
+    offset = 0
+    for raw_line in text.splitlines(keepends=True):
+        line = raw_line.rstrip("\r\n")
+        if fence is not None:
+            character, minimum = fence
+            if re.fullmatch(rf" {{0,3}}{re.escape(character)}{{{minimum},}}[ \t]*", line):
+                fence = None
+        else:
+            opener = re.match(r" {0,3}(`{3,}|~{3,})", line)
+            if opener is not None:
+                run = opener.group(1)
+                fence = (run[0], len(run))
+            else:
+                heading = _RELATION_MARKDOWN_HEADING.fullmatch(line)
+                if heading is not None:
+                    headings.append(
+                        (heading.group(1), offset + heading.start(1), offset + heading.end(1))
+                    )
+        offset += len(raw_line)
+    return headings
+
+
+def derive_source_relations(
+    graph: Graph,
+    snapshot: SourceSnapshotV4,
+    reader: SourceReaderV4,
+) -> SourceRelationResult:
+    """Derive the supported source-witnessed relation forms.
+
+    The seam supports named Python ``from`` imports to one top-level declaration
+    static relative JavaScript named imports to one direct named export, and
+    relative Markdown ``path#fragment`` links to one ATX heading. Other relation
+    forms remain unsupported and are counted rather than inferred.
+    """
+
+    if type(graph) is not Graph:
+        raise TypeError("graph must be an exact Graph")
+    source_bytes = _read_verified_source_bytes(snapshot, reader)
+    records_by_path: dict[str, GraphRecord] = {}
+    for path, data in sorted(source_bytes.items()):
+        candidates = [record for record in graph.records if record.provenance.path == path]
+        if len(candidates) != 1:
+            raise ValueError("relation source custody mismatch")
+        record = candidates[0]
+        try:
+            record_bytes = record.content.encode("utf-8")
+        except UnicodeError as error:
+            raise ValueError("relation source custody mismatch") from error
+        if (
+            record.kind != "source"
+            or record.provenance.sha256 != hashlib.sha256(data).hexdigest()
+            or record_bytes != data
+            or record.trust is not TrustClass.VERIFIED_SOURCE
+            or record.admission is not Admission.VERIFIER
+            or not is_authenticated_eligible(record, (record.sensitivity,))
+        ):
+            raise ValueError("relation source custody mismatch")
+        records_by_path[path] = record
+
+    modules: dict[str, list[str]] = {}
+    declarations: dict[str, dict[str, list[SourceCoordinate]]] = {}
+    trees: dict[str, ast.Module] = {}
+    headings: dict[str, dict[str, list[SourceCoordinate]]] = {}
+    counts = {
+        "javascript_imports": {"resolved": 0, "unresolved": 0, "unsupported": 0},
+        "python_imports": {"resolved": 0, "unresolved": 0, "unsupported": 0},
+        "links_to_heading": {"resolved": 0, "unresolved": 0, "unsupported": 0},
+    }
+    for path, data in sorted(source_bytes.items()):
+        module = _relation_module_name(path)
+        if module is not None:
+            modules.setdefault(module, []).append(path)
+            try:
+                tree = ast.parse(data.decode("utf-8"), filename=path)
+            except (SyntaxError, UnicodeError):
+                counts["python_imports"]["unsupported"] += 1
+                continue
+            trees[path] = tree
+            by_name: dict[str, list[SourceCoordinate]] = {}
+            for node in tree.body:
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    continue
+                bounds = _relation_ast_range(data, node)
+                if bounds is None or bounds[0] >= bounds[1]:
+                    continue
+                by_name.setdefault(node.name, []).append(
+                    _relation_coordinate(
+                        snapshot.snapshot_sha256,
+                        path,
+                        data,
+                        *bounds,
+                        "python_declaration",
+                        "declaration" if isinstance(node, ast.ClassDef) else "definition",
+                        node.name,
+                    )
+                )
+            declarations[path] = by_name
+        if path.casefold().endswith((".md", ".markdown")):
+            text = data.decode("utf-8")
+            by_slug: dict[str, list[SourceCoordinate]] = {}
+            for heading, character_start, character_end in _relation_markdown_headings(text):
+                slug = _relation_heading_slug(heading)
+                if not slug:
+                    continue
+                start = len(text[:character_start].encode("utf-8"))
+                end = len(text[:character_end].encode("utf-8"))
+                by_slug.setdefault(slug, []).append(
+                    _relation_coordinate(
+                        snapshot.snapshot_sha256,
+                        path,
+                        data,
+                        start,
+                        end,
+                        "markdown_heading",
+                        "declaration",
+                        slug,
+                    )
+                )
+            headings[path] = by_slug
+
+    edges: list[GraphEdge] = []
+
+    def add(
+        relation: str,
+        source: SourceCoordinate,
+        target: SourceCoordinate,
+    ) -> None:
+        sensitivity_rank = {
+            Sensitivity.PUBLIC: 0,
+            Sensitivity.INTERNAL: 1,
+            Sensitivity.RESTRICTED: 2,
+        }
+        edge_sensitivity = max(
+            (
+                records_by_path[source.source_path].sensitivity,
+                records_by_path[target.source_path].sensitivity,
+            ),
+            key=sensitivity_rank.__getitem__,
+        )
+        identity = json.dumps(
+            [relation, source.to_dict(), target.to_dict()],
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        edges.append(
+            GraphEdge(
+                f"edge:{hashlib.sha256(identity).hexdigest()}",
+                records_by_path[source.source_path].record_id,
+                records_by_path[target.source_path].record_id,
+                relation,
+                1.0,
+                Provenance(
+                    source.source_path,
+                    source.source_sha256,
+                    f"bytes:{source.byte_start}-{source.byte_end}",
+                    True,
+                ),
+                TrustClass.VERIFIED_SOURCE,
+                edge_sensitivity,
+                Freshness.CURRENT,
+                Admission.VERIFIER,
+                True,
+                source_coordinate=source,
+                target_coordinate=target,
+            )
+        )
+
+    for path, tree in sorted(trees.items()):
+        data = source_bytes[path]
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                counts["python_imports"]["unsupported"] += len(node.names)
+                continue
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            module = _relation_resolved_module(path, node)
+            targets = modules.get(module or "", ())
+            for alias in node.names:
+                if alias.name == "*" or module is None:
+                    counts["python_imports"]["unsupported"] += 1
+                    continue
+                bounds = _relation_ast_range(data, alias)
+                declarations_for_name = (
+                    declarations.get(targets[0], {}).get(alias.name, ())
+                    if len(targets) == 1
+                    else ()
+                )
+                if len(targets) != 1 or len(declarations_for_name) != 1 or bounds is None:
+                    counts["python_imports"]["unresolved"] += 1
+                    continue
+                add(
+                    "imports",
+                    _relation_coordinate(
+                        snapshot.snapshot_sha256,
+                        path,
+                        data,
+                        *bounds,
+                        "python_import",
+                        "import",
+                        alias.name,
+                    ),
+                    declarations_for_name[0],
+                )
+                counts["python_imports"]["resolved"] += 1
+
+    javascript = JavaScriptCoordinateProvider().relations(source_snapshot(source_bytes))
+    if not javascript.supported:
+        raise ValueError(javascript.reason or "javascript_relation_index_unavailable")
+    counts["javascript_imports"]["unsupported"] = javascript.unsupported
+    javascript_paths = frozenset(
+        path for path in source_bytes
+        if path.casefold().endswith((".js", ".jsx", ".mjs", ".cjs"))
+    )
+    javascript_exports: dict[str, dict[str, list[SourceCoordinate]]] = {}
+    for item in javascript.exports:
+        data = source_bytes[item.source_path]
+        javascript_exports.setdefault(item.source_path, {}).setdefault(item.symbol, []).append(
+            _relation_coordinate(
+                snapshot.snapshot_sha256,
+                item.source_path,
+                data,
+                item.byte_start,
+                item.byte_end,
+                "javascript_export_declaration",
+                "definition",
+                item.symbol,
+            )
+        )
+    for item in javascript.imports:
+        base = posixpath.normpath(posixpath.join(posixpath.dirname(item.source_path), item.module))
+        if base == ".." or base.startswith("../"):
+            counts["javascript_imports"]["unresolved"] += 1
+            continue
+        suffix = PurePosixPath(base).suffix.casefold()
+        candidates = (
+            (base,)
+            if suffix
+            else tuple(
+                candidate
+                for extension in (".cjs", ".js", ".jsx", ".mjs")
+                for candidate in (f"{base}{extension}", f"{base}/index{extension}")
+            )
+        )
+        target_paths = tuple(path for path in candidates if path in javascript_paths)
+        declarations_for_name = (
+            javascript_exports.get(target_paths[0], {}).get(item.symbol, ())
+            if len(target_paths) == 1
+            else ()
+        )
+        if len(target_paths) != 1 or len(declarations_for_name) != 1:
+            counts["javascript_imports"]["unresolved"] += 1
+            continue
+        data = source_bytes[item.source_path]
+        add(
+            "imports",
+            _relation_coordinate(
+                snapshot.snapshot_sha256,
+                item.source_path,
+                data,
+                item.byte_start,
+                item.byte_end,
+                "javascript_import",
+                "import",
+                item.symbol,
+            ),
+            declarations_for_name[0],
+        )
+        counts["javascript_imports"]["resolved"] += 1
+
+    for path, data in sorted(source_bytes.items()):
+        if path not in headings:
+            continue
+        text = data.decode("utf-8")
+        for match in _RELATION_MARKDOWN_LINK.finditer(text):
+            destination = match.group(1)
+            if (
+                destination != destination.strip()
+                or any(character.isspace() for character in destination)
+                or "#" not in destination
+            ):
+                counts["links_to_heading"]["unsupported"] += 1
+                continue
+            link_path, fragment = destination.rsplit("#", 1)
+            if (
+                not link_path
+                or not fragment
+                or "%" in link_path
+                or link_path.startswith(("/", "//"))
+                or ":" in link_path
+                or ".." in PurePosixPath(link_path).parts
+            ):
+                counts["links_to_heading"]["unsupported"] += 1
+                continue
+            target_path = posixpath.normpath(posixpath.join(posixpath.dirname(path), link_path))
+            targets = (
+                headings[target_path].get(_relation_heading_slug(unquote(fragment)), ())
+                if not target_path.startswith("../") and target_path in headings
+                else ()
+            )
+            if len(targets) != 1:
+                counts["links_to_heading"]["unresolved"] += 1
+                continue
+            start = len(text[: match.start(1)].encode("utf-8"))
+            end = len(text[: match.end(1)].encode("utf-8"))
+            add(
+                "links_to_heading",
+                _relation_coordinate(
+                    snapshot.snapshot_sha256,
+                    path,
+                    data,
+                    start,
+                    end,
+                    "markdown_link",
+                    "reference",
+                    destination,
+                ),
+                targets[0],
+            )
+            counts["links_to_heading"]["resolved"] += 1
+
+    ordered_edges = tuple(sorted(edges, key=lambda edge: edge.edge_id))
+    Graph(graph.records, ordered_edges)
+    coverage = (
+        SourceRelationCoverage(
+            "imports",
+            "javascript_tree_sitter_static_relative_named_direct_export",
+            **counts["javascript_imports"],
+        ),
+        SourceRelationCoverage(
+            "imports",
+            "python_ast_from_import_named_top_level_declaration",
+            **counts["python_imports"],
+        ),
+        SourceRelationCoverage(
+            "links_to_heading",
+            "markdown_relative_path_fragment_unique_atx_heading",
+            **counts["links_to_heading"],
+        ),
+    )
+    return SourceRelationResult(ordered_edges, coverage)
 
 
 def compile_proof_obligations(
@@ -1765,29 +2283,62 @@ def retrieve(
     if source_bound_expansion and expand_one_hop:
         support_by_seed = {}
         selected_seeds = {hit.record_id for hit in hits if hit.hop == 0}
+        change_impact = any(
+            facet.kind is FacetKind.INTENT and facet.value == "change-impact"
+            for facet in facets.facets
+        )
+        eligible_edges = []
         for edge in sorted(graph.edges, key=lambda item: (item.source_id, item.relation, item.edge_id)):
-            if edge.source_id not in selected_seeds or edge.source_id in support_by_seed:
-                continue
             if edge.relation not in _ALLOWED_RELATIONS or not is_authenticated_eligible(
                 edge, task.allowed_sensitivities
             ):
                 continue
             if edge.source_coordinate is None or edge.target_coordinate is None:
                 continue
-            if edge.source_coordinate.snapshot_sha256 != snapshot.snapshot_sha256:
-                continue
-            if not is_authenticated_eligible(
-                record_map[edge.target_id], task.allowed_sensitivities
+            if (
+                edge.source_coordinate.snapshot_sha256 != snapshot.snapshot_sha256
+                or edge.target_coordinate.snapshot_sha256 != snapshot.snapshot_sha256
             ):
                 continue
-            support_by_seed[edge.source_id] = RelationshipSupport(
-                edge.edge_id,
-                edge.relation,
-                edge.source_id,
-                edge.target_id,
-                edge.source_coordinate,
-                edge.target_coordinate,
-            )
+            source_record = record_map[edge.source_id]
+            target_record = record_map[edge.target_id]
+            if not (
+                is_authenticated_eligible(source_record, task.allowed_sensitivities)
+                and is_authenticated_eligible(target_record, task.allowed_sensitivities)
+            ):
+                continue
+            sensitivity_rank = {
+                Sensitivity.PUBLIC: 0,
+                Sensitivity.INTERNAL: 1,
+                Sensitivity.RESTRICTED: 2,
+            }
+            if edge.sensitivity is not max(
+                (source_record.sensitivity, target_record.sensitivity),
+                key=sensitivity_rank.__getitem__,
+            ):
+                continue
+            eligible_edges.append(edge)
+        direction_order = ("incoming", "outgoing") if change_impact else ("outgoing",)
+        for direction in direction_order:
+            for edge in eligible_edges:
+                if direction == "incoming":
+                    if edge.relation not in _REVERSE_RELATIONS:
+                        continue
+                    seed_id, related_id = edge.target_id, edge.source_id
+                else:
+                    seed_id, related_id = edge.source_id, edge.target_id
+                if seed_id not in selected_seeds or seed_id in support_by_seed:
+                    continue
+                support_by_seed[seed_id] = RelationshipSupport(
+                    edge.edge_id,
+                    edge.relation,
+                    seed_id,
+                    related_id,
+                    edge.source_coordinate,
+                    edge.target_coordinate,
+                    direction,
+                    edge.sensitivity,
+                )
         relationship_supports = tuple(support_by_seed[key] for key in sorted(support_by_seed))
     return RetrievalResult(
         route="graph" if sufficient else "defer",
@@ -2772,8 +3323,9 @@ __all__ = [
     "NavigationContext", "NavigationResult", "SourcePreview",
     "PromptFacet", "PromptFacetSet", "ProofObligation", "RepositoryFileCard",
     "RepositoryTag", "RepositoryTagIndex", "RetrievalHit", "RetrievalResult",
+    "SourceRelationCoverage", "SourceRelationResult",
     "TagKind", "build_repository_file_cards", "build_repository_tag_index",
     "compile_prompt", "compile_proof_obligations", "match_proof_obligation", "match_proof_obligations",
-    "graph_find", "retrieve", "retrieve_hybrid", "ranked_candidates_from_retrieval",
+    "derive_source_relations", "graph_find", "retrieve", "retrieve_hybrid", "ranked_candidates_from_retrieval",
     "navigate", "compose_navigation_context",
 ]

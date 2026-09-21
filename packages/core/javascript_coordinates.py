@@ -33,6 +33,36 @@ _STRUCTURAL_TYPES = _UNIT_TYPES | frozenset({
 _DECLARATION_PARENTS = frozenset({"formal_parameters", "required_parameter", "optional_parameter"})
 
 
+def _is_javascript_path(path: str) -> bool:
+    return path.casefold().endswith(tuple(_JS_SUFFIXES))
+
+
+@dataclass(frozen=True)
+class JavaScriptNamedImport:
+    source_path: str
+    module: str
+    symbol: str
+    byte_start: int
+    byte_end: int
+
+
+@dataclass(frozen=True)
+class JavaScriptNamedExport:
+    source_path: str
+    symbol: str
+    byte_start: int
+    byte_end: int
+
+
+@dataclass(frozen=True)
+class JavaScriptRelationIndex:
+    supported: bool
+    imports: tuple[JavaScriptNamedImport, ...] = ()
+    exports: tuple[JavaScriptNamedExport, ...] = ()
+    unsupported: int = 0
+    reason: str | None = None
+
+
 def _name(node: object) -> str | None:
     field = getattr(node, "child_by_field_name")("name")
     if field is not None and getattr(field, "type", None) == "identifier":
@@ -134,7 +164,7 @@ class JavaScriptCoordinateProvider:
     def index(self, snapshot: SourceSnapshot) -> IndexResult:
         if Parser is None or tree_sitter_javascript is None:
             return IndexResult(snapshot.snapshot_sha256, False, reason="javascript_parser_unavailable")
-        paths = tuple(source.path for source in snapshot.sources if any(source.path.endswith(suffix) for suffix in _JS_SUFFIXES))
+        paths = tuple(source.path for source in snapshot.sources if _is_javascript_path(source.path))
         if not paths:
             return IndexResult(snapshot.snapshot_sha256, False, reason="no_supported_javascript_sources")
         parser = Parser(Language(tree_sitter_javascript.language()))
@@ -163,6 +193,91 @@ class JavaScriptCoordinateProvider:
         ordered = tuple(sorted(coordinates, key=lambda item: (item.source_path, item.byte_start, item.byte_end, item.symbol, item.occurrence_role)))
         return IndexResult(snapshot.snapshot_sha256, True, ordered)
 
+    def relations(self, snapshot: SourceSnapshot) -> JavaScriptRelationIndex:
+        """Index the narrow static named-import and direct-export relation form."""
+
+        paths = tuple(source.path for source in snapshot.sources if _is_javascript_path(source.path))
+        if not paths:
+            return JavaScriptRelationIndex(True)
+        if Parser is None or tree_sitter_javascript is None:
+            return JavaScriptRelationIndex(False, reason="javascript_parser_unavailable")
+        parser = Parser(Language(tree_sitter_javascript.language()))
+        imports: list[JavaScriptNamedImport] = []
+        exports: list[JavaScriptNamedExport] = []
+        unsupported = 0
+        for path in paths:
+            tree = parser.parse(snapshot.source(path).content)
+            if tree.root_node.has_error:
+                return JavaScriptRelationIndex(False, reason=f"javascript_parse_error:{path}")
+            for node in self._walk(tree.root_node):
+                if node.type == "call_expression" and any(child.type == "import" for child in node.children):
+                    unsupported += 1
+            for node in tree.root_node.children:
+                if node.type == "import_statement":
+                    source = node.child_by_field_name("source")
+                    specifiers = tuple(child for child in self._walk(node) if child.type == "import_specifier")
+                    clause = next((child for child in node.children if child.type == "import_clause"), None)
+                    binding_count = sum(
+                        child.type in {"identifier", "namespace_import"}
+                        for child in clause.children
+                    ) if clause is not None else 0
+                    if source is None or source.type != "string" or not specifiers:
+                        unsupported += max(1, binding_count)
+                        continue
+                    fragments = tuple(child for child in source.children if child.type == "string_fragment")
+                    if len(fragments) != 1:
+                        unsupported += len(specifiers) + binding_count
+                        continue
+                    module = fragments[0].text.decode("utf-8", errors="strict")
+                    suffix = module.rsplit("/", 1)[-1].rsplit(".", 1)
+                    if (
+                        not module.startswith(("./", "../"))
+                        or "\\" in module
+                        or any(character in module for character in ("?", "#"))
+                        or (len(suffix) == 2 and f".{suffix[1].casefold()}" not in _JS_SUFFIXES)
+                    ):
+                        unsupported += len(specifiers) + binding_count
+                        continue
+                    unsupported += binding_count
+                    for specifier in specifiers:
+                        name = specifier.child_by_field_name("name")
+                        if name is None or name.type != "identifier":
+                            unsupported += 1
+                            continue
+                        imports.append(JavaScriptNamedImport(
+                            path, module, name.text.decode("utf-8", errors="strict"),
+                            name.start_byte, name.end_byte,
+                        ))
+                elif node.type == "export_statement":
+                    declaration = node.child_by_field_name("declaration")
+                    if declaration is None or any(child.type == "default" for child in node.children):
+                        if node.child_by_field_name("source") is not None:
+                            unsupported += 1
+                        continue
+                    if declaration.type in {"function_declaration", "class_declaration"}:
+                        name = declaration.child_by_field_name("name")
+                        if name is not None and name.type == "identifier":
+                            exports.append(JavaScriptNamedExport(
+                                path, name.text.decode("utf-8", errors="strict"),
+                                declaration.start_byte, declaration.end_byte,
+                            ))
+                    elif declaration.type in {"lexical_declaration", "variable_declaration"}:
+                        for declarator in declaration.children:
+                            if declarator.type != "variable_declarator":
+                                continue
+                            name = declarator.child_by_field_name("name")
+                            if name is not None and name.type == "identifier":
+                                exports.append(JavaScriptNamedExport(
+                                    path, name.text.decode("utf-8", errors="strict"),
+                                    declarator.start_byte, declarator.end_byte,
+                                ))
+        return JavaScriptRelationIndex(
+            True,
+            tuple(sorted(imports, key=lambda item: (item.source_path, item.byte_start, item.symbol))),
+            tuple(sorted(exports, key=lambda item: (item.source_path, item.byte_start, item.symbol))),
+            unsupported,
+        )
+
     @staticmethod
     def _walk(node: object) -> Iterable[object]:
         yield node
@@ -176,4 +291,7 @@ class JavaScriptCoordinateProvider:
                                 1 + content[:start].count(b"\n"), 1 + content[: end - 1].count(b"\n"), kind, role, symbol, enclosing)
 
 
-__all__ = ["JavaScriptCoordinateProvider"]
+__all__ = [
+    "JavaScriptCoordinateProvider", "JavaScriptNamedExport", "JavaScriptNamedImport",
+    "JavaScriptRelationIndex",
+]
