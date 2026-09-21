@@ -1,0 +1,204 @@
+{
+  "arms": {
+    "A": {"jev": "off", "route": "direct"},
+    "B": {"jev": "on", "route": "direct"},
+    "C": {"jev": "off", "route": "graph"},
+    "D": {"jev": "on", "route": "graph"}
+  },
+  "artifacts": {
+    "preflight": {"path": "preflight.json", "sha256": "4c329a1a6fcc004d4a2b566b66fefbd3e2a1152c615f6d131d78c199c3c7f4f8"},
+    "questions": {"path": "questions.json", "sha256": "fcaba540ed5cd189e8702774c0387964d334174e9176a19d8df54c7273d2248c"},
+    "rubrics": {"path": "rubrics.json", "sha256": "d40db2d31ad33cae767a010a4ab3f6c785a7c0ada4918a70a1567b20ef1dbfbd"}
+  },
+  "candidate_pool_contract": {
+    "aggregate_excerpt_bytes": 32768,
+    "candidate_count": 64,
+    "direct_and_graph_authority": "same_public_source_snapshot",
+    "direct_and_graph_fallback": "same_caller_allowlisted_exact_source_reads",
+    "final_context_bytes": 16384,
+    "local_artifact_sha256": "3721b7378848d024e073cfa67bce44249b62551835ce236c22837119fee16d7b",
+    "materialized_pool_sha256_frozen": true,
+    "per_candidate_bytes": 4096,
+    "pool_bindings": {
+      "direct:D-01": "d5ff853da5725875aa6fa812569ddc02a70b23352d8c59b27fecb79937609fb6",
+      "direct:L-01": "ea70e8352988940102be3e58459027e99cf301dcc5f35b935baa062608175da2",
+      "direct:M-02": "7f951d76ba2a69cfbd49e890e46554174eec5253b796097edf764c1071b4c498",
+      "direct:S-01": "0c97557b80d65483ab0484a6ef05570d262da49716fb624de777636423704c49",
+      "graph:D-01": "b0e2df0e7bae33ec64b909b1bf1f1f2675ab613c576354770cfe668f47deee5b",
+      "graph:L-01": "8f2851e56b0e15cafa457e428d7d6e77a22d61e3635ce8c79ef07f60de65d93e",
+      "graph:M-02": "924d32fa3097327ac1c3e85b3171a614de04d4a266003c2e9ba6aea1f370a30e",
+      "graph:S-01": "7dc43f5ff265b3b43f1a5c9183bf7cf8d2d4a55fe7dfd8b6b88499db45712b33"
+    },
+    "pool_pairs": [
+      {"direct": "direct:S-01", "graph": "graph:S-01", "task_id": "S-01"},
+      {"direct": "direct:D-01", "graph": "graph:D-01", "task_id": "D-01"},
+      {"direct": "direct:L-01", "graph": "graph:L-01", "task_id": "L-01"},
+      {"direct": "direct:M-02", "graph": "graph:M-02", "task_id": "M-02"}
+    ],
+    "retrieval_nodes": 12,
+    "relationship_delta": "graph_may_add_only_source_verified_relationship_context",
+    "source_bodies": "ignored_local_only"
+  },
+  "controller": {
+    "argv": [
+      "/usr/bin/env",
+      "python3",
+      "-B",
+      "scripts/benchmarks/four_arm_study_v1.py",
+      "validate",
+      "--root",
+      "benchmarks/velgraphing-four-arm-study-v1"
+    ],
+    "execution_argv_template": [
+      "<ABSOLUTE_PYTHON_EXECUTABLE>", "-B", "scripts/benchmarks/four_arm_study_v1.py",
+      "run", "--root", "benchmarks/velgraphing-four-arm-study-v1",
+      "--pool-artifact", "<ABSOLUTE_IGNORED_POOL_ARTIFACT>",
+      "--lane-root", "<ABSOLUTE_FROZEN_LANES_ROOT>", "--run-root", "<ABSOLUTE_RUN_ROOT>",
+      "--lane-manifest", "<ABSOLUTE_RUN_ROOT>/lane-manifest.json",
+      "--approved-lane-manifest-sha256", "<APPROVED_LANE_MANIFEST_SHA256>",
+      "--approved-python-executable", "<ABSOLUTE_PYTHON_EXECUTABLE>"
+    ],
+    "path": "scripts/benchmarks/four_arm_study_v1.py",
+    "sha256": "79f42fbeee18c45731ec963102e31480bd4669f9f89cb1cedaccbbbcb2e8a21a",
+    "phase": "phase_3a_execution_adapter",
+    "prepare_argv_template": [
+      "/usr/bin/env", "python3", "-B", "scripts/benchmarks/four_arm_study_v1.py",
+      "prepare", "--root", "benchmarks/velgraphing-four-arm-study-v1",
+      "--lanes-root", "<ABSOLUTE_FROZEN_LANES_ROOT>",
+      "--local-output", "<ABSOLUTE_IGNORED_POOL_ARTIFACT>",
+      "--preflight-output", "benchmarks/velgraphing-four-arm-study-v1/preflight.json"
+    ],
+    "provider_answer_and_grader_calls": 0
+  },
+  "corpora": {
+    "engineering-handbook": {
+      "commit": "d177ae2b48b4dfebf8ad0ddae51a345b3e17d99e",
+      "license": "CC BY-SA 4.0",
+      "manifest": "benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests/engineering-handbook.json",
+      "manifest_sha256": "cb47bb899b4a3850f9fbc8fb964430cdbc3e6dce207e8b4d77278c1bf7642156",
+      "snapshot_sha256": "594aa47760172eba049e18c5f3a2f602a7b96b73a315756876955d7be81cd402"
+    },
+    "openchain-reference-material": {
+      "commit": "62a42b6e6267f68f053787c88ec944c82c0e2f0d",
+      "license": "CC0 for covered repository reference material",
+      "manifest": "benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests/openchain.json",
+      "manifest_sha256": "4d148ab5f782873b76670e32f32f2a9b8e00da9aac23b5f5e230800dfec893cd",
+      "snapshot_sha256": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b"
+    },
+    "thealgorithms-python": {
+      "commit": "a381578994d545e44f26afabbd2303746a2dc358",
+      "license": "MIT",
+      "manifest": "benchmarks/velgraphing-corpus-pilot-v1/corpus/manifests/thealgorithms-python.json",
+      "manifest_sha256": "ca4337fa17f5409b2617f45e3ac938a44bc977e52de5ed2c9252ca9afc47c038",
+      "snapshot_sha256": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
+    }
+  },
+  "dispatch_order": [
+    "A-S-01", "B-S-01", "C-S-01", "D-S-01",
+    "B-D-01", "C-D-01", "D-D-01", "A-D-01",
+    "C-L-01", "D-L-01", "A-L-01", "B-L-01",
+    "D-M-02", "A-M-02", "B-M-02", "C-M-02"
+  ],
+  "execution_gates": [
+    "sixteen_unique_answer_host_thread_ids_frozen",
+    "sixteen_unique_grader_host_thread_ids_frozen",
+    "exact_host_argv_arrays_frozen",
+    "provider_authority_separately_confirmed"
+  ],
+  "jev": {
+    "candidate_membership": "frozen_verified_shortlist_only",
+    "decision_bindings": {
+      "B-D-01": "b6a6479253826c3a566f44220b20b805ea45b73f3caa9b3c9b67db1c15b2c611",
+      "B-L-01": "c048ccb1bb78a8fdd540b63887d843f72078e0a3f6768f878bd4e7fbc2940c9e",
+      "B-M-02": "76daad1112c0175a09ace8bc59069106c21c143de32565c51120cba88e339d16",
+      "B-S-01": "41e4ab1956ccc2df624cd75b8fc7e746fff38c5c79f36e3b22b788c090959be0",
+      "D-D-01": "7882c10834379e5c0903e388bd25a731a510f8ffc625cfb39d54c2b41af75b0f",
+      "D-L-01": "a07a344e3edb4521e4575df5709c1f488a8d587bd564c90d764b91a90b7a3f10",
+      "D-M-02": "eeec619b35c7f7d04ce559337d9e4b4d96214334eca850fb229fb70cfbbaa184",
+      "D-S-01": "7f6e78b023af26ce09679e8ed05a34611b11eacb7c087441184df28cc64a1baa"
+    },
+    "max_calls": 8,
+    "model": "jev-1.13.0",
+    "planned_calls": 8,
+    "planned_trials": [
+      "B-S-01", "D-S-01", "B-D-01", "D-D-01",
+      "D-L-01", "B-L-01", "D-M-02", "B-M-02"
+    ],
+    "retries": 0,
+    "rate_usd_per_million_request_bytes": "0.042",
+    "request_byte_set_sha256": "80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94",
+    "request_bytes": 758130,
+    "skip_rule": "skip_only_when_offline_select_ranked_context_preflight_proves_jev_call_could_affect_selection_false",
+    "skipped_trials": [],
+    "total_reservation_usd": "0.359789241"
+  },
+  "implementation_bindings": {
+    "answer_response_contract_sha256": "94f0ec4a1da728b185f8ccfe1b0054e718cf2ebc16179b6a12dcb5897e165bbf",
+    "corpus_materializer": {"path": "scripts/benchmarks/velgraphing_corpus_pilot_v1.py", "sha256": "338592c3464e87aaa6c75df85c7ddec53326f690afc7b4acd3dc434eeb1a26c7"},
+    "grader_response_contract_sha256": "856123bc47978196784c49c1258f8f548f1a29ae4d787182ecf07bf5aed31882",
+    "graph_find_adapter": {"path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "sha256": "5f62bbd9194250c177616ac9198ffc4b27d483b9a5ff1c2f5742e3e0e4505021"},
+    "handoff": {"path": "scripts/benchmarks/time_to_correct_handoff.py", "sha256": "70c741a85785147fe36a327457eda188f22b909cc7517916664d926e22b2b0c0"},
+    "host": {"path": "scripts/benchmarks/time_to_correct_host.py", "sha256": "4e89e9283870ca164a9a82fb93d65b60c9027b76d85ef5e99670d278e1fa1393"},
+    "jev": {"path": "packages/core/jev.py", "sha256": "7daba616d59be40efc4a61f7d3561587316b0bf476e9182cbf041fdc712c9c09"},
+    "retrieval": {"path": "packages/core/retrieval.py", "sha256": "91e289ab900b4c0a0f6460d0c6b1460efe28c5cb4f59d7c50f9bf1300817ffbe"},
+    "selection": {"path": "packages/core/selection.py", "sha256": "78066fdb0d569ca093d2448f48902ed6e195f072f69cc2320ccaab1e0fc60ea2"}
+  },
+  "lane_boundary": {
+    "answer_input": ["question", "instructions", "evidence", "response_contract"],
+    "answer_must_not_receive": ["rubric", "oracle", "treatment", "arm", "route", "jev", "provider", "scores"],
+    "grader_input": ["answer_text", "rubric", "response_contract"],
+    "grader_must_not_receive": ["question", "source_bodies", "treatment", "arm", "route", "jev", "provider"],
+    "oracle_labels_available_to_answer": false,
+    "treatment_labels_available_to_answer": false,
+    "treatment_labels_available_to_grader": false
+  },
+  "lane_identity_contract": {
+    "answer": {"count": 16, "logical_id": "answer:{trial_id}", "model": "gpt-5.6-luna", "reasoning": "medium"},
+    "argv_contract": "exact_handoff_wait_argv_v1",
+    "grader": {"count": 16, "logical_id": "grader:{trial_id}", "model": "gpt-6-astra", "reasoning": "high"},
+    "fresh_no_history": true,
+    "handoff_schema": "velgraphing-v4-luna-lane-manifest-v1",
+    "host_thread_id": "unique_nonempty_value_required_and_frozen_before_execution",
+    "reuse": false
+  },
+  "product": {
+    "commit": "4a4c7bf4f8f000db507117909610fb25bf929949",
+    "package_candidate_sha256": "f47d377d6a51d66cd6b790f5d4a900f41719877b84def61e08bc548a5673e4c1",
+    "package_name": "graph-engineering",
+    "package_version": "0.1.6",
+    "repository": "Vel-Labs/velGraphing"
+  },
+  "prompt_bindings": {
+    "D-01": {"bytes": 176, "sha256": "9f78389e75c8157d2aeb78891ee35a80a51337b8f9de8ac1837b10834d71ef59"},
+    "L-01": {"bytes": 352, "sha256": "d55f40ac1b3798a2e10651a4c8bb0c1354e33bba02ebd67f3e344367f86d6bc7"},
+    "M-02": {"bytes": 389, "sha256": "16fe87964cfa989649b0b914347f6d3308affe9b307dab710ed2bc80d8d63482"},
+    "S-01": {"bytes": 246, "sha256": "62cf41752a1ad335882aa8c9cf194e2bf2c4754a09a57973b5c1cb539c8620c9"}
+  },
+  "public_source_only": true,
+  "schema_version": "velgraphing-four-arm-freeze-v1",
+  "status": "phase_3a_adapter_qualified_pending_lane_manifest_and_provider_authority",
+  "study_id": "velgraphing-four-arm-study-v1",
+  "tasks": ["S-01", "D-01", "L-01", "M-02"],
+  "telemetry_schema": {
+    "failure": ["failure_class", "missingness"],
+    "quality": ["accepted_correctness", "first_pass_correctness"],
+    "time_ms": [
+      "user_visible_wall", "user_visible_wall_excluding_operator_approval",
+      "discovery", "graph_build", "graph_load", "source_capture", "provider",
+      "selection_and_context_composition", "answer", "grading", "fallback_and_repair",
+      "operator_approval"
+    ],
+    "usage": [
+      "answer_input_tokens", "answer_output_tokens", "answer_cached_input_tokens",
+      "grader_input_tokens", "grader_output_tokens", "grader_cached_input_tokens",
+      "provider_input_tokens", "provider_output_tokens", "provider_cached_input_tokens",
+      "provider_cost_usd", "request_bytes", "context_bytes"
+    ],
+    "unknown_policy": "Every unavailable value is null with an explicit missingness reason; never infer tokens from bytes."
+  },
+  "terms_boundary": {
+    "provider_performance_publication": "forbidden_without_separate_provider_permission",
+    "public_freeze_may_describe": "protocol_controls_and_zero_provider_calls_only",
+    "results": "provider_performance_detail_remains_private_even_if_other_study_results_are_retained"
+  }
+}

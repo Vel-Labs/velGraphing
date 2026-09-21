@@ -1,6 +1,7 @@
 """Offline qualification for the 24-trial calibration coordinator."""
 from copy import deepcopy
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -16,7 +17,7 @@ from time_to_correct import (Budget, MeasurementError, Trial, canonical, digest,
 from time_to_correct_calibration import (HANDOFF_PATH, LiveJevBudget, bind_controller,
                                          calibration_run_root, controller_identity,
                                          finish_workers, fixture_identity,
-                                         jev_answer_payload, load_calibration, load_pilot,
+                                         handoff_argv, jev_answer_payload, load_calibration, load_pilot,
                                          qualify,
                                          PREPARATION_RESPONSE_CONTRACT,
                                          request_candidates, require_resumable, revalidate_lane,
@@ -28,6 +29,7 @@ from time_to_correct_handoff import (
     COMPLETION_ATTESTATION,
     HandoffError,
     MAX_BYTES,
+    RAW_ASSISTANT_RESPONSE,
     attest_draft,
     normalize_json_object,
     read_attested_draft,
@@ -42,6 +44,7 @@ def write_lane_manifest(
     root: Path, trial_id: str, role: str, thread_id: str,
     model: str = "gpt-5.6-luna", reasoning: str = "medium",
 ) -> str:
+    root.mkdir(parents=True, exist_ok=True)
     command = [sys.executable, "-c", "pass"]
     raw = canonical({
         "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
@@ -57,6 +60,38 @@ def write_lane_manifest(
     })
     (root / "lane-manifest.json").write_bytes(raw)
     return digest(raw)
+
+
+def write_lane_request(root: Path, identity: dict[str, str]) -> None:
+    contract = deepcopy(ANSWER_RESPONSE_CONTRACT)
+    schema = contract["json_schema"]
+    schema["required"].append("execution_identity")
+    schema["properties"]["execution_identity"] = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": sorted(identity),
+        "properties": {key: {"const": value} for key, value in identity.items()},
+    }
+    lane = (
+        root / "trials" / identity["trial_id"] / "attempt-0" / identity["role"]
+    )
+    lane.mkdir(parents=True, exist_ok=True)
+    (lane / "request.json").write_bytes(canonical({"response_contract": contract}))
+
+
+T310_RAW_RESPONSE = (
+    b'{"schema_version":"velgraphing-answer-output-v1","answer_text":"'
+    b'`quick_sort([3, 1, 2])` removes one randomly chosen pivot from the original '
+    b'input list using `pop`, so the input is left with the other two elements. It '
+    b'returns `[1, 2, 3]`. For each recursive partition, it puts remaining items '
+    b'`<= pivot` into a `lesser` list and items `> pivot` into a `greater` list, '
+    b'recursively sorts both, then combines them around the pivot. When a collection '
+    b'has fewer than two elements, it returns that collection unchanged. Source: '
+    b'`sorts/quick_sort.py` [c1]","usage":null,"model_calls_complete":true,'
+    b'"context_deliveries_complete":true,"execution_identity":{"model":'
+    b'"gpt-5.6-luna","reasoning":"medium","role":"answer","thread_id":'
+    b'"01a0c3b9-3309-7500-a3ad-6cc713dcf659","trial_id":"INLINE-CANARY"}}'
+)
 
 
 class CalibrationTests(unittest.TestCase):
@@ -216,6 +251,41 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(answer["response_contract"], ANSWER_RESPONSE_CONTRACT)
         self.assertEqual(grader["response_contract"], GRADER_RESPONSE_CONTRACT)
 
+    def test_handoff_argv_binds_optional_absolute_python(self):
+        root = self.local_root / "transport-contract"
+        executable = Path(sys.executable).resolve()
+        self.assertEqual(handoff_argv(root, "trial", "answer", 1)[0], sys.executable)
+        self.assertEqual(
+            handoff_argv(root, "trial", "answer", 1, executable)[0], str(executable)
+        )
+        with self.assertRaisesRegex(MeasurementError, "python_executable_invalid"):
+            handoff_argv(root, "trial", "answer", 1, Path("python3"))
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            inert = Path(raw) / "python"
+            inert.write_text("not executable", encoding="utf-8")
+            with self.assertRaisesRegex(MeasurementError, "python_executable_invalid"):
+                handoff_argv(root, "trial", "answer", 1, inert)
+
+    def test_fixture_worker_executes_with_fixed_credential_free_environment(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            executable = Path(sys.executable).resolve()
+            with (
+                patch.dict(os.environ, {"TYPESAFE_API_KEY": "must-not-cross-boundary"}),
+                patch("time_to_correct_calibration.subprocess.Popen", wraps=subprocess.Popen) as launch,
+            ):
+                worker = start_fixture_worker(root, "safe-env", "answer", python_executable=executable)
+                completed = subprocess.run(
+                    handoff_argv(root, "safe-env", "answer", 1, executable),
+                    cwd=ROOT, env={}, input=canonical({"identity": {"answer_model": "fixture-model"}}),
+                    capture_output=True, check=False,
+                )
+                finish_workers([worker])
+            child_env = launch.call_args_list[0].kwargs["env"]
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(child_env, {"PATH": os.defpath, "PYTHONIOENCODING": "utf-8"})
+        self.assertNotIn("TYPESAFE_API_KEY", child_env)
+
     def test_file_handoff_records_exact_request_and_response_hashes(self):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
             root = Path(raw) / "run"
@@ -269,6 +339,180 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual((completed.returncode, completed.stderr), (0, b""))
         self.assertEqual(published, response)
         self.assertEqual(draft_value["answer"], "published")
+
+    def test_host_response_capture_preserves_bytes_and_attestation_is_immutable(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            trial_id = "INLINE-CANARY"
+            thread_id = "01a0c3b9-3309-7500-a3ad-6cc713dcf659"
+            lane = root / f"trials/{trial_id}/attempt-0/answer"
+            manifest_sha256 = write_lane_manifest(
+                root, trial_id, "answer", thread_id
+            )
+            identity = {
+                "trial_id": trial_id, "role": "answer",
+                "thread_id": thread_id, "model": "gpt-5.6-luna",
+                "reasoning": "medium",
+            }
+            write_lane_request(root, identity)
+            response = T310_RAW_RESPONSE
+            self.assertEqual(len(response), 786)
+            self.assertEqual(
+                digest(response),
+                "591f2d3ee65167f5f260b26084014b5374a5b52259ef6c3733449d808057ffc6",
+            )
+            command = [
+                sys.executable, str(HANDOFF_PATH), "capture",
+                "--run-root", str(root), "--trial-id", trial_id,
+                "--attempt", "0", "--lane", "answer",
+                "--thread-id", thread_id, "--model", "gpt-5.6-luna",
+                "--reasoning", "medium", "--lane-manifest-sha256", manifest_sha256,
+                "--thread-status", "completed",
+            ]
+            captured = subprocess.run(
+                command, cwd=ROOT, env={}, input=response,
+                capture_output=True, check=False,
+            )
+            draft = lane / "draft.json"
+            captured_value = json.loads(captured.stdout)
+            canonical_response = canonical(json.loads(response))
+            raw_artifact = lane / RAW_ASSISTANT_RESPONSE
+            self.assertEqual(raw_artifact.read_bytes(), response)
+            self.assertEqual(draft.read_bytes(), canonical_response)
+            self.assertEqual(json.loads(draft.read_bytes()), json.loads(response))
+            attested = subprocess.run(
+                [sys.executable, str(HANDOFF_PATH), "attest",
+                 "--run-root", str(root), "--trial-id", trial_id,
+                 "--attempt", "0", "--lane", "answer", "--draft-file", str(draft),
+                 "--thread-id", thread_id, "--model", "gpt-5.6-luna",
+                 "--reasoning", "medium", "--lane-manifest-sha256", manifest_sha256,
+                 "--thread-status", "completed", "--draft-status", "stable-final"],
+                cwd=ROOT, env={}, capture_output=True, check=False,
+            )
+            changed = {**json.loads(response), "answer_text": "changed"}
+            draft.write_bytes(canonical(changed))
+            rejected = subprocess.run(
+                [sys.executable, str(HANDOFF_PATH), "respond",
+                 "--run-root", str(root), "--trial-id", trial_id,
+                 "--attempt", "0", "--lane", "answer", "--response-file", str(draft),
+                 "--thread-id", thread_id, "--model", "gpt-5.6-luna",
+                 "--reasoning", "medium", "--lane-manifest-sha256", manifest_sha256],
+                cwd=ROOT, env={}, capture_output=True, check=False,
+            )
+        self.assertEqual((captured.returncode, captured.stderr), (0, b""))
+        self.assertEqual(captured_value["raw_sha256"], digest(response))
+        self.assertEqual(captured_value["draft_sha256"], digest(canonical_response))
+        self.assertEqual(
+            captured_value["draft_sha256"],
+            "1a455f9f43b064fe555edafb0da12f137865b35b5f7919ae57a2840204635866",
+        )
+        self.assertEqual((attested.returncode, attested.stderr), (0, b""))
+        self.assertEqual(rejected.returncode, 3)
+        self.assertIn(b"completion_attestation_draft_changed", rejected.stderr)
+
+    def test_host_response_capture_rejects_invalid_content_boundaries(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            cases = (
+                ("empty", b"", b"host_response_empty"),
+                ("oversize", b"{" + b" " * MAX_BYTES, b"handoff_file_invalid"),
+                ("invalid", b"{", b"invalid_json_object"),
+                ("prose", b'{} trailing', b"invalid_json_object"),
+                ("array", b"[]", b"invalid_json_object"),
+            )
+            for trial_id, response, reason in cases:
+                lane = root / "trials" / trial_id / "attempt-0" / "answer"
+                lane.mkdir(parents=True)
+                manifest_sha256 = write_lane_manifest(
+                    root, trial_id, "answer", f"thread-{trial_id}"
+                )
+                completed = subprocess.run(
+                    [sys.executable, str(HANDOFF_PATH), "capture",
+                     "--run-root", str(root), "--trial-id", trial_id,
+                     "--attempt", "0", "--lane", "answer",
+                     "--thread-id", f"thread-{trial_id}",
+                     "--model", "gpt-5.6-luna", "--reasoning", "medium",
+                     "--lane-manifest-sha256", manifest_sha256,
+                     "--thread-status", "completed"],
+                    cwd=ROOT, env={}, input=response,
+                    capture_output=True, check=False,
+                )
+                self.assertEqual(completed.returncode, 3)
+                self.assertIn(reason, completed.stderr)
+                self.assertFalse((lane / "draft.json").exists())
+                self.assertEqual(
+                    (lane / RAW_ASSISTANT_RESPONSE).exists(),
+                    trial_id not in {"empty", "oversize"},
+                )
+
+    def test_host_response_capture_rejects_contract_identity_and_existing_artifacts(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            base = json.loads(T310_RAW_RESPONSE)
+            for trial_id, change in (
+                ("missing", lambda value: value.pop("usage")),
+                ("extra", lambda value: value.update({"extra": True})),
+                ("identity", lambda value: value["execution_identity"].update(
+                    {"thread_id": "wrong-thread"}
+                )),
+            ):
+                thread_id = f"thread-{trial_id}"
+                identity = {
+                    "trial_id": trial_id, "role": "answer", "thread_id": thread_id,
+                    "model": "gpt-5.6-luna", "reasoning": "medium",
+                }
+                value = deepcopy(base)
+                value["execution_identity"] = dict(identity)
+                change(value)
+                manifest_sha256 = write_lane_manifest(
+                    root, trial_id, "answer", thread_id
+                )
+                write_lane_request(root, identity)
+                lane = root / "trials" / trial_id / "attempt-0" / "answer"
+                completed = subprocess.run(
+                    [sys.executable, str(HANDOFF_PATH), "capture",
+                     "--run-root", str(root), "--trial-id", trial_id,
+                     "--attempt", "0", "--lane", "answer",
+                     "--thread-id", thread_id, "--model", "gpt-5.6-luna",
+                     "--reasoning", "medium",
+                     "--lane-manifest-sha256", manifest_sha256,
+                     "--thread-status", "completed"],
+                    cwd=ROOT, env={}, input=json.dumps(value).encode(),
+                    capture_output=True, check=False,
+                )
+                self.assertEqual(completed.returncode, 3)
+                self.assertIn(b"host_response_contract_invalid", completed.stderr)
+                self.assertTrue((lane / RAW_ASSISTANT_RESPONSE).is_file())
+                self.assertFalse((lane / "draft.json").exists())
+
+            for existing in (RAW_ASSISTANT_RESPONSE, "draft.json"):
+                trial_id = f"existing-{existing.split('.')[0]}"
+                thread_id = f"thread-{trial_id}"
+                identity = {
+                    "trial_id": trial_id, "role": "answer", "thread_id": thread_id,
+                    "model": "gpt-5.6-luna", "reasoning": "medium",
+                }
+                manifest_sha256 = write_lane_manifest(
+                    root, trial_id, "answer", thread_id
+                )
+                write_lane_request(root, identity)
+                lane = root / "trials" / trial_id / "attempt-0" / "answer"
+                (lane / existing).write_bytes(b"existing")
+                value = deepcopy(base)
+                value["execution_identity"] = identity
+                completed = subprocess.run(
+                    [sys.executable, str(HANDOFF_PATH), "capture",
+                     "--run-root", str(root), "--trial-id", trial_id,
+                     "--attempt", "0", "--lane", "answer",
+                     "--thread-id", thread_id, "--model", "gpt-5.6-luna",
+                     "--reasoning", "medium",
+                     "--lane-manifest-sha256", manifest_sha256,
+                     "--thread-status", "completed"],
+                    cwd=ROOT, env={}, input=canonical(value),
+                    capture_output=True, check=False,
+                )
+                self.assertEqual(completed.returncode, 3)
+                self.assertIn(b"handoff_file_exists", completed.stderr)
 
     def test_response_normalization_canonicalizes_nested_keys_from_stdin_and_draft(self):
         raw = (

@@ -24,6 +24,7 @@ except ImportError:
 
 ANSWER_OUTPUT_VERSION = "velgraphing-answer-output-v1"
 GRADER_OUTPUT_VERSION = "velgraphing-grader-output-v1"
+SUCCESSOR_GRADER_OUTPUT_VERSION = "velgraphing-grader-output-v2"
 USAGE_KEYS = {
     "model", "provenance", "input_tokens", "output_tokens",
     "cached_input_tokens", "reasoning_output_tokens", "cost_usd",
@@ -54,15 +55,20 @@ def _answer_input(prepared: Mapping[str, Any]) -> dict[str, Any]:
         for index, row in enumerate(raw_evidence):
             if type(row) is not dict:
                 raise MeasurementError("invalid_answer_evidence")
-            candidate_id = row.get("id", f"s{index}")
+            source_candidate_id = row.get("id", f"s{index}")
             path = row.get("path")
             excerpt = row.get("excerpt")
             if (
-                type(candidate_id) is not str or not candidate_id
+                type(source_candidate_id) is not str or not source_candidate_id
                 or type(path) is not str or not path
                 or type(excerpt) is not str
             ):
                 raise MeasurementError("invalid_answer_evidence")
+            candidate_id = (
+                f"c{index + 1}"
+                if prepared.get("schema_version") == "velgraphing-answer-evidence-v3"
+                else source_candidate_id
+            )
             selected: dict[str, Any] = {
                 "id": candidate_id,
                 "path": path,
@@ -113,17 +119,34 @@ def _answer_input(prepared: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _grader_input(answer_text: str, context: Mapping[str, Any] | None) -> dict[str, Any]:
+def _grader_input(answer_text: str, context: Mapping[str, Any] | None,
+                  evidence_sources: Mapping[str, str] | None = None) -> dict[str, Any]:
     context = context or {}
     rubric = {
         key: _string_list(context.get(key, []), "invalid_grader_rubric")
         for key in ("required_facts", "critical_facts", "acceptable_spans")
     }
-    return {
-        "schema_version": "velgraphing-grader-model-input-v1",
+    result = {
+        "schema_version": (
+            "velgraphing-grader-model-input-v2"
+            if evidence_sources is not None else "velgraphing-grader-model-input-v1"
+        ),
         "answer_text": answer_text,
         "rubric": rubric,
     }
+    if evidence_sources is not None:
+        if (
+            type(evidence_sources) is not dict
+            or any(
+                type(candidate_id) is not str
+                or re.fullmatch(r"(?:[a-f0-9]{64}|c[0-9]+)", candidate_id) is None
+                or type(path) is not str or not path
+                for candidate_id, path in evidence_sources.items()
+            )
+        ):
+            raise MeasurementError("invalid_grader_evidence_sources")
+        result["evidence_sources"] = dict(evidence_sources)
+    return result
 
 
 def _response_contract(properties: Mapping[str, Any]) -> dict[str, Any]:
@@ -201,6 +224,16 @@ GRADER_RESPONSE_CONTRACT = _response_contract({
     "usage": {"type": ["object", "null"], "description": USAGE_DESCRIPTION},
     "model_calls_complete": {
         "type": "boolean", "description": MODEL_CALLS_COMPLETE_DESCRIPTION,
+    },
+})
+
+SUCCESSOR_GRADER_RESPONSE_CONTRACT = _response_contract({
+    **GRADER_RESPONSE_CONTRACT["json_schema"]["properties"],
+    "schema_version": {"const": SUCCESSOR_GRADER_OUTPUT_VERSION},
+    "required_fact_decisions": {
+        "type": "array",
+        "items": {"type": "boolean"},
+        "description": "One satisfied decision for each required fact in rubric order.",
     },
 })
 
@@ -328,6 +361,10 @@ def run_process_trial(
     grader_identity = _execution_identity(grader_execution_identity, "grader")
     answer_contract = _identified_contract(answer_response_contract, answer_identity)
     grader_contract = _identified_contract(grader_response_contract, grader_identity)
+    successor_grader = (
+        grader_contract is not None
+        and "required_fact_decisions" in grader_contract["json_schema"]["properties"]
+    )
     if answer_contract is not None and answer_identity is not None:
         answer_contract = dict(answer_contract)
         answer_schema = dict(answer_contract["json_schema"])
@@ -362,6 +399,12 @@ def run_process_trial(
                 "type": "integer", "const": required_fact_maximum,
                 "description": "Frozen rubric required_facts count.",
             }
+            if successor_grader:
+                properties["required_fact_decisions"] = {
+                    **properties["required_fact_decisions"],
+                    "minItems": required_fact_maximum,
+                    "maxItems": required_fact_maximum,
+                }
         if expected_grader_id is not None:
             properties["grader_id"] = {
                 "const": expected_grader_id,
@@ -374,7 +417,10 @@ def run_process_trial(
         schema["properties"] = properties
         grader_contract["json_schema"] = schema
 
+    grader_evidence_sources: dict[str, str] | None = None
+
     def answer(t: Trial, prepared: Mapping[str, Any], attempt: int) -> Answer:
+        nonlocal grader_evidence_sources
         if type(prepared) is not dict:
             raise MeasurementError("invalid_answer_input")
         payload = _answer_input(prepared)
@@ -398,8 +444,13 @@ def run_process_trial(
         if answer_identity is not None and output["execution_identity"] != answer_identity:
             raise MeasurementError("answer_execution_identity_mismatch")
         if prepared.get("schema_version") == "velgraphing-answer-evidence-v3":
-            allowed = {row.get("id") for row in prepared.get("evidence", [])
-                       if type(row) is dict and type(row.get("id")) is str}
+            grader_evidence_sources = {
+                row["id"]: row["path"] for row in payload["evidence"]
+            }
+            if len(grader_evidence_sources) != len(payload["evidence"]):
+                raise MeasurementError("invalid_answer_evidence")
+            _grader_input("", {}, grader_evidence_sources)
+            allowed = set(grader_evidence_sources)
             cited = re.findall(r"\[((?:[a-f0-9]{64})|(?:c[0-9]+))\]", output["answer_text"])
             if require_answer_evidence_citation and not cited:
                 raise MeasurementError("answer_evidence_citation_missing")
@@ -420,7 +471,10 @@ def run_process_trial(
         return Answer(output["answer_text"])
 
     def grade(t: Trial, produced: Answer, attempt: int) -> Grade:
-        payload = _grader_input(produced.content, grader_context)
+        payload = _grader_input(
+            produced.content, grader_context,
+            grader_evidence_sources if successor_grader else None,
+        )
         if grader_contract is not None:
             payload["response_contract"] = grader_contract
         if grader_context is not None:
@@ -431,9 +485,14 @@ def run_process_trial(
             "critical_facts_exact", "unsupported_material_claims", "grader_id",
             "usage", "model_calls_complete",
         }
+        if successor_grader:
+            expected.add("required_fact_decisions")
         if grader_identity is not None:
             expected.add("execution_identity")
-        if set(output) != expected or output["schema_version"] != GRADER_OUTPUT_VERSION:
+        expected_version = (
+            SUCCESSOR_GRADER_OUTPUT_VERSION if successor_grader else GRADER_OUTPUT_VERSION
+        )
+        if set(output) != expected or output["schema_version"] != expected_version:
             raise MeasurementError("invalid_grader_output")
         if type(output["model_calls_complete"]) is not bool:
             raise MeasurementError("invalid_grader_output")
@@ -466,6 +525,18 @@ def run_process_trial(
             raise MeasurementError("grader_required_fact_maximum_mismatch")
         if reported_maximum <= 0 or not 0 <= required_score <= reported_maximum:
             raise MeasurementError("invalid_grader_output")
+        if successor_grader:
+            decisions = output["required_fact_decisions"]
+            if (
+                type(decisions) is not list
+                or any(type(decision) is not bool for decision in decisions)
+                or len(decisions) != reported_maximum
+                or sum(decisions) != required_score
+            ):
+                raise MeasurementError("grader_required_fact_decisions_mismatch")
+            t._attempt().setdefault("grader_boundary", {})[
+                "required_fact_decisions"
+            ] = list(decisions)
         recall = required_score / reported_maximum
         passed = (recall >= t.pass_recall_min and output["critical_facts_exact"] is True
                   and output["unsupported_material_claims"] == 0)
