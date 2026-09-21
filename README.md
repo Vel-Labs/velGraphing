@@ -1,10 +1,15 @@
-# VelGraphing
+# RetrieVel
 
 Source-verified graph navigation for coding agents.
 
-VelGraphing helps an agent decide where to look, retrieves exact source spans,
-and falls back to direct source when graph evidence is incomplete. Source files
-remain authoritative. The graph is a derived navigation layer.
+RetrieVel is the public name for the product formerly called VelGraphing. It
+helps an agent decide where to look, retrieves exact source spans, and keeps
+repository source authoritative. The repository remains named `velGraphing`
+through the 0.2.x line. The plugin and Python package ID remains
+`graph-engineering`.
+
+See [product identity and compatibility](docs/architecture/PRODUCT_IDENTITY_AND_COMPATIBILITY.md)
+for stable identifiers and migration rules.
 
 ## Commands
 
@@ -17,8 +22,23 @@ remain authoritative. The graph is a derived navigation layer.
 | `/graph-benchmark` | Compare Direct and Graph-assisted repository work. |
 | `/graph-jev` | Configure, preview, and test optional Jev evidence reranking. |
 
-The public product name is **VelGraphing**. The compatibility plugin and Python
-package ID remains `graph-engineering` for the `0.1.x` line.
+The public display name is **RetrieVel**, formerly VelGraphing. The repository
+name and plugin and Python package ID remain stable during this transition.
+
+## Retrieval path
+
+RetrieVel scans eligible Git-tracked source files and verifies source identity
+and spans. It expands typed relationships only when source evidence supports
+them. It selects a bounded, ranked context from verified spans. When graph
+evidence is incomplete, it can use caller-declared direct-source fallback. If
+the fallback is unavailable or incomplete, the route defers. Optional Jev can
+rerank a verified shortlist. It cannot add evidence or grant authority.
+
+These statements describe implemented behavior. They do not establish general
+correctness, wall-clock, token, cost, or provider-performance improvements.
+The retained four-arm result is directional diagnostic evidence only. The
+corpus pilot does not establish wall-clock savings. See the
+[benchmark evidence index](benchmarks/README.md) for the exact boundaries.
 
 ## Install
 
@@ -49,7 +69,7 @@ writes project files, use the rollback list that command reports.
 
 ## Orchestration Adapters
 
-VelGraphing includes an optional catalog adapter for
+RetrieVel includes an optional catalog adapter for
 [Orcastrata Max](https://github.com/Vel-Labs/orcastrata-max). It converts the
 canonical Orcastrata umbrella catalog into navigation context for umbrella,
 repository, WorkGraph, and GoalBuddy references. Source remains authoritative.
@@ -74,10 +94,11 @@ It includes the official TypeSafe skill setup, an offline demo, and advanced
 JSON question-design guidance. For implementation and local testing, use the
 [Codex handoff](docs/jev/CODEX_HANDOFF.md). Preserve the historical evidence below.
 
-## Current Evidence
+## Retained Evidence
 
-The current read-only evaluations rejected the Hybrid candidate under their
-predeclared gates. This is useful negative evidence, not a performance claim.
+The retained read-only evaluations rejected the Hybrid candidate under their
+predeclared gates. These are bounded historical observations, not general
+performance claims.
 
 | Evaluation | Direct fact / critical recall | Hybrid fact / critical recall | Context | Verdict |
 | --- | ---: | ---: | ---: | --- |
@@ -166,7 +187,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.p
 
 ## Boundaries
 
-VelGraphing does not replace repository source, grant write authority, or prove
+RetrieVel does not replace repository source, grant write authority, or prove
 that an answer is correct. Graph scores are retrieval diagnostics, not
 confidence or authority. Cross-project federation, background services,
 publication, and consumer adoption require separate proof.
@@ -180,4 +201,5 @@ no network, provider, repository-write, or persistent-index operation.
 
 ## License
 
-VelGraphing is available under the Apache License 2.0. See [LICENSE](LICENSE).
+RetrieVel, formerly VelGraphing, is available under the Apache License 2.0.
+See [LICENSE](LICENSE).
