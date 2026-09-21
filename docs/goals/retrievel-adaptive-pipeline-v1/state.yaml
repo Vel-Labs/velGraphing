@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T140
+active_task: T150
 
 tasks:
   - id: T010
@@ -850,7 +850,7 @@ tasks:
   - id: T140
     type: pm
     assignee: PM
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Define the smallest true time-to-correct successor contract before freezing or spending live calls."
     inputs:
@@ -870,6 +870,53 @@ tasks:
       - "Exact attempt, repair, fallback, usage, and wall-clock accounting"
       - "One bounded implementation package for the established implementation task"
       - "A decision on whether the armed authorization is sufficient for the newly hash-bound request set"
+    receipt:
+      result: done
+      decision: "approved_verified_source_fallback_successor"
+      full_outcome_complete: false
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Read-only Luna inspection of Trial, controller, host, manifest, repair, fallback, and telemetry flow at 0899d19"
+          status: pass
+      summary: "Selected one pre-answer deterministic source-completeness check and one common frozen direct-source fallback. The successor keeps one answer and one independent grade per trial, zero answer repairs, 32 fresh model lanes, at most eight zero-retry Jev calls, and explicit null usage when providers do not report tokens. The hidden witness map is a benchmark-only diagnostic oracle; it is not a product capability or production routing claim. The prior armed phrase cannot bind a not-yet-created request and manifest hash, so exact re-acknowledgment is required after the successor freeze exists."
+      spawned_tasks:
+        - T150
+  - id: T150
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: medium
+    objective: "Implement and freeze the successor time-to-correct verified-fallback contract without running live lanes."
+    allowed_files:
+      - scripts/benchmarks/four_arm_study_v1.py
+      - scripts/benchmarks/time_to_correct_calibration.py
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - tests/benchmarks/test_four_arm_study_v1.py
+    verify:
+      - "python -m unittest tests.benchmarks.test_four_arm_study_v1 tests.benchmarks.test_time_to_correct_calibration -v"
+      - "python3 scripts/benchmarks/four_arm_study_v1.py validate --root benchmarks/velgraphing-four-arm-study-v1"
+      - "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1"
+      - "git diff --check"
+    stop_if:
+      - "The work requires changing historical freeze.json, questions.json, rubrics.json, preflight.json, prior manifests, or sealed results."
+      - "Any frozen fact witness is unresolved or any fallback exceeds the existing 16 KiB final-context limit."
+      - "Answer or grader input receives an arm label, route label, Jev label, hidden rubric fact, or verifier fact label."
+      - "The implementation requires more than one answer or one grade per trial."
+      - "Any provider, answer, or grader call would occur."
+    constraints:
+      - "Reuse the current controller, Trial receipts, source revalidation, and lane custody."
+      - "Bind successor rubric, grader contract, controller, host, source snapshots, private pool, verifier policy, fallback allowlist, request-byte set, and fresh 32-entry lane manifest identities."
+      - "Use one common source-verified direct fallback policy across all four arms before the only answer call."
+      - "Keep final context within 16 KiB and fail closed when required support cannot fit."
+      - "Record primary and final context identities and bytes, verifier outcome, fallback count and time, terminal wall time, confirmed TTC, calls, reported usage, and explicit missingness reasons."
+      - "Label the hidden witness map as benchmark-only diagnostic evidence, not a production capability."
+    expected_output:
+      - "One bounded benchmark-only commit on codex/retrievel-four-arm-study-v1"
+      - "Fresh successor contract and offline freeze validation"
+      - "Exact hashes and budget values needed for final operator re-acknowledgment"
+      - "No live calls"
     receipt: null
   - id: T999
     type: judge
@@ -894,15 +941,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch records accepted T130 scoring repair 0899d19 and activates T140 true time-to-correct successor design"
+  dirty_fingerprint: "custody branch records the T140 verified-fallback design and activates T150 successor freeze implementation"
   last_verification:
     result: pass
-    task: T130
+    task: T140
     commands:
-      - "31 focused benchmark and host tests passed."
-      - "Historical and successor-overlay validation passed with explicit validation scopes."
-      - "Independent Luna re-audit passed on commit 0899d19."
-      - "The benchmark branch is synchronized with origin; no provider, answer, or grader call occurred."
+      - "Read-only Luna analysis rejected answer retry as an unnecessary 64-lane redesign."
+      - "The selected diagnostic uses one common verified fallback before one answer and one grade per trial."
+      - "The successor live authority remains unbound until exact request-set and lane-manifest hashes exist."
+      - "No provider, answer, or grader call occurred."
 
 provider_budget:
   provider: typesafe_jev
