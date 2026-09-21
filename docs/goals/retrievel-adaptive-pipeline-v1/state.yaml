@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T120
+active_task: T130
 
 tasks:
   - id: T010
@@ -758,7 +758,7 @@ tasks:
   - id: T120
     type: judge
     assignee: Judge
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Attribute each missing required fact in D-01, L-01, and M-02 to candidate retrieval, final selection, answer composition, or rubric alignment, then select the smallest falsifiable corrective package."
     inputs:
@@ -776,6 +776,53 @@ tasks:
       - "Fact-level failure attribution matrix"
       - "Decision on whether the next change belongs in product, benchmark, lane instructions, or rubric"
       - "One bounded Worker package or a rejection"
+    receipt:
+      result: done
+      decision: revise_protocol_before_any_live_run
+      full_outcome_complete: false
+      note: notes/T120-fact-level-failure-attribution.md
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T120-fact-level-failure-attribution.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Read-only Luna attribution of frozen pools, selected answer evidence, public answers, rubrics, and controller flow"
+          status: pass
+      summary: "The sealed run has valid custody but an invalid scoring comparison. M-02 narrows an open choice to one answer, L/M citation facts cannot be verified from the grader payload, and arm A is an edge-disabled frozen-shortlist baseline. Graph/Jev did retain the D-01 quick_sort relation candidate and the public answer covered the question, but the grading contract prevents an efficacy claim."
+      spawned_tasks:
+        - T130
+  - id: T130
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: medium
+    objective: "Implement the smallest successor-only scoring and baseline repair proved by T120, with no provider calls and no edits to the sealed T110 artifacts."
+    allowed_files:
+      - benchmarks/velgraphing-four-arm-study-v1/README.md
+      - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+      - scripts/benchmarks/four_arm_study_v1.py
+      - scripts/benchmarks/time_to_correct_host.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - tests/benchmarks/test_time_to_correct_host.py
+    verify:
+      - "python -m unittest tests.benchmarks.test_time_to_correct_host tests.benchmarks.test_four_arm_study_v1 -v"
+      - "python3 scripts/benchmarks/four_arm_study_v1.py validate --root benchmarks/velgraphing-four-arm-study-v1"
+      - "git diff --check"
+    stop_if:
+      - "The repair requires changing freeze.json, rubrics.json, preflight.json, the sealed result, or provider artifacts."
+      - "The repair requires a provider, answer, or grader call."
+      - "The change alters product retrieval or selection code instead of the benchmark contract."
+    constraints:
+      - "Pass the evidence-ID-to-source mapping to the grader and validate cited IDs against it."
+      - "Make the successor grader return fact-level decisions whose count matches the aggregate score."
+      - "Make M-02 accept any source-supported documented playbook choice."
+      - "Make D-01 semantic criteria match the public question instead of frozen micro-phrasing."
+      - "Name arm A as an edge-disabled frozen-shortlist baseline, not ordinary Direct repository use."
+      - "Preserve all historical T110 hashes and custody evidence."
+    expected_output:
+      - "One benchmark-only commit on codex/retrievel-four-arm-study-v1"
+      - "Focused offline validation receipt"
+      - "No live calls"
     receipt: null
   - id: T999
     type: judge
@@ -800,14 +847,14 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch retains the sealed unresolved T110 result and activates T120 fact-level failure attribution"
+  dirty_fingerprint: "custody branch records the T120 protocol defects and activates the offline T130 scoring repair"
   last_verification:
     result: pass
-    task: T110
+    task: T120
     commands:
-      - "The observed controller sealed 16 terminal receipts with eight provider calls and zero retries."
-      - "A credential-free exact restart revalidated all receipt hashes and the same canonical seal."
-      - "Independent Luna audit passed custody and rejected any efficacy, token, cost, or TTC claim."
+      - "Read-only Luna attribution traced every D-01, L-01, and M-02 required fact across pool, final evidence, answer, and rubric layers."
+      - "The audit proved two rubric or grader-contract defects and one comparator-label defect."
+      - "No provider, answer, or grader call occurred."
 
 provider_budget:
   provider: typesafe_jev

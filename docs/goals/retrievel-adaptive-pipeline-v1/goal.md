@@ -126,6 +126,7 @@ budgets, required evidence, fallback, telemetry, and final context selection.
 | T100 | Run the exact installed live Jev canary under the aggregate dollar ledger. |
 | T110 | Run and seal the redesigned end-to-end four-arm study. |
 | T120 | Attribute the sealed study failures to retrieval, selection, answer composition, or rubric alignment before changing the product or benchmark. |
+| T130 | Repair the successor scoring and baseline contract offline without changing the sealed study. |
 | T999 | Run the final audit and Parent lifecycle closeout. |
 
 ## Stop and redesign rule
