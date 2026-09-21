@@ -5,7 +5,7 @@ goal:
   slug: retrievel-adaptive-pipeline-v1
   kind: existing_plan
   tranche: "Land the review candidates, then implement and validate the source-bound multi-language graph and optional Jev pipeline through successive verified milestones."
-  status: active
+  status: blocked
   oracle:
     signal: "The installed product passes source-authority, relation-coverage, projection, live-provider, and end-to-end time-to-correct gates on the final merged candidate."
     cadence: "After each Worker package and at each provider, benchmark, merge, and final-audit boundary."
@@ -40,6 +40,7 @@ rules:
   planning_is_not_completion: true
   queued_required_worker_blocks_completion: true
   continuous_until_full_outcome: true
+  pm_routes_safe_successors: true
   missing_input_or_credentials_do_not_stop_goal: true
   exact_human_approval_can_terminal_wait: true
   preserve_and_validate_existing_plan: true
@@ -64,7 +65,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T999
+active_task: null
 
 tasks:
   - id: T010
@@ -148,6 +149,19 @@ tasks:
       - "A truthful unresolved closure and a redesigned successor."
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       blocked_reason: "The study found isolated relation retrieval value but did not establish repeatable end-to-end Graph or Jev value; the final exact installed product path was not exercised."
       summary: "Closed unresolved after repeated infrastructure, harness, and candidate-design failures. Preserved for regression and hypothesis history."
   - id: T040
@@ -404,6 +418,19 @@ tasks:
       - "The work requires API, route, schema, command, package, topic, or configuration-file connector support."
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       blocked_reason: "Independent review found no demonstrated user-path need for a new connector identity. The proposed environment-key grouping would add speculative graph material before a retrieval or projection requirement exists."
       changed_files: []
       commands:
@@ -535,6 +562,19 @@ tasks:
       - "The conservative aggregate spend would exceed USD 1.00."
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       blocked_reason: "The exact installed command had no valid process-level TYPESAFE_API_KEY. It made zero provider calls and safely retained the verified baseline."
       note: notes/T100-installed-canary.md
       changed_files:
@@ -742,6 +782,19 @@ tasks:
         summary: "Execution completed, but the result does not support a Graph or Jev performance claim. A-S-01 failed evidence-citation validation before grading. B, C, and D each passed only S-01. All four arms failed D-01, L-01, and M-02. Independent interpretation audit remains active before selecting any successor."
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       blocked_reason: "The sealed study passed custody but failed the all-trials correctness gate: 3/16 accepted, 12 failed the frozen grader, and A-S-01 failed answer evidence-citation validation before grading. Only three TTC values exist, so no comparable TTC or Graph/Jev efficacy claim is allowed."
       changed_files:
         - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
@@ -919,6 +972,19 @@ tasks:
       - "No live calls"
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       blocked_reason: "Independent Luna audit found that the concrete oracle map and fallback spans were tracked despite the private-custody contract, and that verifier work occurred outside the measured fallback phase."
       changed_files:
         - scripts/benchmarks/four_arm_study_v1.py
@@ -979,6 +1045,19 @@ tasks:
       - "No live calls"
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       blocked_reason: "Independent Luna audit found that tracked README commands omit the required witness-custody argument and that the protocol retains two exact source paths despite its no-concrete-oracle-path claim."
       changed_files:
         - scripts/benchmarks/four_arm_study_v1.py
@@ -1178,6 +1257,19 @@ tasks:
       - "Measured correctness, TTC, wall time, fallback invocations, and host-reported usage missingness"
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       blocked_reason: "The first answer followed the visible [cN] citation instruction, but the host exposed hash IDs and rejected [c1] before grader dispatch."
       changed_files: []
       commands:
@@ -1221,6 +1313,19 @@ tasks:
       - "Focused regression tests and one reviewable commit"
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       blocked_reason: "The minimal shared-host repair changes the bound host digest. The historical controller constant and successor rubric binding are outside T181 ownership and fail closed."
       changed_files:
         - scripts/benchmarks/time_to_correct_host.py
@@ -1355,6 +1460,19 @@ tasks:
       - "One sealed private result.json or an exact new fail-closed receipt"
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       blocked_reason: "The fresh A-S-01 answer task delegated its host request to another task instead of executing it, violating the one-bound-call lane contract."
       changed_files: []
       commands:
@@ -1453,6 +1571,19 @@ tasks:
       - "Measured correctness, TTC, wall time, fallback, and usage missingness"
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       blocked_reason: "C-S-01 answer draft contained a valid JSON object followed by literal backslash-n characters and failed canonical transport normalization."
       changed_files: []
       commands:
@@ -1850,6 +1981,19 @@ tasks:
       - "A comparative report that states supported results and explicit null claims"
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: superseded_exhausted_path
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: false
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       note: notes/T260-final-candidate-freeze-blocker.md
       blocked_reason: "The regenerated D-01 Graph pool contains no relationship delta. Exact-symbol support selection consumes the caller seed with merge_sort instead of resolving the verified import immediately after that anchor."
       changed_files:
@@ -2035,7 +2179,8 @@ tasks:
       - "One sealed R5 result and independent audit"
       - "A supported comparison with explicit null and proof boundaries"
     receipt:
-      result: stopped
+      result: done
+      outcome: stopped
       note: notes/T290-r5-execution-stop.md
       changed_files:
         - docs/goals/retrievel-adaptive-pipeline-v1/notes/T290-r5-execution-stop.md
@@ -2085,7 +2230,8 @@ tasks:
       - "Eight or fewer Jev calls with no retries"
       - "One sealed R6 result and independent Luna audit"
     receipt:
-      result: stopped
+      result: done
+      outcome: stopped
       note: notes/T300-r6-execution-stop.md
       changed_files:
         - scripts/benchmarks/time_to_correct_handoff.py
@@ -2143,7 +2289,8 @@ tasks:
       - "Eight or fewer Jev calls with zero retries"
       - "One sealed result and independent Luna audit if execution completes"
     receipt:
-      result: revise
+      result: done
+      outcome: revise
       note: notes/T310-inline-transport-canary.md
       changed_files:
         - docs/goals/retrievel-adaptive-pipeline-v1/notes/T310-inline-transport-canary.md
@@ -2192,6 +2339,19 @@ tasks:
       - "One sealed result and independent Luna audit"
     receipt:
       result: blocked
+      decision_owner: pm
+      escalation_class: terminal_platform_and_architecture_exhaustion
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: true
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
       note: notes/T320-r7-terminal-stop.md
       changed_files:
         - scripts/benchmarks/time_to_correct_handoff.py
@@ -2220,7 +2380,7 @@ tasks:
   - id: T999
     type: judge
     assignee: Judge
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Audit the full owner outcome and complete Parent lifecycle closeout."
     inputs:
@@ -2237,18 +2397,49 @@ tasks:
       - "full_outcome_complete: true | false"
       - "Child lifecycle closeout receipt"
       - "Missing evidence and next task if not complete"
-    receipt: null
+    receipt:
+      result: blocked
+      decision_owner: pm
+      escalation_class: terminal_platform_and_architecture_exhaustion
+      safe_successor: none
+      human_fact_required: false
+      material_product_decision_required: false
+      external_action_required: false
+      credential_action_required: false
+      material_oracle_change_required: false
+      authority_expansion_required: false
+      terminal_platform_error: true
+      architecture_path_exhausted: true
+      redesign_exhausted: true
+      task_split_exhausted: true
+      decision: not_complete
+      full_outcome_complete: false
+      outcome_integrated: true
+      task_transition_complete: true
+      child_cleanup_complete: true
+      note: notes/T999-final-audit.md
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T999-final-audit.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Independent GoalBuddy Judge full-outcome audit"
+          status: blocked
+        - cmd: "Archive 99 terminal R5, R6, R7, and transport-canary tasks by exact task ID"
+          status: pass
+        - cmd: "Fresh collaboration and implementation-task inventory"
+          status: pass
+      summary: "Final Judge decision is not_complete with full_outcome_complete false. Validated product work remains useful and pushed, but it is not merged to main. The required sealed 16-trial result, final-candidate live Jev evidence, and comparative TTC evidence are absent. The goal closes blocked; no R8 is allowed here."
 
 checks:
-  dirty_fingerprint: "R7 proved the answer handoff but stopped on a silent frozen Astra grader completion at 0/16 with zero Jev calls; T999 owns terminal audit"
+  dirty_fingerprint: "Final audit is not_complete; goal is blocked after R7 grader host failure, zero R5-R7 Jev calls, and complete terminal-lane cleanup"
   last_verification:
     result: blocked
-    task: T320
+    task: T999
     commands:
-      - "R7 freeze and independent Luna audit passed."
-      - "A-S-01 Luna answer completed through raw capture, canonicalization, attestation, and response publication."
-      - "The bound Astra grader completed with no assistant or tool item."
-      - "The controller stopped. No Jev, retry, replacement, or later trial ran."
+      - "Independent GoalBuddy Judge returned not_complete and full_outcome_complete false."
+      - "Ninety-nine terminal benchmark and canary tasks were archived with zero archive failures."
+      - "Implementation task is idle and retained as the explicitly authorized persistent implementation session."
+      - "Fresh collaboration inventory shows only Parent running; all child agents are complete."
 
 provider_budget:
   provider: typesafe_jev
