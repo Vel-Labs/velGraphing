@@ -1228,7 +1228,14 @@ class FourArmStudyTests(unittest.TestCase):
             "id": "0" * 64, "path": "irrelevant.py", "source_sha256": "1" * 64,
             "byte_start": 0, "byte_end": 100, "required": False,
         }
-        packet = {"schema_version": "fixture", "query": "question", "candidates": [candidate]}
+        unselected = {
+            "id": "f" * 64, "path": "unselected.py", "source_sha256": "2" * 64,
+            "byte_start": 0, "byte_end": 100, "required": False,
+        }
+        packet = {
+            "schema_version": "fixture", "query": "question",
+            "candidates": [candidate, unselected],
+        }
         receipts = []
         for arm in study.ARMS:
             with self.subTest(arm=arm):
@@ -1240,6 +1247,10 @@ class FourArmStudyTests(unittest.TestCase):
                 self.assertLessEqual(receipt["final_context_bytes"], 16_384)
                 self.assertEqual(len(updated["candidates"]), 3)
                 self.assertEqual(len(order), 3)
+                self.assertEqual(
+                    [row["id"] for row in updated["candidates"]], order,
+                )
+                self.assertNotIn(unselected["id"], order)
                 receipts.append(receipt)
         self.assertTrue(all(receipt == receipts[0] for receipt in receipts))
         self.assertEqual(self.ttc["verifier_policy"]["scope"], "all_arms")

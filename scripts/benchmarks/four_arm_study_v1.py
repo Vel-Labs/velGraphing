@@ -1835,7 +1835,9 @@ def apply_verified_fallback(
     fallback_candidates = [dict(row) for row in allowlist if row["id"] in needed]
     if needed != {row["id"] for row in fallback_candidates}:
         raise MeasurementError("source_witness_unresolved")
-    final_candidates = [dict(row) for row in candidates]
+    # The answer packet contains the selected shortlist, not the full discovery
+    # pool. Exact fallback witnesses are appended below when required.
+    final_candidates = [dict(by_id[candidate_id]) for candidate_id in order]
     final_order = list(order)
     for candidate in fallback_candidates:
         final_candidates.append({**candidate, "required": True})
@@ -3109,7 +3111,10 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
         raise MeasurementError("study_retry_forbidden")
     calls = [row.get("kind") for row in result["attempts"][0].get("model_calls", [])]
     if calls.count("answer") != 1 or calls.count("grader") != 1:
-        raise MeasurementError("single_answer_grade_required")
+        raise MeasurementError(
+            result["attempts"][0].get("failure_reason")
+            or "single_answer_grade_required"
+        )
     return result
 
 
