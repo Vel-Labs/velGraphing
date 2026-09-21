@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T310
+active_task: T320
 
 tasks:
   - id: T010
@@ -2111,7 +2111,7 @@ tasks:
   - id: T310
     type: pm
     assignee: PM
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Replace file-based model input with exact inline host input, then execute and seal the unchanged final four-arm study."
     inputs:
@@ -2142,6 +2142,54 @@ tasks:
       - "Sixteen terminal trials or a terminal host-architecture rejection"
       - "Eight or fewer Jev calls with zero retries"
       - "One sealed result and independent Luna audit if execution completes"
+    receipt:
+      result: revise
+      note: notes/T310-inline-transport-canary.md
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T310-inline-transport-canary.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Fresh Luna exact inline A-S-01 transport canary"
+          status: pass
+        - cmd: "Strict canonical-byte equality gate"
+          status: fail
+      summary: "The exact inline-input architecture succeeded: Luna returned one valid identity-correct JSON answer with zero tool calls. The harness rejected it only because JSON key order was not canonical. T320 replaces model-owned serialization with raw-response retention plus Parent-owned canonicalization after validation."
+      spawned_tasks:
+        - T320
+  - id: T320
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Retain raw host output, canonicalize valid identity-bound JSON in Parent, then execute and seal the final R7 study."
+    inputs:
+      - "T310 inline canary receipt with valid JSON and exact execution identity"
+      - "Inline input SHA-256 b6cf1fc1fd7fc0eeb5efd8751aa68be8f52de75ed3a9193b42498fa72d31a1b0"
+      - "Raw output SHA-256 591f2d3ee65167f5f260b26084014b5374a5b52259ef6c3733449d808057ffc6"
+      - "Benchmark head b7ca78774cbb49216b662a89d5de078444fb6059"
+      - "Unchanged product, request set, source scope, provider budget, models, and acceptance rules"
+    constraints:
+      - "Store exact raw assistant bytes as an immutable host-response artifact before normalization."
+      - "Accept only one valid JSON object with the exact frozen execution identity and response schema. Reject extra text, missing fields, wrong identity, oversize data, or invalid JSON."
+      - "Parent owns deterministic canonical serialization to draft.json, attestation, and response publication. The model does not own JSON key ordering."
+      - "Deliver each frozen request inline. Model lanes make zero repository or filesystem tool calls."
+      - "Use fresh R7 Luna and Astra identities and a fresh ignored run root. Preserve all product, source, question, rubric, pool, request, model, dispatch, budget, and acceptance identities."
+      - "Make at most eight Jev calls with zero retries. Stop at the first provider or lane failure."
+      - "Do not create another transport variant after R7. A repeated execution failure is terminal evidence for this benchmark architecture."
+    verify:
+      - "Focused tests prove raw retention, deterministic canonicalization, schema and identity validation, extra-text rejection, and immutable attestation."
+      - "The T310 raw canary response is accepted without changing semantic fields."
+      - "Every R7 trial records terminal provider, answer, grader, timing, context, and available usage receipts."
+      - "One independent Luna audit validates the freeze and one validates the sealed result."
+    stop_if:
+      - "Raw retention or canonicalization changes semantic content."
+      - "Any frozen product, request, source, model, rubric, budget, dispatch, or acceptance identity changes."
+      - "The first R7 provider or lane failure occurs."
+    expected_output:
+      - "One minimal validated raw-to-canonical host handoff"
+      - "Sixteen terminal R7 trials"
+      - "Eight or fewer Jev calls with zero retries"
+      - "One sealed result and independent Luna audit"
   - id: T999
     type: judge
     assignee: Judge
@@ -2165,15 +2213,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "R5 and R6 both stopped at 0/16 on silent file-based Luna lane completion with zero Jev calls; T310 owns the inline-input redesign"
+  dirty_fingerprint: "Inline input is proven; T320 removes the false model-owned JSON key-order gate before the final R7 execution"
   last_verification:
-    result: stopped
-    task: T300
+    result: revise
+    task: T310
     commands:
-      - "Host-response output canary, capture tests, and independent freeze audit passed."
-      - "Exact R6 hashes and Python identity passed the live gate."
-      - "A-S-01 completed with no assistant response before capture; the controller stopped."
-      - "No Jev, grader, retry, replacement, or result occurred."
+      - "Exact 14473-byte A-S-01 request was delivered inline to a fresh Luna task."
+      - "The task returned one valid JSON object with exact identity and zero tool calls."
+      - "Strict canonical-byte equality rejected only JSON key order."
+      - "No R7 task or provider call ran."
 
 provider_budget:
   provider: typesafe_jev
