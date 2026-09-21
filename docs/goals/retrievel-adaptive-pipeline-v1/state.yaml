@@ -2428,10 +2428,10 @@ tasks:
           status: pass
         - cmd: "Fresh collaboration and implementation-task inventory"
           status: pass
-      summary: "Final Judge decision is not_complete with full_outcome_complete false. Validated product work remains useful and pushed, but it is not merged to main. The required sealed 16-trial result, final-candidate live Jev evidence, and comparative TTC evidence are absent. The goal closes blocked; no R8 is allowed here."
+      summary: "Final Judge decision is not_complete with full_outcome_complete false. Validated product work is merged through PR #16 at origin/main 4a4c7bf. The required sealed 16-trial result, final-candidate live Jev evidence, and comparative TTC evidence are absent. The goal closes blocked; no R8 is allowed here."
 
 checks:
-  dirty_fingerprint: "Final audit is not_complete; goal is blocked after R7 grader host failure, zero R5-R7 Jev calls, and complete terminal-lane cleanup"
+  dirty_fingerprint: "Product PR #16 is merged; final audit remains not_complete after R7 grader host failure, zero R5-R7 Jev calls, and complete terminal-lane cleanup"
   last_verification:
     result: blocked
     task: T999
@@ -2440,6 +2440,7 @@ checks:
       - "Ninety-nine terminal benchmark and canary tasks were archived with zero archive failures."
       - "Implementation task is idle and retained as the explicitly authorized persistent implementation session."
       - "Fresh collaboration inventory shows only Parent running; all child agents are complete."
+      - "Product integration PR #16 merged at origin/main 4a4c7bf; benchmark proof remains absent."
 
 provider_budget:
   provider: typesafe_jev

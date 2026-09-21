@@ -9,13 +9,14 @@
 The product work is substantial and validated. The original outcome is not
 complete because the exact final candidate has no sealed 16-trial four-arm
 result, no final-candidate live Jev call, and no supported comparative
-time-to-correct evidence. The final product candidate is pushed but is not an
-ancestor of `origin/main`.
+time-to-correct evidence.
 
 ## Accepted product evidence
 
-- PRs 11 through 15 are merged through `origin/main` commit `3bad9cb`.
-- Product implementation `6b9d120e74bb0b658d8623bd2ec37bb05096f6b1`
+- PRs 11 through 15 are merged through commit `3bad9cb`.
+- Clean product integration PR #16 is merged into `origin/main` at
+  `4a4c7bf4f8f000db507117909610fb25bf929949`.
+- Product integration `574cc4bb47454c54593c990f3313058891887e84`
   and package candidate
   `f47d377d6a51d66cd6b790f5d4a900f41719877b84def61e08bc548a5673e4c1`
   add source-bound relationship retention, symbol-aligned incoming support,
@@ -33,8 +34,6 @@ or Jev performance.
 - One completed live Jev call through the exact final package candidate.
 - Comparable accepted correctness, end-to-end wall-clock time, context,
   all-model usage, and provider-cost evidence across all four arms.
-- Merge or separate disposition of product implementation `6b9d120` against
-  `origin/main`.
 
 R7 completed one Luna answer with raw custody, canonicalization, attestation,
 and publication. Its first bound Astra grader completed with no output. The
@@ -71,6 +70,7 @@ grader handling.
 - GoalBuddy installed-plugin state checker: passed with no errors or warnings.
 - Both checkers accepted the terminal stop as
   `consequential_terminal_condition`.
+- PR #16 merged and its head is an ancestor of `origin/main`.
 
 Changed files:
 
