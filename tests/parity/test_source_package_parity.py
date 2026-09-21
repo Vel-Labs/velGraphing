@@ -66,6 +66,10 @@ class SourcePackageParityTests(unittest.TestCase):
 
     def test_current_candidate_verifies_and_identity_is_deterministic(self) -> None:
         first = PARITY.write_manifest(self.root)
+        self.assertEqual(
+            first["package"],
+            {"name": "graph-engineering", "version": "0.2.0-rc.1"},
+        )
         second = PARITY.build_manifest(self.root)
         self.assertEqual(first, second)
         self.assertEqual(first, PARITY.verify(self.root))

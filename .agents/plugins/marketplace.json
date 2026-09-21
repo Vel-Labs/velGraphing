@@ -1,7 +1,7 @@
 {
   "name": "graph-engineering-local",
   "interface": {
-    "displayName": "Graph Engineering Local"
+    "displayName": "RetrieVel"
   },
   "plugins": [
     {

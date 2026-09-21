@@ -27,12 +27,22 @@ name and plugin and Python package ID remain stable during this transition.
 
 ## Retrieval path
 
-RetrieVel scans eligible Git-tracked source files and verifies source identity
-and spans. It expands typed relationships only when source evidence supports
-them. It selects a bounded, ranked context from verified spans. When graph
-evidence is incomplete, it can use caller-declared direct-source fallback. If
-the fallback is unavailable or incomplete, the route defers. Optional Jev can
-rerank a verified shortlist. It cannot add evidence or grant authority.
+By default, `/graph-find` scans eligible Git-tracked regular UTF-8 files,
+verifies source identity, and returns body-free pointers. Any relationship
+support in this response is source-verified metadata; it does not change the
+default ranking or context.
+
+`--ranked-context plan` is an explicit opt-in. It builds Direct and
+relationship-expanded candidates from the same verified retrieval, then selects
+a bounded context from verified spans. Only source-witnessed typed relationships
+can add optional candidates. The graph route is selected only when those
+candidates add evidence and required evidence remains present. A `route: defer`
+means graph evidence is incomplete and provides fallback paths for direct reads.
+The context-assist path can use direct fallback only from the caller's explicit
+allowlist. It defers if the fallback is unavailable, incomplete, or unverified.
+
+Jev is a separately invoked, optional reranker. It can reorder optional
+candidates in the verified shortlist. It cannot add evidence or grant authority.
 
 These statements describe implemented behavior. They do not establish general
 correctness, wall-clock, token, cost, or provider-performance improvements.
