@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T202
+active_task: T210
 
 tasks:
   - id: T010
@@ -1495,7 +1495,7 @@ tasks:
   - id: T202
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Bind the clean r4 lane manifest into the ready successor contract and validate its exact execution identity."
     allowed_files:
@@ -1514,6 +1514,38 @@ tasks:
       - "Any field other than the two manifest SHA values must change."
     expected_output:
       - "Ready contract bound to r4 and one reviewable commit"
+    receipt:
+      result: done
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      commands:
+        - cmd: "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 -v"
+          status: pass
+        - cmd: "Validate exact r4 manifest against ready contract"
+          status: pass
+      summary: "Accepted and pushed ade03a6. The ready contract binds clean r4 manifest 4ddd687e."
+      spawned_tasks:
+        - T210
+  - id: T210
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Execute the clean r4 study and seal it, with explicit JSON transport instructions and no retries."
+    inputs:
+      - "Benchmark head ade03a6"
+      - "r4 run root successor-live-r4-4f07ef8"
+      - "r4 manifest 4ddd687e0b1aa891db3c24067186fd8748df355bbc2af0e10aab0da09440d314"
+      - "One prior discarded Jev call already recorded in aggregate budget"
+    constraints:
+      - "Every lane executes directly."
+      - "Draft may have normal whitespace but must not contain literal backslash-n after the JSON object."
+      - "No model or provider retries."
+      - "Stop at the first new failure."
+    expected_output:
+      - "Sixteen terminal trials and one result seal"
+      - "Eight or fewer r4 Jev calls"
+      - "Final metric and usage report"
     receipt: null
   - id: T999
     type: judge
