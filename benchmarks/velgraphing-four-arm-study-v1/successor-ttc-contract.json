@@ -6,7 +6,7 @@
     },
     "controller": {
       "path": "scripts/benchmarks/four_arm_study_v1.py",
-      "sha256": "b51a77d677dcaf54c8f33ce726e934e3c068a092b3e1f80b8321edcf56093e82"
+      "sha256": "057fe81d91cc36134518e8d50d7df99b24847123157520955e1472f0d00ba14e"
     },
     "host": {
       "path": "scripts/benchmarks/time_to_correct_host.py",
@@ -15,7 +15,7 @@
     "lane_manifest": {
       "entry_count": 32,
       "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
-      "sha256": "57d444a0a8ea252433e5d69140c9677685878c9956576dd55a1c2df05406a0fa",
+      "sha256": "290be76aa609690572523ce9feb198e5d485dcab36b2a0333a5bdc2bd83b6c65",
       "status": "frozen",
       "thread_id_semantics": "canonical_collaboration_task_name_not_opaque_host_id"
     },
@@ -38,7 +38,7 @@
     "successor_grader_response_contract_sha256": "dd517640475fe2219514ebee94a01182bbd74ff17adafeb5aa1348a3e0f6db2c",
     "successor_rubric": {
       "path": "successor-rubrics.json",
-        "sha256": "91799682531977718ffe75cce4b0674b7b4193f54cb528d7475f431fdd913083"
+      "sha256": "4058aeb08655a507a89e1a89228b3b73092dbdd6a0dae357d8b77cdb6bd8a6a6"
     }
   },
   "classification": {
@@ -84,7 +84,7 @@
     "exact_host_argv_arrays": 32,
     "final_user_reack": [],
     "grader_task_names": 16,
-    "lane_manifest_sha256": "57d444a0a8ea252433e5d69140c9677685878c9956576dd55a1c2df05406a0fa",
+    "lane_manifest_sha256": "290be76aa609690572523ce9feb198e5d485dcab36b2a0333a5bdc2bd83b6c65",
     "live_lanes_created": 0
   },
   "result_contract": {

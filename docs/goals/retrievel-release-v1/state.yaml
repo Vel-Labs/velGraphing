@@ -397,9 +397,9 @@ tasks:
       - "T060 is not execution-ready."
       - "Provider approval, key environment, call cap, or budget binding is absent."
     receipt:
-      result: approval_materialized
-      candidate_commit: 067b6d27f36260c6c1fa7b7289016a68244748dd
-      summary: "Materialized the exact final user re-ack into the successor TTC contract, freeze, and preflight without making provider calls."
+      result: launch_repair_ready_for_handoff_probe
+      candidate_commit: 06cd219
+      summary: "Repaired a successor packet-shape defect that stopped before answer dispatch, refreshed the frozen bindings, and retained zero executed calls."
       changed_files:
         - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
         - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
@@ -411,7 +411,7 @@ tasks:
         - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
         - docs/goals/retrievel-release-v1/state.yaml
       commands:
-        - cmd: "approve-successor with request hash 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94, 8 Jev calls, USD 0.9031, manifest 57d444a0a8ea252433e5d69140c9677685878c9956576dd55a1c2df05406a0fa, and the approved Python executable"
+        - cmd: "approve-successor with request hash 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94, 8 Jev calls, USD 0.9031, manifest 290be76aa609690572523ce9feb198e5d485dcab36b2a0333a5bdc2bd83b6c65, and the approved Python executable"
           status: pass
         - cmd: "validate-successor-overlay"
           status: pass
@@ -423,12 +423,13 @@ tasks:
         - "33 benchmark tests passed, 2 skipped"
         - "execution_ready: true; provider_spend_authorized: true; final_user_reack: []"
         - "answer, grader, Jev, and provider executed calls remain zero; retries remain zero"
+        - "actual 64-candidate S-01 pool produced an exact 11-candidate answer packet"
         - "historical freeze.json and preflight.json remain unchanged"
         - "package parity refused private_or_machine_path on ignored __pycache__; no package files changed"
-      successor_ttc_contract_file_sha256: d25290d05f1719d4082e16fca036c09b1ae7138ccfa287ba63ccc2959b796ef9
-      successor_freeze_sha256: a442afb5fea8529e2979435dd09877207c2a9ba30d53f0c85198c622a7bd86d0
-      successor_preflight_sha256: 23a14866597f20a204ffc6df598bd62ccb1269e2d48364c2c4eef63d82160e66
-      boundary: "Approval transition only. No model, provider, network, credential, task creation, benchmark execution, commit, push, or release action."
+      successor_ttc_contract_canonical_sha256: 5a409a6c101b054a65b95e1a813b1635dd5feb42393b3f2efe914d58160278f3
+      successor_freeze_sha256: fdad0cdd6bb6e051ec0a71454747d759524006c0c2c3a255aa8dfc5813265a08
+      successor_preflight_sha256: e9b60becc853988033ea353d0d823994562525f103845b55366b595b0924b1f4
+      boundary: "Launch repair and offline re-freeze only. No model, provider, network, credential, task creation, benchmark execution, push, or release action."
   - id: T080
     type: judge
     assignee: Judge

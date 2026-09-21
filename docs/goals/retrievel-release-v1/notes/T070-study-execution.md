@@ -128,3 +128,38 @@ manifest and final re-ack for its new hash. No task was created for this freeze.
 The ignored T070 run root contains the updated `lane-bindings.json` and
 regenerated `lane-manifest.json`. The board file had pre-existing local
 changes and now also records this approval transition.
+
+## Launch repair after two refused starts
+
+The first start refused a stale successor lane state. The second start exposed
+`single_answer_grade_required`. No answer, grader, Jev, or provider call ran in
+either attempt.
+
+The second message masked the actual preparation failure. Direct inspection of
+the returned trial showed `answer_evidence_order_invalid`. The selector chose
+11 of 64 source-bound candidates, but the answer packet still contained all 64.
+The answer composer correctly refused the inconsistent packet before dispatch.
+
+Commit `06cd219` repairs the packet boundary. The verified fallback now returns
+only the selected shortlist plus any required fallback witnesses. It also
+preserves the recorded preparation failure instead of replacing it with the
+generic answer-and-grade postcondition.
+
+The replacement ignored run root is
+`.velgraphing-local/velgraphing-four-arm-study-v1/retrievel-0.2.0-rc1-t070-r2`.
+Its lane manifest SHA-256 is
+`290be76aa609690572523ce9feb198e5d485dcab36b2a0333a5bdc2bd83b6c65`.
+The refreshed successor freeze SHA-256 is
+`fdad0cdd6bb6e051ec0a71454747d759524006c0c2c3a255aa8dfc5813265a08`.
+The refreshed successor preflight SHA-256 is
+`e9b60becc853988033ea353d0d823994562525f103845b55366b595b0924b1f4`.
+The request-byte-set SHA-256 and eight-call, zero-retry controls did not change.
+
+Validation after the repair:
+
+- Actual 64-candidate S-01 Direct pool reduced to the exact 11-candidate answer
+  packet with matching order.
+- Focused benchmark suite: 33 passed and 2 expected machine-local skips.
+- Successor overlay: passed with `execution_ready: true`.
+- Historical bundle plus replacement lane manifest: passed.
+- Provider, answer, grader, and Jev calls: zero.

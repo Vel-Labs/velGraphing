@@ -11,7 +11,7 @@
       },
       "controller": {
         "path": "scripts/benchmarks/four_arm_study_v1.py",
-        "sha256": "b51a77d677dcaf54c8f33ce726e934e3c068a092b3e1f80b8321edcf56093e82"
+        "sha256": "057fe81d91cc36134518e8d50d7df99b24847123157520955e1472f0d00ba14e"
       },
       "host": {
         "path": "scripts/benchmarks/time_to_correct_host.py",
@@ -41,8 +41,8 @@
       "openchain-reference-material": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
       "thealgorithms-python": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
     },
-    "successor_rubric_sha256": "91799682531977718ffe75cce4b0674b7b4193f54cb528d7475f431fdd913083",
-    "successor_ttc_core_sha256": "5a488d76699e12c56049e53303981c07ed9f916a5536715aec019aa0b35b785e",
+    "successor_rubric_sha256": "4058aeb08655a507a89e1a89228b3b73092dbdd6a0dae357d8b77cdb6bd8a6a6",
+    "successor_ttc_core_sha256": "cc13e4ae0ef9f1f2f808e0813e0f3253e16b3f80bc426a1f32dcd01608324f6d",
     "witness_custody_sha256": "e042c9ee45c7fcc9e36a7ad693b7f77106f12dd94f06756b9e8ae19e276be38b"
   },
   "claim_boundary": {
