@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T130
+active_task: T140
 
 tasks:
   - id: T010
@@ -793,7 +793,7 @@ tasks:
   - id: T130
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: medium
     objective: "Implement the smallest successor-only scoring and baseline repair proved by T120, with no provider calls and no edits to the sealed T110 artifacts."
     allowed_files:
@@ -823,6 +823,53 @@ tasks:
       - "One benchmark-only commit on codex/retrievel-four-arm-study-v1"
       - "Focused offline validation receipt"
       - "No live calls"
+    receipt:
+      result: done
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/README.md
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+        - scripts/benchmarks/four_arm_study_v1.py
+        - scripts/benchmarks/time_to_correct_host.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+        - tests/benchmarks/test_time_to_correct_host.py
+      commands:
+        - cmd: "python -m unittest tests.benchmarks.test_time_to_correct_host tests.benchmarks.test_four_arm_study_v1 -v"
+          status: pass
+        - cmd: "python3 scripts/benchmarks/four_arm_study_v1.py validate --root benchmarks/velgraphing-four-arm-study-v1"
+          status: pass
+        - cmd: "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+        - cmd: "Independent Luna audit of commit 0899d19"
+          status: pass
+      summary: "Accepted and pushed benchmark-only commit 0899d19. It repairs evidence-ID citation validation, per-fact scoring, D-01 and M-02 rubric alignment, and comparator naming. Historical validation and successor-overlay validation are explicit and independent. Historical execution remains fail-closed. No live, answer, grader, or provider call occurred."
+      spawned_tasks:
+        - T140
+  - id: T140
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Define the smallest true time-to-correct successor contract before freezing or spending live calls."
+    inputs:
+      - "T110 sealed result and T120 failure attribution"
+      - "T130 corrected successor scoring overlay at 0899d19"
+      - "Current benchmark Trial repair and fallback flow"
+      - "User authorization phrase: VelGraphing live run armed"
+    constraints:
+      - "Do not make a provider, answer, or grader call."
+      - "Do not create another benchmark stack when the current controller can be extended."
+      - "Measure time to accepted correctness, not one-shot answer latency."
+      - "Use one treatment-blind bounded repair or verified fallback path that receives structured verifier feedback."
+      - "Keep the edge-disabled frozen-shortlist comparator distinct from ordinary repository-direct use."
+      - "Preserve the historical freeze, sealed result, and T130 successor overlay."
+    expected_output:
+      - "A single execution contract for a fresh successor freeze"
+      - "Exact attempt, repair, fallback, usage, and wall-clock accounting"
+      - "One bounded implementation package for the established implementation task"
+      - "A decision on whether the armed authorization is sufficient for the newly hash-bound request set"
     receipt: null
   - id: T999
     type: judge
@@ -847,14 +894,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch records the T120 protocol defects and activates the offline T130 scoring repair"
+  dirty_fingerprint: "custody branch records accepted T130 scoring repair 0899d19 and activates T140 true time-to-correct successor design"
   last_verification:
     result: pass
-    task: T120
+    task: T130
     commands:
-      - "Read-only Luna attribution traced every D-01, L-01, and M-02 required fact across pool, final evidence, answer, and rubric layers."
-      - "The audit proved two rubric or grader-contract defects and one comparator-label defect."
-      - "No provider, answer, or grader call occurred."
+      - "31 focused benchmark and host tests passed."
+      - "Historical and successor-overlay validation passed with explicit validation scopes."
+      - "Independent Luna re-audit passed on commit 0899d19."
+      - "The benchmark branch is synchronized with origin; no provider, answer, or grader call occurred."
 
 provider_budget:
   provider: typesafe_jev
