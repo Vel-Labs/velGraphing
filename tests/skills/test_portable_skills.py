@@ -599,12 +599,15 @@ class PortableSkillTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="graph-find-impact-") as raw:
             root = Path(raw)
             (root / "src").mkdir()
-            (root / "src" / "caller.py").write_text(
-                "from src.helper import helper\n\ndef call_helper():\n    return helper()\n",
+            (root / "src" / "z_caller.py").write_text(
+                "from src.a_target import helper\n\ndef invoke():\n    return helper()\n",
                 encoding="utf-8",
             )
-            (root / "src" / "helper.py").write_text(
-                "def helper():\n    return 1\n", encoding="utf-8"
+            (root / "src" / "a_target.py").write_text(
+                "def helper():\n    value = 0\n"
+                + "    value += 1\n" * 300
+                + "    return value\n",
+                encoding="utf-8",
             )
             subprocess.run(["git", "init", "-q", str(root)], check=True)
             subprocess.run(["git", "-C", str(root), "add", "."], check=True)
@@ -616,6 +619,10 @@ class PortableSkillTests(unittest.TestCase):
                     str(root),
                     "--prompt",
                     "what changes if helper changes",
+                    "--maximum-results",
+                    "1",
+                    "--ranked-context",
+                    "plan",
                 ],
                 text=True,
                 capture_output=True,
@@ -630,9 +637,13 @@ class PortableSkillTests(unittest.TestCase):
             if item["direction"] == "incoming"
         ]
         self.assertEqual(1, len(incoming))
-        self.assertEqual("src/helper.py", incoming[0]["seed_coordinate"]["source_path"])
-        self.assertEqual("src/caller.py", incoming[0]["related_coordinate"]["source_path"])
+        self.assertEqual("src/a_target.py", incoming[0]["seed_coordinate"]["source_path"])
+        self.assertEqual("src/z_caller.py", incoming[0]["related_coordinate"]["source_path"])
         self.assertEqual("helper", incoming[0]["seed_coordinate"]["symbol"])
+        ranked = payload["ranked_context"]
+        self.assertEqual("graph", ranked["plan"]["route"])
+        spans = ranked["selection"]["context"]["spans"]
+        self.assertTrue(any(item["relationship_parent_candidate_id"] for item in spans))
 
     def test_graph_find_leaves_ambiguous_relations_unresolved(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"

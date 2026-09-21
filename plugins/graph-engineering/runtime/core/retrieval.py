@@ -13,11 +13,13 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from enum import Enum
 import hashlib
+import io
 import json
 import math
 from pathlib import PurePosixPath
 import posixpath
 import re
+import tokenize
 from typing import TYPE_CHECKING, Iterable, Mapping, Sequence
 from urllib.parse import unquote
 
@@ -1221,6 +1223,39 @@ def _relation_ast_range(data: bytes, node: ast.AST) -> tuple[int, int] | None:
         return None
 
 
+def _relation_declaration_name_ranges(
+    data: bytes,
+) -> dict[tuple[int, str, str], tuple[int, int]]:
+    """Return exact UTF-8 byte ranges for Python declaration-name tokens."""
+
+    text = data.decode("utf-8")
+    lines = text.splitlines(keepends=True)
+    offsets: list[int] = []
+    position = 0
+    for line in lines:
+        offsets.append(position)
+        position += len(line.encode("utf-8"))
+    try:
+        tokens = tuple(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (IndentationError, tokenize.TokenError):
+        return {}
+    ranges: dict[tuple[int, str, str], tuple[int, int]] = {}
+    for index, token in enumerate(tokens[:-1]):
+        if token.type != tokenize.NAME or token.string not in {"class", "def"}:
+            continue
+        name = tokens[index + 1]
+        if name.type != tokenize.NAME or name.start[0] != token.start[0]:
+            continue
+        line = lines[name.start[0] - 1]
+        start = offsets[name.start[0] - 1] + len(
+            line[:name.start[1]].encode("utf-8")
+        )
+        end = offsets[name.end[0] - 1] + len(line[:name.end[1]].encode("utf-8"))
+        if data[start:end].decode("utf-8") == name.string:
+            ranges[(token.start[0], token.string, name.string)] = (start, end)
+    return ranges
+
+
 def _relation_module_name(path: str) -> str | None:
     if not path.endswith(".py"):
         return None
@@ -1331,11 +1366,13 @@ def derive_source_relations(
                 counts["python_imports"]["unsupported"] += 1
                 continue
             trees[path] = tree
+            declaration_names = _relation_declaration_name_ranges(data)
             by_name: dict[str, list[SourceCoordinate]] = {}
             for node in tree.body:
                 if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                     continue
-                bounds = _relation_ast_range(data, node)
+                keyword = "class" if isinstance(node, ast.ClassDef) else "def"
+                bounds = declaration_names.get((node.lineno, keyword, node.name))
                 if bounds is None or bounds[0] >= bounds[1]:
                     continue
                 by_name.setdefault(node.name, []).append(

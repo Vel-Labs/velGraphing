@@ -191,6 +191,83 @@ def obligated_facets(*obligations: ProofObligation, count: int = 8) -> PromptFac
 
 
 class SourceRelationDerivationTests(unittest.TestCase):
+    def test_python_declaration_names_are_exact_and_large_body_can_plan_graph(self) -> None:
+        sources = {
+            "src/z_caller.py": (
+                "from src.a_target import Café, async_large, large\n"
+            ).encode("utf-8"),
+            "src/a_target.py": (
+                b"def large():\n    value = 0\n"
+                + b"    value += 1\n" * 300
+                + b"    return value\n\n"
+                + b"async def async_large():\n    return 1\n\n"
+                + "class Café:\n    pass\n".encode("utf-8")
+            ),
+        }
+        plain_graph, snapshot, reader = multi_source_fixture(sources)
+        relations = derive_source_relations(plain_graph, snapshot, Reader(sources))
+        edges = {edge.target_coordinate.symbol: edge for edge in relations.edges}
+        target = sources["src/a_target.py"]
+        self.assertEqual({"large", "async_large", "Café"}, set(edges))
+        for symbol, edge in edges.items():
+            coordinate = edge.target_coordinate
+            self.assertEqual(symbol.encode("utf-8"), target[coordinate.byte_start:coordinate.byte_end])
+            self.assertEqual("python_declaration", coordinate.entity_kind)
+            self.assertEqual(
+                "declaration" if symbol == "Café" else "definition",
+                coordinate.occurrence_role,
+            )
+
+        graph = Graph(plain_graph.records, relations.edges)
+        index = build_repository_tag_index(graph, snapshot, reader)
+        prompt = "what changes if large changes"
+        facets = compile_prompt(prompt, index)
+        impact_task = task(query_terms=("changes", "large"), node_budget=1)
+
+        def run(expand_one_hop: bool):
+            return retrieve(
+                graph, impact_task, index, facets, snapshot, reader,
+                source_bound_expansion=True,
+                expand_one_hop=expand_one_hop,
+                maximum_results=1,
+            )
+
+        direct = ranked_candidates_from_retrieval(
+            graph, impact_task, snapshot, reader, run(False),
+            maximum_candidates=64,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        graph_candidates = ranked_candidates_from_retrieval(
+            graph, impact_task, snapshot, reader, run(True),
+            maximum_candidates=64,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        child = next(
+            candidate for candidate in graph_candidates
+            if candidate.relationship_parent_candidate_id is not None
+        )
+        parent_index = next(
+            index for index, candidate in enumerate(graph_candidates)
+            if candidate.candidate_id == child.relationship_parent_candidate_id
+        )
+        self.assertLess(parent_index, graph_candidates.index(child))
+        self.assertLessEqual(child.byte_end - child.byte_start, 4096)
+        self.assertEqual(edges["large"].edge_id, child.relationship_edge_id)
+        self.assertEqual(
+            "graph",
+            plan_ranked_context(
+                graph,
+                impact_task,
+                snapshot,
+                reader,
+                query=prompt,
+                direct_candidates=direct,
+                graph_candidates=graph_candidates,
+            ).route,
+        )
+
     def test_derivation_is_source_bound_and_reports_explicit_coverage(self) -> None:
         sources = {
             "src/caller.py": (
