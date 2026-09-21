@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T250
+active_task: T260
 
 tasks:
   - id: T010
@@ -1743,7 +1743,7 @@ tasks:
   - id: T250
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Bind Python relation targets to exact declaration-name anchors so long declarations can produce bounded source-verified relationship candidates."
     allowed_files:
@@ -1784,7 +1784,70 @@ tasks:
       - "One precise Python relation-anchor repair and generated projection"
       - "Focused, consumer, parity, projector, and installed-path evidence"
       - "One fresh exact request packet for Parent review, with no provider call"
-    receipt: null
+    receipt:
+      result: done
+      changed_files:
+        - packages/core/retrieval.py
+        - plugins/graph-engineering/runtime/core/retrieval.py
+        - plugins/graph-engineering/runtime/.projection-state.json
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - tests/core/test_retrieval.py
+        - tests/skills/test_portable_skills.py
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T250-declaration-anchors.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Run exact declaration-anchor regressions and the 120-test consumer set"
+          status: pass
+        - cmd: "Run the clean 47-test portable, Jev, and parity set and project twice"
+          status: pass
+        - cmd: "Install package candidate 6adb2850 and reproduce its exact preview"
+          status: pass
+        - cmd: "Execute one exact approved live request with no retry"
+          status: pass
+        - cmd: "Independent Luna audit of T230 through T250 and the live artifact"
+          status: pass
+      summary: "Exact Python declaration-name anchors made the intended incoming relationship eligible under the unchanged unit cap. One installed Graph plus Jev canary retained that relationship after a source-revalidated Jev rerank. This is mechanism proof, not comparative performance proof."
+      spawned_tasks:
+        - T260
+  - id: T260
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Bind the final integrated product candidate to a fresh four-arm confirmation study without changing the historical R4 result."
+    inputs:
+      - "Final product commit fbfa54b0d1f223a073e67753ea1b3cd958d48baa"
+      - "Package candidate 6adb2850258ed178376b6d63c2dcaae04457844cefec6a38411a5bfe2166c19e"
+      - "T250 installed-canary receipt"
+      - "Historical R4 result 884dbb95387ff6b49606c2303b2788cb6d80a573eaa5fd4a63571814074f5a54"
+      - "Corrected four-task successor contract and existing Luna answer and Astra grader design"
+    constraints:
+      - "Merge the final product branch into the benchmark branch in normal Git order; do not rewrite or alter R4."
+      - "Use the existing four corrected tasks and four arms: Direct off/on and Graph off/on."
+      - "Use fresh answer and grader task identities. Do not reuse prior responses or receipts."
+      - "Keep Luna medium for every answer arm and Astra high for every grader arm."
+      - "Make at most eight Jev calls, one for each B or D trial, with no retries."
+      - "Bind every request to the final candidate, public source snapshot, exact preview hash, and USD 1 aggregate ledger."
+      - "Preserve direct fallback, source revalidation, failed-grade censoring rules, and all historical evidence."
+      - "Do not change task questions, rubrics, model identities, or acceptance rules after freeze."
+    verify:
+      - "Verify branch ancestry and package identity after the product fold-in."
+      - "Regenerate and freeze all 16 candidate contexts on the final product candidate."
+      - "Require the D-01 Graph pool to contain the source-bound incoming relationship used by the task."
+      - "Run an independent Luna freeze and custody audit before any provider call."
+      - "Execute 16 fresh answer lanes and 16 fresh grader lanes with exact identity receipts."
+      - "Seal correctness, end-to-end TTC, provider usage and latency, context bytes, fallback, and available host usage."
+      - "Run an independent final result audit before interpretation."
+    stop_if:
+      - "The product fold-in changes historical R4 bytes or its result seal."
+      - "The final candidate cannot produce the required source-bound D-01 relationship before answer execution."
+      - "The freeze audit finds an identity, custody, rubric, or authority defect."
+      - "The first provider or lane failure repeats without a changed hypothesis."
+    expected_output:
+      - "One final-candidate frozen four-arm run"
+      - "Sixteen terminal trial receipts and one sealed result"
+      - "Eight or fewer Jev calls under the aggregate USD 1 ledger"
+      - "A comparative report that states supported results and explicit null claims"
   - id: T999
     type: judge
     assignee: Judge
@@ -1808,16 +1871,16 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "T240 selects the correct incoming symbol; T250 replaces whole-body relation coordinates with exact declaration-name anchors"
+  dirty_fingerprint: "T250 final product candidate accepted; T260 folds it into a fresh final-candidate four-arm study"
   last_verification:
     result: pass
-    task: T240
+    task: T250
     commands:
-      - "Natural-language changes activates the existing change-impact intent."
-      - "Exact verified prompt-symbol support wins before stable unrelated edge order."
-      - "Focused and consumer tests, clean parity, and projector idempotence passed."
-      - "Fresh installed preflight selected incoming derive_source_relations supports."
-      - "No provider call occurred because the whole-function coordinate exceeds the candidate-unit cap."
+      - "Exact declaration-name token coordinates passed focused and consumer tests."
+      - "Clean portable, Jev, package parity, and projector idempotence passed."
+      - "Fresh installed preflight retained the exact incoming relationship under the unchanged cap."
+      - "One exact live Jev call reranked the Graph shortlist and preserved parent-child integrity."
+      - "Independent Luna audit passed with no blocking finding."
 
 provider_budget:
   provider: typesafe_jev
@@ -1826,10 +1889,10 @@ provider_budget:
   aggregate_limit_usd: 1.00
   call_count_is_budget: false
   prior_live_calls: 46
-  final_installed_path_live_calls: 2
+  final_installed_path_live_calls: 3
   four_arm_live_calls: 17
   actual_spend_usd: null
-  conservative_committed_spend_usd: 0.324229437
-  remaining_usd: 0.675770563
+  conservative_committed_spend_usd: 0.327947781
+  remaining_usd: 0.672052219
   ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
-  claim_boundary: "Clean R4 supports only oracle-assisted fallback time-to-correct. T230 additionally proves one exact installed live transport and safe rerank diagnostic, not useful change-impact retrieval or comparative Graph plus Jev performance."
+  claim_boundary: "Clean R4 supports only oracle-assisted fallback time-to-correct. T250 proves one exact installed Graph plus Jev mechanism with source-bound incoming relationship retention. Neither result proves comparative Graph plus Jev performance; T260 must run the final candidate."
