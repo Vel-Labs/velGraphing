@@ -277,13 +277,16 @@ tasks:
         - d1c8512196b1047c9443c75feb855ef03fbb0399
         - c4d362fa67c28ab73982a62eb036a8dc507dc308
         - c7301d83b3dd92d676e48bbc86ae00403c52feca
-      summary: "Graph/off now performs fresh installed-path discovery inside Trial.prepare, transports source-bound evidence through one answer and one independent grader, measures complete child graph construction in a separate clock domain, and passes independent audit. Graph/on remains fail-closed and keeps T050 active."
+        - 04a17d4907db9a9040aeca380c1bbbef63ecfb18
+      summary: "Graph/off now performs fresh installed-path discovery inside Trial.prepare. Graph/on replay uses one installed Graph Find process and transports a request-bound reranked selection through one answer and one independent grader with zero provider calls. Child timing remains separate, replay tokens cannot enter provider totals, and independent audit accepted both paths. Observed/live Graph/on remains fail-closed and keeps T050 active."
       package_candidate_sha256: 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107
       validation:
         - "clean exact-candidate suite: scaffold 11, core 284, adapters 18, skills 38, benchmarks 193 with 25 expected skips, parity 10"
         - "package parity: passed, 87 files"
         - "independent Luna measurement audit: ACCEPT"
-      remaining: "Implement installed Graph/on preview, approval binding, one-call evaluate or replay, reranked source-bound context, and provider telemetry without changing historical results."
+        - "Graph/on replay production-path test: 28 benchmark tests passed, 24 expected private-data skips"
+        - "independent Luna Graph/on replay audit: ACCEPT"
+      remaining: "Implement observed installed Graph/on approval binding, one-call evaluate, unknown-consumption accounting, and live provider telemetry without changing historical results."
   - id: T060
     type: judge
     assignee: Judge
