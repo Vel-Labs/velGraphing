@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T110
+active_task: T120
 
 tasks:
   - id: T010
@@ -549,7 +549,7 @@ tasks:
   - id: T110
     type: pm
     assignee: PM
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Freeze, execute, independently grade, and seal the redesigned four-arm time-to-correct study."
     current_phase: "phase_3c_sealed_result_interpretation_audit"
@@ -740,6 +740,42 @@ tasks:
           answer: 16
           grader: 15
         summary: "Execution completed, but the result does not support a Graph or Jev performance claim. A-S-01 failed evidence-citation validation before grading. B, C, and D each passed only S-01. All four arms failed D-01, L-01, and M-02. Independent interpretation audit remains active before selecting any successor."
+    receipt:
+      result: blocked
+      blocked_reason: "The sealed study passed custody but failed the all-trials correctness gate: 3/16 accepted, 12 failed the frozen grader, and A-S-01 failed answer evidence-citation validation before grading. Only three TTC values exist, so no comparable TTC or Graph/Jev efficacy claim is allowed."
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Run the exact approved controller through 16 blind Luna answer lanes, 15 Astra grader lanes, and eight Jev calls"
+          status: pass
+        - cmd: "Credential-free exact restart and result-seal validation"
+          status: pass
+        - cmd: "Independent Luna source-free custody and interpretation audit"
+          status: pass
+      summary: "Retained sealed result df168115f34fa07366c8758d5f91fb2060161c566cdb5f970ec9c615a86f61ca as unresolved evidence. D had the highest graded fact total among fully graded arms and the lowest mean observed wall time, but correctness remained 1/4 and usage telemetry was unavailable. The next task attributes missing facts to retrieval, selection, answer composition, or rubric alignment before any further implementation or live run."
+      spawned_tasks:
+        - T120
+  - id: T120
+    type: judge
+    assignee: Judge
+    status: active
+    reasoning_hint: high
+    objective: "Attribute each missing required fact in D-01, L-01, and M-02 to candidate retrieval, final selection, answer composition, or rubric alignment, then select the smallest falsifiable corrective package."
+    inputs:
+      - "T110 sealed result and terminal receipts"
+      - "Frozen questions and rubrics"
+      - "Frozen public-source candidate pools, final lane requests, and answers"
+      - "Merged product selection and retrieval code at 93f6dd8"
+    constraints:
+      - "Read only. Do not edit product, benchmark, or result artifacts."
+      - "Do not inspect credentials or publish provider score details."
+      - "Do not authorize another live run."
+      - "Separate a missing source span from an answer omission and from a rubric defect."
+      - "Do not weaken accepted-correctness or source-authority gates."
+    expected_output:
+      - "Fact-level failure attribution matrix"
+      - "Decision on whether the next change belongs in product, benchmark, lane instructions, or rubric"
+      - "One bounded Worker package or a rejection"
     receipt: null
   - id: T999
     type: judge
@@ -764,16 +800,14 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch records T110 phase-three adapter acceptance and phase-three live execution activation"
+  dirty_fingerprint: "custody branch retains the sealed unresolved T110 result and activates T120 fact-level failure attribution"
   last_verification:
     result: pass
     task: T110
     commands:
-      - "44 focused T110 controller and custody tests passed."
-      - "87 mapped consumers passed with one known unavailable-lane skip."
-      - "The frozen-study validator, py_compile, git diff --check, and clean-worktree check passed."
-      - "Parent fixture qualification closed four trials, then resumed without replay and with zero provider calls."
-      - "Independent Luna re-audit passed after exact manifest and executable approval bindings were added."
+      - "The observed controller sealed 16 terminal receipts with eight provider calls and zero retries."
+      - "A credential-free exact restart revalidated all receipt hashes and the same canonical seal."
+      - "Independent Luna audit passed custody and rejected any efficacy, token, cost, or TTC claim."
 
 provider_budget:
   provider: typesafe_jev
@@ -785,7 +819,7 @@ provider_budget:
   final_installed_path_live_calls: 0
   four_arm_live_calls: 8
   actual_spend_usd: null
-  conservative_committed_spend_usd: 0.253231104
-  remaining_usd: 0.746768896
+  conservative_committed_spend_usd: 0.284922456
+  remaining_usd: 0.715077544
   ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
   claim_boundary: "No Graph plus Jev correctness, speed, token, or cost claim is currently supported."
