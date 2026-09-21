@@ -18,6 +18,7 @@ from packages.core import (
     PromptFacetSet,
     ProofObligation,
     Provenance,
+    RetrievalHit,
     Sensitivity,
     SourceCoordinate,
     SourceIdentityV4,
@@ -189,6 +190,7 @@ class SourceBoundExpansionTests(unittest.TestCase):
         sources = {
             "src/caller.py": b"from src.helper import helper\n\ndef call_helper():\n    return helper()\n",
             "src/helper.py": b"def helper():\n    return 1\n",
+            "src/noise.py": b"def alpha_noise():\n    return '" + b"x" * 512 + b"'\n",
         }
         plain_graph, snapshot, reader = multi_source_fixture(sources)
         records = plain_graph.record_map()
@@ -300,6 +302,44 @@ class SourceBoundExpansionTests(unittest.TestCase):
             candidate.relationship_parent_candidate_id is not None
             for candidate in valid_candidates
         ))
+        crowded = replace(
+            enabled,
+            hits=(
+                RetrievalHit(
+                    "repo:src/noise.py", "src/noise.py", 2,
+                    ("exact",), ("alpha",), 0,
+                ),
+                *enabled.hits,
+            ),
+        )
+        broad = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader, crowded,
+            maximum_candidates=64,
+            maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096,
+        )
+        child = next(
+            candidate for candidate in broad
+            if candidate.relationship_parent_candidate_id is not None
+        )
+        parent = next(
+            candidate for candidate in broad
+            if candidate.candidate_id == child.relationship_parent_candidate_id
+        )
+        relationship_bytes = sum(
+            candidate.byte_end - candidate.byte_start for candidate in (parent, child)
+        )
+        constrained = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader, crowded,
+            maximum_candidates=64,
+            maximum_candidate_bytes=relationship_bytes,
+            maximum_unit_bytes=4096,
+        )
+        self.assertEqual(constrained, (parent, child))
+        self.assertEqual(
+            sum(candidate.byte_end - candidate.byte_start for candidate in constrained),
+            relationship_bytes,
+        )
         with self.assertRaisesRegex(ValueError, "duplicate_relationship_support"):
             ranked_candidates_from_retrieval(
                 graph, task(), snapshot, reader,

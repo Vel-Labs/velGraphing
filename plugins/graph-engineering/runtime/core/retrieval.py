@@ -838,7 +838,16 @@ def ranked_candidates_from_retrieval(
     ordered: list[RankedContextCandidate] = list(required)
     for candidate in required:
         ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
-    for candidate in [*completion, *optional]:
+    nonrequired = [*completion, *optional]
+    relationship_parents = [
+        candidate for candidate in nonrequired
+        if supports_by_parent.get(candidate.candidate_id)
+    ]
+    other_optional = [
+        candidate for candidate in nonrequired
+        if not supports_by_parent.get(candidate.candidate_id)
+    ]
+    for candidate in [*relationship_parents, *other_optional]:
         ordered.append(candidate)
         ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
 
