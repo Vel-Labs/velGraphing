@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T320
+active_task: T999
 
 tasks:
   - id: T010
@@ -2159,7 +2159,7 @@ tasks:
   - id: T320
     type: pm
     assignee: PM
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Retain raw host output, canonicalize valid identity-bound JSON in Parent, then execute and seal the final R7 study."
     inputs:
@@ -2190,10 +2190,37 @@ tasks:
       - "Sixteen terminal R7 trials"
       - "Eight or fewer Jev calls with zero retries"
       - "One sealed result and independent Luna audit"
+    receipt:
+      result: blocked
+      note: notes/T320-r7-terminal-stop.md
+      changed_files:
+        - scripts/benchmarks/time_to_correct_handoff.py
+        - scripts/benchmarks/four_arm_study_v1.py
+        - tests/benchmarks/test_time_to_correct_calibration.py
+        - benchmarks/velgraphing-four-arm-study-v1/freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - benchmarks/velgraphing-four-arm-study-v1/README.md
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T320-r7-terminal-stop.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Raw-response retention, canonicalization, schema, identity, attestation, and controller validation"
+          status: pass
+        - cmd: "Independent Luna R7 freeze audit"
+          status: pass
+        - cmd: "Launch R7 and complete A-S-01 answer handoff"
+          status: pass
+        - cmd: "Complete A-S-01 frozen Astra grader handoff"
+          status: fail
+        - cmd: "Stop the exact R7 controller after the first grader failure"
+          status: pass
+      summary: "R7 proved exact inline answer delivery, raw response custody, Parent canonicalization, attestation, and response publication. The first frozen Astra grader task then completed with no output. R7 stopped at 0/16 with zero Jev calls. The predeclared terminal rule rejects another transport variant."
+      spawned_tasks:
+        - T999
   - id: T999
     type: judge
     assignee: Judge
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Audit the full owner outcome and complete Parent lifecycle closeout."
     inputs:
@@ -2213,15 +2240,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "Inline input is proven; T320 removes the false model-owned JSON key-order gate before the final R7 execution"
+  dirty_fingerprint: "R7 proved the answer handoff but stopped on a silent frozen Astra grader completion at 0/16 with zero Jev calls; T999 owns terminal audit"
   last_verification:
-    result: revise
-    task: T310
+    result: blocked
+    task: T320
     commands:
-      - "Exact 14473-byte A-S-01 request was delivered inline to a fresh Luna task."
-      - "The task returned one valid JSON object with exact identity and zero tool calls."
-      - "Strict canonical-byte equality rejected only JSON key order."
-      - "No R7 task or provider call ran."
+      - "R7 freeze and independent Luna audit passed."
+      - "A-S-01 Luna answer completed through raw capture, canonicalization, attestation, and response publication."
+      - "The bound Astra grader completed with no assistant or tool item."
+      - "The controller stopped. No Jev, retry, replacement, or later trial ran."
 
 provider_budget:
   provider: typesafe_jev
@@ -2239,6 +2266,7 @@ provider_budget:
   r6_reservation_reuses_r5_request_set: true
   r6_executed_live_calls: 0
   r7_reservation_reuses_r5_request_set: true
+  r7_executed_live_calls: 0
   conservative_committed_spend_usd: 0.359789241
   remaining_usd: 0.640210759
   ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
