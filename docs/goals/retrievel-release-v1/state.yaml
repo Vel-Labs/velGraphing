@@ -63,7 +63,7 @@ visual_board:
     url: null
     command: "node <skill-path>/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-release-v1"
 
-active_task: T050
+active_task: T060
 
 tasks:
   - id: T010
@@ -252,7 +252,7 @@ tasks:
   - id: T050
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: medium
     objective: "Repair the smallest remaining end-to-end measurement transport gap and prove one complete canary."
     allowed_files:
@@ -272,25 +272,46 @@ tasks:
       - "The candidate identity or installed path is not frozen."
       - "The repair would rewrite historical results."
     receipt:
-      result: partial
+      result: done
       commits:
         - d1c8512196b1047c9443c75feb855ef03fbb0399
         - c4d362fa67c28ab73982a62eb036a8dc507dc308
         - c7301d83b3dd92d676e48bbc86ae00403c52feca
         - 04a17d4907db9a9040aeca380c1bbbef63ecfb18
-      summary: "Graph/off now performs fresh installed-path discovery inside Trial.prepare. Graph/on replay uses one installed Graph Find process and transports a request-bound reranked selection through one answer and one independent grader with zero provider calls. Child timing remains separate, replay tokens cannot enter provider totals, and independent audit accepted both paths. Observed/live Graph/on remains fail-closed and keeps T050 active."
+        - a496154e8e51b357e5c988d6a6354b5154a9e731
+      summary: "Graph/off performs fresh installed-path discovery inside Trial.prepare and completed a credential-free answer/grader canary. Graph/on replay transports a request-bound reranked selection through one answer and one independent grader with zero provider calls. The observed Graph/on controller now binds exact approval hash and request bytes, reserves one call, launches one installed child with no retry, preserves unknown-consumption accounting on failure, validates reranked or safe-fallback output, and keeps provider totals incomplete unless the parent observes them. Independent Luna audits accepted the repaired paths."
       package_candidate_sha256: 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107
+      changed_files:
+        - plugins/graph-engineering/skills/graph-find/scripts/graph_find.py
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - scripts/benchmarks/four_arm_study_v1.py
+        - tests/skills/test_portable_skills.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+        - docs/goals/retrievel-release-v1/notes/T050-measurement-repair.md
+      commands:
+        - cmd: "focused portable-skill and benchmark unittest discovery"
+          status: pass
+        - cmd: "clean-export six-suite validation on a496154e8e51b357e5c988d6a6354b5154a9e731"
+          status: pass
+        - cmd: "clean-export source/package parity"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
       validation:
         - "clean exact-candidate suite: scaffold 11, core 284, adapters 18, skills 38, benchmarks 193 with 25 expected skips, parity 10"
         - "package parity: passed, 87 files"
         - "independent Luna measurement audit: ACCEPT"
         - "Graph/on replay production-path test: 28 benchmark tests passed, 24 expected private-data skips"
         - "independent Luna Graph/on replay audit: ACCEPT"
-      remaining: "Implement observed installed Graph/on approval binding, one-call evaluate, unknown-consumption accounting, and live provider telemetry without changing historical results."
+        - "observed Graph/on controller/subprocess simulation: 28 benchmark tests passed, 24 expected private-data skips"
+        - "clean exact-commit a496154 suite: scaffold 11, core 284, adapters 18, skills 38, benchmarks 193 with 25 expected skips, parity 10"
+        - "clean exact-commit package parity: passed, 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+        - "independent Luna observed-host re-audit: ACCEPT"
+      remaining: "No accepted live adapter or provider result exists. T040 remains blocked on exact current smoke approval and a credential-bearing operator process. T060 must freeze the successor study before T070 can request bounded live authority."
   - id: T060
     type: judge
     assignee: Judge
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Freeze the expanded corpus and question matrix with independent rubrics, exact snapshots, telemetry, budget, and publication boundaries."
     inputs:
@@ -368,8 +389,8 @@ checks:
   dirty_fingerprint: "clean at ab229142e9a577c88d15bacd67d5bf36cd85e1ea before T010; board files then added by Parent"
   last_verification:
     result: pass
-    task: T050
+    task: T060
     commands:
-      - "clean-export six-suite validation on c7301d83b3dd92d676e48bbc86ae00403c52feca"
+      - "clean-export six-suite validation on a496154e8e51b357e5c988d6a6354b5154a9e731"
       - "clean-export source/package parity on candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
-      - "independent Luna measurement audit: ACCEPT"
+      - "independent Luna observed-host re-audit: ACCEPT"
