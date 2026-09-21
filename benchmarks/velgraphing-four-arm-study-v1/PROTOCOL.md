@@ -60,6 +60,19 @@ through the current controller. A new successor freeze and fresh lane manifest
 must bind the current controller, host, rubric, and grader contract before any
 execution command is eligible.
 
+T060 writes `successor-freeze.json` and `successor-preflight.json`. It derives
+source-free pool summaries from the pinned local v4 lanes and binds the current
+release-package candidate, controller, source snapshots, corrected rubrics,
+request-byte set, pool hashes, and private witness-custody digests. It does not
+rewrite `freeze.json`, `preflight.json`, or sealed results. It records eight
+planned Jev calls, zero retries, and zero executed answer, grader, Jev, or
+provider calls. It does not create answer or grader tasks, freeze lane IDs,
+authorize provider spend, or make the study execution-ready. The maximum live
+provider budget is USD 1.00, independent of request-byte counts. This is a
+spend authorization ceiling, not an estimated cost or predicted charge. Final
+user re-ack must approve this exact ceiling. Request bytes identify the frozen
+request set only.
+
 The successor TTC contract adds a deterministic pre-answer source-completeness
 check. It uses only selected evidence identities and a frozen private fact-witness
 map. The map is a benchmark diagnostic. It is not a production routing input.
@@ -88,6 +101,42 @@ cannot support Direct, Graph, Jev, or comparative retrieval-performance claims.
 Historical and successor validation are separate commands. `validate` reports
 the historical scope. `validate-successor-overlay` reports the offline
 successor scope and its bound implementation identities.
+
+Reproduce the separate T060 successor freeze and offline preflight with:
+
+```sh
+python3 -B scripts/benchmarks/four_arm_study_v1.py \
+  freeze-successor --root benchmarks/velgraphing-four-arm-study-v1 \
+  --lanes-root "$LANE_ROOT" \
+  --witness-custody "$WITNESS_CUSTODY" --refresh
+```
+
+This command reads the three pinned local v4 lanes. It makes no answer,
+grader, Jev, provider, credential, or network call. The resulting artifacts
+must pass `validate-successor-overlay` before a later execution task can use
+them.
+
+Before any lane manifest can be created, regenerate the ignored source-bound
+pool artifact and check it against `successor-preflight.json`:
+
+```sh
+python3 -B scripts/benchmarks/four_arm_study_v1.py \
+  prepare-successor-execution --root benchmarks/velgraphing-four-arm-study-v1 \
+  --lanes-root "$LANE_ROOT" \
+  --witness-custody "$WITNESS_CUSTODY"
+```
+
+This writes only
+`.velgraphing-local/velgraphing-four-arm-study-v1/phase-2-pools.json`.
+`freeze-lanes` and `run` refuse a missing, changed, or unbound pool artifact.
+The prep command scans the pinned lanes again and verifies the generated pool
+SHA-256 against the successor preflight before it writes the ignored artifact.
+It creates no lanes and makes no model or provider call.
+
+The successor `run` command uses
+`--approved-max-live-provider-budget-usd 1.00` only after final user re-ack.
+Do not use the historical `--approved-budget-usd` value for successor
+execution. The old request-byte reservation fields remain historical-only.
 
 ## Jev budget and skip rule
 
@@ -157,14 +206,20 @@ Fixture qualification covered all four treatment shapes, restart, baseline
 fallback, telemetry, and zero external calls. It did not import or run the
 historical T030 continuation controller.
 
-T300 froze 16 fresh Luna answer thread IDs, 16 fresh Astra grader thread IDs,
-all 32 exact host argv arrays, the absolute Python executable, and the R6
-manifest hash. Parent sends each exact request inline. Parent retains each raw
-assistant response, validates its identity and role contract, and serializes an
-equivalent canonical lane draft before the existing attestation flow. Parent
-must retain the exact
-request-byte set, eight-call cap, total USD reservation, manifest hash, and
-Python executable. No lane or provider call is authorized by this package.
+The older T300 record froze 16 fresh Luna answer thread IDs, 16 fresh Astra
+grader thread IDs, all 32 exact host argv arrays, the absolute Python
+executable, and the R6 manifest hash. That record belongs to the earlier
+private execution boundary. It is not copied into the T060 successor freeze;
+the successor lane manifest remains pending, and no successor answer or grader
+tasks have been created. Parent sends each exact request inline. Parent retains
+each raw assistant response, validates its identity and role contract, and
+serializes an equivalent canonical lane draft before the existing attestation
+flow. The historical T300 request-byte set, eight-call cap, reservation,
+manifest hash, and Python executable apply only to that earlier private
+boundary. This T060 successor has separate pending authority. It requires final
+user re-ack for its request-byte-set hash, eight-call cap, USD 1.00 maximum
+live provider spend, lane-manifest hash, and Python executable. No lane or
+provider call is authorized by this package.
 
 Provider performance details remain private unless separate provider permission
 authorizes publication. This restriction applies to future results as well as

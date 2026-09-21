@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from copy import deepcopy
+from decimal import Decimal
 from io import StringIO
 import json
 import os
@@ -698,6 +699,9 @@ class FourArmStudyTests(unittest.TestCase):
         self.ttc, self.custody = study.load_successor_ttc_contract(
             custody_path=CUSTODY,
         )
+        self.successor_freeze, self.successor_preflight = study.load_successor_freeze(
+            custody_path=CUSTODY,
+        )
         self.frozen_preflight = json.loads(
             (BENCHMARK / "preflight.json").read_text(encoding="utf-8")
         )
@@ -730,7 +734,7 @@ class FourArmStudyTests(unittest.TestCase):
         )
         self.assertEqual(
             self.successor["implementation_bindings"]["controller"]["sha256"],
-            study.SUCCESSOR_RUBRICS_CONTROLLER_SHA256,
+            study.digest((ROOT / "scripts/benchmarks/four_arm_study_v1.py").read_bytes()),
         )
         self.assertEqual(
             self.ttc["bindings"]["controller"]["sha256"],
@@ -764,6 +768,128 @@ class FourArmStudyTests(unittest.TestCase):
                             if row["ask_id"] == "citations")
             self.assertIn("evidence IDs that map", citation)
         self.assertEqual(self.successor["arm_labels"], study.SUCCESSOR_ARM_LABELS)
+
+    def test_successor_freeze_binds_current_candidate_and_pending_authority(self) -> None:
+        bindings = self.successor_freeze["bindings"]
+        policy = self.successor_freeze["execution_policy"]
+        self.assertEqual(
+            bindings["package_candidate"]["candidate_sha256"],
+            json.loads((ROOT / "plugins/graph-engineering/.codex-plugin/release-manifest.json")
+                       .read_text(encoding="utf-8"))["candidate_sha256"],
+        )
+        self.assertEqual(bindings["pool_bindings"], self.ttc["bindings"]["pool_bindings"])
+        self.assertEqual(policy["fresh_answer_lanes"], 16)
+        self.assertEqual(policy["fresh_grader_lanes"], 16)
+        self.assertEqual(policy["exact_host_argv_arrays"], 32)
+        self.assertEqual(policy["planned_jev_calls"], 8)
+        self.assertEqual(policy["jev_max_calls"], 8)
+        self.assertEqual(policy["jev_retries"], 0)
+        self.assertEqual(policy["task_retries"], 0)
+        self.assertEqual(policy["answer_tasks_created"], 0)
+        self.assertEqual(policy["grader_tasks_created"], 0)
+        self.assertEqual(policy["live_lanes_created"], 0)
+        self.assertFalse(policy["execution_ready"])
+        self.assertEqual(policy["max_live_provider_budget_usd"], "1.00")
+        self.assertFalse(policy["provider_spend_authorized"])
+        self.assertIn(
+            "max_live_provider_budget_usd",
+            self.ttc["remaining_authority"]["final_user_reack"],
+        )
+        self.assertNotIn(
+            "total_reservation_usd",
+            self.ttc["remaining_authority"]["final_user_reack"],
+        )
+        self.assertEqual(self.successor_preflight["executed_calls"], {
+            "answer": 0, "grader": 0, "jev": 0, "provider": 0,
+        })
+        self.assertEqual(self.successor_preflight["retries"], 0)
+        self.assertEqual(self.successor_preflight["planned_jev_calls"], 8)
+
+        invalid = deepcopy(self.successor_freeze)
+        invalid["execution_policy"]["jev_max_calls"] = 9
+        with self.assertRaisesRegex(study.StudyError, "successor_freeze_invalid"):
+            study._validate_successor_freeze(
+                invalid, self.freeze, self.successor, self.ttc, 8, BENCHMARK, ROOT,
+            )
+
+        invalid_preflight = deepcopy(self.successor_preflight)
+        invalid_preflight["executed_calls"]["provider"] = 1
+        with self.assertRaisesRegex(study.StudyError, "successor_preflight_invalid"):
+            study._validate_successor_preflight(
+                invalid_preflight, self.successor_freeze,
+                study.digest((BENCHMARK / study.SUCCESSOR_FREEZE).read_bytes()),
+                self.freeze, BENCHMARK,
+            )
+
+    def test_live_provider_budget_is_independent_and_requires_exact_cap(self) -> None:
+        self.assertEqual(study.MAX_LIVE_PROVIDER_BUDGET_USD, Decimal("1.00"))
+        with self.assertRaisesRegex(
+            study.MeasurementError, "live_provider_budget_ceiling_not_approved",
+        ):
+            study._validate_approved_provider_budget("0.359789241")
+        study._validate_approved_provider_budget("1.00")
+
+    def test_pool_hash_mismatch_blocks_preparation_and_lane_creation(self) -> None:
+        expected = study.digest(b"frozen-source-bound-pools")
+        self.assertEqual(
+            study._require_successor_pool_hash(b"frozen-source-bound-pools", {
+                "pool_artifact_sha256": expected,
+            }),
+            expected,
+        )
+        with self.assertRaisesRegex(
+            study.StudyError, "successor_pool_artifact_hash_invalid",
+        ):
+            study._require_successor_pool_hash(b"stale-pools", {
+                "pool_artifact_sha256": expected,
+            })
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            pool_path = Path(directory) / "phase-2-pools.json"
+            pool_path.write_bytes(b"stale-pools")
+            relative_path = pool_path.relative_to(ROOT).as_posix()
+            with patch.object(study, "LOCAL_POOL_ARTIFACT", relative_path):
+                with self.assertRaisesRegex(
+                    study.StudyError, "successor_pool_artifact_hash_invalid",
+                ):
+                    study.load_prepared_successor_pool(
+                        BENCHMARK, pool_path, CUSTODY, ROOT,
+                    )
+                with patch.object(study, "execute_trial") as execute_trial:
+                    with self.assertRaisesRegex(
+                        study.StudyError, "successor_pool_artifact_hash_invalid",
+                    ):
+                        study.run_study(
+                            BENCHMARK, pool_path, Path(directory),
+                            Path(directory) / "run", Path(directory) / "lane-manifest.json",
+                            CUSTODY, allow_live_jev=True, approved_cap=8,
+                            approved_request_set=study.REQUEST_BYTE_SET_SHA256,
+                            approved_max_live_provider_budget_usd="1.00",
+                            approved_manifest="0" * 64,
+                            approved_python=sys.executable,
+                        )
+                    execute_trial.assert_not_called()
+
+        error = StringIO()
+        with (
+            patch.object(
+                study, "load_prepared_successor_pool",
+                side_effect=study.StudyError("successor_pool_artifact_hash_invalid"),
+            ),
+            patch.object(study, "freeze_lane_manifest") as create_lanes,
+            redirect_stderr(error),
+        ):
+            with self.assertRaises(SystemExit) as stopped:
+                study.main([
+                    "freeze-lanes", "--root", str(BENCHMARK),
+                    "--bindings", str(BENCHMARK / "not-read-before-pool-check.json"),
+                    "--run-root", str(ROOT / ".velgraphing-local/t060-no-lanes"),
+                    "--python-executable", sys.executable,
+                    "--witness-custody", str(CUSTODY),
+                ])
+        self.assertEqual(stopped.exception.code, 2)
+        self.assertIn("successor_pool_artifact_hash_invalid", error.getvalue())
+        create_lanes.assert_not_called()
 
     def test_host_payloads_keep_answer_and_grader_blind(self) -> None:
         answer = _answer_input({
@@ -940,6 +1066,22 @@ class FourArmStudyTests(unittest.TestCase):
                 successor_ttc_contract=self.ttc, successor_rubrics=self.successor,
             )
         self.assertEqual(sealed["classification"], "oracle_assisted_fallback_ttc")
+        self.assertEqual(sealed["budget"]["max_live_provider_budget_usd"], "1.00")
+        self.assertNotIn("total_reservation_usd", sealed["budget"])
+        self.assertEqual(
+            sealed["budget"]["budget_semantics"],
+            "authorized_maximum_not_cost_estimate",
+        )
+        with tempfile.TemporaryDirectory(dir=local) as directory:
+            historical = study._seal(
+                Path(directory), self.freeze,
+                {"A-S-01": {"trial_id": "A-S-01", "task_id": "S-01"}},
+                [result], "0" * 64, "fixture",
+            )
+        self.assertEqual(
+            historical["budget"]["total_reservation_usd"],
+            str(study.TOTAL_RESERVATION),
+        )
         self.assertEqual(
             set(sealed["claim_boundary"]["prohibited"]),
             {

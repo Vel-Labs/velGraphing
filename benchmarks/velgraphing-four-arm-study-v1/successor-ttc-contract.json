@@ -6,7 +6,7 @@
     },
     "controller": {
       "path": "scripts/benchmarks/four_arm_study_v1.py",
-      "sha256": "fbffeec3d75e24f8b30ec02f798933006bc545899c20123a3ebeeddec986fe22"
+      "sha256": "515a1762712de5af558cf4364c7010295b985828031803493352eef2e3a781f9"
     },
     "host": {
       "path": "scripts/benchmarks/time_to_correct_host.py",
@@ -37,7 +37,7 @@
     "successor_grader_response_contract_sha256": "dd517640475fe2219514ebee94a01182bbd74ff17adafeb5aa1348a3e0f6db2c",
     "successor_rubric": {
       "path": "successor-rubrics.json",
-      "sha256": "f863147640b47342d9c066f42d245708a58ba47f8ec235d5fa1459de0ccfbd41"
+      "sha256": "9a296e0a83f7d0fc17408679baa607743da1f79206d6cff4267c648a5cf506d8"
     }
   },
   "classification": {
@@ -64,7 +64,7 @@
     "final_user_reack": [
       "request_byte_set_sha256",
       "eight_call_cap",
-      "total_reservation_usd",
+      "max_live_provider_budget_usd",
       "lane_manifest_sha256",
       "absolute_python_executable"
     ],
