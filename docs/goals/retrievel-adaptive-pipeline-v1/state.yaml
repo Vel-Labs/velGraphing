@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T300
+active_task: T310
 
 tasks:
   - id: T010
@@ -2053,7 +2053,7 @@ tasks:
   - id: T300
     type: pm
     assignee: PM
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Replace the cross-worktree lane-write assumption, then execute and seal a fresh R6 study on the unchanged final product candidate."
     inputs:
@@ -2084,6 +2084,64 @@ tasks:
       - "Sixteen terminal R6 trials"
       - "Eight or fewer Jev calls with no retries"
       - "One sealed R6 result and independent Luna audit"
+    receipt:
+      result: stopped
+      note: notes/T300-r6-execution-stop.md
+      changed_files:
+        - scripts/benchmarks/time_to_correct_handoff.py
+        - tests/benchmarks/test_time_to_correct_calibration.py
+        - benchmarks/velgraphing-four-arm-study-v1/freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - benchmarks/velgraphing-four-arm-study-v1/README.md
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T300-r6-execution-stop.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Fresh Luna host-response transport canary"
+          status: pass
+        - cmd: "Focused capture, attestation, controller, projector, and independent Luna freeze validation"
+          status: pass
+        - cmd: "Launch the exact frozen R6 controller and dispatch A-S-01"
+          status: fail
+        - cmd: "Stop the exact R6 controller process after the first lane failure"
+          status: pass
+      summary: "R6 preserved the product and provider request set and proved the output capture seam, but the first real answer lane again completed silently before reading the file-based request. R6 stopped at 0/16 with zero Jev calls. Two same-signature failures end the file-based lane architecture."
+      spawned_tasks:
+        - T310
+  - id: T310
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Replace file-based model input with exact inline host input, then execute and seal the unchanged final four-arm study."
+    inputs:
+      - "T290 and T300 same-signature silent lane failures"
+      - "Passed host-response output canary and capture implementation at benchmark head b7ca78774cbb49216b662a89d5de078444fb6059"
+      - "Unchanged product implementation 6b9d120e74bb0b658d8623bd2ec37bb05096f6b1"
+      - "Unchanged request-byte-set SHA-256 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94"
+      - "Eight Jev calls, 758130 request bytes, and USD 0.359789241 aggregate reservation"
+    constraints:
+      - "First prove one fresh Luna canary with the exact 14473-byte A-S-01 request delivered inline in the host follow-up message."
+      - "The model task must use only the inline request, make zero tool calls, and return one canonical JSON object in its final assistant response."
+      - "If the exact inline canary fails, stop the current host-task benchmark architecture. Do not create another micro-variant."
+      - "If it passes, use fresh R7 Luna and Astra task identities and a fresh ignored run root."
+      - "Do not change the product, question, rubric, pool, request bytes, model, source scope, dispatch order, provider budget, or acceptance rules."
+      - "Use the proven Parent capture, attestation, and response path. Make at most eight Jev calls and zero retries."
+      - "Stop at the first provider or lane failure. Preserve R5 and R6 unchanged."
+    verify:
+      - "The inline canary binds the exact A-S-01 request SHA-256 b6cf1fc1fd7fc0eeb5efd8751aa68be8f52de75ed3a9193b42498fa72d31a1b0 and 14473 bytes."
+      - "The task returns a non-empty canonical response with exact execution identity and zero tool calls."
+      - "Every R7 trial records terminal provider, answer, grader, timing, context, and available usage receipts."
+      - "A sealed result passes one independent Luna audit before interpretation."
+    stop_if:
+      - "The exact inline input canary returns a silent, empty, malformed, or wrong-identity response."
+      - "Any frozen product, source, request, model, rubric, budget, or acceptance identity changes."
+      - "The first R7 provider or lane failure occurs."
+    expected_output:
+      - "One exact inline-input transport proof"
+      - "Sixteen terminal trials or a terminal host-architecture rejection"
+      - "Eight or fewer Jev calls with zero retries"
+      - "One sealed result and independent Luna audit if execution completes"
   - id: T999
     type: judge
     assignee: Judge
@@ -2107,15 +2165,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "R5 stopped at 0/16 on one silent empty Luna completion with zero Jev calls; T300 owns the host-response transport successor"
+  dirty_fingerprint: "R5 and R6 both stopped at 0/16 on silent file-based Luna lane completion with zero Jev calls; T310 owns the inline-input redesign"
   last_verification:
     result: stopped
-    task: T290
+    task: T300
     commands:
-      - "Exact R5 hashes and Python identity passed the live gate."
-      - "A-S-01 request was emitted to the frozen Luna lane."
-      - "The lane completed with no message and no draft; attestation and response failed closed."
-      - "The controller was stopped. No Jev or grader call ran."
+      - "Host-response output canary, capture tests, and independent freeze audit passed."
+      - "Exact R6 hashes and Python identity passed the live gate."
+      - "A-S-01 completed with no assistant response before capture; the controller stopped."
+      - "No Jev, grader, retry, replacement, or result occurred."
 
 provider_budget:
   provider: typesafe_jev
@@ -2131,6 +2189,8 @@ provider_budget:
   reserved_r5_request_bytes: 758130
   r5_executed_live_calls: 0
   r6_reservation_reuses_r5_request_set: true
+  r6_executed_live_calls: 0
+  r7_reservation_reuses_r5_request_set: true
   conservative_committed_spend_usd: 0.359789241
   remaining_usd: 0.640210759
   ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
