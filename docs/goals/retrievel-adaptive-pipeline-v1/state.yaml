@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T190
+active_task: T191
 
 tasks:
   - id: T010
@@ -1335,7 +1335,7 @@ tasks:
   - id: T190
     type: pm
     assignee: PM
-    status: active
+    status: blocked
     reasoning_hint: high
     objective: "Execute the clean approved successor run after the citation-boundary repair, then seal or fail closed without replaying any completed model call."
     inputs:
@@ -1353,6 +1353,37 @@ tasks:
       - "Sixteen terminal trial receipts"
       - "At most eight observed Jev calls"
       - "One sealed private result.json or an exact new fail-closed receipt"
+    receipt:
+      result: blocked
+      blocked_reason: "The fresh A-S-01 answer task delegated its host request to another task instead of executing it, violating the one-bound-call lane contract."
+      changed_files: []
+      commands:
+        - cmd: "Approved controller run against successor-live-r2-4e9d1b0"
+          status: fail
+      summary: "Fail-closed before any Jev or grader call. One Luna task-coordination turn occurred, but no answer draft, completed trial, or result seal was accepted. The task and run root will not be reused."
+      spawned_tasks:
+        - T191
+  - id: T191
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Replace the lane pool with strictly non-delegating fresh tasks, verify every setup turn contains no tool call, and freeze a third clean manifest before another live attempt."
+    inputs:
+      - "Observed task-host delegation failure in r2"
+      - "Prior successful lane setup wording from the retained historical run"
+      - "Accepted citation repair d6d79bc"
+    constraints:
+      - "Create 16 Luna-medium answer tasks and 16 Astra-high grader tasks."
+      - "Setup explicitly prohibits create, fork, send, coordination, or delegation tools."
+      - "Require exact READY and no setup tool call for every accepted task."
+      - "Do not expose benchmark content or run the controller during setup."
+      - "Archive every rejected or superseded lane task."
+    expected_output:
+      - "32 fresh verified non-delegating lane tasks"
+      - "One ignored clean r3 manifest with 32 unique identities"
+      - "Tracked contract rotated to the r3 manifest"
+      - "Zero provider, answer, or grader calls during setup"
     receipt: null
   - id: T999
     type: judge
