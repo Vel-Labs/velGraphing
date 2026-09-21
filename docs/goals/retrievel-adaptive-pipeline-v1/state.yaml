@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T150
+active_task: T151
 
 tasks:
   - id: T010
@@ -885,7 +885,7 @@ tasks:
   - id: T150
     type: worker
     assignee: Worker
-    status: active
+    status: blocked
     reasoning_hint: medium
     objective: "Implement and freeze the successor time-to-correct verified-fallback contract without running live lanes."
     allowed_files:
@@ -917,6 +917,66 @@ tasks:
       - "Fresh successor contract and offline freeze validation"
       - "Exact hashes and budget values needed for final operator re-acknowledgment"
       - "No live calls"
+    receipt:
+      result: blocked
+      blocked_reason: "Independent Luna audit found that the concrete oracle map and fallback spans were tracked despite the private-custody contract, and that verifier work occurred outside the measured fallback phase."
+      changed_files:
+        - scripts/benchmarks/four_arm_study_v1.py
+        - scripts/benchmarks/time_to_correct_calibration.py
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - tests/benchmarks/test_four_arm_study_v1.py
+      commands:
+        - cmd: "python -m unittest tests.benchmarks.test_four_arm_study_v1 tests.benchmarks.test_time_to_correct_calibration -v"
+          status: fail
+        - cmd: "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 tests.benchmarks.test_time_to_correct_calibration -v"
+          status: pass
+        - cmd: "python3 scripts/benchmarks/four_arm_study_v1.py validate --root benchmarks/velgraphing-four-arm-study-v1"
+          status: pass
+        - cmd: "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1"
+          status: pass
+        - cmd: "Independent Luna audit of 7a3f8b6"
+          status: fail
+      summary: "Local unpushed commit 7a3f8b6 proved the five-file design but was rejected before adoption. Structural checks passed under python3. The literal python command was unavailable. The candidate must move concrete oracle data to ignored hash-bound custody, classify the measurement as oracle-assisted, and measure the verifier inside the fallback interval."
+      spawned_tasks:
+        - T151
+  - id: T151
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: medium
+    objective: "Repair the successor TTC package so oracle custody, claim boundaries, and fallback timing are exact."
+    allowed_files:
+      - scripts/benchmarks/four_arm_study_v1.py
+      - scripts/benchmarks/time_to_correct_calibration.py
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json
+    verify:
+      - "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 tests.benchmarks.test_time_to_correct_calibration -v"
+      - "python3 scripts/benchmarks/four_arm_study_v1.py validate --root benchmarks/velgraphing-four-arm-study-v1"
+      - "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1"
+      - "git diff --check"
+    stop_if:
+      - "The work requires changing historical freeze.json, questions.json, rubrics.json, preflight.json, prior manifests, or sealed results."
+      - "The private custody artifact cannot remain ignored, source-bound, canonical, and hash-matched."
+      - "Any fallback cannot fit the existing 16 KiB final-context limit."
+      - "Any treatment, verifier, or hidden rubric fact label reaches the answer lane."
+      - "The implementation requires more than one answer or one grade per trial."
+      - "Any provider, answer, or grader call would occur."
+    constraints:
+      - "Remove all concrete fact-to-candidate mappings, paths, and spans from tracked artifacts."
+      - "Track only source-free policy and exact custody hashes. Require the ignored custody artifact explicitly for successor custody validation and execution."
+      - "Classify the study and result as oracle_assisted_fallback_ttc and prohibit Direct, Graph, or Jev retrieval-performance claims."
+      - "Measure the actual verifier and append work inside the fallback phase for every successor trial. Retain fallback_invocations to distinguish verification-only from evidence append."
+      - "Preserve one answer, one grade, zero answer repairs, model blindness, source revalidation, exact bindings, and explicit usage missingness."
+      - "Amend or replace local unpushed commit 7a3f8b6. Do not push."
+    expected_output:
+      - "One clean local benchmark-only commit"
+      - "Tracked source-free successor contract plus ignored hash-bound custody artifact"
+      - "Focused validation and independent-audit-ready receipt"
+      - "No live calls"
     receipt: null
   - id: T999
     type: judge
@@ -941,14 +1001,14 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch records the T140 verified-fallback design and activates T150 successor freeze implementation"
+  dirty_fingerprint: "custody branch records the rejected T150 oracle-custody candidate and activates T151 bounded repair"
   last_verification:
-    result: pass
-    task: T140
+    result: blocked
+    task: T150
     commands:
-      - "Read-only Luna analysis rejected answer retry as an unnecessary 64-lane redesign."
-      - "The selected diagnostic uses one common verified fallback before one answer and one grade per trial."
-      - "The successor live authority remains unbound until exact request-set and lane-manifest hashes exist."
+      - "50 focused tests and both offline validators passed under python3."
+      - "Independent Luna audit blocked tracked oracle data and inaccurate fallback phase timing."
+      - "Commit 7a3f8b6 remains local and unpushed pending T151 repair."
       - "No provider, answer, or grader call occurred."
 
 provider_budget:
