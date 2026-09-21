@@ -552,7 +552,7 @@ tasks:
     status: active
     reasoning_hint: high
     objective: "Freeze, execute, independently grade, and seal the redesigned four-arm time-to-correct study."
-    current_phase: "phase_3b_live_execution_ready_credential_gate"
+    current_phase: "phase_3c_sealed_result_interpretation_audit"
     implementation_thread: "01a0b0e4-21fa-7961-80d8-090e1c6728eb"
     implementation_branch: "codex/retrievel-four-arm-study-v1"
     implementation_base: "3bad9cbfa618e4a39789298a52a8d03d2afdb8f2"
@@ -614,6 +614,27 @@ tasks:
         benchmark_branch: "origin/codex/retrievel-four-arm-study-v1"
         benchmark_head: "93f6dd8af0187e052317f93656fe13387aef6035"
         custody_branch: "origin/codex/retrievel-adaptive-pipeline"
+      result:
+        sha256: "df168115f34fa07366c8758d5f91fb2060161c566cdb5f970ec9c615a86f61ca"
+        status: closed
+        execution: observed
+        reported_trials: 16
+        terminal_receipts: 16
+        provider_calls: 8
+        retries: 0
+        fallback_trials: 0
+        arm_passes:
+          A: "0/4; S-01 ended measurement_error before grading"
+          B: "1/4"
+          C: "1/4"
+          D: "1/4"
+        required_fact_scores:
+          A: "4/14 graded facts plus one ungraded trial"
+          B: "12/19"
+          C: "13/19"
+          D: "14/19"
+        usage_boundary: "Answer, grader, and provider input/output token counts were not exposed and remain null. No all-model token or actual-spend claim is available."
+        interpretation: "Unresolved pending independent source-free audit. The exact-lookup task passed under B, C, and D. Every dependency, synthesis, and heterogeneous-document arm missed the frozen correctness gate. Mean wall time across failed trials is processing time, not time to accepted correctness."
     phase_receipts:
       - phase: "phase_1_benchmark_only_freeze"
         result: done
@@ -704,6 +725,21 @@ tasks:
           answer: 0
           grader: 0
         summary: "Accepted the bounded validate-CLI root-cause repair and froze fresh blind host-native lane identities against the repaired controller. Private bindings remain ignored. No repository content, treatment label, hidden rubric, provider call, answer request, or grader request was sent during lane creation."
+      - phase: "phase_3b_live_execution_and_seal"
+        result: done
+        branch: "codex/retrievel-four-arm-study-v1"
+        commit: "93f6dd8af0187e052317f93656fe13387aef6035"
+        result_sha256: "df168115f34fa07366c8758d5f91fb2060161c566cdb5f970ec9c615a86f61ca"
+        validation:
+          - "The controller sealed 16 terminal receipts against the approved 32-lane manifest."
+          - "A credential-free exact restart revalidated all receipts and the same result seal without replay or provider calls."
+          - "Eight approved Jev calls were consumed with zero retries and no fallback trial."
+          - "The benchmark and custody worktrees remained clean."
+        calls:
+          provider: 8
+          answer: 16
+          grader: 15
+        summary: "Execution completed, but the result does not support a Graph or Jev performance claim. A-S-01 failed evidence-citation validation before grading. B, C, and D each passed only S-01. All four arms failed D-01, L-01, and M-02. Independent interpretation audit remains active before selecting any successor."
     receipt: null
   - id: T999
     type: judge
@@ -747,6 +783,7 @@ provider_budget:
   call_count_is_budget: false
   prior_live_calls: 46
   final_installed_path_live_calls: 0
+  four_arm_live_calls: 8
   actual_spend_usd: null
   conservative_committed_spend_usd: 0.253231104
   remaining_usd: 0.746768896
