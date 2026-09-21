@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T152
+active_task: T160
 
 tasks:
   - id: T010
@@ -1002,7 +1002,7 @@ tasks:
   - id: T152
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: low
     objective: "Align the tracked operator commands and protocol wording with the accepted successor custody boundary."
     allowed_files:
@@ -1028,6 +1028,45 @@ tasks:
       - "Executable source-free tracked operator instructions"
       - "Focused validation and final-audit-ready receipt"
       - "No live calls"
+    receipt:
+      result: done
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/README.md
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - tests/benchmarks/test_four_arm_study_v1.py
+      commands:
+        - cmd: "python3 -m unittest tests.benchmarks.test_four_arm_study_v1 -v"
+          status: pass
+        - cmd: "python3 scripts/benchmarks/four_arm_study_v1.py validate-successor-overlay --root benchmarks/velgraphing-four-arm-study-v1 --witness-custody .velgraphing-local/velgraphing-four-arm-study-v1/successor-ttc-witness-custody.json"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+        - cmd: "Independent Luna audit of 9c5079a"
+          status: pass
+      summary: "Accepted and pushed 9c5079a. The successor package now has executable custody-bound operator commands, source-free tracked instructions, private ignored oracle custody, observed fallback timing, one answer and grade, explicit usage missingness, and an oracle-assisted claim boundary. No live lane, provider, answer, or grader call occurred."
+      spawned_tasks:
+        - T160
+  - id: T160
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Create and freeze the 32 fresh blind lane identities and exact successor manifest without dispatching benchmark content."
+    inputs:
+      - "Accepted benchmark commit 9c5079a"
+      - "Ignored canonical successor witness custody artifact"
+      - "Successor TTC contract and operator commands"
+    constraints:
+      - "Create 16 fresh Luna-medium answer lanes and 16 fresh Astra-high grader lanes."
+      - "Lane setup prompts contain no source, question, arm, route, Jev, rubric, witness, or treatment data."
+      - "Freeze all 32 exact host argv arrays, absolute Python executable, custody path, and canonical manifest SHA."
+      - "Do not run the benchmark controller or make a TypeSafe provider call."
+      - "Do not mark the successor contract live-ready before exact final user re-acknowledgment."
+    expected_output:
+      - "32 unique ready lane task IDs"
+      - "Canonical ignored lane manifest and SHA"
+      - "Exact request-set hash, call cap, USD reservation, Python executable, and claim boundary for final user re-acknowledgment"
+      - "No benchmark answer, grader, or provider calls"
     receipt: null
   - id: T999
     type: judge
@@ -1052,15 +1091,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "custody branch records the code-correct but documentation-blocked T151 candidate and activates T152 operator-contract repair"
+  dirty_fingerprint: "custody branch records accepted successor contract 9c5079a and activates T160 fresh lane freeze"
   last_verification:
-    result: blocked
-    task: T151
+    result: pass
+    task: T152
     commands:
-      - "55 focused tests and historical plus successor validators passed."
-      - "Independent Luna audit passed oracle custody, claim boundary, fallback timing, blindness, and source limits."
-      - "The audit blocked only the missing README custody flag and two literal protocol paths."
-      - "Commit 7d87052 remains local and unpushed pending T152 repair."
+      - "24 final focused tests passed."
+      - "Successor overlay and private custody validation passed."
+      - "Independent Luna final audit passed."
+      - "Benchmark and GoalBuddy branches are synchronized with origin."
       - "No provider, answer, or grader call occurred."
 
 provider_budget:
