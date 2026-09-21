@@ -615,7 +615,7 @@ class PortableSkillTests(unittest.TestCase):
                     "--root",
                     str(root),
                     "--prompt",
-                    "change impact helper function caller import",
+                    "what changes if helper changes",
                 ],
                 text=True,
                 capture_output=True,
@@ -632,6 +632,7 @@ class PortableSkillTests(unittest.TestCase):
         self.assertEqual(1, len(incoming))
         self.assertEqual("src/helper.py", incoming[0]["seed_coordinate"]["source_path"])
         self.assertEqual("src/caller.py", incoming[0]["related_coordinate"]["source_path"])
+        self.assertEqual("helper", incoming[0]["seed_coordinate"]["symbol"])
 
     def test_graph_find_leaves_ambiguous_relations_unresolved(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"

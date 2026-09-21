@@ -729,15 +729,27 @@ class SourceBoundExpansionTests(unittest.TestCase):
         sources = {
             "src/a_definition.py": (
                 b"from src.b_dependency import dependency\n\n"
-                b"def helper():\n    return dependency()\n"
+                b"def helper():\n    return dependency()\n\n"
+                b"def unrelated():\n    return dependency()\n"
             ),
+            "src/a_unrelated.py": b"from src.a_definition import unrelated\n",
             "src/b_dependency.py": b"def dependency():\n    return 1\n",
             "src/z_importer.py": b"from src.a_definition import helper\n",
         }
         plain_graph, snapshot, reader = multi_source_fixture(sources)
+        derived = derive_source_relations(plain_graph, snapshot, Reader(sources)).edges
         graph = Graph(
             plain_graph.records,
-            derive_source_relations(plain_graph, snapshot, Reader(sources)).edges,
+            tuple(
+                replace(
+                    edge,
+                    edge_id={
+                        "unrelated": "edge:0-unrelated",
+                        "helper": "edge:1-helper",
+                    }.get(edge.source_coordinate.symbol, edge.edge_id),
+                )
+                for edge in derived
+            ),
         )
         index = build_repository_tag_index(graph, snapshot, reader)
         obligation = ProofObligation(
@@ -749,7 +761,8 @@ class SourceBoundExpansionTests(unittest.TestCase):
             ordinary_facets,
             facets=(
                 PromptFacet(FacetKind.INTENT, "change-impact", 8),
-                *ordinary_facets.facets[1:],
+                PromptFacet(FacetKind.IDENTIFIER, "helper", 10, True),
+                *ordinary_facets.facets[2:],
             ),
         )
 
@@ -769,6 +782,7 @@ class SourceBoundExpansionTests(unittest.TestCase):
         )
         self.assertEqual(1, len(impact.relationship_supports))
         self.assertEqual("incoming", impact.relationship_supports[0].direction)
+        self.assertEqual("helper", impact.relationship_supports[0].seed_coordinate.symbol)
         self.assertEqual(
             "repo:src/z_importer.py", impact.relationship_supports[0].target_record_id
         )
@@ -1022,6 +1036,17 @@ class TagIndexTests(unittest.TestCase):
             facet for facet in facets.facets if facet.value == "token-expiry"
         )
         self.assertFalse(token_expiry.required)
+
+    def test_changes_compiles_to_change_impact(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = compile_prompt(
+            "what changes if derive_source_relations changes", index
+        )
+        self.assertIn(
+            (FacetKind.INTENT, "change-impact"),
+            {(facet.kind, facet.value) for facet in facets.facets},
+        )
 
     def test_prompt_excludes_common_generic_words(self) -> None:
         graph, snapshot, reader = fixture()

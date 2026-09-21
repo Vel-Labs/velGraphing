@@ -2319,26 +2319,35 @@ def retrieve(
                 continue
             eligible_edges.append(edge)
         direction_order = ("incoming", "outgoing") if change_impact else ("outgoing",)
+        prompt_values = {facet.value for facet in facets.facets}
         for direction in direction_order:
-            for edge in eligible_edges:
-                if direction == "incoming":
-                    if edge.relation not in _REVERSE_RELATIONS:
+            for symbol_matched in (True, False):
+                for edge in eligible_edges:
+                    if direction == "incoming":
+                        if edge.relation not in _REVERSE_RELATIONS:
+                            continue
+                        seed_id, related_id = edge.target_id, edge.source_id
+                        seed_coordinate = edge.target_coordinate
+                    else:
+                        seed_id, related_id = edge.source_id, edge.target_id
+                        seed_coordinate = edge.source_coordinate
+                    assert seed_coordinate is not None
+                    if (
+                        _canonical(seed_coordinate.symbol) in prompt_values
+                    ) is not symbol_matched:
                         continue
-                    seed_id, related_id = edge.target_id, edge.source_id
-                else:
-                    seed_id, related_id = edge.source_id, edge.target_id
-                if seed_id not in selected_seeds or seed_id in support_by_seed:
-                    continue
-                support_by_seed[seed_id] = RelationshipSupport(
-                    edge.edge_id,
-                    edge.relation,
-                    seed_id,
-                    related_id,
-                    edge.source_coordinate,
-                    edge.target_coordinate,
-                    direction,
-                    edge.sensitivity,
-                )
+                    if seed_id not in selected_seeds or seed_id in support_by_seed:
+                        continue
+                    support_by_seed[seed_id] = RelationshipSupport(
+                        edge.edge_id,
+                        edge.relation,
+                        seed_id,
+                        related_id,
+                        edge.source_coordinate,
+                        edge.target_coordinate,
+                        direction,
+                        edge.sensitivity,
+                    )
         relationship_supports = tuple(support_by_seed[key] for key in sorted(support_by_seed))
     return RetrievalResult(
         route="graph" if sufficient else "defer",
@@ -2895,7 +2904,7 @@ def _intent_facets(words: Sequence[str]) -> list[PromptFacet]:
     groups = (
         ("locate", {"find", "locate", "owner", "owns", "where", "which"}),
         ("trace", {"flow", "how", "path", "trace"}),
-        ("change-impact", {"affect", "break", "change", "impact", "migration"}),
+        ("change-impact", {"affect", "break", "change", "changes", "impact", "migration"}),
         ("validate", {"build", "package", "release", "test", "verify"}),
         ("authority", {"authority", "credential", "permission", "privacy", "publish", "safe", "safety"}),
     )
