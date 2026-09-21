@@ -769,7 +769,7 @@ class FourArmStudyTests(unittest.TestCase):
             self.assertIn("evidence IDs that map", citation)
         self.assertEqual(self.successor["arm_labels"], study.SUCCESSOR_ARM_LABELS)
 
-    def test_successor_freeze_binds_current_candidate_and_pending_authority(self) -> None:
+    def test_successor_freeze_binds_current_candidate_and_ready_authority(self) -> None:
         generated = study._build_successor_freeze(
             self.freeze, self.successor, self.ttc, 8, BENCHMARK, ROOT,
         )
@@ -777,7 +777,7 @@ class FourArmStudyTests(unittest.TestCase):
         bindings = self.successor_freeze["bindings"]
         policy = self.successor_freeze["execution_policy"]
         self.assertEqual(
-            self.successor_freeze["status"], "frozen_pending_final_user_reack",
+            self.successor_freeze["status"], "ready_after_final_user_reack",
         )
         self.assertEqual(
             bindings["package_candidate"]["candidate_sha256"],
@@ -795,17 +795,15 @@ class FourArmStudyTests(unittest.TestCase):
         self.assertEqual(policy["answer_tasks_created"], 0)
         self.assertEqual(policy["grader_tasks_created"], 0)
         self.assertEqual(policy["live_lanes_created"], 0)
-        self.assertFalse(policy["execution_ready"])
+        self.assertTrue(policy["execution_ready"])
         self.assertEqual(policy["max_additional_provider_spend_usd"], "0.9031")
         self.assertEqual(
             policy["provider_budget_authority"],
             self.ttc["provider_budget_authority"],
         )
-        self.assertFalse(policy["provider_spend_authorized"])
-        self.assertIn(
-            "max_additional_provider_spend_usd",
-            self.ttc["remaining_authority"]["final_user_reack"],
-        )
+        self.assertTrue(policy["provider_spend_authorized"])
+        self.assertFalse(policy["final_user_reack_required"])
+        self.assertEqual(self.ttc["remaining_authority"]["final_user_reack"], [])
         self.assertNotIn(
             "total_reservation_usd",
             self.ttc["remaining_authority"]["final_user_reack"],
@@ -831,6 +829,99 @@ class FourArmStudyTests(unittest.TestCase):
                 study.digest((BENCHMARK / study.SUCCESSOR_FREEZE).read_bytes()),
                 self.freeze, BENCHMARK,
             )
+
+    def _copy_successor_bundle(self, root: Path) -> None:
+        for name in (
+            "freeze", "questions", "rubrics", "preflight", "successor-rubrics",
+            "successor-ttc-contract", "successor-freeze", "successor-preflight",
+        ):
+            shutil.copy(BENCHMARK / f"{name}.json", root / f"{name}.json")
+        pending = deepcopy(self.ttc)
+        pending["status"] = "frozen_pending_final_user_reack"
+        pending["remaining_authority"]["final_user_reack"] = [
+            "request_byte_set_sha256", "eight_call_cap",
+            "total_authorized_provider_budget_usd",
+            "operator_reported_spend_to_date_usd",
+            "max_additional_provider_spend_usd", "lane_manifest_sha256",
+            "absolute_python_executable",
+        ]
+        pending_freeze = study._build_successor_freeze(
+            self.freeze, self.successor, pending, 8, root, ROOT,
+        )
+        pending_freeze_sha = study.digest(study._json_bytes(pending_freeze))
+        pending_preflight = study._build_successor_preflight(
+            pending_freeze_sha,
+            self.successor_preflight["source_free_preflight"],
+            self.successor_preflight["source_preflight_sha256"],
+            self.successor_preflight["pool_artifact_sha256"],
+            pending_freeze,
+        )
+        (root / "successor-ttc-contract.json").write_bytes(
+            study._json_bytes(pending)
+        )
+        (root / "successor-freeze.json").write_bytes(
+            study._json_bytes(pending_freeze)
+        )
+        (root / "successor-preflight.json").write_bytes(
+            study._json_bytes(pending_preflight)
+        )
+
+    def test_approve_successor_materializes_ready_state_without_calls(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._copy_successor_bundle(root)
+            result = study.approve_successor(
+                root, CUSTODY,
+                approved_max_live_jev_calls=8,
+                approved_request_set=study.REQUEST_BYTE_SET_SHA256,
+                approved_max_additional_provider_spend_usd="0.9031",
+                approved_manifest=self.ttc["bindings"]["lane_manifest"]["sha256"],
+                approved_python=self.ttc["remaining_authority"][
+                    "absolute_python_executable"
+                ],
+            )
+            contract, _ = study.load_successor_ttc_contract(
+                root, ROOT, custody_path=CUSTODY,
+            )
+            successor_freeze, successor_preflight = study.load_successor_freeze(
+                root, ROOT, custody_path=CUSTODY,
+            )
+            self.assertTrue(result["execution_ready"])
+            self.assertEqual(contract["status"], "ready_after_final_user_reack")
+            self.assertEqual(contract["remaining_authority"]["final_user_reack"], [])
+            self.assertTrue(successor_freeze["execution_policy"]["execution_ready"])
+            self.assertFalse(successor_freeze["execution_policy"]["final_user_reack_required"])
+            self.assertTrue(successor_freeze["execution_policy"]["provider_spend_authorized"])
+            self.assertEqual(successor_preflight["executed_calls"], {
+                "answer": 0, "grader": 0, "jev": 0, "provider": 0,
+            })
+            self.assertEqual(successor_preflight["retries"], 0)
+
+    def test_approve_successor_rejects_mismatch_before_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._copy_successor_bundle(root)
+            before = {
+                name: (root / f"{name}.json").read_bytes()
+                for name in (
+                    "successor-ttc-contract", "successor-freeze", "successor-preflight",
+                )
+            }
+            with self.assertRaisesRegex(
+                study.StudyError, "approval_request_byte_set_mismatch",
+            ):
+                study.approve_successor(
+                    root, CUSTODY,
+                    approved_max_live_jev_calls=8,
+                    approved_request_set="0" * 64,
+                    approved_max_additional_provider_spend_usd="0.9031",
+                    approved_manifest=self.ttc["bindings"]["lane_manifest"]["sha256"],
+                    approved_python=self.ttc["remaining_authority"][
+                        "absolute_python_executable"
+                    ],
+                )
+            for name, raw in before.items():
+                self.assertEqual(raw, (root / f"{name}.json").read_bytes())
 
     def test_additional_provider_spend_uses_unverified_operator_account_truth(self) -> None:
         authority = self.ttc["provider_budget_authority"]
@@ -1179,7 +1270,7 @@ class FourArmStudyTests(unittest.TestCase):
 
     def test_successor_contract_refuses_stale_bindings_and_pending_manifest(self) -> None:
         self.assertEqual(
-            self.ttc["status"], "frozen_pending_final_user_reack",
+            self.ttc["status"], "ready_after_final_user_reack",
         )
         self.assertEqual(
             self.ttc["bindings"]["lane_manifest"]["thread_id_semantics"],
@@ -1188,6 +1279,7 @@ class FourArmStudyTests(unittest.TestCase):
         self.assertEqual(self.ttc["remaining_authority"]["answer_task_names"], 16)
         self.assertEqual(self.ttc["remaining_authority"]["grader_task_names"], 16)
         self.assertEqual(self.ttc["remaining_authority"]["live_lanes_created"], 0)
+        self.assertEqual(self.ttc["remaining_authority"]["final_user_reack"], [])
         self.assertEqual(
             self.ttc["remaining_authority"]["lane_manifest_sha256"],
             self.ttc["bindings"]["lane_manifest"]["sha256"],

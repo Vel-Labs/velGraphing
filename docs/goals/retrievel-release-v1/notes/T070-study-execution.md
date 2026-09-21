@@ -1,16 +1,16 @@
-# T070 authority preparation
+# T070 execution approval transition
 
 ## Status
 
-Prepared the successor authority package only. No nested task was created. No
-answer, grader, Jev, or provider call ran. No credential or network access
-occurred. `execution_ready` remains false. No commit was created.
+Materialized the explicit final user re-ack into the successor artifacts. No
+nested task, answer, grader, Jev, or provider call ran. No credential or
+network access occurred. `execution_ready` is true. No commit was created.
 
-Base HEAD: `ddb094cd01c3a7b2450a937203fc40f9a1bff290`.
+Candidate HEAD before this transition: `067b6d27f36260c6c1fa7b7289016a68244748dd`.
 
 ```text
-verified custody and pool -> frozen manifest with planned names -> final user re-ack pending
-                                                          no tasks created; live_lanes_created = 0
+verified custody and pool -> frozen manifest -> exact final user re-ack materialized
+                                      no tasks created; live_lanes_created = 0
 ```
 
 ## Financial authority
@@ -33,10 +33,11 @@ subtracted again, and is not attributable to the operator-reported account-level
 USD `0.0969`. Successor planning uses USD `0.9031` remaining and maximum
 additional spend, with the separate eight-call and zero-retry batch controls.
 
-The regenerated successor freeze status is
-`frozen_pending_final_user_reack`. The lane manifest is already frozen, so a
-fresh lane manifest is no longer a pending gate. Final user re-ack remains
-required before execution.
+The successor freeze status is `ready_after_final_user_reack`. The exact
+request hash, eight-call cap, approved maximum additional spend, lane manifest
+hash, and Python executable matched the frozen values. The v1 schema has no
+approval-receipt field, so the transition is bound by its ready status,
+cleared re-ack list, and regenerated freeze/preflight hashes only.
 
 ## Frozen lane plan
 
@@ -64,16 +65,16 @@ manifest and final re-ack for its new hash. No task was created for this freeze.
 - Request-byte-set SHA-256: `80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94`.
 - Per-batch Jev cap: 8 calls; retries: 0.
 - Maximum additional provider spend: USD `0.9031`.
-- Successor freeze SHA-256: `ed86110272cb4d8dfad853245698b82a2daca1b6cd17fe341db7406fe98d2a5b`.
-- Successor preflight SHA-256: `dffaf31f8dde051223b7ccf86f2b2b90fa5f271fb46693037e061cb415f0fdbf`.
+- Successor freeze SHA-256: `a442afb5fea8529e2979435dd09877207c2a9ba30d53f0c85198c622a7bd86d0`.
+- Successor preflight SHA-256: `23a14866597f20a204ffc6df598bd62ccb1269e2d48364c2c4eef63d82160e66`.
 - Ignored pool artifact SHA-256: `3721b7378848d024e073cfa67bce44249b62551835ce236c22837119fee16d7b`.
-- Controller SHA-256: `505099f791674f3c007873429c5fa35f737c295cf6821be89122a7f127776a33`.
-- Successor rubric canonical SHA-256: `5bcdbf640ef88067db6162c7b937a9976b355c9cd933df2440c51793c16e4e6d`.
-- Successor rubric file SHA-256: `66acba6c5cdec5c970f417ec457e39a40bdef31065611fa464f5e9de5d2b4cc2`.
-- Successor TTC contract canonical SHA-256: `6ea6382a0b8c1be0135be410b2d3bb7dad66d025c78257f7a8fc98d456fd1305`.
-- Successor TTC contract file SHA-256: `6395345ed8c299eea41d45a76e575d305da9423f84dd3e7507b45c54e73e32df`.
-- Contract status: `frozen_pending_final_user_reack`.
-- Remaining re-ack fields: request-byte-set hash; eight-call cap; total budget; operator-reported spend-to-date; maximum additional spend; manifest hash; Python executable.
+- Controller SHA-256: `92c4783c4f81b5768e26394119947199207bea278b675f29038fc37f2343c930`.
+- Successor rubric canonical SHA-256: `91799682531977718ffe75cce4b0674b7b4193f54cb528d7475f431fdd913083`.
+- Successor rubric file SHA-256: `d20a63a1a46f3d5e855862fe9b3fa36c6859178506de5a6900f67553d6b75e35`.
+- Successor TTC contract canonical SHA-256: `87ac7ef1ad996052f856564ff02b96db4e43843f3086741607971c47b0ded8da`.
+- Successor TTC contract file SHA-256: `d25290d05f1719d4082e16fca036c09b1ae7138ccfa287ba63ccc2959b796ef9`.
+- Contract status: `ready_after_final_user_reack`.
+- Remaining re-ack fields: none.
 
 ## Validation
 
@@ -86,22 +87,30 @@ manifest and final re-ack for its new hash. No task was created for this freeze.
 - `freeze-lanes --refresh` with the specified run root, Python path, updated
   bindings, pool, and custody: passed. It replaced the prior planned-name
   manifest and froze 32 unique canonical task names; it created no tasks.
+- `approve-successor` with the exact user-approved request hash, eight-call cap,
+  USD `0.9031` maximum additional value, manifest hash, and Python executable:
+  passed. It made no calls and changed only the successor contract, freeze, and
+  preflight artifacts.
 - `validate-successor-overlay`: passed. It reports eight planned Jev calls,
-  the frozen manifest hash, zero live lanes created, and `execution_ready: false`.
+  the frozen manifest hash, zero live lanes created, and `execution_ready: true`.
 - Historical `validate --lane-manifest`: passed. Direct binding checks passed:
   32 names match their answer/grader bindings exactly, are unique, and use only
   lowercase ASCII letters, digits, and underscores. The contract SHA matches
   the regenerated manifest.
-- Focused benchmark tests: 31 passed, 2 skipped. Coverage now checks the
-  canonical task-name rule, refresh overwrite guard, manifest semantics, and
-  historical-reservation reconciliation.
+- Focused benchmark tests: 33 passed, 2 skipped. Coverage now checks the
+  approval transition, mismatch no-write behavior, canonical task-name rule,
+  refresh overwrite guard, manifest semantics, and historical-reservation
+  reconciliation.
 - `git diff --check`: passed.
 - GoalBuddy `state.yaml` syntax check with Ruby YAML: passed.
 - `run --help`: passed; it exposes `--approved-max-additional-provider-spend-usd`.
+- `git diff --exit-code` for historical `freeze.json` and `preflight.json`: passed; both remain unchanged.
 - Historical `freeze.json` and `preflight.json` diff check: passed; both remain unchanged.
 - Historical `freeze.json` and `preflight.json`: unchanged.
-- Package parity was not rerun. No package files changed; T060's parity result
-  for the same package candidate remains the available evidence.
+- Package parity was attempted but refused with `private_or_machine_path` on
+  an ignored `__pycache__` path in the checkout inventory. No package files
+  changed; this is a parity-harness/environment issue, not a T070 artifact
+  result.
 
 ## Files changed
 
@@ -114,7 +123,8 @@ manifest and final re-ack for its new hash. No task was created for this freeze.
 - `tests/benchmarks/test_four_arm_study_v1.py`
 - `docs/goals/retrievel-release-v1/notes/T060-study-freeze.md`
 - `docs/goals/retrievel-release-v1/notes/T070-study-execution.md`
+- `docs/goals/retrievel-release-v1/state.yaml`
 
-`docs/goals/retrievel-release-v1/state.yaml` had pre-existing local changes and
-was not changed in this repair. The ignored T070 run root contains the updated
-`lane-bindings.json` and regenerated `lane-manifest.json`.
+The ignored T070 run root contains the updated `lane-bindings.json` and
+regenerated `lane-manifest.json`. The board file had pre-existing local
+changes and now also records this approval transition.

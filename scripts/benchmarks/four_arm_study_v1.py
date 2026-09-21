@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 from decimal import Decimal
 import hashlib
 import importlib.util
@@ -2263,6 +2264,11 @@ def _build_successor_freeze(
 ) -> dict[str, Any]:
     if planned_jev_calls != 8:
         raise StudyError("successor_jev_budget_invalid")
+    ready = contract["status"] == "ready_after_final_user_reack"
+    if contract["status"] not in {
+        "frozen_pending_final_user_reack", "ready_after_final_user_reack",
+    }:
+        raise StudyError("successor_ttc_contract_invalid")
     ttc_bindings = contract["bindings"]
     implementation = {
         key: ttc_bindings[key]
@@ -2270,7 +2276,7 @@ def _build_successor_freeze(
     }
     return {
         "schema_version": SUCCESSOR_FREEZE_SCHEMA,
-        "status": "frozen_pending_final_user_reack",
+        "status": contract["status"],
         "study_id": freeze["study_id"],
         "bindings": {
             "historical_freeze_sha256": digest(
@@ -2315,13 +2321,13 @@ def _build_successor_freeze(
             "answer_tasks_created": 0,
             "grader_tasks_created": 0,
             "live_lanes_created": 0,
-            "execution_ready": False,
-            "final_user_reack_required": True,
+            "execution_ready": ready,
+            "final_user_reack_required": not ready,
             "provider_budget_authority": contract["provider_budget_authority"],
             "max_additional_provider_spend_usd": str(
                 MAX_ADDITIONAL_PROVIDER_SPEND_USD
             ),
-            "provider_spend_authorized": False,
+            "provider_spend_authorized": ready,
         },
         "telemetry_schema": freeze["telemetry_schema"],
         "result_contract": contract["result_contract"],
@@ -2333,6 +2339,98 @@ def _build_successor_freeze(
             "provider_specific_results": "private_without_separate_permission",
             "request_bytes_are_not_a_cost_or_reservation_bound": True,
         },
+    }
+
+
+def approve_successor(
+    benchmark_root: Path, custody_path: Path, *,
+    approved_max_live_jev_calls: int,
+    approved_request_set: str,
+    approved_max_additional_provider_spend_usd: str,
+    approved_manifest: str,
+    approved_python: str,
+    repo_root: Path = ROOT,
+) -> dict[str, str | int | bool]:
+    """Materialize the exact final user re-ack without making external calls."""
+    freeze, _, _ = load_bundle(benchmark_root, repo_root)
+    successor = load_successor_rubrics(benchmark_root, repo_root)
+    contract, custody = load_successor_ttc_contract(
+        benchmark_root, repo_root, custody_path=custody_path,
+    )
+    successor_freeze, successor_preflight = load_successor_freeze(
+        benchmark_root, repo_root, custody_path=custody_path,
+    )
+    if contract["status"] != "frozen_pending_final_user_reack":
+        raise StudyError("successor_approval_not_pending")
+    lane_binding = contract["bindings"]["lane_manifest"]
+    expected_manifest = lane_binding["sha256"]
+    expected_python = contract["remaining_authority"][
+        "absolute_python_executable"
+    ]
+    if approved_max_live_jev_calls != 8:
+        raise StudyError("approval_jev_cap_mismatch")
+    if approved_request_set != REQUEST_BYTE_SET_SHA256:
+        raise StudyError("approval_request_byte_set_mismatch")
+    _validate_approved_additional_provider_spend(
+        approved_max_additional_provider_spend_usd,
+    )
+    if approved_manifest != expected_manifest:
+        raise StudyError("approval_lane_manifest_mismatch")
+    if (
+        type(approved_python) is not str
+        or not Path(approved_python).is_absolute()
+        or approved_python != expected_python
+    ):
+        raise StudyError("approval_python_executable_mismatch")
+    if (
+        successor_freeze["status"] != "frozen_pending_final_user_reack"
+        or successor_freeze["execution_policy"]["execution_ready"]
+        or successor_freeze["execution_policy"]["provider_spend_authorized"]
+        or successor_preflight["executed_calls"]
+        != {"answer": 0, "grader": 0, "jev": 0, "provider": 0}
+        or successor_preflight["retries"] != 0
+    ):
+        raise StudyError("successor_approval_state_invalid")
+
+    ready_contract = deepcopy(contract)
+    ready_contract["status"] = "ready_after_final_user_reack"
+    ready_contract["remaining_authority"]["final_user_reack"] = []
+    _validate_successor_ttc_contract(
+        ready_contract, freeze, successor, benchmark_root, repo_root,
+        custody,
+    )
+    ready_freeze = _build_successor_freeze(
+        freeze, successor, ready_contract, 8, benchmark_root, repo_root,
+    )
+    ready_freeze_raw = _json_bytes(ready_freeze)
+    ready_freeze_sha = digest(ready_freeze_raw)
+    ready_preflight = _build_successor_preflight(
+        ready_freeze_sha,
+        successor_preflight["source_free_preflight"],
+        successor_preflight["source_preflight_sha256"],
+        successor_preflight["pool_artifact_sha256"],
+        ready_freeze,
+    )
+    _validate_successor_freeze(
+        ready_freeze, freeze, successor, ready_contract, 8,
+        benchmark_root, repo_root,
+    )
+    _validate_successor_preflight(
+        ready_preflight, ready_freeze, ready_freeze_sha, freeze, benchmark_root,
+    )
+
+    contract_path = benchmark_root / SUCCESSOR_TTC_CONTRACT
+    freeze_path = benchmark_root / SUCCESSOR_FREEZE
+    preflight_path = benchmark_root / SUCCESSOR_PREFLIGHT
+    _write_json(contract_path, ready_contract)
+    _write_json(freeze_path, ready_freeze)
+    ready_preflight_sha = _write_json(preflight_path, ready_preflight)
+    return {
+        "successor_ttc_contract_sha256": digest(_json_bytes(ready_contract)),
+        "successor_freeze_sha256": ready_freeze_sha,
+        "successor_preflight_sha256": ready_preflight_sha,
+        "execution_ready": True,
+        "provider_spend_authorized": True,
     }
 
 
@@ -3309,6 +3407,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     successor_freeze_command.add_argument("--lanes-root", type=Path, required=True)
     successor_freeze_command.add_argument("--witness-custody", type=Path, required=True)
     successor_freeze_command.add_argument("--refresh", action="store_true")
+    successor_approval = subparsers.add_parser("approve-successor")
+    successor_approval.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    successor_approval.add_argument("--witness-custody", type=Path, required=True)
+    successor_approval.add_argument("--approved-max-live-jev-calls", type=int, required=True)
+    successor_approval.add_argument("--approved-request-byte-set-sha256", required=True)
+    successor_approval.add_argument(
+        "--approved-max-additional-provider-spend-usd", required=True,
+    )
+    successor_approval.add_argument("--approved-lane-manifest-sha256", required=True)
+    successor_approval.add_argument("--approved-python-executable", required=True)
     successor_prep = subparsers.add_parser("prepare-successor-execution")
     successor_prep.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     successor_prep.add_argument("--lanes-root", type=Path, required=True)
@@ -3345,6 +3453,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = freeze_successor(
                 arguments.root.resolve(), arguments.lanes_root.resolve(),
                 arguments.witness_custody, ROOT, refresh=arguments.refresh,
+            )
+            print(json.dumps(result, sort_keys=True))
+            return 0
+        if arguments.command == "approve-successor":
+            result = approve_successor(
+                arguments.root.resolve(), arguments.witness_custody,
+                approved_max_live_jev_calls=arguments.approved_max_live_jev_calls,
+                approved_request_set=arguments.approved_request_byte_set_sha256,
+                approved_max_additional_provider_spend_usd=(
+                    arguments.approved_max_additional_provider_spend_usd
+                ),
+                approved_manifest=arguments.approved_lane_manifest_sha256,
+                approved_python=arguments.approved_python_executable,
+                repo_root=ROOT,
             )
             print(json.dumps(result, sort_keys=True))
             return 0

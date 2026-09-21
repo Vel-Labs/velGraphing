@@ -396,7 +396,39 @@ tasks:
     stop_if:
       - "T060 is not execution-ready."
       - "Provider approval, key environment, call cap, or budget binding is absent."
-    receipt: null
+    receipt:
+      result: approval_materialized
+      candidate_commit: 067b6d27f36260c6c1fa7b7289016a68244748dd
+      summary: "Materialized the exact final user re-ack into the successor TTC contract, freeze, and preflight without making provider calls."
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+        - scripts/benchmarks/four_arm_study_v1.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
+        - docs/goals/retrievel-release-v1/state.yaml
+      commands:
+        - cmd: "approve-successor with request hash 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94, 8 Jev calls, USD 0.9031, manifest 57d444a0a8ea252433e5d69140c9677685878c9956576dd55a1c2df05406a0fa, and the approved Python executable"
+          status: pass
+        - cmd: "validate-successor-overlay"
+          status: pass
+        - cmd: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.benchmarks.test_four_arm_study_v1"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      validation:
+        - "33 benchmark tests passed, 2 skipped"
+        - "execution_ready: true; provider_spend_authorized: true; final_user_reack: []"
+        - "answer, grader, Jev, and provider executed calls remain zero; retries remain zero"
+        - "historical freeze.json and preflight.json remain unchanged"
+        - "package parity refused private_or_machine_path on ignored __pycache__; no package files changed"
+      successor_ttc_contract_file_sha256: d25290d05f1719d4082e16fca036c09b1ae7138ccfa287ba63ccc2959b796ef9
+      successor_freeze_sha256: a442afb5fea8529e2979435dd09877207c2a9ba30d53f0c85198c622a7bd86d0
+      successor_preflight_sha256: 23a14866597f20a204ffc6df598bd62ccb1269e2d48364c2c4eef63d82160e66
+      boundary: "Approval transition only. No model, provider, network, credential, task creation, benchmark execution, commit, push, or release action."
   - id: T080
     type: judge
     assignee: Judge

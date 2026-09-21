@@ -6,7 +6,7 @@
     },
     "controller": {
       "path": "scripts/benchmarks/four_arm_study_v1.py",
-      "sha256": "505099f791674f3c007873429c5fa35f737c295cf6821be89122a7f127776a33"
+      "sha256": "b51a77d677dcaf54c8f33ce726e934e3c068a092b3e1f80b8321edcf56093e82"
     },
     "host": {
       "path": "scripts/benchmarks/time_to_correct_host.py",
@@ -38,7 +38,7 @@
     "successor_grader_response_contract_sha256": "dd517640475fe2219514ebee94a01182bbd74ff17adafeb5aa1348a3e0f6db2c",
     "successor_rubric": {
       "path": "successor-rubrics.json",
-      "sha256": "5bcdbf640ef88067db6162c7b937a9976b355c9cd933df2440c51793c16e4e6d"
+        "sha256": "91799682531977718ffe75cce4b0674b7b4193f54cb528d7475f431fdd913083"
     }
   },
   "classification": {
@@ -60,37 +60,29 @@
   "fallback_allowlist_sha256": "75e4c72c5a3b945a8bd1cfdbb994341cd185060ce33450c23357fe0f8583d122",
   "provider_budget_authority": {
     "currency": "USD",
-    "total_authorized_usd": "1.0000",
-    "operator_reported_spend_to_date_usd": "0.0969",
-    "operator_reported_calls_to_date": 108,
-    "operator_reported_tokens_to_date": 2371440,
-    "remaining_authorized_usd": "0.9031",
-    "max_additional_spend_usd": "0.9031",
-    "source": "operator_provided_typesafe_account_truth",
-    "provider_verified": false,
     "historical_reservation_reconciliation": {
       "amount_usd": "0.359789241",
+      "attributable_to_operator_reported_account_level_spend": false,
       "basis": "historical_request_byte_based_total_reservation",
-      "status": "retired_historical_only",
-      "counts_as_spend": false,
       "charged": false,
-      "subtract_again_from_remaining_budget": false,
-      "attributable_to_operator_reported_account_level_spend": false
-    }
+      "counts_as_spend": false,
+      "status": "retired_historical_only",
+      "subtract_again_from_remaining_budget": false
+    },
+    "max_additional_spend_usd": "0.9031",
+    "operator_reported_calls_to_date": 108,
+    "operator_reported_spend_to_date_usd": "0.0969",
+    "operator_reported_tokens_to_date": 2371440,
+    "provider_verified": false,
+    "remaining_authorized_usd": "0.9031",
+    "source": "operator_provided_typesafe_account_truth",
+    "total_authorized_usd": "1.0000"
   },
   "remaining_authority": {
     "absolute_python_executable": "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python",
     "answer_task_names": 16,
     "exact_host_argv_arrays": 32,
-    "final_user_reack": [
-      "request_byte_set_sha256",
-      "eight_call_cap",
-      "total_authorized_provider_budget_usd",
-      "operator_reported_spend_to_date_usd",
-      "max_additional_provider_spend_usd",
-      "lane_manifest_sha256",
-      "absolute_python_executable"
-    ],
+    "final_user_reack": [],
     "grader_task_names": 16,
     "lane_manifest_sha256": "57d444a0a8ea252433e5d69140c9677685878c9956576dd55a1c2df05406a0fa",
     "live_lanes_created": 0
@@ -124,7 +116,7 @@
     "token_policy": "host_reported_only_never_estimate_from_bytes"
   },
   "schema_version": "velgraphing-four-arm-successor-ttc-v1",
-  "status": "frozen_pending_final_user_reack",
+  "status": "ready_after_final_user_reack",
   "trial_policy": {
     "answer_calls_per_dispatch": 1,
     "answer_repairs": 0,

@@ -157,14 +157,15 @@ python3 -B scripts/benchmarks/four_arm_study_v1.py \
 The 32 unique identifiers are planned nested task names: one Luna answer lane
 and one Astra grader lane for each trial. This freeze creates only the manifest.
 It does not create nested tasks. `live_lanes_created` remains zero, and
-`execution_ready` remains false. After this manifest is frozen, successor freeze
-status is `frozen_pending_final_user_reack`; a fresh lane manifest is no longer
-pending. The frozen contract still requires final user
-re-ack for the request-byte-set hash, eight-call cap, USD 1.0000 total budget,
-operator-reported USD 0.0969 spend-to-date, USD 0.9031 maximum additional
-spend, manifest hash, and absolute Python executable. The spend snapshot is
-operator-provided and not provider-verified. The eight-call cap and zero retries
-remain separate batch controls.
+Before approval, `execution_ready` is false and the successor freeze status is
+`frozen_pending_final_user_reack`. The lane manifest is then frozen, but the
+contract still requires final user re-ack for the request-byte-set hash,
+eight-call cap, USD 1.0000 total budget, operator-reported USD 0.0969
+spend-to-date, USD 0.9031 maximum additional spend, manifest hash, and absolute
+Python executable. After `approve-successor`, the status is
+`ready_after_final_user_reack` and `execution_ready` is true. The spend snapshot
+is operator-provided and not provider-verified. The eight-call cap and zero
+retries remain separate batch controls.
 
 For compatibility with the frozen handoff schema, each manifest `thread_id`
 stores the canonical collaboration `task_name`, not an opaque host-issued
@@ -180,8 +181,20 @@ If an authorized correction must replace an existing planned manifest, rerun
 not create nested tasks. Regenerate the successor contract, freeze, and
 preflight, then obtain final re-ack for the new manifest and artifact hashes.
 
+Materialize final re-ack with the offline `approve-successor` command. It
+requires the exact frozen request-byte-set hash, eight-call cap, approved
+maximum additional spend, lane-manifest hash, and absolute Python executable.
+It rejects any mismatch before writing. On success it changes the TTC contract
+to `ready_after_final_user_reack`, clears its re-ack list, and regenerates the
+successor freeze and preflight with `execution_ready: true` and
+`provider_spend_authorized: true`. It makes no model, provider, credential,
+network, task-creation, or benchmark calls. The v1 schema has no approval
+receipt field, so the ready contract and regenerated artifact hashes are the
+approval binding.
+
 The successor `run` command uses
-`--approved-max-additional-provider-spend-usd 0.9031` only after final user re-ack.
+`--approved-max-additional-provider-spend-usd 0.9031` after the offline
+approval transition has materialized the final user re-ack.
 Do not use the historical `--approved-budget-usd` value for successor
 execution. The old request-byte reservation fields remain historical-only.
 The historical USD 0.359789241 `total_reservation_usd` is not spend, not charged,
