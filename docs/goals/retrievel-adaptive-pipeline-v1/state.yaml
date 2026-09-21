@@ -64,7 +64,7 @@ visual_board:
     url: null
     command: "node /Users/steven/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-adaptive-pipeline-v1"
 
-active_task: T290
+active_task: T300
 
 tasks:
   - id: T010
@@ -2002,7 +2002,7 @@ tasks:
   - id: T290
     type: pm
     assignee: PM
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute and seal the final-candidate R5 four-arm study after one exact post-freeze user reacknowledgement."
     inputs:
@@ -2034,6 +2034,56 @@ tasks:
       - "Eight or fewer Jev calls with no retries"
       - "One sealed R5 result and independent audit"
       - "A supported comparison with explicit null and proof boundaries"
+    receipt:
+      result: stopped
+      note: notes/T290-r5-execution-stop.md
+      changed_files:
+        - docs/goals/retrievel-adaptive-pipeline-v1/notes/T290-r5-execution-stop.md
+        - docs/goals/retrievel-adaptive-pipeline-v1/state.yaml
+      commands:
+        - cmd: "Launch the exact frozen R5 controller through the approved key-bearing Terminal environment"
+          status: pass
+        - cmd: "Dispatch frozen A-S-01 Luna answer lane"
+          status: fail
+        - cmd: "Stop the exact controller process after the first lane failure"
+          status: pass
+      summary: "R5 stopped fail-closed at 0/16 terminal trials. The first Luna answer task ended with a silent empty completion and wrote no draft. No Jev, grader, retry, or replacement call ran. This is a host lane transport failure, not product or answer-quality evidence."
+      spawned_tasks:
+        - T300
+  - id: T300
+    type: pm
+    assignee: PM
+    status: active
+    reasoning_hint: high
+    objective: "Replace the cross-worktree lane-write assumption, then execute and seal a fresh R6 study on the unchanged final product candidate."
+    inputs:
+      - "T290 R5 stop receipt"
+      - "Unchanged product implementation 6b9d120e74bb0b658d8623bd2ec37bb05096f6b1"
+      - "Unchanged package candidate f47d377d6a51d66cd6b790f5d4a900f41719877b84def61e08bc548a5673e4c1"
+      - "Unchanged request-byte-set SHA-256 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94"
+      - "Eight Jev calls, 758130 request bytes, and USD 0.359789241 aggregate reservation"
+    constraints:
+      - "First prove one fresh Luna transport canary that returns canonical JSON through the host task response."
+      - "The completed host response is the model artifact. Parent may persist its exact canonical JSON before attestation; the model task must not write into another task's worktree."
+      - "Use fresh Luna answer and Astra grader task identities and a fresh ignored R6 run root."
+      - "Do not change the product, questions, rubrics, pools, request byte set, model identities, dispatch order, source scope, or acceptance rules."
+      - "Reuse the existing conservative provider reservation. Make at most eight Jev calls and record zero retries."
+      - "Stop the affected execution at the first provider or lane failure. Do not overwrite or resume R5."
+      - "The user's current full approval covers this transport-only successor within the unchanged public source and USD 1 aggregate authority."
+    verify:
+      - "The transport canary has a non-empty completed host response and byte-stable persisted JSON."
+      - "Focused handoff and controller tests exercise host-response persistence, identity binding, empty-response rejection, and immutable attestation."
+      - "Every R6 trial records one terminal receipt for provider, answer, grader, timing, context, and available usage."
+      - "The sealed R6 result passes an independent Luna audit before interpretation."
+    stop_if:
+      - "The transport canary returns another silent empty completion."
+      - "Any product, request, source, model, rubric, acceptance, or provider-budget identity changes."
+      - "The first R6 provider or lane failure occurs."
+    expected_output:
+      - "One proven host-response lane transport"
+      - "Sixteen terminal R6 trials"
+      - "Eight or fewer Jev calls with no retries"
+      - "One sealed R6 result and independent Luna audit"
   - id: T999
     type: judge
     assignee: Judge
@@ -2057,16 +2107,15 @@ tasks:
     receipt: null
 
 checks:
-  dirty_fingerprint: "T280 final-candidate freeze is pushed and audited; T290 awaits one exact post-freeze reack before live execution"
+  dirty_fingerprint: "R5 stopped at 0/16 on one silent empty Luna completion with zero Jev calls; T300 owns the host-response transport successor"
   last_verification:
-    result: pass
-    task: T280
+    result: stopped
+    task: T290
     commands:
-      - "Eight paired pools and 16 final-candidate trial plans passed validation."
-      - "D-01 Graph contains one verified relationship candidate and differs from Direct."
-      - "Thirty-two fresh tasks returned exact READY with zero tool calls."
-      - "Focused, custody, projector, and clean package parity validation passed."
-      - "Independent Luna high freeze audit passed. No R5 external call ran."
+      - "Exact R5 hashes and Python identity passed the live gate."
+      - "A-S-01 request was emitted to the frozen Luna lane."
+      - "The lane completed with no message and no draft; attestation and response failed closed."
+      - "The controller was stopped. No Jev or grader call ran."
 
 provider_budget:
   provider: typesafe_jev
@@ -2080,6 +2129,8 @@ provider_budget:
   actual_spend_usd: null
   reserved_r5_live_calls: 8
   reserved_r5_request_bytes: 758130
+  r5_executed_live_calls: 0
+  r6_reservation_reuses_r5_request_set: true
   conservative_committed_spend_usd: 0.359789241
   remaining_usd: 0.640210759
   ledger_rule: "Before a live batch, bind request bytes and price, then record actual usage when returned or reserve the conservative worst-case cost."
