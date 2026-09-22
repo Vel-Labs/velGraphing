@@ -5,7 +5,7 @@ goal:
   slug: "retrievel-release-v1"
   kind: existing_plan
   tranche: "Complete identity and documentation, then package, installed-path, measurement, benchmark, audit, and release gates."
-  status: active
+  status: done
   oracle:
     signal: "A clean RetrieVel 0.2 candidate installs from packaged bytes, passes release checks, completes the bounded study with required telemetry, and survives independent audit without unsupported claims."
     cadence: "after each Worker package and at final audit"
@@ -63,7 +63,7 @@ visual_board:
     url: null
     command: "node <skill-path>/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-release-v1"
 
-active_task: T999
+active_task: null
 
 tasks:
   - id: T010
@@ -413,7 +413,8 @@ tasks:
       - "T060 is not execution-ready."
       - "Provider approval, key environment, call cap, or budget binding is absent."
     receipt:
-      result: r4_sealed_observed
+      result: done
+      execution_result: r4_sealed_observed
       candidate_commit: 463b4fba6f67ef55df3156cb1f2563f1a011c799
       summary: "Executed and sealed the frozen R4 study: 16 answer calls, 16 independent grader calls, 8 live Jev calls, 0 retries, and 12 passed trials."
       changed_files:
@@ -468,7 +469,8 @@ tasks:
       - "Exact blocking findings"
       - "Release claim boundary"
     receipt:
-      result: repair
+      result: done
+      decision: repair
       candidate_commit: 0849755149f7a1072bd219c4c4119252473d4bd9
       summary: "R4 counters and A-versus-D arithmetic verify, but five answer lanes lack the required capture custody chain. R4 is a partial diagnostic, not a promotion-grade four-arm result."
       findings:
@@ -492,10 +494,12 @@ tasks:
       - scripts/benchmarks/time_to_correct_handoff.py
       - tests/benchmarks/test_time_to_correct_handoff.py
       - tests/benchmarks/test_four_arm_study_v1.py
+      - tests/benchmarks/test_time_to_correct_calibration.py
       - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
       - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
       - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
       - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
+      - docs/goals/retrievel-release-v1/notes/T040-installed-path.md
       - docs/goals/retrievel-release-v1/state.yaml
     verify:
       - "enforce raw-response, canonical-draft, capture-receipt, and execution-identity custody before attestation"
@@ -534,6 +538,17 @@ tasks:
         receipt_sha256: ab7d4ef2e709f4ac6374d76b4752ee0863ba5c0fd01c4209feb4ecfb9175c06e
         package_candidate_sha256: 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107
         status: pass
+      commands:
+        - cmd: "R7 frozen serial controller with 16 answer lanes, 16 independent grader lanes, and 8 approved Jev calls"
+          status: pass
+        - cmd: "current-package isolated install, synthetic live smoke, removal, and cleanup"
+          status: pass
+        - cmd: "two projector passes and source/package parity"
+          status: pass
+        - cmd: "six unittest discovery suites with the declared shared repository interpreter"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
       validation:
         - "projector ran twice; second pass produced no tracked projection change"
         - "source/package parity passed: 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
@@ -552,7 +567,7 @@ tasks:
   - id: T999
     type: judge
     assignee: Judge
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Audit the complete goal against the release oracle and close collaboration and task lifecycle state."
     inputs:
@@ -569,13 +584,49 @@ tasks:
       - "full_outcome_complete: true | false"
       - "missing evidence"
       - "final lifecycle receipt"
-    receipt: null
+    receipt:
+      result: done
+      decision: complete
+      full_outcome_complete: true
+      candidate_commit_before_closeout: 6308ce798a67e19bb8033cb4f4b728f4cb95795b
+      summary: "The RetrieVel 0.2.0-rc.1 candidate is clean, pushed, mergeable, package-bound, live-smoke validated, benchmark-sealed, independently audited, and CI-green within its stated evidence boundary."
+      pull_request:
+        number: 18
+        url: "https://github.com/Vel-Labs/velGraphing/pull/18"
+        state: open
+        mergeable: true
+      ci:
+        run_id: 35688460394
+        head_sha: 6308ce798a67e19bb8033cb4f4b728f4cb95795b
+        result: success
+        checks:
+          - "offline (3.11): success"
+          - "offline (3.13): success"
+      validation:
+        - "timeout qualification passed 10 consecutive Python 3.11 runs"
+        - "Python 3.11 benchmark suite: 206 passed, 3 expected skips"
+        - "shared declared interpreter: scaffold 11, core 284, adapters 18, skills 38, benchmarks 206 with 3 expected skips, parity 10"
+        - "two projector passes were byte-identical and produced no tracked projection change"
+        - "source/package parity passed: 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+        - "git diff --check passed"
+      collaboration_cleanup:
+        live_collaboration_agents: 0
+        completed_collaboration_agents: 4
+        addressable_non_persistent_child_tasks: 0
+        preserved_persistent_task: "01a0c48a-1626-7001-a727-44706c122d87 Implement RetrieVel 0.2 release"
+        note: "The completed collaboration agents are not standalone app tasks and expose no opaque task IDs for archival. The human-supplied implementation task is preserved as an authorized persistent session."
+      audit:
+        decision: accepted
+        candidate_commit: 6308ce798a67e19bb8033cb4f4b728f4cb95795b
+        auditor: t999_exact_closeout_audit
+        blocking_findings: 0
+      boundary: "The candidate is merge-ready, not merged or released. R7 proves controlled execution and optional live Jev adapter compatibility. It does not prove general correctness, retrieval, wall-clock, token, cost, or optimization benefit. Desktop command-picker reload remains unverified."
 
 checks:
   dirty_fingerprint: "clean at ab229142e9a577c88d15bacd67d5bf36cd85e1ea before T010; board files then added by Parent"
   last_verification:
-    result: pass_with_measurement_gaps
-    task: T090
+    result: pass_with_explicit_claim_boundary
+    task: T999
     commands:
       - "R7 sealed 16 trials, 16 answer calls, 16 grader calls, 8 Jev calls, and 0 retries"
       - "R7 result SHA-256 3bd8b2f1bb3fa9e40449004ca1d1b706d4dd6f499816c462e5a8b916f25dd3e0"
@@ -583,3 +634,5 @@ checks:
       - "two projector passes produced no tracked diff"
       - "source/package parity: 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
       - "full unittest discovery: 567 passed and 3 expected skips"
+      - "Python 3.11 benchmark suite: 206 passed and 3 expected skips"
+      - "GitHub Actions run 35688460394: offline Python 3.11 and Python 3.13 checks passed on 6308ce798a67e19bb8033cb4f4b728f4cb95795b"
