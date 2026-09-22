@@ -1,6 +1,14 @@
 """Public host-neutral interfaces for Graph Engineering V1."""
 
 from .export import ExportPolicy, ExportResult, export_graph
+from .instructions import (
+    InstructionPlan,
+    InstructionPlanError,
+    InstructionSection,
+    OmittedSupplementalSection,
+    plan_instructions,
+)
+from .review_packet import ReviewPacket, ReviewPacketError, ReviewPacketStatus, check_review_packet, prepare_review_packet
 from .models import (
     Admission,
     Freshness,
@@ -122,6 +130,12 @@ __all__ = [
     "GraphEdge",
     "GraphRecord",
     "HybridRetrievalResult",
+    "InstructionPlan",
+    "InstructionPlanError",
+    "InstructionSection",
+    "ReviewPacket",
+    "ReviewPacketError",
+    "ReviewPacketStatus",
     "NavigationContext",
     "NavigationResult",
     "PolicyAssertionV4",
@@ -166,6 +180,7 @@ __all__ = [
     "NavigationStep",
     "NavigationV5",
     "NavigationV5Result",
+    "OmittedSupplementalSection",
     "JavaScriptCoordinateProvider",
     "source_snapshot",
     "TaskSpec",
@@ -197,6 +212,9 @@ __all__ = [
     "select_context",
     "select_documents",
     "plan_ranked_context",
+    "plan_instructions",
+    "prepare_review_packet",
+    "check_review_packet",
     "select_ranked_context",
     "serialize_projection",
     "navigate_v4",

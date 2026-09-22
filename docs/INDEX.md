@@ -21,6 +21,7 @@ provider reports under `/reports/` remain excluded from the public repository.
 | Projection ownership | `architecture/SOURCE_OWNERSHIP_AND_PORTABILITY.md` |
 | Package identity | `architecture/PACKAGING_AND_PARITY.md` |
 | Compact benchmark evidence | `../benchmarks/README.md` |
+| Query-aware context platform roadmap | `roadmaps/RETRIEVEL_CONTEXT_PLATFORM_ROADMAP.md` |
 | Pre-publication red-team | `reviews/velgraphing-prepublication-red-team-2026-09-02/report-source.md` |
 
 ## Jev pilot

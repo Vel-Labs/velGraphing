@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "review-packet-v1.schema.json",
+  "title": "Retrievel Review Packet V1",
+  "$comment": "Canonical ReviewPacket.from_dict validation is required for context and instruction semantic validation, digest equality, canonical ordering, complete included-candidate binding, and snapshot membership because JSON Schema cannot express all of these constraints.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "mode", "task_id", "task_summary", "review_question", "changed_paths", "source_snapshot", "source_snapshot_sha256", "context_plan", "context_plan_sha256", "selected_candidate_ids", "selected_context", "instruction_plan", "instruction_plan_sha256", "skill_manifest", "skill_manifest_sha256", "applicable_skill_ids", "known_risks", "blocking_policy", "advisory_policy"],
+  "properties": {
+    "schema_version": {"const": "review-packet-v1"},
+    "mode": {"const": "packet_only"},
+    "task_id": {"type": "string", "minLength": 1},
+    "task_summary": {"type": "string", "minLength": 1},
+    "review_question": {"type": "string", "minLength": 1},
+    "changed_paths": {"type": "array", "items": {"$ref": "#/$defs/relative_path"}, "uniqueItems": true},
+    "source_snapshot": {"$ref": "#/$defs/source_snapshot"},
+    "source_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "context_plan": {"type": "object"},
+    "context_plan_sha256": {"$ref": "#/$defs/sha256"},
+    "selected_candidate_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "selected_context": {"type": "array", "items": {"$ref": "#/$defs/selected_context"}, "uniqueItems": true},
+    "instruction_plan": {"type": "object"},
+    "instruction_plan_sha256": {"$ref": "#/$defs/sha256"},
+    "skill_manifest": {"type": "object", "required": ["schema_version", "skills"], "properties": {"schema_version": {"const": "retrievel-skill-manifest-v1"}, "skills": {"type": "array", "minItems": 1}}},
+    "skill_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "applicable_skill_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "known_risks": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "blocking_policy": {"oneOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["policy_id", "policy_sha256", "blocking_finding_codes"], "properties": {"policy_id": {"type": "string", "minLength": 1}, "policy_sha256": {"$ref": "#/$defs/sha256"}, "blocking_finding_codes": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}}]},
+    "advisory_policy": {"type": "object", "additionalProperties": false, "required": ["contract_kind", "grants_authority", "tools_activated", "host_interception_claimed", "network", "external_effects"], "properties": {"contract_kind": {"const": "advisory"}, "grants_authority": {"const": false}, "tools_activated": {"const": false}, "host_interception_claimed": {"const": false}, "network": {"const": "none"}, "external_effects": {"const": []}}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "relative_path": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))[^/]+(?:/[^/]+)*$"},
+    "source_identity": {"type": "object", "additionalProperties": false, "required": ["path", "byte_length", "sha256"], "properties": {"path": {"$ref": "#/$defs/relative_path"}, "byte_length": {"type": "integer", "minimum": 0}, "sha256": {"$ref": "#/$defs/sha256"}}},
+    "source_snapshot": {"type": "object", "additionalProperties": false, "required": ["snapshot_sha256", "sources"], "properties": {"snapshot_sha256": {"$ref": "#/$defs/sha256"}, "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source_identity"}, "uniqueItems": true}}},
+    "selected_context": {"type": "object", "additionalProperties": false, "required": ["candidate_id", "record_id", "source_path", "source_sha256", "byte_start", "byte_end", "excerpt_sha256", "required"], "properties": {"candidate_id": {"type": "string", "minLength": 1}, "record_id": {"type": "string", "minLength": 1}, "source_path": {"$ref": "#/$defs/relative_path"}, "source_sha256": {"$ref": "#/$defs/sha256"}, "byte_start": {"type": "integer", "minimum": 0}, "byte_end": {"type": "integer", "minimum": 1}, "excerpt_sha256": {"$ref": "#/$defs/sha256"}, "required": {"type": "boolean"}}}
+  }
+}

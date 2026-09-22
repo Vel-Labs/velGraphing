@@ -244,6 +244,8 @@ class SourceRelationDerivationTests(unittest.TestCase):
             maximum_candidate_bytes=32_768,
             maximum_unit_bytes=4096,
         )
+        self.assertTrue(any(candidate.source_unit_complete for candidate in graph_candidates))
+        self.assertTrue(any(not candidate.source_unit_complete for candidate in graph_candidates))
         child = next(
             candidate for candidate in graph_candidates
             if candidate.relationship_parent_candidate_id is not None

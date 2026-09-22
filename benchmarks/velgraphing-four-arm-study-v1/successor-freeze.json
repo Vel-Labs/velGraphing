@@ -11,17 +11,17 @@
       },
       "controller": {
         "path": "scripts/benchmarks/four_arm_study_v1.py",
-        "sha256": "edd29205b0933552aaefbf5ca80ee443d7d1471304bb28ec3df9a4175279affb"
+        "sha256": "827933e4d891ed6a05b7a649d235b6347cff615400b11297ed8121c9efee4c87"
       },
       "host": {
         "path": "scripts/benchmarks/time_to_correct_host.py",
-        "sha256": "7bcea2f8907b003d9b4709561d181e37f6782fdb69dd4d905d16e76eaa77fc05"
+        "sha256": "7397a269af33f3384e63b611b272e1990cb7f33d6a845a7e9c863af2fcd35885"
       }
     },
     "package_candidate": {
-      "candidate_sha256": "112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107",
+      "candidate_sha256": "2f5307ff99fb802c1f6de2a5335a21cf973da137cff6be38aafceaef190462b0",
       "manifest_path": "plugins/graph-engineering/.codex-plugin/release-manifest.json",
-      "manifest_sha256": "3e6389bd70b2de2ef2e59bab1197d881f5f40bc23914391802235fcc3e5a6099",
+      "manifest_sha256": "7dfdffd3f80701d374476660c9301901ce522516d5be496130d2e5ffe26c399f",
       "name": "graph-engineering",
       "version": "0.2.0-rc.1"
     },
@@ -41,8 +41,8 @@
       "openchain-reference-material": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
       "thealgorithms-python": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
     },
-    "successor_rubric_sha256": "97fea1d794e740e56b3f35ee5be46405d5b0321804900da8b4dd3ca93943b0ac",
-    "successor_ttc_core_sha256": "a975a0218cc2e9a88a0497a60ffb539967dc3f5706691593a900f305b69e6ad7",
+    "successor_rubric_sha256": "2ee818c05336c9e88c234e954320909d421ff6f8f77a4917cdd36158947b825e",
+    "successor_ttc_core_sha256": "145db89ea21f7bbb0ef3d9f3c913c5f9db52555564bb0f653e87912baa6e0aa8",
     "witness_custody_sha256": "e042c9ee45c7fcc9e36a7ad693b7f77106f12dd94f06756b9e8ae19e276be38b"
   },
   "claim_boundary": {
@@ -61,8 +61,8 @@
     "answer_repairs": 0,
     "answer_tasks_created": 0,
     "exact_host_argv_arrays": 32,
-    "execution_ready": true,
-    "final_user_reack_required": false,
+    "execution_ready": false,
+    "final_user_reack_required": true,
     "fresh_answer_lanes": 16,
     "fresh_grader_lanes": 16,
     "fresh_no_history": true,
@@ -95,7 +95,7 @@
       "total_authorized_usd": "1.0000"
     },
     "provider_calls_executed": 0,
-    "provider_spend_authorized": true,
+    "provider_spend_authorized": false,
     "task_retries": 0
   },
   "provider_boundary": {
@@ -132,7 +132,7 @@
     "token_policy": "host_reported_only_never_estimate_from_bytes"
   },
   "schema_version": "velgraphing-four-arm-successor-freeze-v1",
-  "status": "ready_after_final_user_reack",
+  "status": "pending_lane_manifest_and_final_user_reack",
   "study_id": "velgraphing-four-arm-study-v1",
   "telemetry_schema": {
     "failure": [

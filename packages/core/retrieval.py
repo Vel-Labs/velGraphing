@@ -557,6 +557,7 @@ def ranked_candidates_from_retrieval(
         relationship_direction: str | None = None,
         relationship_relation: str | None = None,
         relationship_sensitivity: Sensitivity | None = None,
+        source_unit_complete: bool = False,
     ) -> RankedContextCandidate:
         record = records.get(record_id)
         source = sources.get(path)
@@ -591,6 +592,7 @@ def ranked_candidates_from_retrieval(
             path, digest, start, end, required, record_id, parent_id,
             relationship_edge_id, relationship_direction, relationship_relation,
             relationship_sensitivity,
+            source_unit_complete=source_unit_complete,
         )
 
     required: list[RankedContextCandidate] = []
@@ -682,6 +684,7 @@ def ranked_candidates_from_retrieval(
                 candidate = make_candidate(
                     hit.record_id, hit.source_path, source.sha256, start, end,
                     required=False,
+                    source_unit_complete=units[(start, end)][1],
                 )
             except JevError as error:
                 if str(error) == "unsupported_source_type":
@@ -832,6 +835,7 @@ def ranked_candidates_from_retrieval(
         for start, end in sorted(units, key=unit_priority):
             candidate = make_candidate(
                 record.record_id, path, source.sha256, start, end, required=False,
+                source_unit_complete=units[(start, end)][1],
             )
             if candidate.candidate_id in completion_ids:
                 continue
@@ -917,7 +921,7 @@ def ranked_candidates_from_retrieval(
         )
         if parent is None:
             continue
-        start, end, _ = _bounded_source_unit_bounds(
+        start, end, source_unit_complete = _bounded_source_unit_bounds(
             raw, coordinate.source_path, coordinate.byte_start,
             coordinate.byte_end, maximum_unit_bytes,
         )
@@ -932,6 +936,7 @@ def ranked_candidates_from_retrieval(
                 relationship_direction=support.direction,
                 relationship_relation=support.relation,
                 relationship_sensitivity=support.sensitivity,
+                source_unit_complete=source_unit_complete,
             )
         except JevError as error:
             if str(error) == "unsupported_source_type":

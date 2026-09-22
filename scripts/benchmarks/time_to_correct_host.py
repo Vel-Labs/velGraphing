@@ -25,6 +25,15 @@ except ImportError:
 ANSWER_OUTPUT_VERSION = "velgraphing-answer-output-v1"
 GRADER_OUTPUT_VERSION = "velgraphing-grader-output-v1"
 SUCCESSOR_GRADER_OUTPUT_VERSION = "velgraphing-grader-output-v2"
+V3_COMPLETENESS_INSTRUCTION = (
+    "Answer every explicit part of the question. State each requested rule, "
+    "behavior, comparison, distinction, and consequence directly; do not rely "
+    "on examples or implications. Cite the supporting evidence for each statement."
+)
+MAX_PUBLIC_TASK_FACETS = 20
+TASK_FACET_CHECKLIST_PREFIX = (
+    "Address each public task facet directly in the answer, in this order:"
+)
 USAGE_KEYS = {
     "model", "provenance", "input_tokens", "output_tokens",
     "cached_input_tokens", "reasoning_output_tokens", "cost_usd",
@@ -43,6 +52,32 @@ def _string_list(value: Any, reason: str) -> list[str]:
     if type(value) is not list or not all(type(item) is str for item in value):
         raise MeasurementError(reason)
     return list(value)
+
+
+def _task_facet_instruction(prepared: Mapping[str, Any]) -> str | None:
+    raw_facets = prepared.get("task_facets")
+    if raw_facets is None:
+        return None
+    if type(raw_facets) not in {list, tuple} or len(raw_facets) > MAX_PUBLIC_TASK_FACETS:
+        raise MeasurementError("invalid_task_facets")
+    facets = list(raw_facets)
+    if (
+        any(
+            type(facet) is not str
+            or not facet
+            or facet != facet.strip()
+            or any(ord(character) < 32 for character in facet)
+            for facet in facets
+        )
+        or len(facets) != len(set(facets))
+    ):
+        raise MeasurementError("invalid_task_facets")
+    if not facets:
+        return None
+    checklist = "\n".join(
+        f"{index}. {facet}" for index, facet in enumerate(facets, start=1)
+    )
+    return f"{TASK_FACET_CHECKLIST_PREFIX}\n{checklist}"
 
 
 def _answer_input(prepared: Mapping[str, Any]) -> dict[str, Any]:
@@ -111,6 +146,11 @@ def _answer_input(prepared: Mapping[str, Any]) -> dict[str, Any]:
         if type(citation) is not str or not citation:
             raise MeasurementError("invalid_answer_instructions")
         instructions.append(citation)
+    task_facets = _task_facet_instruction(prepared)
+    if task_facets is not None:
+        instructions.append(task_facets)
+    if prepared.get("schema_version") == "velgraphing-answer-evidence-v3":
+        instructions.append(V3_COMPLETENESS_INSTRUCTION)
     return {
         "schema_version": "velgraphing-answer-model-input-v1",
         "question": question,

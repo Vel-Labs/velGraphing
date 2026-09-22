@@ -1,4 +1,5 @@
 """Real subprocess boundary tests. No shell, provider, credential, or Codex CLI."""
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -11,6 +12,9 @@ from time_to_correct_host import (
     ANSWER_RESPONSE_CONTRACT,
     GRADER_RESPONSE_CONTRACT,
     SUCCESSOR_GRADER_RESPONSE_CONTRACT,
+    TASK_FACET_CHECKLIST_PREFIX,
+    V3_COMPLETENESS_INSTRUCTION,
+    _answer_input,
     _grader_input,
     run_process_trial,
 )
@@ -162,6 +166,61 @@ class HostBoundaryTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.cwd = Path(self.temp.name)
 
+    def test_v3_answer_boundary_adds_only_public_completeness_instruction(self):
+        evidence = [{"id": "candidate", "path": "source.py", "excerpt": "public evidence"}]
+        v2 = _answer_input({"schema_version": "other", "question": "public question", "evidence": evidence})
+        v3 = _answer_input({
+            "schema_version": "velgraphing-answer-evidence-v3",
+            "question": "public question",
+            "citation_instruction": "Cite supporting evidence IDs as [cN].",
+            "evidence": evidence,
+        })
+
+        self.assertNotIn(V3_COMPLETENESS_INSTRUCTION, v2["instructions"])
+        self.assertIn(V3_COMPLETENESS_INSTRUCTION, v3["instructions"])
+        self.assertEqual(set(v3), {"schema_version", "question", "instructions", "evidence"})
+        self.assertNotIn("rubric", json.dumps(v3, sort_keys=True))
+
+    def test_public_task_facets_render_as_deterministic_numbered_checklist(self):
+        payload = _answer_input({
+            "schema_version": "velgraphing-answer-evidence-v3",
+            "question": "public question",
+            "citation_instruction": "Cite supporting evidence IDs as [cN].",
+            "task_facets": ("implementation", "ordering consequence"),
+            "evidence": [],
+        })
+
+        self.assertEqual(payload["instructions"][1], (
+            f"{TASK_FACET_CHECKLIST_PREFIX}\n"
+            "1. implementation\n"
+            "2. ordering consequence"
+        ))
+        self.assertNotIn("task_facets", payload)
+        self.assertNotIn("rubric", json.dumps(payload, sort_keys=True))
+
+    def test_absent_or_empty_task_facets_preserve_v3_behavior(self):
+        base = {
+            "schema_version": "velgraphing-answer-evidence-v3",
+            "question": "public question",
+            "citation_instruction": "Cite supporting evidence IDs as [cN].",
+            "evidence": [],
+        }
+
+        self.assertEqual(_answer_input(base), _answer_input({**base, "task_facets": []}))
+
+    def test_invalid_task_facets_fail_closed(self):
+        base = {
+            "schema_version": "velgraphing-answer-evidence-v3",
+            "question": "public question",
+            "evidence": [],
+        }
+        invalid = ("facet", {"facet"}, [""], [" leading"], ["a", "a"], ["a\nb"], [1])
+        for facets in invalid:
+            with self.subTest(facets=facets), self.assertRaisesRegex(
+                MeasurementError, "invalid_task_facets",
+            ):
+                _answer_input({**base, "task_facets": facets})
+
     def run_host(self, answer_code=ANSWER_CODE, *, grader_code=GRADER_CODE,
                  answer_timeout_s=2, wall_limit_ns=5_000_000_000,
                  prepared=None, grader_context=None, grader_model=None,
@@ -208,7 +267,7 @@ class HostBoundaryTests(unittest.TestCase):
             'if "response_contract" in payload:',
             '''
 if payload["question"] != "Which implementation is imported immediately after merge_sort, and how does it choose and place its pivot?": raise SystemExit(7)
-if payload["instructions"] != ["Cite supporting evidence IDs as [cN]."]: raise SystemExit(7)
+if payload["instructions"] != ["Cite supporting evidence IDs as [cN].", "Answer every explicit part of the question. State each requested rule, behavior, comparison, distinction, and consequence directly; do not rely on examples or implications. Cite the supporting evidence for each statement."]: raise SystemExit(7)
 if payload["evidence"] != [{"id":"c1","path":"sorts/quick_sort.py","excerpt":"pivot = collection.pop(randint(0, len(collection) - 1))","source_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","byte_start":253,"byte_end":1299,"relationship_parent_candidate_id":"parent"}]: raise SystemExit(7)
 if "response_contract" in payload:''').replace(
                 "observed subprocess answer", "observed subprocess answer [c1]"

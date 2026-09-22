@@ -24,6 +24,7 @@ LANES = Path(os.environ.get(
     "VELGRAPHING_CORPUS_LANE_ROOT",
     ROOT / "benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4",
 ))
+PINNED_LANES = ROOT.parent.parent / "benchmarks/velgraphing-corpus-pilot-v1/.inputs/lanes/v4"
 sys.path.insert(0, str(ROOT / "scripts/benchmarks"))
 
 import four_arm_study_v1 as study  # noqa: E402
@@ -756,6 +757,169 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
         self.assertEqual(len(questions["questions"]), 4)
         self.assertEqual(len(rubrics["tasks"]), 4)
 
+    def test_historical_implementation_bindings_ignore_worktree_drift(self) -> None:
+        freeze, _, _ = study.load_bundle()
+        for name in ("retrieval", "selection"):
+            path = freeze["implementation_bindings"][name]["path"]
+            current = study.digest((ROOT / path).read_bytes())
+            bound = study._bound_blob_sha256(
+                ROOT, freeze["product"]["commit"], path,
+                "implementation_binding_invalid",
+            )
+            self.assertNotEqual(current, freeze["implementation_bindings"][name]["sha256"])
+            self.assertEqual(bound, freeze["implementation_bindings"][name]["sha256"])
+
+    def test_refresh_rebinds_stale_successor_and_clears_prior_authority(self) -> None:
+        local = ROOT / ".velgraphing-local"
+        local.mkdir(mode=0o700, exist_ok=True)
+        names = (
+            "freeze", "questions", "rubrics", "preflight", "successor-rubrics",
+            "successor-ttc-contract", "successor-freeze", "successor-preflight",
+        )
+        with tempfile.TemporaryDirectory(prefix="successor-refresh-", dir=local) as raw:
+            root = Path(raw)
+            for name in names:
+                shutil.copy(BENCHMARK / f"{name}.json", root / f"{name}.json")
+            successor_path = root / "successor-rubrics.json"
+            successor = json.loads(successor_path.read_text(encoding="utf-8"))
+            successor["implementation_bindings"]["controller"]["sha256"] = "0" * 64
+            successor["implementation_bindings"]["host"]["sha256"] = "0" * 64
+            successor_path.write_text(json.dumps(successor), encoding="utf-8")
+            contract_path = root / "successor-ttc-contract.json"
+            contract = json.loads(contract_path.read_text(encoding="utf-8"))
+            contract["status"] = "ready_after_final_user_reack"
+            contract["bindings"]["controller"]["sha256"] = "0" * 64
+            contract["bindings"]["host"]["sha256"] = "0" * 64
+            contract["bindings"]["calibration"]["sha256"] = "0" * 64
+            contract["bindings"]["successor_rubric"]["sha256"] = "0" * 64
+            contract["bindings"]["lane_manifest"]["sha256"] = "1" * 64
+            contract["bindings"]["lane_manifest"]["status"] = "frozen"
+            contract["remaining_authority"]["absolute_python_executable"] = sys.executable
+            contract["remaining_authority"]["lane_manifest_sha256"] = "1" * 64
+            contract["remaining_authority"]["final_user_reack"] = []
+            contract_path.write_text(json.dumps(contract), encoding="utf-8")
+            successor_freeze_path = root / "successor-freeze.json"
+            successor_freeze = json.loads(
+                successor_freeze_path.read_text(encoding="utf-8")
+            )
+            successor_freeze["bindings"]["package_candidate"]["candidate_sha256"] = (
+                "0" * 64
+            )
+            successor_freeze_path.write_text(
+                json.dumps(successor_freeze), encoding="utf-8",
+            )
+            result = study.freeze_successor(
+                root, PINNED_LANES, CUSTODY, ROOT, refresh=True,
+            )
+            contract = json.loads(
+                (root / "successor-ttc-contract.json").read_text(encoding="utf-8")
+            )
+            successor_freeze = json.loads(
+                (root / "successor-freeze.json").read_text(encoding="utf-8")
+            )
+            successor_preflight = json.loads(
+                (root / "successor-preflight.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                result["successor_freeze_sha256"],
+                study.digest((root / "successor-freeze.json").read_bytes()),
+            )
+            self.assertNotEqual(
+                successor_preflight["pool_artifact_sha256"], study.LOCAL_POOL_SHA256,
+            )
+            self.assertEqual(
+                successor_preflight["source_preflight_sha256"],
+                study.digest(study._json_bytes(
+                    successor_preflight["source_free_preflight"]
+                )),
+            )
+            self.assertEqual(
+                contract["status"], "pending_lane_manifest_and_final_user_reack",
+            )
+            self.assertIsNone(contract["bindings"]["lane_manifest"]["sha256"])
+            self.assertNotEqual(contract["remaining_authority"]["final_user_reack"], [])
+            self.assertFalse(successor_freeze["execution_policy"]["execution_ready"])
+            self.assertFalse(
+                successor_freeze["execution_policy"]["provider_spend_authorized"]
+            )
+            current_release = json.loads(
+                (ROOT / "plugins/graph-engineering/.codex-plugin/release-manifest.json")
+                .read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                successor_freeze["bindings"]["package_candidate"]["candidate_sha256"],
+                current_release["candidate_sha256"],
+            )
+
+        with tempfile.TemporaryDirectory(prefix="successor-refresh-tamper-", dir=local) as raw:
+            root = Path(raw)
+            for name in names:
+                shutil.copy(BENCHMARK / f"{name}.json", root / f"{name}.json")
+            successor_path = root / "successor-rubrics.json"
+            successor = json.loads(successor_path.read_text(encoding="utf-8"))
+            successor["arm_labels"]["A"] = "tampered"
+            successor_path.write_text(json.dumps(successor), encoding="utf-8")
+            with self.assertRaisesRegex(study.StudyError, "successor_rubrics_invalid"):
+                study.freeze_successor(root, LANES, CUSTODY, ROOT, refresh=True)
+
+    def test_bind_successor_lanes_enables_offline_approval(self) -> None:
+        local = ROOT / ".velgraphing-local"
+        local.mkdir(mode=0o700, exist_ok=True)
+        names = (
+            "freeze", "questions", "rubrics", "preflight", "successor-rubrics",
+            "successor-ttc-contract", "successor-freeze", "successor-preflight",
+        )
+        with tempfile.TemporaryDirectory(prefix="successor-bind-", dir=local) as raw:
+            root = Path(raw)
+            for name in names:
+                shutil.copy(BENCHMARK / f"{name}.json", root / f"{name}.json")
+            study.freeze_successor(root, PINNED_LANES, CUSTODY, ROOT, refresh=True)
+            freeze = json.loads((root / "freeze.json").read_text(encoding="utf-8"))
+            bindings = {
+                "schema_version": "velgraphing-four-arm-lane-bindings-v1",
+                "bindings": [{
+                    "trial_id": trial_id,
+                    "answer_thread_id": (
+                        f"m09_bind_r1_luna_answer_"
+                        f"{trial_id.lower().replace('-', '_')}"
+                    ),
+                    "grader_thread_id": (
+                        f"m09_bind_r1_astra_grader_"
+                        f"{trial_id.lower().replace('-', '_')}"
+                    ),
+                } for trial_id in study.DISPATCH],
+            }
+            manifest_path = root / "lane-manifest.json"
+            manifest_sha = study.freeze_lane_manifest(
+                bindings, freeze, manifest_path, sys.executable,
+            )
+            result = study.bind_successor_lane_manifest(
+                root, root, CUSTODY, sys.executable, ROOT,
+            )
+            contract = json.loads(
+                (root / "successor-ttc-contract.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                contract["status"], "frozen_pending_final_user_reack",
+            )
+            self.assertEqual(
+                contract["bindings"]["lane_manifest"]["sha256"], manifest_sha,
+            )
+            self.assertEqual(
+                contract["remaining_authority"]["absolute_python_executable"],
+                sys.executable,
+            )
+            self.assertFalse(result["execution_ready"])
+            approved = study.approve_successor(
+                root, CUSTODY,
+                approved_max_live_jev_calls=8,
+                approved_request_set=study.REQUEST_BYTE_SET_SHA256,
+                approved_max_additional_provider_spend_usd="0.9031",
+                approved_manifest=manifest_sha,
+                approved_python=sys.executable,
+            )
+            self.assertTrue(approved["execution_ready"])
+
     def test_tampered_historical_product_bindings_fail_closed(self) -> None:
         freeze, _, _ = study.load_bundle()
         with tempfile.TemporaryDirectory() as directory:
@@ -867,7 +1031,7 @@ class FourArmStudyTests(unittest.TestCase):
             self.assertIn("evidence IDs that map", citation)
         self.assertEqual(self.successor["arm_labels"], study.SUCCESSOR_ARM_LABELS)
 
-    def test_successor_freeze_binds_current_candidate_and_ready_authority(self) -> None:
+    def test_successor_freeze_binds_current_candidate_and_pending_authority(self) -> None:
         generated = study._build_successor_freeze(
             self.freeze, self.successor, self.ttc, 8, BENCHMARK, ROOT,
         )
@@ -875,7 +1039,8 @@ class FourArmStudyTests(unittest.TestCase):
         bindings = self.successor_freeze["bindings"]
         policy = self.successor_freeze["execution_policy"]
         self.assertEqual(
-            self.successor_freeze["status"], "ready_after_final_user_reack",
+            self.successor_freeze["status"],
+            "pending_lane_manifest_and_final_user_reack",
         )
         self.assertEqual(
             bindings["package_candidate"]["candidate_sha256"],
@@ -893,18 +1058,23 @@ class FourArmStudyTests(unittest.TestCase):
         self.assertEqual(policy["answer_tasks_created"], 0)
         self.assertEqual(policy["grader_tasks_created"], 0)
         self.assertEqual(policy["live_lanes_created"], 0)
-        self.assertTrue(policy["execution_ready"])
+        self.assertFalse(policy["execution_ready"])
         self.assertEqual(policy["max_additional_provider_spend_usd"], "0.9031")
         self.assertEqual(
             policy["provider_budget_authority"],
             self.ttc["provider_budget_authority"],
         )
-        self.assertTrue(policy["provider_spend_authorized"])
-        self.assertFalse(policy["final_user_reack_required"])
-        self.assertEqual(self.ttc["remaining_authority"]["final_user_reack"], [])
-        self.assertNotIn(
-            "total_reservation_usd",
-            self.ttc["remaining_authority"]["final_user_reack"],
+        self.assertFalse(policy["provider_spend_authorized"])
+        self.assertTrue(policy["final_user_reack_required"])
+        self.assertEqual(
+            set(self.ttc["remaining_authority"]["final_user_reack"]),
+            {
+                "request_byte_set_sha256", "eight_call_cap",
+                "total_authorized_provider_budget_usd",
+                "operator_reported_spend_to_date_usd",
+                "max_additional_provider_spend_usd",
+                "lane_manifest_sha256", "absolute_python_executable",
+            },
         )
         self.assertEqual(self.successor_preflight["executed_calls"], {
             "answer": 0, "grader": 0, "jev": 0, "provider": 0,
@@ -934,8 +1104,29 @@ class FourArmStudyTests(unittest.TestCase):
             "successor-ttc-contract", "successor-freeze", "successor-preflight",
         ):
             shutil.copy(BENCHMARK / f"{name}.json", root / f"{name}.json")
+        lane_bindings = {
+            "schema_version": "velgraphing-four-arm-lane-bindings-v1",
+            "bindings": [{
+                "trial_id": trial_id,
+                "answer_thread_id": f"answer_{trial_id.lower().replace('-', '_')}",
+                "grader_thread_id": f"grader_{trial_id.lower().replace('-', '_')}",
+            } for trial_id in study.DISPATCH],
+        }
+        lane_manifest = root / "lane-manifest.json"
+        lane_sha = study.freeze_lane_manifest(
+            lane_bindings, self.freeze, lane_manifest, sys.executable,
+        )
         pending = deepcopy(self.ttc)
         pending["status"] = "frozen_pending_final_user_reack"
+        pending["bindings"]["lane_manifest"] = {
+            "schema_version": self.freeze["lane_identity_contract"]["handoff_schema"],
+            "entry_count": 32,
+            "sha256": lane_sha,
+            "status": "frozen",
+            "thread_id_semantics": study.THREAD_ID_SEMANTICS,
+        }
+        pending["remaining_authority"]["absolute_python_executable"] = sys.executable
+        pending["remaining_authority"]["lane_manifest_sha256"] = lane_sha
         pending["remaining_authority"]["final_user_reack"] = [
             "request_byte_set_sha256", "eight_call_cap",
             "total_authorized_provider_budget_usd",
@@ -973,8 +1164,12 @@ class FourArmStudyTests(unittest.TestCase):
                 approved_max_live_jev_calls=8,
                 approved_request_set=study.REQUEST_BYTE_SET_SHA256,
                 approved_max_additional_provider_spend_usd="0.9031",
-                approved_manifest=self.ttc["bindings"]["lane_manifest"]["sha256"],
-                approved_python=self.ttc["remaining_authority"][
+                approved_manifest=json.loads(
+                    (root / "successor-ttc-contract.json").read_text(encoding="utf-8")
+                )["bindings"]["lane_manifest"]["sha256"],
+                approved_python=json.loads(
+                    (root / "successor-ttc-contract.json").read_text(encoding="utf-8")
+                )["remaining_authority"][
                     "absolute_python_executable"
                 ],
             )
@@ -1013,8 +1208,12 @@ class FourArmStudyTests(unittest.TestCase):
                     approved_max_live_jev_calls=8,
                     approved_request_set="0" * 64,
                     approved_max_additional_provider_spend_usd="0.9031",
-                    approved_manifest=self.ttc["bindings"]["lane_manifest"]["sha256"],
-                    approved_python=self.ttc["remaining_authority"][
+                    approved_manifest=json.loads(
+                        (root / "successor-ttc-contract.json").read_text(encoding="utf-8")
+                    )["bindings"]["lane_manifest"]["sha256"],
+                    approved_python=json.loads(
+                        (root / "successor-ttc-contract.json").read_text(encoding="utf-8")
+                    )["remaining_authority"][
                         "absolute_python_executable"
                     ],
                 )
@@ -1379,7 +1578,7 @@ class FourArmStudyTests(unittest.TestCase):
 
     def test_successor_contract_refuses_stale_bindings_and_pending_manifest(self) -> None:
         self.assertEqual(
-            self.ttc["status"], "ready_after_final_user_reack",
+            self.ttc["status"], "pending_lane_manifest_and_final_user_reack",
         )
         self.assertEqual(
             self.ttc["bindings"]["lane_manifest"]["thread_id_semantics"],
@@ -1388,10 +1587,22 @@ class FourArmStudyTests(unittest.TestCase):
         self.assertEqual(self.ttc["remaining_authority"]["answer_task_names"], 16)
         self.assertEqual(self.ttc["remaining_authority"]["grader_task_names"], 16)
         self.assertEqual(self.ttc["remaining_authority"]["live_lanes_created"], 0)
-        self.assertEqual(self.ttc["remaining_authority"]["final_user_reack"], [])
         self.assertEqual(
-            self.ttc["remaining_authority"]["lane_manifest_sha256"],
-            self.ttc["bindings"]["lane_manifest"]["sha256"],
+            set(self.ttc["remaining_authority"]["final_user_reack"]),
+            {
+                "request_byte_set_sha256", "eight_call_cap",
+                "total_authorized_provider_budget_usd",
+                "operator_reported_spend_to_date_usd",
+                "max_additional_provider_spend_usd",
+                "lane_manifest_sha256", "absolute_python_executable",
+            },
+        )
+        self.assertIsNone(self.ttc["remaining_authority"]["absolute_python_executable"])
+        self.assertIsNone(self.ttc["remaining_authority"]["lane_manifest_sha256"])
+        self.assertIsNone(self.ttc["bindings"]["lane_manifest"]["sha256"])
+        self.assertFalse(self.successor_freeze["execution_policy"]["execution_ready"])
+        self.assertFalse(
+            self.successor_freeze["execution_policy"]["provider_spend_authorized"]
         )
         with self.assertRaisesRegex(study.StudyError, "successor_lane_manifest_not_ready"):
             study.validate_successor_execution_bindings(self.ttc, self.freeze)

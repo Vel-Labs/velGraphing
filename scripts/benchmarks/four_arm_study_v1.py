@@ -90,7 +90,7 @@ MAX_ADDITIONAL_PROVIDER_SPEND_USD = Decimal(
 )
 HISTORICAL_CONTROLLER_SHA256 = "79f42fbeee18c45731ec963102e31480bd4669f9f89cb1cedaccbbbcb2e8a21a"
 HISTORICAL_HOST_SHA256 = "4e89e9283870ca164a9a82fb93d65b60c9027b76d85ef5e99670d278e1fa1393"
-HISTORICAL_GRAPH_FIND_SHA256 = "5f62bbd9194250c177616ac9198ffc4b27d483b9a5ff1c2f5742e3e0e4505021"
+HISTORICAL_HANDOFF_SHA256 = "b993fb11ff2c405ee5154fab85c578818e179df5afcae83ccb0490a636359085"
 SUCCESSOR_ARM_LABELS = {
     "A": "edge-disabled frozen-shortlist baseline; Jev off",
     "B": "edge-disabled frozen-shortlist baseline; Jev on",
@@ -228,6 +228,15 @@ def _git(root: Path, *arguments: str) -> bytes:
     if completed.returncode:
         raise StudyError("lane_git_invalid")
     return completed.stdout
+
+
+def _bound_blob_sha256(
+    repo_root: Path, commit: str, path: str, reason: str,
+) -> str:
+    try:
+        return digest(_git(repo_root, "show", f"{commit}:{path}"))
+    except StudyError:
+        raise StudyError(reason) from None
 
 
 def _safe_path(value: object) -> str:
@@ -1215,6 +1224,29 @@ def _validate_freeze(
         or freeze.get("public_source_only") is not True
     ):
         raise StudyError("freeze_identity_invalid")
+    product = freeze.get("product")
+    if (
+        type(product) is not dict
+        or not _is_ancestor(repo_root, product.get("commit"))
+    ):
+        raise StudyError("package_binding_invalid")
+    release_path = "plugins/graph-engineering/.codex-plugin/release-manifest.json"
+    try:
+        release_raw = _git(
+            repo_root, "show", f"{product['commit']}:{release_path}",
+        )
+        release = json.loads(release_raw.decode("utf-8"))
+    except (StudyError, UnicodeError, json.JSONDecodeError):
+        raise StudyError("package_binding_invalid") from None
+    release_package = release.get("package") if type(release) is dict else None
+    if (
+        type(release) is not dict
+        or type(release_package) is not dict
+        or product.get("package_candidate_sha256") != release.get("candidate_sha256")
+        or product.get("package_name") != release_package.get("name")
+        or product.get("package_version") != release_package.get("version")
+    ):
+        raise StudyError("package_binding_invalid")
     controller = freeze.get("controller", {})
     controller_path = "scripts/benchmarks/four_arm_study_v1.py"
     if controller != {
@@ -1279,29 +1311,6 @@ def _validate_freeze(
     }
     if prompt_bindings != expected_prompts:
         raise StudyError("prompt_binding_invalid")
-    product = freeze.get("product")
-    if (
-        type(product) is not dict
-        or not _is_ancestor(repo_root, product.get("commit"))
-    ):
-        raise StudyError("package_binding_invalid")
-    release_path = "plugins/graph-engineering/.codex-plugin/release-manifest.json"
-    try:
-        release_raw = _git(
-            repo_root, "show", f"{product['commit']}:{release_path}",
-        )
-        release = json.loads(release_raw.decode("utf-8"))
-    except (StudyError, UnicodeError, json.JSONDecodeError):
-        raise StudyError("package_binding_invalid") from None
-    release_package = release.get("package") if type(release) is dict else None
-    if (
-        type(release) is not dict
-        or type(release_package) is not dict
-        or product.get("package_candidate_sha256") != release.get("candidate_sha256")
-        or product.get("package_name") != release_package.get("name")
-        or product.get("package_version") != release_package.get("version")
-    ):
-        raise StudyError("package_binding_invalid")
     corpora = freeze.get("corpora")
     if type(corpora) is not dict or {
         row["corpus"] for row in rows
@@ -1338,11 +1347,17 @@ def _validate_freeze(
         raise StudyError("implementation_binding_invalid")
     for name, expected_path in IMPLEMENTATION_PATHS.items():
         binding = bindings.get(name)
+        historical_benchmark_sha256 = {
+            "handoff": HISTORICAL_HANDOFF_SHA256,
+            "host": HISTORICAL_HOST_SHA256,
+        }.get(name)
         expected_sha256 = (
-            HISTORICAL_HOST_SHA256
-            if name == "host" else HISTORICAL_GRAPH_FIND_SHA256
-            if name == "graph_find_adapter"
-            else digest((repo_root / expected_path).read_bytes())
+            historical_benchmark_sha256
+            if historical_benchmark_sha256 is not None
+            else _bound_blob_sha256(
+                repo_root, product["commit"], expected_path,
+                "implementation_binding_invalid",
+            )
         )
         if (
             type(binding) is not dict
@@ -1432,6 +1447,26 @@ def _validate_freeze(
     validate_preflight(preflight, freeze)
 
 
+def _current_successor_rubric_bindings(repo_root: Path) -> dict[str, Any]:
+    return {
+        "controller": {
+            "path": "scripts/benchmarks/four_arm_study_v1.py",
+            "sha256": digest(
+                (repo_root / "scripts/benchmarks/four_arm_study_v1.py").read_bytes()
+            ),
+        },
+        "host": {
+            "path": "scripts/benchmarks/time_to_correct_host.py",
+            "sha256": digest(
+                (repo_root / "scripts/benchmarks/time_to_correct_host.py").read_bytes()
+            ),
+        },
+        "successor_grader_response_contract_sha256": digest(
+            canonical(SUCCESSOR_GRADER_RESPONSE_CONTRACT)
+        ),
+    }
+
+
 def _validate_successor_rubrics(value: Mapping[str, Any], historical: Mapping[str, Any],
                                 benchmark_root: Path, repo_root: Path) -> None:
     if (
@@ -1448,21 +1483,9 @@ def _validate_successor_rubrics(value: Mapping[str, Any], historical: Mapping[st
         or value.get("arm_labels") != SUCCESSOR_ARM_LABELS
     ):
         raise StudyError("successor_rubrics_invalid")
-    bindings = value.get("implementation_bindings")
-    controller_path = repo_root / "scripts/benchmarks/four_arm_study_v1.py"
-    if bindings != {
-        "controller": {
-            "path": "scripts/benchmarks/four_arm_study_v1.py",
-            "sha256": digest(controller_path.read_bytes()),
-        },
-        "host": {
-            "path": "scripts/benchmarks/time_to_correct_host.py",
-            "sha256": digest((repo_root / "scripts/benchmarks/time_to_correct_host.py").read_bytes()),
-        },
-        "successor_grader_response_contract_sha256": digest(
-            canonical(SUCCESSOR_GRADER_RESPONSE_CONTRACT)
-        ),
-    }:
+    if value.get("implementation_bindings") != _current_successor_rubric_bindings(
+        repo_root
+    ):
         raise StudyError("successor_binding_invalid")
     normalized = {
         "schema_version": "velgraphing-four-arm-rubrics-v1",
@@ -1765,6 +1788,92 @@ def load_successor_ttc_contract(
     return contract, custody
 
 
+def _pending_successor_lane_binding(freeze: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema_version": freeze["lane_identity_contract"]["handoff_schema"],
+        "entry_count": 32,
+        "sha256": None,
+        "status": "pending_parent_freeze",
+        "thread_id_semantics": THREAD_ID_SEMANTICS,
+    }
+
+
+def _pending_successor_authority() -> dict[str, Any]:
+    return {
+        "answer_task_names": 16,
+        "grader_task_names": 16,
+        "exact_host_argv_arrays": 32,
+        "absolute_python_executable": None,
+        "lane_manifest_sha256": None,
+        "final_user_reack": [
+            "request_byte_set_sha256", "eight_call_cap",
+            "total_authorized_provider_budget_usd",
+            "operator_reported_spend_to_date_usd",
+            "max_additional_provider_spend_usd",
+            "lane_manifest_sha256", "absolute_python_executable",
+        ],
+        "live_lanes_created": 0,
+    }
+
+
+def _refresh_successor_inputs(
+    benchmark_root: Path, repo_root: Path, *, custody_path: Path,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    freeze, _, historical = load_bundle(benchmark_root, repo_root)
+    _, successor = _read_json(
+        benchmark_root / SUCCESSOR_RUBRICS, "successor_rubrics_invalid",
+    )
+    refreshed_successor = deepcopy(successor)
+    refreshed_successor["implementation_bindings"] = (
+        _current_successor_rubric_bindings(repo_root)
+    )
+    _validate_successor_rubrics(
+        refreshed_successor, historical, benchmark_root, repo_root,
+    )
+
+    custody = _load_successor_witness_custody(custody_path, repo_root)
+    _, contract = _read_json(
+        benchmark_root / SUCCESSOR_TTC_CONTRACT, "successor_ttc_contract_invalid",
+    )
+    refreshed_contract = deepcopy(contract)
+    bindings = refreshed_contract.get("bindings")
+    if type(bindings) is not dict:
+        raise StudyError("successor_ttc_binding_invalid")
+    for name in ("controller", "host", "calibration"):
+        binding = bindings.get(name)
+        if type(binding) is not dict or set(binding) != {"path", "sha256"}:
+            raise StudyError("successor_ttc_binding_invalid")
+    successor_rubric = bindings.get("successor_rubric")
+    if type(successor_rubric) is not dict or set(successor_rubric) != {
+        "path", "sha256",
+    }:
+        raise StudyError("successor_ttc_binding_invalid")
+    refreshed_contract["status"] = "pending_lane_manifest_and_final_user_reack"
+    refreshed_contract["bindings"] = {
+        **bindings,
+        "controller": refreshed_successor["implementation_bindings"]["controller"],
+        "host": refreshed_successor["implementation_bindings"]["host"],
+        "calibration": {
+            "path": "scripts/benchmarks/time_to_correct_calibration.py",
+            "sha256": digest(
+                (repo_root / "scripts/benchmarks/time_to_correct_calibration.py")
+                .read_bytes()
+            ),
+        },
+        "successor_rubric": {
+            "path": SUCCESSOR_RUBRICS,
+            "sha256": digest(canonical(refreshed_successor)),
+        },
+        "lane_manifest": _pending_successor_lane_binding(freeze),
+    }
+    refreshed_contract["remaining_authority"] = _pending_successor_authority()
+    _validate_successor_ttc_contract(
+        refreshed_contract, freeze, refreshed_successor, benchmark_root, repo_root,
+        custody,
+    )
+    return freeze, refreshed_successor, refreshed_contract, custody
+
+
 def validate_successor_execution_bindings(
     contract: Mapping[str, Any], freeze: Mapping[str, Any],
     manifest: Mapping[str, Any] | None = None,
@@ -2029,7 +2138,10 @@ def freeze_lane_manifest(bindings: Mapping[str, Any], freeze: Mapping[str, Any],
     return digest(canonical(manifest))
 
 
-def validate_preflight(value: Mapping[str, Any], freeze: Mapping[str, Any]) -> int:
+def validate_preflight(
+    value: Mapping[str, Any], freeze: Mapping[str, Any], *,
+    current_candidate: bool = False,
+) -> int:
     rows = value.get("trials")
     pools = value.get("pools")
     if (
@@ -2194,8 +2306,8 @@ def validate_preflight(value: Mapping[str, Any], freeze: Mapping[str, Any]) -> i
     if (
         set(observed) != set(DISPATCH)
         or planned != value.get("planned_jev_calls")
-        or planned != freeze["jev"]["planned_calls"]
         or planned > freeze["jev"]["max_calls"]
+        or not current_candidate and planned != freeze["jev"]["planned_calls"]
     ):
         raise StudyError("preflight_invalid")
     for task_id in TASKS:
@@ -2218,9 +2330,12 @@ def validate_preflight(value: Mapping[str, Any], freeze: Mapping[str, Any]) -> i
         for row in rows if ARMS[row["arm"]]["jev"] == "on"
     }
     if (
-        freeze["jev"]["planned_trials"] != planned_trials
-        or freeze["jev"]["skipped_trials"] != skipped_trials
-        or freeze["jev"]["decision_bindings"] != decision_bindings
+        not current_candidate
+        and (
+            freeze["jev"]["planned_trials"] != planned_trials
+            or freeze["jev"]["skipped_trials"] != skipped_trials
+            or freeze["jev"]["decision_bindings"] != decision_bindings
+        )
     ):
         raise StudyError("preflight_invalid")
     return planned
@@ -2265,6 +2380,7 @@ def _build_successor_freeze(
         raise StudyError("successor_jev_budget_invalid")
     ready = contract["status"] == "ready_after_final_user_reack"
     if contract["status"] not in {
+        "pending_lane_manifest_and_final_user_reack",
         "frozen_pending_final_user_reack", "ready_after_final_user_reack",
     }:
         raise StudyError("successor_ttc_contract_invalid")
@@ -2476,93 +2592,148 @@ def _validate_successor_preflight(
     successor_freeze_sha256: str, freeze: Mapping[str, Any],
     benchmark_root: Path,
 ) -> None:
-    expected_source_sha = digest((benchmark_root / "preflight.json").read_bytes())
     source_preflight = value.get("source_free_preflight")
     if type(source_preflight) is not dict:
         raise StudyError("successor_preflight_invalid")
-    if digest(_json_bytes(source_preflight)) != expected_source_sha:
+    expected_source_sha = digest(_json_bytes(source_preflight))
+    if value.get("source_preflight_sha256") != expected_source_sha:
         raise StudyError("successor_preflight_invalid")
     try:
-        planned = validate_preflight(source_preflight, freeze)
+        planned = validate_preflight(
+            source_preflight, freeze, current_candidate=True,
+        )
     except StudyError:
         raise StudyError("successor_preflight_invalid") from None
     if (
         planned != 8
         or value.get("source_preflight_sha256") != expected_source_sha
-        or value.get("pool_artifact_sha256") != LOCAL_POOL_SHA256
+        or not _is_sha256(value.get("pool_artifact_sha256"))
         or value != _build_successor_preflight(
             successor_freeze_sha256, source_preflight, expected_source_sha,
-            LOCAL_POOL_SHA256, successor_freeze,
+            value["pool_artifact_sha256"], successor_freeze,
         )
     ):
         raise StudyError("successor_preflight_invalid")
+
+
+def _write_json_batch(values: Mapping[Path, Mapping[str, Any]]) -> dict[Path, str]:
+    temporary: list[tuple[Path, Path]] = []
+    try:
+        for path, value in values.items():
+            if path.is_symlink() or path.parent.is_symlink():
+                raise StudyError("output_path_invalid")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handle, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+            temp_path = Path(name)
+            with os.fdopen(handle, "wb") as stream:
+                stream.write(_json_bytes(value))
+            temporary.append((temp_path, path))
+        hashes = {
+            path: digest(_json_bytes(value)) for path, value in values.items()
+        }
+        for temp_path, path in temporary:
+            temp_path.replace(path)
+        return hashes
+    except OSError:
+        raise StudyError("output_path_invalid") from None
+    finally:
+        for temp_path, _ in temporary:
+            try:
+                temp_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def freeze_successor(
     benchmark_root: Path, lanes_root: Path, custody_path: Path,
     repo_root: Path = ROOT, *, refresh: bool = False,
 ) -> dict[str, str | int]:
-    freeze, questions, _ = load_bundle(benchmark_root, repo_root)
-    successor = load_successor_rubrics(benchmark_root, repo_root)
-    contract, _ = load_successor_ttc_contract(
-        benchmark_root, repo_root, custody_path=custody_path,
-    )
-    result = prepare_study(
-        freeze, questions, benchmark_root, lanes_root, None, None, repo_root,
-        persist=False,
-    )
-    preflight = result.pop("_preflight")
-    pools = result.pop("_local_artifact")
-    if type(preflight) is not dict or type(pools) is not dict:
-        raise StudyError("successor_preflight_invalid")
-    planned = validate_preflight(preflight, freeze)
-    if (
-        result["pool_count"] != 8
-        or result["planned_jev_calls"] != 8
-        or result["skipped_jev_calls"] != 0
-        or result["preflight_sha256"]
-        != freeze["artifacts"]["preflight"]["sha256"]
-        or result["local_artifact_sha256"] != LOCAL_POOL_SHA256
-        or planned != 8
-        or {
-            row["pool_id"]: row["pool_sha256"] for row in preflight["pools"]
-        } != contract["bindings"]["pool_bindings"]
-        or pools.get("provider_calls_executed") != 0
-    ):
-        raise StudyError("successor_pool_reproduction_mismatch")
-    request_bytes = {
-        row["trial_id"]: next(
-            pool["jev_preview"]["request_bytes"]
-            for pool in pools["pools"]
-            if pool["identity"]["pool_id"] == row["pool_id"]
+    if refresh:
+        freeze, successor, contract, _ = _refresh_successor_inputs(
+            benchmark_root, repo_root, custody_path=custody_path,
         )
-        for row in preflight["trials"] if row["call_disposition"] == "planned"
-    }
-    if digest(canonical(request_bytes)) != REQUEST_BYTE_SET_SHA256:
-        raise StudyError("successor_request_byte_set_invalid")
+        _, questions, _ = load_bundle(benchmark_root, repo_root)
+        result = prepare_study(
+            freeze, questions, benchmark_root, lanes_root, None, None, repo_root,
+            persist=False,
+        )
+        preflight = result.pop("_preflight")
+        pools = result.pop("_local_artifact")
+        if type(preflight) is not dict or type(pools) is not dict:
+            raise StudyError("successor_preflight_invalid")
+        planned = validate_preflight(
+            preflight, freeze, current_candidate=True,
+        )
+        if (
+            result["pool_count"] != 8
+            or result["planned_jev_calls"] != 8
+            or result["skipped_jev_calls"] != 0
+            or planned != 8
+            or pools.get("provider_calls_executed") != 0
+        ):
+            raise StudyError("successor_pool_reproduction_mismatch")
+        source_preflight_sha = result["preflight_sha256"]
+        pool_sha = result["local_artifact_sha256"]
+        request_bytes = {
+            row["trial_id"]: next(
+                pool["jev_preview"]["request_bytes"]
+                for pool in pools["pools"]
+                if pool["identity"]["pool_id"] == row["pool_id"]
+            )
+            for row in preflight["trials"] if row["call_disposition"] == "planned"
+        }
+        if digest(canonical(request_bytes)) != REQUEST_BYTE_SET_SHA256:
+            raise StudyError("successor_request_byte_set_invalid")
+    else:
+        freeze, questions, _ = load_bundle(benchmark_root, repo_root)
+        successor = load_successor_rubrics(benchmark_root, repo_root)
+        contract, _ = load_successor_ttc_contract(
+            benchmark_root, repo_root, custody_path=custody_path,
+        )
+        result = prepare_study(
+            freeze, questions, benchmark_root, lanes_root, None, None, repo_root,
+            persist=False,
+        )
+        preflight = result.pop("_preflight")
+        pools = result.pop("_local_artifact")
+        if type(preflight) is not dict or type(pools) is not dict:
+            raise StudyError("successor_preflight_invalid")
+        planned = validate_preflight(preflight, freeze)
+        if (
+            result["pool_count"] != 8
+            or result["planned_jev_calls"] != 8
+            or result["skipped_jev_calls"] != 0
+            or result["preflight_sha256"]
+            != freeze["artifacts"]["preflight"]["sha256"]
+            or result["local_artifact_sha256"] != LOCAL_POOL_SHA256
+            or planned != 8
+            or {
+                row["pool_id"]: row["pool_sha256"] for row in preflight["pools"]
+            } != contract["bindings"]["pool_bindings"]
+            or pools.get("provider_calls_executed") != 0
+        ):
+            raise StudyError("successor_pool_reproduction_mismatch")
+        source_preflight_sha = result["preflight_sha256"]
+        pool_sha = result["local_artifact_sha256"]
+        request_bytes = {
+            row["trial_id"]: next(
+                pool["jev_preview"]["request_bytes"]
+                for pool in pools["pools"]
+                if pool["identity"]["pool_id"] == row["pool_id"]
+            )
+            for row in preflight["trials"] if row["call_disposition"] == "planned"
+        }
+        if digest(canonical(request_bytes)) != REQUEST_BYTE_SET_SHA256:
+            raise StudyError("successor_request_byte_set_invalid")
     successor_freeze = _build_successor_freeze(
         freeze, successor, contract, planned, benchmark_root, repo_root,
     )
-    freeze_path = benchmark_root / SUCCESSOR_FREEZE
     freeze_raw = _json_bytes(successor_freeze)
-    if (
-        freeze_path.exists() and freeze_path.read_bytes() != freeze_raw
-        and not refresh
-    ):
-        raise StudyError("successor_freeze_conflict")
-    freeze_sha = _write_json(freeze_path, successor_freeze)
+    freeze_sha = digest(freeze_raw)
     successor_preflight = _build_successor_preflight(
-        freeze_sha, preflight, result["preflight_sha256"],
-        result["local_artifact_sha256"], successor_freeze,
+        freeze_sha, preflight, source_preflight_sha, pool_sha, successor_freeze,
     )
-    preflight_path = benchmark_root / SUCCESSOR_PREFLIGHT
     preflight_raw = _json_bytes(successor_preflight)
-    if (
-        preflight_path.exists() and preflight_path.read_bytes() != preflight_raw
-        and not refresh
-    ):
-        raise StudyError("successor_preflight_conflict")
-    preflight_sha = _write_json(preflight_path, successor_preflight)
     _validate_successor_freeze(
         successor_freeze, freeze, successor, contract, planned,
         benchmark_root, repo_root,
@@ -2570,9 +2741,31 @@ def freeze_successor(
     _validate_successor_preflight(
         successor_preflight, successor_freeze, freeze_sha, freeze, benchmark_root,
     )
+    if not refresh:
+        freeze_path = benchmark_root / SUCCESSOR_FREEZE
+        preflight_path = benchmark_root / SUCCESSOR_PREFLIGHT
+        if (
+            freeze_path.exists() and freeze_path.read_bytes() != freeze_raw
+        ):
+            raise StudyError("successor_freeze_conflict")
+        if (
+            preflight_path.exists() and preflight_path.read_bytes() != preflight_raw
+        ):
+            raise StudyError("successor_preflight_conflict")
+        hashes = _write_json_batch({
+            freeze_path: successor_freeze,
+            preflight_path: successor_preflight,
+        })
+    else:
+        hashes = _write_json_batch({
+            benchmark_root / SUCCESSOR_RUBRICS: successor,
+            benchmark_root / SUCCESSOR_TTC_CONTRACT: contract,
+            benchmark_root / SUCCESSOR_FREEZE: successor_freeze,
+            benchmark_root / SUCCESSOR_PREFLIGHT: successor_preflight,
+        })
     return {
-        "successor_freeze_sha256": freeze_sha,
-        "successor_preflight_sha256": preflight_sha,
+        "successor_freeze_sha256": hashes[benchmark_root / SUCCESSOR_FREEZE],
+        "successor_preflight_sha256": hashes[benchmark_root / SUCCESSOR_PREFLIGHT],
         "planned_jev_calls": planned,
         "pool_count": 8,
         "trial_count": 16,
@@ -2580,6 +2773,94 @@ def freeze_successor(
         "grader_calls_executed": 0,
         "provider_calls_executed": 0,
         "retries": 0,
+    }
+
+
+def bind_successor_lane_manifest(
+    benchmark_root: Path, run_root: Path, custody_path: Path,
+    python_executable: str | Path, repo_root: Path = ROOT,
+) -> dict[str, str | bool]:
+    freeze, _, _ = load_bundle(benchmark_root, repo_root)
+    successor = load_successor_rubrics(benchmark_root, repo_root)
+    contract, custody = load_successor_ttc_contract(
+        benchmark_root, repo_root, custody_path=custody_path,
+    )
+    if contract["status"] != "pending_lane_manifest_and_final_user_reack":
+        raise StudyError("successor_ttc_binding_invalid")
+    run_root = validate_run_root(str(run_root.resolve()))
+    manifest_path = run_root / "lane-manifest.json"
+    raw, manifest = read_canonical(manifest_path)
+    validate_lane_manifest(manifest, freeze)
+    python_executable = str(python_executable)
+    if (
+        not Path(python_executable).is_absolute()
+        or not Path(python_executable).is_file()
+        or not os.access(python_executable, os.X_OK)
+    ):
+        raise StudyError("successor_python_binding_stale")
+    entries = manifest["entries"]
+    if any(row["argv"][0] != python_executable for row in entries):
+        raise StudyError("successor_python_binding_stale")
+    manifest_sha = digest(raw)
+    frozen_contract = deepcopy(contract)
+    frozen_contract["status"] = "frozen_pending_final_user_reack"
+    frozen_contract["bindings"]["lane_manifest"] = {
+        "schema_version": freeze["lane_identity_contract"]["handoff_schema"],
+        "entry_count": 32,
+        "sha256": manifest_sha,
+        "status": "frozen",
+        "thread_id_semantics": THREAD_ID_SEMANTICS,
+    }
+    frozen_contract["remaining_authority"]["absolute_python_executable"] = (
+        python_executable
+    )
+    frozen_contract["remaining_authority"]["lane_manifest_sha256"] = manifest_sha
+    frozen_contract["remaining_authority"]["final_user_reack"] = (
+        _pending_successor_authority()["final_user_reack"]
+    )
+    _validate_successor_ttc_contract(
+        frozen_contract, freeze, successor, benchmark_root, repo_root, custody,
+    )
+    _, source_successor_preflight = _read_json(
+        benchmark_root / SUCCESSOR_PREFLIGHT, "successor_preflight_invalid",
+    )
+    source_preflight = source_successor_preflight.get("source_free_preflight")
+    if type(source_preflight) is not dict:
+        raise StudyError("successor_preflight_invalid")
+    successor_freeze = _build_successor_freeze(
+        freeze, successor, frozen_contract, 8, benchmark_root, repo_root,
+    )
+    successor_freeze_sha = digest(_json_bytes(successor_freeze))
+    successor_preflight = _build_successor_preflight(
+        successor_freeze_sha,
+        source_preflight,
+        source_successor_preflight["source_preflight_sha256"],
+        source_successor_preflight["pool_artifact_sha256"],
+        successor_freeze,
+    )
+    _validate_successor_freeze(
+        successor_freeze, freeze, successor, frozen_contract, 8,
+        benchmark_root, repo_root,
+    )
+    _validate_successor_preflight(
+        successor_preflight, successor_freeze, successor_freeze_sha,
+        freeze, benchmark_root,
+    )
+    hashes = _write_json_batch({
+        benchmark_root / SUCCESSOR_TTC_CONTRACT: frozen_contract,
+        benchmark_root / SUCCESSOR_FREEZE: successor_freeze,
+        benchmark_root / SUCCESSOR_PREFLIGHT: successor_preflight,
+    })
+    return {
+        "lane_manifest_sha256": manifest_sha,
+        "successor_ttc_contract_sha256": hashes[
+            benchmark_root / SUCCESSOR_TTC_CONTRACT
+        ],
+        "successor_freeze_sha256": hashes[benchmark_root / SUCCESSOR_FREEZE],
+        "successor_preflight_sha256": hashes[
+            benchmark_root / SUCCESSOR_PREFLIGHT
+        ],
+        "execution_ready": False,
     }
 
 
@@ -2601,7 +2882,9 @@ def load_successor_freeze(
     source_preflight = successor_preflight.get("source_free_preflight")
     if type(source_preflight) is not dict:
         raise StudyError("successor_preflight_invalid")
-    planned = validate_preflight(source_preflight, freeze)
+    planned = validate_preflight(
+        source_preflight, freeze, current_candidate=True,
+    )
     _validate_successor_freeze(
         successor_freeze, freeze, successor, contract, planned,
         benchmark_root, repo_root,
@@ -2637,7 +2920,9 @@ def load_prepared_successor_pool(
     _require_successor_pool_hash(raw, successor_preflight)
     freeze, _, _ = load_bundle(benchmark_root, repo_root)
     return load_runtime_inputs(
-        benchmark_root, pool_path, freeze, validate_historical_reservation=False,
+        benchmark_root, pool_path, freeze,
+        validate_historical_reservation=False,
+        expected_pool_sha256=successor_preflight["pool_artifact_sha256"],
     )
 
 
@@ -2658,13 +2943,13 @@ def prepare_successor_execution(
     if (
         type(preflight) is not dict or type(pools) is not dict
         or result["preflight_sha256"]
-        != successor_freeze["bindings"]["historical_preflight_sha256"]
+        != successor_preflight["source_preflight_sha256"]
         or result["local_artifact_sha256"]
         != successor_preflight["pool_artifact_sha256"]
         or result["pool_count"] != 8
         or result["planned_jev_calls"] != 8
         or result["skipped_jev_calls"] != 0
-        or validate_preflight(preflight, freeze) != 8
+        or validate_preflight(preflight, freeze, current_candidate=True) != 8
         or pools.get("provider_calls_executed") != 0
     ):
         raise StudyError("successor_pool_reproduction_mismatch")
@@ -2694,14 +2979,15 @@ def prepare_successor_execution(
 
 def load_runtime_inputs(benchmark_root: Path, pool_path: Path,
                         freeze: Mapping[str, Any], *,
-                        validate_historical_reservation: bool = True
+                        validate_historical_reservation: bool = True,
+                        expected_pool_sha256: str = LOCAL_POOL_SHA256,
                         ) -> tuple[dict[str, Any], dict[str, Any]]:
     _, preflight = _read_json(benchmark_root / "preflight.json", "preflight_invalid")
     validate_preflight(preflight, freeze)
     raw, artifact = _read_json(pool_path, "pool_artifact_invalid")
     rows = artifact.get("pools")
     if (
-        digest(raw) != LOCAL_POOL_SHA256
+        digest(raw) != expected_pool_sha256
         or artifact.get("schema_version") != LOCAL_ARTIFACT_SCHEMA
         or artifact.get("study_id") != freeze["study_id"]
         or artifact.get("provider_calls_executed") != 0
@@ -3422,6 +3708,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     successor_prep.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     successor_prep.add_argument("--lanes-root", type=Path, required=True)
     successor_prep.add_argument("--witness-custody", type=Path, required=True)
+    successor_lane_binding = subparsers.add_parser("bind-successor-lanes")
+    successor_lane_binding.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    successor_lane_binding.add_argument("--run-root", type=Path, required=True)
+    successor_lane_binding.add_argument("--python-executable", type=Path, required=True)
+    successor_lane_binding.add_argument("--witness-custody", type=Path, required=True)
     lanes = subparsers.add_parser("freeze-lanes")
     lanes.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     lanes.add_argument("--bindings", type=Path, required=True)
@@ -3475,6 +3766,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = prepare_successor_execution(
                 arguments.root.resolve(), arguments.lanes_root.resolve(),
                 arguments.witness_custody, ROOT,
+            )
+            print(json.dumps(result, sort_keys=True))
+            return 0
+        if arguments.command == "bind-successor-lanes":
+            result = bind_successor_lane_manifest(
+                arguments.root.resolve(), arguments.run_root.resolve(),
+                arguments.witness_custody, arguments.python_executable, ROOT,
             )
             print(json.dumps(result, sort_keys=True))
             return 0

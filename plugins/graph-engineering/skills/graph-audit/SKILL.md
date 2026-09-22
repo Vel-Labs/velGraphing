@@ -41,6 +41,20 @@ Use a paired audit when the user asks whether the graph improves agent work:
 Stop after the comparison. Do not modify the repository, install components,
 or publish results unless the user separately authorizes that action.
 
+## Packet-only Review
+
+The host or Parent must explicitly prepare and validate a `review-packet-v1`
+against the current exact source snapshot and reader. Read only the listed
+selected context references and the accepted instruction plan. Do not discover
+paths, widen context, invoke graph-find or graph-update, call providers, or run
+a scheduler. Return `eligible`, `stale_snapshot`, or `source_mismatch`; a
+stale or mismatched packet stops the review and does not use fallback. Findings
+are advisory unless the exact recorded deterministic project policy names the
+finding code as blocking. This skill does not claim a CLI, lifecycle hook,
+scheduler, or automatic reviewer.
+Deleted or otherwise absent changed paths require a fresh diff-aware host
+review and cannot use this packet contract.
+
 ## Output
 
 Return the repository snapshot, questions, route controls, result table,
