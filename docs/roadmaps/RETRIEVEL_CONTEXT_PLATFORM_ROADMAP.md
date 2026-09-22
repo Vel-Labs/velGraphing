@@ -12,9 +12,9 @@ Source candidate at creation: `331b13ba0499bffcdb2f2b4dd79124c2dd0853ed`
 
 Current milestone: `M09 — Multi-corpus evaluation`
 
-Current gate: freeze and bind 32 fresh host-native task names for the accepted current-candidate pool
+Current gate: obtain the exact final execution re-ack for the bound current-candidate pool and fresh lane manifest
 
-Next action: create the fresh answer and grader lanes, freeze and bind their manifest, then verify the one remaining approval boundary before execution
+Next action: materialize offline approval, then create the 16 answer and 16 grader lanes from the exact frozen task names
 
 ## Purpose
 
@@ -591,7 +591,7 @@ receipts for Parent integration.
 | `W012` | `M06` | Parent plus Luna discovery and implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | provider-neutral instruction plan and structured skill metadata | complete | Pure caller-supplied plan, eight-skill advisory manifest, and 91-file package parity |
 | `W013` | `M07` | Parent plus Luna discovery and implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | source-bound read-only review packet and explicit consumer path | complete | Closed snapshot-bound packet; 46 focused tests and 93-file package parity passed |
 | `W014` | `M08` | Parent plus Luna discovery and implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | verified Codex and Orcastrata translation seams only | complete | Explicit Codex command seam and navigation-only Orcastrata intake verified; no lifecycle API exists |
-| `W015` | `M09` | Parent plus implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | frozen multi-corpus four-arm evaluation | active | Current pool refresh and lane binding transitions pass; create and bind 32 fresh host-native task names |
+| `W015` | `M09` | Parent plus implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | frozen multi-corpus four-arm evaluation | active | Fresh 32-entry manifest `4dd21648...` is bound; execution and provider spend remain disabled pending exact final re-ack |
 
 ## Decision Registry
 
@@ -648,6 +648,7 @@ or accepted phase. Merge retries with identical inputs and failure signatures.
 | 2026-09-22 | `M09` | Exact D-01 Direct/Graph and Jev artifact inspection | real-artifact causal checkpoint | accepted diagnostic | Direct had no `sorts/quick_sort.py` candidate; Graph added and selected one source-witnessed relationship candidate. Stored B/D Jev request hashes exactly match the current pools. Graph+Jev retained the target and passed `3/3`; Direct+Jev could not add the absent target and failed `1/3`. This permits the existing full successor run but is not current-candidate performance proof. |
 | 2026-09-22 | `M09` | Current successor execution dry preparation | read-only integrated preflight | failed transition gate | Current preparation produces pool hash `bf6ea247...` and preflight hash `a3c4469e...`, not the frozen `3721b737...` and `4c329a1a...`; preparation fails closed. The harness also has no command that binds a newly frozen lane manifest into the pending TTC contract. Repair these two explicit transitions before lanes or calls. |
 | 2026-09-22 | `M09` | Current-candidate pool refresh and explicit lane-manifest binding | focused harness and successor validation | accepted harness repair | `freeze-successor --refresh` and `prepare-successor-execution` now bind current preflight `a3c4469e...` and pool `bf6ea247...`. `bind-successor-lanes` validates and binds a fresh 32-entry manifest plus exact Python path without inheriting approval. Historical and successor validators pass; 37 benchmark tests pass with 2 unavailable-lane skips. State remains pending, execution disabled, and provider spend unauthorized. |
+| 2026-09-22 | `M09` | Fresh M09 R1 lane freeze and pending binding | offline authority preparation | ready for re-ack | Manifest `4dd216489009e1f1d22db14545f96b902aae20e5a20c42ba56ad474392b61474` binds 16 Luna answer and 16 Astra grader task names plus the declared Python executable. Successor freeze is `5cfd441f...`; preflight is `4a51506f...`. No task, model, Jev, provider, credential, or network call occurred. |
 
 ## Handoff Protocol
 

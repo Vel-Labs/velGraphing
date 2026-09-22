@@ -15,8 +15,8 @@
     "lane_manifest": {
       "entry_count": 32,
       "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
-      "sha256": null,
-      "status": "pending_parent_freeze",
+      "sha256": "4dd216489009e1f1d22db14545f96b902aae20e5a20c42ba56ad474392b61474",
+      "status": "frozen",
       "thread_id_semantics": "canonical_collaboration_task_name_not_opaque_host_id"
     },
     "pool_bindings": {
@@ -79,7 +79,7 @@
     "total_authorized_usd": "1.0000"
   },
   "remaining_authority": {
-    "absolute_python_executable": null,
+    "absolute_python_executable": "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python",
     "answer_task_names": 16,
     "exact_host_argv_arrays": 32,
     "final_user_reack": [
@@ -92,7 +92,7 @@
       "absolute_python_executable"
     ],
     "grader_task_names": 16,
-    "lane_manifest_sha256": null,
+    "lane_manifest_sha256": "4dd216489009e1f1d22db14545f96b902aae20e5a20c42ba56ad474392b61474",
     "live_lanes_created": 0
   },
   "result_contract": {
@@ -124,7 +124,7 @@
     "token_policy": "host_reported_only_never_estimate_from_bytes"
   },
   "schema_version": "velgraphing-four-arm-successor-ttc-v1",
-  "status": "pending_lane_manifest_and_final_user_reack",
+  "status": "frozen_pending_final_user_reack",
   "trial_policy": {
     "answer_calls_per_dispatch": 1,
     "answer_repairs": 0,
