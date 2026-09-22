@@ -398,7 +398,7 @@ tasks:
       - "Provider approval, key environment, call cap, or budget binding is absent."
     receipt:
       result: r4_direct_jev_binding_repaired_ready
-      candidate_commit: f5c20cb
+      candidate_commit: 9d83ac23a696bbcc32d109607f4cbb43341e5b32
       summary: "Sealed R3 as diagnostic evidence, repaired the Direct-plus-Jev canonical hash collision, raised worker wait ceilings to 600 seconds, and froze an execution-ready R4 successor without retries."
       changed_files:
         - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
