@@ -26,11 +26,13 @@ from time_to_correct_calibration import (HANDOFF_PATH, LiveJevBudget, bind_contr
                                          validate_live_authority, verify_lane,
                                          V3_CANDIDATE_POLICY, V3_MEASUREMENT_CONTRACT)
 from time_to_correct_handoff import (
+    CAPTURE_RECEIPT,
     COMPLETION_ATTESTATION,
     HandoffError,
     MAX_BYTES,
     RAW_ASSISTANT_RESPONSE,
     attest_draft,
+    capture_host_response,
     normalize_json_object,
     read_attested_draft,
     read_canonical,
@@ -92,6 +94,29 @@ T310_RAW_RESPONSE = (
     b'"gpt-5.6-luna","reasoning":"medium","role":"answer","thread_id":'
     b'"01a0c3b9-3309-7500-a3ad-6cc713dcf659","trial_id":"INLINE-CANARY"}}'
 )
+
+
+def capture_test_response(
+    root: Path, trial_id: str, role: str, thread_id: str,
+    model: str = "gpt-5.6-luna", reasoning: str = "medium",
+) -> tuple[Path, str, bytes]:
+    identity = {
+        "trial_id": trial_id, "role": role, "thread_id": thread_id,
+        "model": model, "reasoning": reasoning,
+    }
+    manifest_sha256 = write_lane_manifest(
+        root, trial_id, role, thread_id, model, reasoning
+    )
+    write_lane_request(root, identity)
+    value = json.loads(T310_RAW_RESPONSE)
+    value["execution_identity"] = identity
+    raw = json.dumps(value, indent=2).encode()
+    draft, _, _ = capture_host_response(
+        root, trial_id, 0, role, raw,
+        thread_id=thread_id, model=model, reasoning=reasoning,
+        lane_manifest_sha256=manifest_sha256,
+    )
+    return draft, manifest_sha256, canonical(value)
 
 
 class CalibrationTests(unittest.TestCase):
@@ -309,11 +334,7 @@ class CalibrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
             root = Path(raw) / "run"
             lane = root / "trials/publish/attempt-0/answer"
-            lane.mkdir(parents=True)
-            response = canonical({"schema_version": "fixture-response-v1", "answer": "published"})
-            draft = lane / "draft-response.json"
-            draft.write_bytes(response)
-            manifest_sha256 = write_lane_manifest(
+            draft, manifest_sha256, response = capture_test_response(
                 root, "publish", "answer", "thread-publish"
             )
             identity = [
@@ -338,7 +359,7 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual((attested.returncode, attested.stderr), (0, b""))
         self.assertEqual((completed.returncode, completed.stderr), (0, b""))
         self.assertEqual(published, response)
-        self.assertEqual(draft_value["answer"], "published")
+        self.assertEqual(draft_value["answer_text"], json.loads(response)["answer_text"])
 
     def test_host_response_capture_preserves_bytes_and_attestation_is_immutable(self):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
@@ -408,7 +429,7 @@ class CalibrationTests(unittest.TestCase):
         )
         self.assertEqual((attested.returncode, attested.stderr), (0, b""))
         self.assertEqual(rejected.returncode, 3)
-        self.assertIn(b"completion_attestation_draft_changed", rejected.stderr)
+        self.assertIn(b"capture_receipt_invalid", rejected.stderr)
 
     def test_host_response_capture_rejects_invalid_content_boundaries(self):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
@@ -419,6 +440,7 @@ class CalibrationTests(unittest.TestCase):
                 ("invalid", b"{", b"invalid_json_object"),
                 ("prose", b'{} trailing', b"invalid_json_object"),
                 ("array", b"[]", b"invalid_json_object"),
+                ("string", b'"{}"', b"invalid_json_object"),
             )
             for trial_id, response, reason in cases:
                 lane = root / "trials" / trial_id / "attempt-0" / "answer"
@@ -444,6 +466,50 @@ class CalibrationTests(unittest.TestCase):
                     (lane / RAW_ASSISTANT_RESPONSE).exists(),
                     trial_id not in {"empty", "oversize"},
                 )
+
+    def test_manually_created_draft_cannot_be_attested(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            lane = root / "trials/manual/attempt-0/answer"
+            lane.mkdir(parents=True)
+            draft = lane / "draft.json"
+            draft.write_bytes(canonical({"answer": "manual"}))
+            manifest_sha256 = write_lane_manifest(
+                root, "manual", "answer", "thread-manual"
+            )
+            with self.assertRaisesRegex(HandoffError, "capture_receipt_invalid"):
+                attest_draft(
+                    root, "manual", 0, "answer", draft,
+                    thread_id="thread-manual", model="gpt-5.6-luna",
+                    reasoning="medium", lane_manifest_sha256=manifest_sha256,
+                )
+
+    def test_missing_or_invalid_capture_receipt_cannot_be_attested(self):
+        with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
+            root = Path(raw) / "run"
+            for state in ("missing", "invalid"):
+                with self.subTest(state=state):
+                    trial_id = f"receipt-{state}"
+                    thread_id = f"thread-{state}"
+                    manifest_sha256 = write_lane_manifest(
+                        root, trial_id, "answer", thread_id
+                    )
+                    lane = root / f"trials/{trial_id}/attempt-0/answer"
+                    lane.mkdir(parents=True)
+                    draft = lane / "draft.json"
+                    draft.write_bytes(canonical({"answer": state}))
+                    (lane / RAW_ASSISTANT_RESPONSE).write_bytes(draft.read_bytes())
+                    if state == "invalid":
+                        (lane / CAPTURE_RECEIPT).write_bytes(canonical({}))
+                    with self.assertRaisesRegex(
+                        HandoffError, "capture_receipt_invalid"
+                    ):
+                        attest_draft(
+                            root, trial_id, 0, "answer", draft,
+                            thread_id=thread_id, model="gpt-5.6-luna",
+                            reasoning="medium",
+                            lane_manifest_sha256=manifest_sha256,
+                        )
 
     def test_host_response_capture_rejects_contract_identity_and_existing_artifacts(self):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
@@ -534,9 +600,7 @@ class CalibrationTests(unittest.TestCase):
                 ]
                 input_raw = raw
                 if source == "draft":
-                    draft = lane / "draft-response.json"
-                    draft.write_bytes(raw)
-                    manifest_sha256 = write_lane_manifest(
+                    draft, manifest_sha256, expected = capture_test_response(
                         root, trial_id, "grader", "thread-1"
                     )
                     attest_draft(
@@ -574,43 +638,40 @@ class CalibrationTests(unittest.TestCase):
     def test_completed_mutated_draft_is_rejected(self):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
             root = Path(raw) / "run"
-            lane = root / "trials/mutated/attempt-0/answer"
-            lane.mkdir(parents=True)
-            draft = lane / "draft.json"
-            draft.write_bytes(canonical({"answer": "final"}))
+            draft, manifest_sha256, _ = capture_test_response(
+                root, "mutated", "answer", "thread-mutated"
+            )
             attest_draft(
                 root, "mutated", 0, "answer", draft,
                 thread_id="thread-mutated", model="gpt-5.6-luna", reasoning="medium",
-                lane_manifest_sha256="a" * 64,
+                lane_manifest_sha256=manifest_sha256,
             )
             draft.write_bytes(canonical({"answer": "changed"}))
             with self.assertRaisesRegex(
-                HandoffError, "completion_attestation_draft_changed"
+                HandoffError, "capture_receipt_invalid"
             ):
                 read_attested_draft(
                     root, "mutated", 0, "answer", draft,
                     thread_id="thread-mutated", model="gpt-5.6-luna", reasoning="medium",
-                    lane_manifest_sha256="a" * 64,
+                    lane_manifest_sha256=manifest_sha256,
                 )
 
     def test_completed_stable_matching_draft_succeeds(self):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
             root = Path(raw) / "run"
-            lane = root / "trials/stable/attempt-0/grader"
-            lane.mkdir(parents=True)
-            draft = lane / "draft.json"
-            expected = canonical({"grade": "final"})
-            draft.write_bytes(expected)
+            draft, manifest_sha256, expected = capture_test_response(
+                root, "stable", "grader", "thread-stable"
+            )
             attest_draft(
                 root, "stable", 0, "grader", draft,
                 thread_id="thread-stable", model="gpt-5.6-luna", reasoning="medium",
-                lane_manifest_sha256="a" * 64,
+                lane_manifest_sha256=manifest_sha256,
             )
             self.assertEqual(
                 read_attested_draft(
                     root, "stable", 0, "grader", draft,
                     thread_id="thread-stable", model="gpt-5.6-luna", reasoning="medium",
-                    lane_manifest_sha256="a" * 64,
+                    lane_manifest_sha256=manifest_sha256,
                 ),
                 expected,
             )
@@ -619,10 +680,7 @@ class CalibrationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir=self.local_root) as raw:
             root = Path(raw) / "run"
             lane = root / "trials/identity/attempt-0/answer"
-            lane.mkdir(parents=True)
-            draft = lane / "draft.json"
-            draft.write_bytes(canonical({"answer": "final"}))
-            manifest_sha256 = write_lane_manifest(
+            draft, manifest_sha256, _ = capture_test_response(
                 root, "identity", "answer", "thread-correct"
             )
             rejected = subprocess.run(

@@ -283,3 +283,18 @@ the frozen-contract TTC comparison. It does not establish general Direct,
 Graph, or Jev retrieval performance. The next audit must address the missing
 Graph-plus-Jev provider usage and the larger Graph answer context before any
 release claim.
+
+## T080 custody reclassification
+
+The independent T080 audit found that five answer lanes did not retain the
+frozen raw-response to canonical-draft custody chain. B-D-01 attested the raw
+file directly. B-L-01, B-M-02, and C-D-01 wrote responses without retained raw
+and attestation proof. C-M-02 retained a double-encoded raw JSON string and a
+Parent-normalized inner object. The other 27 lanes passed the custody audit.
+
+R4 is therefore a partial diagnostic, not a promotion-grade four-arm result.
+The A Direct/off and D Graph/on lanes retain complete custody, so their narrow
+comparison remains numerically intact. The B and C aggregates, the 12-of-16
+overall count, and any full four-arm claim are not accepted. R4 remains sealed
+and immutable. T090 must repair the shared custody boundary and execute a fresh
+16-lane R5.

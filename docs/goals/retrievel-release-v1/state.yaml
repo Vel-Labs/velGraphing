@@ -63,7 +63,7 @@ visual_board:
     url: null
     command: "node <skill-path>/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-release-v1"
 
-active_task: T080
+active_task: T090
 
 tasks:
   - id: T010
@@ -439,7 +439,7 @@ tasks:
   - id: T080
     type: judge
     assignee: Judge
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Run independent product, evidence, package, and release audits and specify one bounded repair if required."
     inputs:
@@ -451,15 +451,42 @@ tasks:
       - "accept | repair | reject"
       - "Exact blocking findings"
       - "Release claim boundary"
-    receipt: null
+    receipt:
+      result: repair
+      candidate_commit: 0849755149f7a1072bd219c4c4119252473d4bd9
+      summary: "R4 counters and A-versus-D arithmetic verify, but five answer lanes lack the required capture custody chain. R4 is a partial diagnostic, not a promotion-grade four-arm result."
+      findings:
+        - "B-D-01 answer attested raw output directly without a canonical capture draft"
+        - "B-L-01, B-M-02, and C-D-01 answers lack retained raw and completion-attestation custody"
+        - "C-M-02 retained a raw JSON string and a Parent-normalized inner object"
+        - "Graph-plus-Jev provider usage and Graph phase telemetry remain incomplete"
+        - "The current packaged live smoke and fresh clean-tree package qualification remain required"
+      validation:
+        - "27 of 32 lanes passed response-contract, identity, and custody review"
+        - "A Direct/off and D Graph/on retain all 8 lane captures and their narrow arithmetic"
+        - "focused benchmark validation: 44 passed, 2 expected path-local skips"
+      boundary: "R4 remains immutable partial diagnostic evidence. A fresh full R5 is required after the shared custody repair."
   - id: T090
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: medium
     objective: "Resolve accepted audit findings, run final release qualification, and prepare the merge and release receipt."
-    allowed_files: []
-    verify: []
+    allowed_files:
+      - scripts/benchmarks/time_to_correct_handoff.py
+      - tests/benchmarks/test_time_to_correct_handoff.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+      - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
+      - docs/goals/retrievel-release-v1/state.yaml
+    verify:
+      - "enforce raw-response, canonical-draft, capture-receipt, and execution-identity custody before attestation"
+      - "freeze and execute a fresh 16-lane R5 with zero retries and at most eight Jev calls"
+      - "run the current packaged synthetic installed live smoke"
+      - "run clean-tree projector idempotence, source/package parity, and full validation"
+      - "obtain one fresh independent audit"
     stop_if:
       - "T080 has not produced an accepted repair or release decision."
       - "Publication authority is absent."
