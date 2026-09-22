@@ -25,6 +25,13 @@ COMPLETION_ATTESTATION_SCHEMA = "velgraphing-lane-completion-attestation-v2"
 RAW_ASSISTANT_RESPONSE = "assistant-response.raw"
 CAPTURE_RECEIPT = "capture-receipt.json"
 CAPTURE_RECEIPT_SCHEMA = "velgraphing-host-response-capture-receipt-v1"
+CAPTURE_REJECTION = "capture-rejection.json"
+CAPTURE_REJECTION_SCHEMA = "velgraphing-host-response-capture-rejection-v1"
+CAPTURE_REJECTION_REASONS = {
+    "invalid_json_object",
+    "host_response_contract_invalid",
+    "host_response_identity_invalid",
+}
 
 
 class HandoffError(ValueError):
@@ -595,6 +602,68 @@ def receipt(root: Path, *, trial_id: str, attempt: int, lane: str, status: str,
     }), replace=True)
 
 
+def capture_rejection_reason(
+    directory: int,
+    directory_path: Path,
+    *,
+    trial_id: str,
+    attempt: int,
+    lane: str,
+    request_sha256: str,
+) -> str:
+    try:
+        _, rejection = read_canonical_at(directory, CAPTURE_REJECTION)
+        raw = read_bounded_regular_at(directory, RAW_ASSISTANT_RESPONSE)
+    except HandoffError as error:
+        if str(error) in {
+            "handoff_file_missing", "handoff_file_invalid", "invalid_canonical_json"
+        }:
+            raise HandoffError("capture_rejection_invalid") from None
+        raise
+    if (
+        set(rejection) != {
+            "schema_version", "trial_id", "attempt", "role", "request_sha256",
+            "raw_path", "raw_size_bytes", "raw_sha256", "reason",
+        }
+        or rejection["schema_version"] != CAPTURE_REJECTION_SCHEMA
+        or rejection["trial_id"] != trial_id
+        or rejection["attempt"] != attempt
+        or rejection["role"] != lane
+        or rejection["request_sha256"] != request_sha256
+        or rejection["raw_path"] != str(directory_path / RAW_ASSISTANT_RESPONSE)
+        or rejection["raw_size_bytes"] != len(raw)
+        or rejection["raw_sha256"] != digest(raw)
+        or rejection["reason"] not in CAPTURE_REJECTION_REASONS
+    ):
+        raise HandoffError("capture_rejection_invalid")
+    return rejection["reason"]
+
+
+def _raise_capture_rejection(
+    root: Path,
+    trial_id: str,
+    attempt: int,
+    lane: str,
+    request_sha256: str | None = None,
+) -> None:
+    directory_path = lane_root(root, trial_id, attempt, lane)
+    directory = _open_lane(root, trial_id, attempt, lane, create=False)
+    try:
+        try:
+            os.stat(CAPTURE_REJECTION, dir_fd=directory, follow_symlinks=False)
+        except FileNotFoundError:
+            return
+        if request_sha256 is None:
+            request_sha256 = digest(read_canonical_at(directory, "request.json")[0])
+        raise HandoffError(capture_rejection_reason(
+            directory, directory_path,
+            trial_id=trial_id, attempt=attempt, lane=lane,
+            request_sha256=request_sha256,
+        ))
+    finally:
+        os.close(directory)
+
+
 def wait_for_response(root: Path, trial_id: str, attempt: int, lane: str,
                       wait_seconds: float, request_raw: bytes) -> bytes:
     request = decode(request_raw)
@@ -607,6 +676,15 @@ def wait_for_response(root: Path, trial_id: str, attempt: int, lane: str,
             response_sha256=None, wait_ns=0)
     deadline = time.monotonic() + wait_seconds
     while time.monotonic() < deadline:
+        try:
+            _raise_capture_rejection(
+                root, trial_id, attempt, lane, request_hash
+            )
+        except HandoffError as error:
+            receipt(root, trial_id=trial_id, attempt=attempt, lane=lane,
+                    status="capture_rejected", request_sha256=request_hash,
+                    response_sha256=None, wait_ns=time.monotonic_ns() - start)
+            raise
         try:
             response_raw, _ = read_lane(root, trial_id, attempt, lane, "response.json")
         except HandoffError as error:
@@ -629,6 +707,7 @@ def wait_for_response(root: Path, trial_id: str, attempt: int, lane: str,
 
 
 def write_response(root: Path, trial_id: str, attempt: int, lane: str, raw: bytes) -> None:
+    _raise_capture_rejection(root, trial_id, attempt, lane)
     decode(raw)
     _write_lane(root, trial_id, attempt, lane, "response.json", raw)
 
@@ -651,7 +730,9 @@ def capture_host_response(
         raise HandoffError("handoff_file_invalid")
     directory = _open_lane(root, trial_id, attempt, lane, create=False)
     try:
-        for name in (RAW_ASSISTANT_RESPONSE, "draft.json", CAPTURE_RECEIPT):
+        for name in (
+            RAW_ASSISTANT_RESPONSE, "draft.json", CAPTURE_RECEIPT, CAPTURE_REJECTION
+        ):
             try:
                 os.stat(name, dir_fd=directory, follow_symlinks=False)
             except FileNotFoundError:
@@ -659,21 +740,46 @@ def capture_host_response(
             else:
                 raise HandoffError("handoff_file_exists")
         atomic_write_at(directory, RAW_ASSISTANT_RESPONSE, raw)
-        value = parse_json_object(raw)
-        _, request = read_canonical_at(directory, "request.json")
-        validate_response_contract(value, request.get("response_contract"))
+        request_raw = None
+        try:
+            value = parse_json_object(raw)
+            request_raw, request = read_canonical_at(directory, "request.json")
+            validate_response_contract(value, request.get("response_contract"))
+            expected_identity = bound_lane_identity(
+                root, trial_id, lane, lane_manifest_sha256
+            )
+            supplied_identity = value.get("execution_identity")
+            if (
+                expected_identity
+                != _execution_identity(trial_id, lane, thread_id, model, reasoning)
+                or supplied_identity != expected_identity
+            ):
+                raise HandoffError("host_response_identity_invalid")
+        except HandoffError as error:
+            reason = str(error)
+            if reason in CAPTURE_REJECTION_REASONS:
+                if request_raw is None:
+                    try:
+                        request_raw, _ = read_canonical_at(directory, "request.json")
+                    except HandoffError:
+                        raise error
+                atomic_write_at(directory, CAPTURE_REJECTION, canonical({
+                    "schema_version": CAPTURE_REJECTION_SCHEMA,
+                    "trial_id": trial_id,
+                    "attempt": attempt,
+                    "role": lane,
+                    "request_sha256": digest(request_raw),
+                    "raw_path": str(
+                        lane_root(root, trial_id, attempt, lane)
+                        / RAW_ASSISTANT_RESPONSE
+                    ),
+                    "raw_size_bytes": len(raw),
+                    "raw_sha256": digest(raw),
+                    "reason": reason,
+                }))
+            raise
     finally:
         os.close(directory)
-    expected_identity = bound_lane_identity(
-        root, trial_id, lane, lane_manifest_sha256
-    )
-    supplied_identity = value.get("execution_identity")
-    if (
-        expected_identity
-        != _execution_identity(trial_id, lane, thread_id, model, reasoning)
-        or supplied_identity != expected_identity
-    ):
-        raise HandoffError("host_response_identity_invalid")
     draft_path = lane_root(root, trial_id, attempt, lane) / "draft.json"
     draft_raw = canonical(value)
     _write_lane(root, trial_id, attempt, lane, draft_path.name, draft_raw)
