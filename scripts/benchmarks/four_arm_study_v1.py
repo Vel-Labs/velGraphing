@@ -1968,10 +1968,7 @@ def lane_argv(trial_id: str, role: str, repo_root: Path = ROOT, *,
         raise StudyError("lane_manifest_invalid")
     target = run_root or repo_root / ".velgraphing-local/velgraphing-four-arm-study-v1"
     try:
-        return handoff_argv(
-            target, trial_id, role, 180 if role == "answer" else 120,
-            python_executable,
-        )
+        return handoff_argv(target, trial_id, role, 600, python_executable)
     except MeasurementError as error:
         raise StudyError(str(error)) from None
 
@@ -2854,7 +2851,7 @@ def _discover_direct(trial: Trial, task_id: str, prompt: str, lane: Path,
         if not candidates:
             raise MeasurementError("candidate_pool_empty")
     packet = _packet(prompt, candidates)
-    candidate_set_sha256 = _sha256(packet["candidates"])
+    candidate_set_sha256 = jev.sha256(jev.canonical(packet["candidates"]))
     trial.bind(candidate_set_sha256=candidate_set_sha256)
     trial.current["candidate_observation"] = {
         "route": "direct", "candidate_set_sha256": candidate_set_sha256,
@@ -3088,7 +3085,7 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
     observed = execution == "observed"
     result = run_process_trial(
         trial, prepare, answer_argv=answer["argv"], grader_argv=grader["argv"],
-        cwd=ROOT, answer_timeout_s=181, grader_timeout_s=121,
+        cwd=ROOT, answer_timeout_s=601, grader_timeout_s=601,
         grader_context=context, grader_model=grader["model"],
         answer_response_contract=ANSWER_RESPONSE_CONTRACT,
         grader_response_contract=(

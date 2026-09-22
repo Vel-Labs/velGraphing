@@ -397,9 +397,9 @@ tasks:
       - "T060 is not execution-ready."
       - "Provider approval, key environment, call cap, or budget binding is absent."
     receipt:
-      result: r3_failure_continuation_ready
-      candidate_commit: 405b792
-      summary: "Retained the R2 live evidence, repaired contract-invalid lane accounting and continuation, and froze fresh R3 task identities without retries."
+      result: r4_direct_jev_binding_repaired_ready
+      candidate_commit: f5c20cb
+      summary: "Sealed R3 as diagnostic evidence, repaired the Direct-plus-Jev canonical hash collision, raised worker wait ceilings to 600 seconds, and froze an execution-ready R4 successor without retries."
       changed_files:
         - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
         - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
@@ -411,27 +411,26 @@ tasks:
         - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
         - docs/goals/retrievel-release-v1/state.yaml
       commands:
-        - cmd: "approve-successor with request hash 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94, 8 Jev calls, USD 0.9031, manifest 0a11bb06ca7477cdb9c6dc18fc49022ac7215867cb509b02f928a88e47357c69, and the approved Python executable"
+        - cmd: "approve-successor with request hash 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94, 8 Jev calls, USD 0.9031, R4 manifest e6ab860654c138dc93b8815a2d539e816e59b2c75dbce12778e015e69da2cb39, and the approved Python executable"
           status: pass
         - cmd: "validate-successor-overlay"
           status: pass
-        - cmd: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.benchmarks.test_four_arm_study_v1"
+        - cmd: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.benchmarks.test_time_to_correct_jev tests.benchmarks.test_four_arm_study_v1 -v"
           status: pass
         - cmd: "git diff --check"
           status: pass
       validation:
-        - "52 host and benchmark tests passed, 2 skipped"
+        - "44 Jev timing and four-arm contract tests passed, 2 expected path-local skips"
         - "execution_ready: true; provider_spend_authorized: true; final_user_reack: []"
-        - "answer, grader, Jev, and provider executed calls remain zero; retries remain zero"
-        - "actual 64-candidate S-01 pool produced an exact 11-candidate answer packet"
-        - "contract-invalid answer and malformed usage each retain one completed answer-call receipt and continue as failed trials"
-        - "R2 retained A-S-01 passed 5/5, B-S-01 failed 4/5, and the exact invalid C-S-01 response; no retry was issued"
+        - "R3 sealed 16 trials with 13 answer calls, 10 grader calls, 4 provider calls, 3 passes, and zero retries"
+        - "R3 is diagnostic only because all four Direct-plus-Jev lanes failed before provider dispatch on a canonical hash collision"
+        - "R4 Direct discovery and the real Jev evaluator now retain matching candidate and request bindings and reach an injected transport as reranked"
+        - "R4 answer and grader handoff ceilings are 600 seconds; actual completion time remains measured"
         - "historical freeze.json and preflight.json remain unchanged"
-        - "package parity refused private_or_machine_path on ignored __pycache__; no package files changed"
-      successor_ttc_contract_canonical_sha256: c029a325931db5c126888e214e83864abb9d6391dff7a525b6f1d756e4ee5f52
-      successor_freeze_sha256: 8ba835a2761cab1cec316d553996fdc56685237a29007bc8ec645cd1a2c6ee98
-      successor_preflight_sha256: 5281a43097d4a5f210077f86b48040803bc870f642b01490f0f5f948aa0ef9c4
-      boundary: "R2 made two answer calls, two grader calls, and one Jev-path fallback reporting zero attempted provider calls. R3 is re-frozen but not launched. No retry, push, or release action occurred."
+      successor_ttc_contract_canonical_sha256: bffe794e51f57015b629c832565d084246525016cbf4ab7c9c671889c99fef8d
+      successor_freeze_sha256: c0908969c9e3aa39e6f0c058bcf05817aeb8b24ddaa1a8c468ea5668029033cb
+      successor_preflight_sha256: 71a70fc83e65f46d99bc8d84b2bd48a8d0984fa2a95a3d25facea3a2509b9577
+      boundary: "R3 remains sealed diagnostic evidence. R4 is frozen and execution-ready but has made no answer, grader, Jev, or provider call. No retry, push, or release action occurred."
   - id: T080
     type: judge
     assignee: Judge

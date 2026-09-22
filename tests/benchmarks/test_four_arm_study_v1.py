@@ -27,6 +27,7 @@ LANES = Path(os.environ.get(
 sys.path.insert(0, str(ROOT / "scripts/benchmarks"))
 
 import four_arm_study_v1 as study  # noqa: E402
+from time_to_correct import Answer, Budget, Grade, Trial  # noqa: E402
 from time_to_correct_calibration import _v3_trial_measurement  # noqa: E402
 from time_to_correct_host import (  # noqa: E402
     _answer_input, _grader_input,
@@ -36,6 +37,99 @@ CUSTODY = ROOT / study.SUCCESSOR_WITNESS_CUSTODY
 
 
 class FourArmPublicBoundaryTests(unittest.TestCase):
+    def test_direct_candidate_binding_matches_real_jev_evaluator(self) -> None:
+        local = ROOT / ".velgraphing-local"
+        local.mkdir(mode=0o700, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="direct-jev-hash-", dir=local) as raw:
+            lane = Path(raw)
+            source = lane / "evidence.py"
+            source.write_text(
+                "def cancel_task(task):\n    return task.cancel()\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "init", "-q", str(lane)], check=True)
+            subprocess.run(["git", "-C", str(lane), "add", "evidence.py"], check=True)
+            subprocess.run([
+                "git", "-C", str(lane), "-c", "user.name=Fixture",
+                "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture",
+            ], check=True)
+            commit = subprocess.check_output(
+                ["git", "-C", str(lane), "rev-parse", "HEAD"], text=True,
+            ).strip()
+            source_row = {
+                "path": "evidence.py", "byte_length": len(source.read_bytes()),
+                "sha256": study.digest(source.read_bytes()),
+            }
+            manifest = {
+                "schema_version": "velgraphing-corpus-source-manifest-v1",
+                "repository": "fixture", "commit": commit,
+                "includes": ["**"], "excludes": [], "sources": [source_row],
+                "source_count": 1, "source_bytes": source_row["byte_length"],
+                "snapshot_sha256": study._sha256({"sources": [source_row]}),
+                "skipped": [],
+            }
+            identity = {
+                "run_id": "fixture", "trial_id": "B-S-01", "task_id": "S-01",
+                "arm": "B", "repository_id": "fixture", "repository_commit": commit,
+                "source_snapshot_sha256": manifest["snapshot_sha256"],
+                "dirty_state_sha256": "b" * 64, "answer_model": "fixture",
+                "reasoning": "none", "prompt_sha256": "c" * 64,
+                "rubric_sha256": "d" * 64, "rubric_version": "fixture-v1",
+                "answer_lane_id": "answer-fixture",
+            }
+            trial = Trial(identity, Budget(0, 5_000_000_000), execution="fixture")
+            observations = []
+
+            def prepare(current, _attempt):
+                discovery = study._discover_direct(
+                    current, "S-01", "Find cancel_task.", lane, manifest,
+                )
+                preview = study.jev.prepare(discovery["packet"], lane)
+                legend = {
+                    str(index): value
+                    for index, value in enumerate(study.jev._rubric_criteria())
+                }
+                envelope = {
+                    "schema_version": "velgraphing-jev-replay-v1",
+                    "request_sha256": preview["request_sha256"],
+                    "response": {
+                        "model": study.jev.DEFAULT_MODEL,
+                        "answers": {
+                            f"candidate_{index}": {
+                                "type": "score", "score": 2, "confidence": 1.0,
+                                "probabilities": {str(value): float(value == 2)
+                                                  for value in range(3)},
+                                "legend": legend,
+                            }
+                            for index, _ in enumerate(discovery["packet"]["candidates"])
+                        },
+                        "usage": {"input_tokens": 1, "output_tokens": 1},
+                    },
+                }
+                observation = study.evaluate_offline(
+                    current, ROOT, discovery["packet"], lane, envelope=envelope,
+                    fixture_provider=True, retain_packet_telemetry=True,
+                )
+                observations.append(observation)
+                return observation
+
+            result = trial.run(
+                prepare,
+                lambda _trial, observation, _attempt: Answer(" ".join(observation["order"])),
+                lambda _trial, _answer, _attempt: Grade(
+                    True, 1, 1, True, 0, "grader-fixture", "d" * 64,
+                ),
+            )
+            attempt = result["attempts"][0]
+            self.assertEqual("passed", result["terminal_reason"], result["attempts"])
+            self.assertEqual("reranked", observations[0]["status"])
+            self.assertEqual(1, observations[0]["attempted_calls"])
+            self.assertEqual(
+                attempt["candidate_observation"]["candidate_set_sha256"],
+                attempt["bindings"]["candidate_set_sha256"],
+            )
+            self.assertEqual(observations[0]["request_sha256"], attempt["bindings"]["request_sha256"])
+
     def test_installed_graph_find_trial_supports_graph_off_and_d_on_replay(self) -> None:
         local = ROOT / ".velgraphing-local"
         local.mkdir(mode=0o700, exist_ok=True)
@@ -1393,6 +1487,10 @@ class FourArmStudyTests(unittest.TestCase):
     def test_lane_manifest_binds_models_reasoning_and_unique_threads(self) -> None:
         manifest = self.lane_manifest()
         study.validate_lane_manifest(manifest, self.freeze)
+        self.assertTrue(all(
+            row["argv"][row["argv"].index("--wait-seconds") + 1] == "600"
+            for row in manifest["entries"]
+        ))
         grader = next(row for row in manifest["entries"] if row["role"] == "grader")
         grader["model"] = "gpt-5.6-luna"
         with self.assertRaisesRegex(study.StudyError, "lane_manifest_invalid"):

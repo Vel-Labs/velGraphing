@@ -190,3 +190,50 @@ Its lane manifest SHA-256 is
 Focused host and four-arm validation passed 52 tests with 2 expected
 machine-local skips. The request set, eight-call cap, and zero-retry rule remain
 unchanged.
+
+## R3 diagnostic result and R4 repair
+
+R3 completed all 16 trials and sealed result SHA-256
+`1e3142100f038773fda391f16576fc913421086a46bd71aca0c57382c73fb231`.
+It made 13 answer calls, 10 grader calls, and 4 provider calls. Three trials
+passed. Three early lanes exceeded the 120 or 180 second handoff ceiling. Three
+answer lanes returned an invalid response schema. Seven independently graded
+answers failed the rubric.
+
+R3 does not support an arm comparison. All four Direct plus Jev trials failed
+before provider dispatch. Direct discovery bound the benchmark canonical JSON
+hash. The Jev adapter then bound the same candidate array with its newline-
+terminated canonical JSON hash. The binding guard correctly rejected the
+second unequal hash as `attempt_binding_changed`. The adapter reported a safe
+`provider_or_adapter_error` fallback with zero attempted calls. All four Graph
+plus Jev trials used the Jev hash first and reached the provider.
+
+The R4 repair uses the Jev canonical candidate hash for Direct discovery. It
+does not weaken the binding guard. The lane handoff ceiling is now 600 seconds
+for answers and graders. Actual completion time remains measured; the higher
+ceiling only prevents a slow Parent dispatch from becoming a false timeout.
+
+The ignored R4 run root is
+`.velgraphing-local/velgraphing-four-arm-study-v1/retrievel-0.2.0-rc1-t070-r4`.
+Its 32-entry manifest SHA-256 is
+`e6ab860654c138dc93b8815a2d539e816e59b2c75dbce12778e015e69da2cb39`.
+Its launcher SHA-256 is
+`5eecf413c334ef83b0e3c34a678da6b3f9e4f51dadcc41ec353085ed9dcdddaa`.
+The successor overlay is execution-ready. The request set, eight-call cap,
+zero-retry rule, source snapshots, candidate pools, questions, and rubrics are
+unchanged.
+
+R4 validation before launch:
+
+- Direct discovery followed by the real Jev evaluator and an injected local
+  transport completed as `reranked` with one attempted call and matching
+  candidate and request bindings.
+- The Jev timing and four-arm contract suites passed 44 tests. Two tests skipped
+  because this worktree does not contain the optional path-local lane override.
+- `validate-successor-overlay` passed with `execution_ready: true` and no
+  remaining re-ack fields.
+- Successor freeze SHA-256:
+  `c0908969c9e3aa39e6f0c058bcf05817aeb8b24ddaa1a8c468ea5668029033cb`.
+- Successor preflight SHA-256:
+  `71a70fc83e65f46d99bc8d84b2bd48a8d0984fa2a95a3d25facea3a2509b9577`.
+- No R4 answer, grader, Jev, or provider call has run.
