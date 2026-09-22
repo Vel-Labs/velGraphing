@@ -137,7 +137,7 @@
     "corpus_materializer": {"path": "scripts/benchmarks/velgraphing_corpus_pilot_v1.py", "sha256": "338592c3464e87aaa6c75df85c7ddec53326f690afc7b4acd3dc434eeb1a26c7"},
     "grader_response_contract_sha256": "856123bc47978196784c49c1258f8f548f1a29ae4d787182ecf07bf5aed31882",
     "graph_find_adapter": {"path": "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py", "sha256": "5f62bbd9194250c177616ac9198ffc4b27d483b9a5ff1c2f5742e3e0e4505021"},
-    "handoff": {"path": "scripts/benchmarks/time_to_correct_handoff.py", "sha256": "70c741a85785147fe36a327457eda188f22b909cc7517916664d926e22b2b0c0"},
+    "handoff": {"path": "scripts/benchmarks/time_to_correct_handoff.py", "sha256": "2f80ae1273818163f09715bd37c2675bf928b64871703053824b082ab9e03a77"},
     "host": {"path": "scripts/benchmarks/time_to_correct_host.py", "sha256": "4e89e9283870ca164a9a82fb93d65b60c9027b76d85ef5e99670d278e1fa1393"},
     "jev": {"path": "packages/core/jev.py", "sha256": "7daba616d59be40efc4a61f7d3561587316b0bf476e9182cbf041fdc712c9c09"},
     "retrieval": {"path": "packages/core/retrieval.py", "sha256": "91e289ab900b4c0a0f6460d0c6b1460efe28c5cb4f59d7c50f9bf1300817ffbe"},

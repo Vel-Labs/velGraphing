@@ -2,7 +2,7 @@
   "bindings": {
     "fact_witness_map_sha256": "430aaebf981f370b6a8005168252d2676a3a361c0d705b7faa43479c87a5b5ad",
     "fallback_allowlist_sha256": "75e4c72c5a3b945a8bd1cfdbb994341cd185060ce33450c23357fe0f8583d122",
-    "historical_freeze_sha256": "276c164899681d4a94c4671597aeccce0525de47752b4b5368256078fe052c74",
+    "historical_freeze_sha256": "57b5d2ae2b5280c6934106236bdf8e1fb8a2e8c28cad21244f1ba8ec3839d42e",
     "historical_preflight_sha256": "4c329a1a6fcc004d4a2b566b66fefbd3e2a1152c615f6d131d78c199c3c7f4f8",
     "implementation": {
       "calibration": {
