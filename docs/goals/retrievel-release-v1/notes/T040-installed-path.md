@@ -1,7 +1,7 @@
 # T040 Installed-Path Verification
 
 Date: 2026-09-21
-Status: local installed-path checks complete; live provider smoke remains unapproved and unrun.
+Status: complete, including one approved synthetic installed-package live smoke.
 
 ## Candidate and scope
 
@@ -118,8 +118,41 @@ python3 runtime/core/jev.py evaluate skills/graph-jev/examples/packet.json \
   '747673913325bd4d5992f6c05c38cfaf123e76adc8f55bfa0e5f5bc66a42d829'
 ```
 
-This command was not run. No network or provider call occurred. A key, if later
-available, is not approval. Any changed packet or preview needs new approval.
+This command was not run during the original T040 slice. A later T090 release
+qualification ran the same unchanged request under the operator's subsequent
+live-call authority. See the retained result below. Any changed packet or
+preview still needs its own bound approval.
+
+## T090 installed-package live-smoke result
+
+T090 reinstalled the current `0.2.0-rc.1` package into a fresh isolated
+`CODEX_HOME`. The installed preview reproduced the exact request SHA-256
+`747673913325bd4d5992f6c05c38cfaf123e76adc8f55bfa0e5f5bc66a42d829`
+and request size of 3,816 bytes. It contained only the three synthetic source
+files listed above.
+
+The installed runtime made one approved shadow-mode call. It returned
+`shadow / advisory_only`, resolved `jev-1.13.0`, revalidated the source, and
+preserved required candidate `c2`. The provider observation reported 1,300
+input tokens, 49 output tokens, and 312.823 milliseconds. It remained
+non-authority-bearing and insufficient by design.
+
+The replacement proof is under
+`.velgraphing-local/t040-installed-live-r8/`. Its receipt binds the live
+response to current package candidate
+`112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107`,
+all 87 manifest files, installed manifest SHA-256
+`3e6389bd70b2de2ef2e59bab1197d881f5f40bc23914391802235fcc3e5a6099`,
+and installed runtime SHA-256
+`7daba616d59be40efc4a61f7d3561587316b0bf476e9182cbf041fdc712c9c09`.
+The live observation reported 1,300 input tokens, 49 output tokens, and 297.637
+milliseconds. The receipt SHA-256 is
+`ab7d4ef2e709f4ac6374d76b4752ee0863ba5c0fd01c4209feb4ecfb9175c06e`.
+
+Codex then removed the isolated plugin and marketplace, confirmed that the
+isolated plugin inventory was empty, and removed the exact temporary
+`CODEX_HOME`. No credential value was read or written. The earlier unbound R7
+smoke remains diagnostic only and is superseded by this R8 receipt.
 
 ## Cleanup and remaining risk
 
@@ -128,7 +161,7 @@ was empty, and the marketplace list reported no marketplaces. Codex then
 removed the exact temporary `CODEX_HOME`; the path no longer exists. The
 worktree was clean after cleanup and before adding this note.
 
-Validation was focused on the packaged candidate, installed CLI state, and
-installed runtime. No repository-wide suite was run because product files did
-not change. The live provider path, provider-side response, API usage, and
-Desktop command-picker reload remain unverified.
+The original validation was focused on the packaged candidate, installed CLI
+state, and installed runtime. T090 later ran the repository-wide suite and
+package qualification. The Desktop command-picker reload remains unverified;
+the installed CLI command files and runtime path are verified.

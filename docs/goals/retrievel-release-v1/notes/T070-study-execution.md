@@ -298,3 +298,42 @@ comparison remains numerically intact. The B and C aggregates, the 12-of-16
 overall count, and any full four-arm claim are not accepted. R4 remains sealed
 and immutable. T090 must repair the shared custody boundary and execute a fresh
 16-lane R5.
+
+## T090 custody repair and R7 sealed execution
+
+T090 moved answer and grader response capture into the Parent-owned handoff.
+Each accepted lane now retains the request, exact raw response, canonical
+draft, capture receipt, completion attestation, and published response. A
+capture rejection is also a canonical fail-fast artifact. This removed the
+manual response relay and the 600-second wait after a contract-invalid model
+response.
+
+R5 stopped after four trials when a worker captured the request instead of the
+model response. R6 stopped on a contract-invalid response and exposed the slow
+rejection path. Both are superseded diagnostic runs. R7 used the repaired
+Parent-owned path and completed all 16 frozen trials. It made 16 answer calls,
+16 independent grader calls, eight live Jev calls, and zero retries. All 32
+answer and grader lanes retain the complete custody chain. The sealed result
+SHA-256 is
+`3bd8b2f1bb3fa9e40449004ca1d1b706d4dd6f499816c462e5a8b916f25dd3e0`.
+
+R7 passed 10 of 16 trials:
+
+- Direct, Jev off: 3 of 4.
+- Direct, Jev on: 2 of 4.
+- Graph, Jev off: 3 of 4.
+- Graph, Jev on: 2 of 4.
+
+Mean all-trial wall time was 121.814 seconds for Direct/off, 153.305 seconds
+for Direct/on, 126.188 seconds for Graph/off, and 120.774 seconds for
+Graph/on. These values are descriptive only. The result's claim boundary
+prohibits Direct, Graph, Jev, or comparative retrieval-performance claims.
+Graph telemetry is incomplete, all answer and grader token usage is unavailable,
+and Direct/on provider token usage is missing. Graph/on retained 113,154
+provider input tokens and 3,160 output tokens. The Jev evaluator mean was
+0.746 seconds for Direct/on and 0.828 seconds for Graph/on.
+
+The result is classified `oracle_assisted_fallback_ttc`. It proves that the
+current frozen controller, live provider adapter, independent answer and grade
+lanes, and strict custody path can finish without retries. It does not prove
+that Graph or Jev improves retrieval, correctness, time, token use, or cost.

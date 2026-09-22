@@ -63,7 +63,7 @@ visual_board:
     url: null
     command: "node <skill-path>/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-release-v1"
 
-active_task: T090
+active_task: T999
 
 tasks:
   - id: T010
@@ -221,7 +221,7 @@ tasks:
   - id: T040
     type: worker
     assignee: Worker
-    status: blocked
+    status: done
     reasoning_hint: medium
     objective: "Install the frozen candidate into an isolated environment and verify command discovery, offline behavior, one bounded live smoke, fallback, and removal."
     allowed_files:
@@ -235,8 +235,8 @@ tasks:
       - "T030 has not frozen a package candidate."
       - "A live request lacks exact scope, hash, and budget authority."
     receipt:
-      result: blocked
-      summary: "The exact candidate passed isolated install, discovery, offline replay, failure fallback, package-byte verification, removal, and cleanup. The exact synthetic live request is ready but requires operator approval and a credential-bearing process."
+      result: done
+      summary: "The current package passed isolated install, discovery, offline replay, failure fallback, one exact synthetic live shadow call, package-byte verification, removal, and cleanup."
       changed_files:
         - docs/goals/retrievel-release-v1/notes/T040-installed-path.md
       commands:
@@ -244,11 +244,27 @@ tasks:
           status: pass
         - cmd: "installed runtime status, replay, missing-key fallback, and malformed-response fallback"
           status: pass
+        - cmd: "installed runtime synthetic shadow evaluation for exact request SHA-256 747673913325bd4d5992f6c05c38cfaf123e76adc8f55bfa0e5f5bc66a42d829"
+          status: pass
         - cmd: "isolated plugin removal and CODEX_HOME cleanup"
           status: pass
       request_sha256: 747673913325bd4d5992f6c05c38cfaf123e76adc8f55bfa0e5f5bc66a42d829
-      blocker: "No exact operator approval for this request hash, and TYPESAFE_API_KEY is absent from the isolated process."
-      boundary: "No provider or network call occurred."
+      live_observation:
+        status: shadow
+        reason: advisory_only
+        attempted_calls: 1
+        model: jev-1.13.0
+        input_tokens: 1300
+        output_tokens: 49
+        elapsed_ms: 297.637
+        source_revalidated: true
+        authority_bearing: false
+        sufficient: false
+        package_candidate_sha256: 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107
+        installed_manifest_sha256: 3e6389bd70b2de2ef2e59bab1197d881f5f40bc23914391802235fcc3e5a6099
+        installed_runtime_sha256: 7daba616d59be40efc4a61f7d3561587316b0bf476e9182cbf041fdc712c9c09
+        receipt_sha256: ab7d4ef2e709f4ac6374d76b4752ee0863ba5c0fd01c4209feb4ecfb9175c06e
+      boundary: "The live call used only the packaged synthetic fixture. No credential value, repository source, or private source was retained. Desktop command-picker reload remains unverified."
   - id: T050
     type: worker
     assignee: Worker
@@ -469,7 +485,7 @@ tasks:
   - id: T090
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: medium
     objective: "Resolve accepted audit findings, run final release qualification, and prepare the merge and release receipt."
     allowed_files:
@@ -490,11 +506,53 @@ tasks:
     stop_if:
       - "T080 has not produced an accepted repair or release decision."
       - "Publication authority is absent."
-    receipt: null
+    receipt:
+      result: done
+      candidate_commit_before_receipt: 7348b59
+      summary: "Repaired benchmark response custody, completed the fresh R7 study, bound a current-package installed live smoke, and passed release-level validation."
+      changed_files:
+        - scripts/benchmarks/time_to_correct_handoff.py
+        - tests/benchmarks/test_time_to_correct_calibration.py
+        - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+        - docs/goals/retrievel-release-v1/notes/T040-installed-path.md
+        - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
+        - docs/goals/retrievel-release-v1/state.yaml
+      benchmark:
+        run: retrievel-0.2.0-rc1-t090-r7
+        result_sha256: 3bd8b2f1bb3fa9e40449004ca1d1b706d4dd6f499816c462e5a8b916f25dd3e0
+        trials: 16
+        answer_calls: 16
+        grader_calls: 16
+        jev_calls: 8
+        retries: 0
+        passed_trials: 10
+        lane_custody_passed: 32
+        lane_custody_total: 32
+      installed_smoke:
+        request_sha256: 747673913325bd4d5992f6c05c38cfaf123e76adc8f55bfa0e5f5bc66a42d829
+        receipt_sha256: ab7d4ef2e709f4ac6374d76b4752ee0863ba5c0fd01c4209feb4ecfb9175c06e
+        package_candidate_sha256: 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107
+        status: pass
+      validation:
+        - "projector ran twice; second pass produced no tracked projection change"
+        - "source/package parity passed: 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+        - "scaffold 11, core 284, adapters 18, skills 38, benchmarks 206 with 3 expected skips, parity 10"
+        - "the full discovery used the existing declared shared repository interpreter because this isolated worktree has no .venv; literal npm test was not run"
+        - "git diff --check passed"
+      audit:
+        decision: repair_then_route_to_T999
+        accepted_evidence:
+          - "R7 aggregate and all 32 custody chains"
+          - "fresh full unittest discovery and source/package parity"
+        repaired_findings:
+          - "current installed package identity is now bound to the live smoke"
+          - "projector idempotence and exact validation are recorded"
+      boundary: "R7 proves frozen-controller execution and optional live adapter compatibility. It does not prove comparative retrieval, correctness, wall-time, token, cost, or general optimization benefit."
   - id: T999
     type: judge
     assignee: Judge
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Audit the complete goal against the release oracle and close collaboration and task lifecycle state."
     inputs:
