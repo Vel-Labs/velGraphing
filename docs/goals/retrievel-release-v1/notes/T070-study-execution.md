@@ -328,10 +328,13 @@ Mean all-trial wall time was 121.814 seconds for Direct/off, 153.305 seconds
 for Direct/on, 126.188 seconds for Graph/off, and 120.774 seconds for
 Graph/on. These values are descriptive only. The result's claim boundary
 prohibits Direct, Graph, Jev, or comparative retrieval-performance claims.
-Graph telemetry is incomplete, all answer and grader token usage is unavailable,
-and Direct/on provider token usage is missing. Graph/on retained 113,154
-provider input tokens and 3,160 output tokens. The Jev evaluator mean was
-0.746 seconds for Direct/on and 0.828 seconds for Graph/on.
+Graph telemetry is incomplete, and all answer and grader token usage is
+unavailable. Direct/on aggregate usage is 111,816 provider input tokens and
+3,112 output tokens. Graph/on raw completed lanes retain 113,154 provider input
+tokens and 3,160 output tokens, but that usage is missing from the aggregate
+transport. The Jev evaluator mean was 0.746 seconds for Direct/on and 0.828
+seconds for Graph/on. The result therefore does not support a complete arm-level
+token comparison.
 
 The result is classified `oracle_assisted_fallback_ttc`. It proves that the
 current frozen controller, live provider adapter, independent answer and grade
