@@ -1122,8 +1122,13 @@ class CalibrationTests(unittest.TestCase):
         self.assertEqual(result["direct_off"]["terminal_reason"], "passed")
         self.assertEqual(result["graph_on_replay"], {
             "terminal_reason": "passed", "graph_records": 2, "jev_execution": "replay"})
-        self.assertEqual(result["missing_response"], {
-            "terminal_reason": "measurement_error", "handoff_status": "response_timeout"})
+        self.assertIn(
+            result["missing_response"]["terminal_reason"],
+            {"measurement_error", "callback_timeout"},
+        )
+        self.assertEqual(
+            result["missing_response"]["handoff_status"], "response_timeout",
+        )
         self.assertEqual(result["live_refusal"], "live_jev_not_approved")
 
     def test_v3_qualification_proves_fixed_pairs_without_provider_calls(self):

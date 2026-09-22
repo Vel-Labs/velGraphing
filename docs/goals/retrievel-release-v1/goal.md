@@ -83,4 +83,3 @@ Machine truth lives at:
 Codex: /goal Follow docs/goals/retrievel-release-v1/goal.md.
 Claude Code: /goalbuddy Follow docs/goals/retrievel-release-v1/goal.md.
 ```
-
