@@ -63,7 +63,7 @@ visual_board:
     url: null
     command: "node <skill-path>/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-release-v1"
 
-active_task: T070
+active_task: T080
 
 tasks:
   - id: T010
@@ -373,7 +373,7 @@ tasks:
   - id: T070
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: medium
     objective: "Execute and seal the approved cross-corpus four-arm study with fresh answer and grader lanes."
     allowed_files:
@@ -397,9 +397,9 @@ tasks:
       - "T060 is not execution-ready."
       - "Provider approval, key environment, call cap, or budget binding is absent."
     receipt:
-      result: r4_direct_jev_binding_repaired_ready
-      candidate_commit: 9d83ac23a696bbcc32d109607f4cbb43341e5b32
-      summary: "Sealed R3 as diagnostic evidence, repaired the Direct-plus-Jev canonical hash collision, raised worker wait ceilings to 600 seconds, and froze an execution-ready R4 successor without retries."
+      result: r4_sealed_observed
+      candidate_commit: 463b4fba6f67ef55df3156cb1f2563f1a011c799
+      summary: "Executed and sealed the frozen R4 study: 16 answer calls, 16 independent grader calls, 8 live Jev calls, 0 retries, and 12 passed trials."
       changed_files:
         - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
         - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
@@ -425,16 +425,21 @@ tasks:
         - "R3 sealed 16 trials with 13 answer calls, 10 grader calls, 4 provider calls, 3 passes, and zero retries"
         - "R3 is diagnostic only because all four Direct-plus-Jev lanes failed before provider dispatch on a canonical hash collision"
         - "R4 Direct discovery and the real Jev evaluator now retain matching candidate and request bindings and reach an injected transport as reranked"
-        - "R4 answer and grader handoff ceilings are 600 seconds; actual completion time remains measured"
+        - "R4 closed as observed with 16 reported trials, 16 answer calls, 16 grader calls, 8 provider calls, and 0 retries"
+        - "pass counts: Direct/off 3 of 4, Direct/on 2 of 4, Graph/off 4 of 4, Graph/on 3 of 4"
+        - "Graph/on and Direct/off both passed 3 of 4; all-trial mean wall time was 245.373 seconds versus 247.663 seconds"
+        - "Direct/on retained 111,816 provider input tokens and 3,112 output tokens; Graph/on provider usage is missing as model_call_incomplete"
+        - "answer and grader host token usage is unavailable for all arms"
         - "historical freeze.json and preflight.json remain unchanged"
       successor_ttc_contract_canonical_sha256: bffe794e51f57015b629c832565d084246525016cbf4ab7c9c671889c99fef8d
       successor_freeze_sha256: c0908969c9e3aa39e6f0c058bcf05817aeb8b24ddaa1a8c468ea5668029033cb
       successor_preflight_sha256: 71a70fc83e65f46d99bc8d84b2bd48a8d0984fa2a95a3d25facea3a2509b9577
-      boundary: "R3 remains sealed diagnostic evidence. R4 is frozen and execution-ready but has made no answer, grader, Jev, or provider call. No retry, push, or release action occurred."
+      result_sha256: e78ddf4a33a1be4132725da9f7f1247d34b34c0f51b7c4f194e603df74abb6ce
+      boundary: "R4 is sealed oracle-assisted fallback TTC evidence. It does not establish general retrieval performance or complete all-model token and cost results. No retry, push, or release action occurred."
   - id: T080
     type: judge
     assignee: Judge
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Run independent product, evidence, package, and release audits and specify one bounded repair if required."
     inputs:
@@ -484,9 +489,9 @@ tasks:
 checks:
   dirty_fingerprint: "clean at ab229142e9a577c88d15bacd67d5bf36cd85e1ea before T010; board files then added by Parent"
   last_verification:
-    result: pass
+    result: pass_with_measurement_gaps
     task: T070
     commands:
-      - "clean-export six-suite validation on c5aa657eedd49423faed8407d4b7ac01fa92153f"
-      - "clean-export source/package parity on candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
-      - "independent Luna T060 re-audit: ACCEPT"
+      - "R4 sealed execution on candidate 463b4fba6f67ef55df3156cb1f2563f1a011c799"
+      - "result SHA-256 e78ddf4a33a1be4132725da9f7f1247d34b34c0f51b7c4f194e603df74abb6ce"
+      - "focused benchmark suite: 44 passed, 2 expected path-local skips"

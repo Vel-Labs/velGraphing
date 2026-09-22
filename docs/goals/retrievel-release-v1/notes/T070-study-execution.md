@@ -237,3 +237,49 @@ R4 validation before launch:
 - Successor preflight SHA-256:
   `71a70fc83e65f46d99bc8d84b2bd48a8d0984fa2a95a3d25facea3a2509b9577`.
 - No R4 answer, grader, Jev, or provider call has run.
+
+## R4 sealed execution
+
+R4 completed all 16 frozen trials. It made 16 answer calls, 16 independent
+grader calls, and 8 live Jev calls. It made no retry. The source-free result is
+`closed` and `observed`. Its SHA-256 is
+`e78ddf4a33a1be4132725da9f7f1247d34b34c0f51b7c4f194e603df74abb6ce`.
+
+The result passed 12 of 16 trials:
+
+- Direct, Jev off: 3 of 4.
+- Direct, Jev on: 2 of 4.
+- Graph, Jev off: 4 of 4.
+- Graph, Jev on: 3 of 4.
+
+Graph plus Jev and Direct without Jev each passed 3 of 4. Their all-trial mean
+wall times were 245.373 seconds and 247.663 seconds. Graph plus Jev was 0.9%
+faster on that narrow aggregate. On the three tasks that both arms passed, the
+mean confirmed time to correct was 253.281 seconds and 258.358 seconds. Graph
+plus Jev was 2.0% faster. The task-level wall-time changes were not consistent:
+-29.9%, +2.8%, +33.9%, and -3.2% for S-01, D-01, L-01, and M-02.
+
+The Jev evaluator itself took 0.509 to 0.929 seconds. Answer and grader time
+dominated wall time. Graph plus Jev reduced mean answer-request bytes by 6.0%
+against Graph without Jev, but its mean answer request remained 75.9% larger
+than Direct without Jev. The Graph Jev request was equal to the Direct Jev
+request on two tasks and larger on two tasks. This result does not show general
+packet compression.
+
+Direct plus Jev retained complete provider usage: 111,816 input tokens and
+3,112 output tokens across four calls. Graph plus Jev retained the evaluator
+elapsed time and request bytes, but not provider token usage. Its usage state is
+`model_call_incomplete`. Answer and grader token usage is unavailable for every
+arm. The result therefore does not support an all-model token or cost claim.
+
+One C-M-02 answer capture double-encoded the already completed model JSON. The
+Parent removed that single transport quoting layer, validated the unchanged
+object against the frozen response contract and execution identity, and
+submitted it without another model or provider call. This was a transport
+normalization, not a retry.
+
+The result classification is `oracle_assisted_fallback_ttc`. It supports only
+the frozen-contract TTC comparison. It does not establish general Direct,
+Graph, or Jev retrieval performance. The next audit must address the missing
+Graph-plus-Jev provider usage and the larger Graph answer context before any
+release claim.
