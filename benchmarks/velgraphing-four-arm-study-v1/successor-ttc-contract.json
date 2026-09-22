@@ -83,15 +83,7 @@
     "absolute_python_executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
     "answer_task_names": 16,
     "exact_host_argv_arrays": 32,
-    "final_user_reack": [
-      "request_byte_set_sha256",
-      "eight_call_cap",
-      "total_authorized_provider_budget_usd",
-      "operator_reported_spend_to_date_usd",
-      "max_additional_provider_spend_usd",
-      "lane_manifest_sha256",
-      "absolute_python_executable"
-    ],
+    "final_user_reack": [],
     "grader_task_names": 16,
     "lane_manifest_sha256": "5e997dded4c4cdce4947e267dbb3491905a8daeaa25b1a7054d99a47a0479a1f",
     "live_lanes_created": 0
@@ -136,7 +128,7 @@
     "token_policy": "host_reported_only_never_estimate_from_bytes"
   },
   "schema_version": "velgraphing-four-arm-successor-ttc-v1",
-  "status": "frozen_pending_final_user_reack",
+  "status": "ready_after_final_user_reack",
   "trial_policy": {
     "answer_calls_per_dispatch": 1,
     "answer_repairs": 0,

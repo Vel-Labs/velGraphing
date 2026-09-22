@@ -61,8 +61,8 @@
     "answer_repairs": 0,
     "answer_tasks_created": 0,
     "exact_host_argv_arrays": 32,
-    "execution_ready": false,
-    "final_user_reack_required": true,
+    "execution_ready": true,
+    "final_user_reack_required": false,
     "fresh_answer_lanes": 16,
     "fresh_grader_lanes": 16,
     "fresh_no_history": true,
@@ -95,7 +95,7 @@
       "total_authorized_usd": "1.0000"
     },
     "provider_calls_executed": 0,
-    "provider_spend_authorized": false,
+    "provider_spend_authorized": true,
     "task_retries": 0
   },
   "provider_boundary": {
@@ -132,7 +132,7 @@
     "token_policy": "host_reported_only_never_estimate_from_bytes"
   },
   "schema_version": "velgraphing-four-arm-successor-freeze-v1",
-  "status": "frozen_pending_final_user_reack",
+  "status": "ready_after_final_user_reack",
   "study_id": "velgraphing-four-arm-study-v1",
   "telemetry_schema": {
     "failure": [
