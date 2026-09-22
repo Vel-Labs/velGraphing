@@ -15,7 +15,7 @@
     "lane_manifest": {
       "entry_count": 32,
       "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
-      "sha256": "5b6460238bf75bd203d671d23ca1a127bee26570cd16c02f9a93f4cd99f9ce0b",
+      "sha256": "b45a2d628468889b7509c9bdd066f8ad3b4c43a2d3db7a750d873444e5c951ba",
       "status": "frozen",
       "thread_id_semantics": "canonical_collaboration_task_name_not_opaque_host_id"
     },
@@ -84,7 +84,7 @@
     "exact_host_argv_arrays": 32,
     "final_user_reack": [],
     "grader_task_names": 16,
-    "lane_manifest_sha256": "5b6460238bf75bd203d671d23ca1a127bee26570cd16c02f9a93f4cd99f9ce0b",
+    "lane_manifest_sha256": "b45a2d628468889b7509c9bdd066f8ad3b4c43a2d3db7a750d873444e5c951ba",
     "live_lanes_created": 0
   },
   "result_contract": {
