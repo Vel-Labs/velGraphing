@@ -64,6 +64,8 @@ SUCCESSOR_WITNESS_CUSTODY = (
 )
 COLLABORATION_TASK_NAME_RE = re.compile(r"[a-z0-9_]+\Z")
 THREAD_ID_SEMANTICS = "canonical_collaboration_task_name_not_opaque_host_id"
+TASK_PATH_SEMANTICS = "exact_parent_relative_collaboration_task_path"
+LANE_MANIFEST_SCHEMA = "velgraphing-v4-luna-lane-manifest-v2"
 LOCAL_POOL_ARTIFACT = ".velgraphing-local/velgraphing-four-arm-study-v1/phase-2-pools.json"
 PROVIDER_BUDGET_AUTHORITY = {
     "currency": "USD",
@@ -1411,7 +1413,7 @@ def _validate_freeze(
         or lane.get("fresh_no_history") is not True
         or lane.get("reuse") is not False
         or lane.get("argv_contract") != "exact_handoff_wait_argv_v1"
-        or lane.get("handoff_schema") != "velgraphing-v4-luna-lane-manifest-v1"
+        or lane.get("handoff_schema") != LANE_MANIFEST_SCHEMA
         or lane.get("host_thread_id")
         != "unique_nonempty_value_required_and_frozen_before_execution"
     ):
@@ -1563,7 +1565,7 @@ def _validate_successor_ttc_contract(
             "verifier_policy", "verifier_policy_sha256", "fact_witness_map_sha256",
             "fallback_allowlist_sha256", "witness_custody_sha256",
             "provider_budget_authority", "bindings", "result_contract",
-            "remaining_authority",
+            "remaining_authority", "replacement_authority",
         }
         or value.get("schema_version") != "velgraphing-four-arm-successor-ttc-v1"
         or value.get("status") not in {
@@ -1592,6 +1594,17 @@ def _validate_successor_ttc_contract(
             "response_capture": (
                 "parent_retains_raw_validates_contract_then_canonicalizes"
             ),
+        }
+        or value.get("replacement_authority") != {
+            "authorized_replacements": 1,
+            "trial_id": "A-S-01",
+            "excluded_prior_dispatch": {
+                "run_id": "retrievel-0.2.0-rc1-m09-r1",
+                "status": "request_written_response_unavailable",
+                "answer_agent_turns": 1,
+                "captured_answer_calls": 0,
+                "reason": "launcher_task_path_mismatch",
+            },
         }
     ):
         raise StudyError("successor_ttc_contract_invalid")
@@ -1684,6 +1697,7 @@ def _validate_successor_ttc_contract(
             "sha256": None,
             "status": "pending_parent_freeze",
             "thread_id_semantics": THREAD_ID_SEMANTICS,
+            "task_path_semantics": TASK_PATH_SEMANTICS,
         }
         or not pending and (
             lane_binding.get("schema_version")
@@ -1692,6 +1706,7 @@ def _validate_successor_ttc_contract(
             or not _is_sha256(lane_binding.get("sha256"))
             or lane_binding.get("status") != "frozen"
             or lane_binding.get("thread_id_semantics") != THREAD_ID_SEMANTICS
+            or lane_binding.get("task_path_semantics") != TASK_PATH_SEMANTICS
         )
     ):
         raise StudyError("successor_ttc_binding_invalid")
@@ -1823,6 +1838,7 @@ def _pending_successor_lane_binding(freeze: Mapping[str, Any]) -> dict[str, Any]
         "sha256": None,
         "status": "pending_parent_freeze",
         "thread_id_semantics": THREAD_ID_SEMANTICS,
+        "task_path_semantics": TASK_PATH_SEMANTICS,
     }
 
 
@@ -2073,7 +2089,8 @@ def validate_lane_manifest(value: Mapping[str, Any], freeze: Mapping[str, Any], 
     threads: set[str] = set()
     for row in entries:
         if type(row) is not dict or set(row) != {
-            "trial_id", "role", "thread_id", "model", "reasoning", "argv", "argv_sha256",
+            "trial_id", "role", "thread_id", "canonical_task_path", "model",
+            "reasoning", "argv", "argv_sha256",
         }:
             raise StudyError("lane_manifest_invalid")
         key = (row["trial_id"], row["role"])
@@ -2087,6 +2104,7 @@ def validate_lane_manifest(value: Mapping[str, Any], freeze: Mapping[str, Any], 
             key not in expected or key in observed or type(role) is not dict
             or row["model"] != role["model"] or row["reasoning"] != role["reasoning"]
             or not _is_collaboration_task_name(row["thread_id"])
+            or row["canonical_task_path"] != f"/root/{row['thread_id']}"
             or row["thread_id"] in threads
             or argv != expected_argv
             or row["argv_sha256"] != _sha256(argv)
@@ -2124,10 +2142,17 @@ def freeze_lane_manifest(bindings: Mapping[str, Any], freeze: Mapping[str, Any],
     for row in rows:
         if (
             type(row) is not dict
-            or set(row) != {"trial_id", "answer_thread_id", "grader_thread_id"}
+            or set(row) != {
+                "trial_id", "answer_thread_id", "answer_task_path",
+                "grader_thread_id", "grader_task_path",
+            }
             or row.get("trial_id") not in DISPATCH or row["trial_id"] in by_trial
             or any(not _is_collaboration_task_name(row.get(key))
                    for key in ("answer_thread_id", "grader_thread_id"))
+            or any(
+                row[f"{role}_task_path"] != f"/root/{row[f'{role}_thread_id']}"
+                for role in ("answer", "grader")
+            )
         ):
             raise StudyError("lane_bindings_invalid")
         by_trial[row["trial_id"]] = row
@@ -2145,6 +2170,7 @@ def freeze_lane_manifest(bindings: Mapping[str, Any], freeze: Mapping[str, Any],
                 "trial_id": trial_id, "role": role,
                 # The frozen handoff field stores task_name, not host thread ID.
                 "thread_id": by_trial[trial_id][f"{role}_thread_id"],
+                "canonical_task_path": by_trial[trial_id][f"{role}_task_path"],
                 "model": contract["model"], "reasoning": contract["reasoning"],
                 "argv": argv, "argv_sha256": _sha256(argv),
             })
@@ -2838,6 +2864,7 @@ def bind_successor_lane_manifest(
         "sha256": manifest_sha,
         "status": "frozen",
         "thread_id_semantics": THREAD_ID_SEMANTICS,
+        "task_path_semantics": TASK_PATH_SEMANTICS,
     }
     frozen_contract["remaining_authority"]["absolute_python_executable"] = (
         python_executable
@@ -3651,8 +3678,12 @@ def qualify(benchmark_root: Path, pool_path: Path, lane_root: Path,
     manifest_path = root / "lane-manifest.json"
     if not manifest_path.exists():
         bindings = {"schema_version": "velgraphing-four-arm-lane-bindings-v1", "bindings": [
-            {"trial_id": trial_id, "answer_thread_id": f"fixture-answer-{trial_id}",
-             "grader_thread_id": f"fixture-grader-{trial_id}"} for trial_id in DISPATCH
+            {"trial_id": trial_id,
+             "answer_thread_id": f"fixture_answer_{trial_id.replace('-', '_')}",
+             "answer_task_path": f"/root/fixture_answer_{trial_id.replace('-', '_')}",
+             "grader_thread_id": f"fixture_grader_{trial_id.replace('-', '_')}",
+             "grader_task_path": f"/root/fixture_grader_{trial_id.replace('-', '_')}"}
+            for trial_id in DISPATCH
         ]}
         freeze_lane_manifest(bindings, freeze, manifest_path, python_executable)
     raw, manifest = read_canonical(manifest_path)

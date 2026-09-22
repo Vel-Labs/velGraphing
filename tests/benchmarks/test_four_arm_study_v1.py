@@ -954,8 +954,16 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                         f"m09_bind_r1_luna_answer_"
                         f"{trial_id.lower().replace('-', '_')}"
                     ),
+                    "answer_task_path": (
+                        f"/root/m09_bind_r1_luna_answer_"
+                        f"{trial_id.lower().replace('-', '_')}"
+                    ),
                     "grader_thread_id": (
                         f"m09_bind_r1_astra_grader_"
+                        f"{trial_id.lower().replace('-', '_')}"
+                    ),
+                    "grader_task_path": (
+                        f"/root/m09_bind_r1_astra_grader_"
                         f"{trial_id.lower().replace('-', '_')}"
                     ),
                 } for trial_id in study.DISPATCH],
@@ -1180,7 +1188,9 @@ class FourArmStudyTests(unittest.TestCase):
             "bindings": [{
                 "trial_id": trial_id,
                 "answer_thread_id": f"answer_{trial_id.lower().replace('-', '_')}",
+                "answer_task_path": f"/root/answer_{trial_id.lower().replace('-', '_')}",
                 "grader_thread_id": f"grader_{trial_id.lower().replace('-', '_')}",
+                "grader_task_path": f"/root/grader_{trial_id.lower().replace('-', '_')}",
             } for trial_id in study.DISPATCH],
         }
         lane_manifest = root / "lane-manifest.json"
@@ -1195,6 +1205,7 @@ class FourArmStudyTests(unittest.TestCase):
             "sha256": lane_sha,
             "status": "frozen",
             "thread_id_semantics": study.THREAD_ID_SEMANTICS,
+            "task_path_semantics": study.TASK_PATH_SEMANTICS,
         }
         pending["remaining_authority"]["absolute_python_executable"] = sys.executable
         pending["remaining_authority"]["lane_manifest_sha256"] = lane_sha
@@ -1756,6 +1767,9 @@ class FourArmStudyTests(unittest.TestCase):
                     "trial_id": trial_id,
                     "role": role,
                     "thread_id": f"thread_{role}_{trial_id.lower().replace('-', '_')}",
+                    "canonical_task_path": (
+                        f"/root/thread_{role}_{trial_id.lower().replace('-', '_')}"
+                    ),
                     "model": binding["model"],
                     "reasoning": binding["reasoning"],
                     "argv": argv,
@@ -1777,6 +1791,10 @@ class FourArmStudyTests(unittest.TestCase):
         grader["model"] = "gpt-5.6-luna"
         with self.assertRaisesRegex(study.StudyError, "lane_manifest_invalid"):
             study.validate_lane_manifest(manifest, self.freeze)
+        wrong_path = self.lane_manifest()
+        wrong_path["entries"][0]["canonical_task_path"] = "/root/other_task"
+        with self.assertRaisesRegex(study.StudyError, "lane_manifest_invalid"):
+            study.validate_lane_manifest(wrong_path, self.freeze)
         for invalid_name in ("T070_r1_luna_answer_a_s_01", "t070-r1-luna-answer-a-s-01"):
             invalid = self.lane_manifest()
             invalid["entries"][0]["thread_id"] = invalid_name
@@ -1795,7 +1813,9 @@ class FourArmStudyTests(unittest.TestCase):
                 "bindings": [{
                     "trial_id": trial_id,
                     "answer_thread_id": f"answer_{trial_id.lower().replace('-', '_')}",
+                    "answer_task_path": f"/root/answer_{trial_id.lower().replace('-', '_')}",
                     "grader_thread_id": f"grader_{trial_id.lower().replace('-', '_')}",
+                    "grader_task_path": f"/root/grader_{trial_id.lower().replace('-', '_')}",
                 } for trial_id in study.DISPATCH],
             }
             invalid_bindings = deepcopy(bindings)

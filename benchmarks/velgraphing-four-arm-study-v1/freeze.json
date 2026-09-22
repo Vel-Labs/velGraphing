@@ -157,7 +157,7 @@
     "argv_contract": "exact_handoff_wait_argv_v1",
     "grader": {"count": 16, "logical_id": "grader:{trial_id}", "model": "gpt-6-astra", "reasoning": "high"},
     "fresh_no_history": true,
-    "handoff_schema": "velgraphing-v4-luna-lane-manifest-v1",
+    "handoff_schema": "velgraphing-v4-luna-lane-manifest-v2",
     "host_thread_id": "unique_nonempty_value_required_and_frozen_before_execution",
     "reuse": false
   },

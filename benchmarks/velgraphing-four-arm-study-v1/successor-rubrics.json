@@ -9,7 +9,7 @@
   "implementation_bindings": {
     "controller": {
       "path": "scripts/benchmarks/four_arm_study_v1.py",
-      "sha256": "9f796bf0628d70d969785fef1a8ca1f801a53e08c9e83186b2137f6819c28f00"
+      "sha256": "8562903908370610c1726dc2310d2153d93731a9eed00832413226fb185c8b2f"
     },
     "host": {
       "path": "scripts/benchmarks/time_to_correct_host.py",

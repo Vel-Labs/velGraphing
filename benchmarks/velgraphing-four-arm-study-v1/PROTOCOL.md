@@ -167,14 +167,22 @@ Python executable. After `approve-successor`, the status is
 is operator-provided and not provider-verified. The eight-call cap and zero
 retries remain separate batch controls.
 
-For compatibility with the frozen handoff schema, each manifest `thread_id`
-stores the canonical collaboration `task_name`, not an opaque host-issued
-thread ID. Names use only lowercase ASCII letters, digits, and underscores.
-Before response capture or attestation, Parent must verify that
-`spawn_agent` returned a `task_name` that exactly matches the planned manifest
-name. Keep any opaque host ID separate from the manifest. On mismatch, stop
-before capture or attestation. A corrected name requires a new manifest and
-final re-ack for its hash.
+Each manifest entry stores the canonical collaboration `task_name` in
+`thread_id` and the exact parent-relative task path in `canonical_task_path`.
+Names use only lowercase ASCII letters, digits, and underscores. After
+`spawn_agent` returns, Parent must compare its complete task path with
+`canonical_task_path` before retaining, forwarding, or attesting the response.
+A matching leaf name with a different parent path is a mismatch. The launcher
+may already have produced one model turn; exclude that turn and stop. Any
+replacement must match the explicit contract authority. A corrected binding
+requires a new manifest and final re-ack for its hash.
+
+M09 permits one replacement for trial `A-S-01` because its prior R1 handoff
+returned an unexpected task path. That R1 request was written, but no response
+was captured and no attestation was made. One answer-agent turn occurred, but
+it is excluded from scored results and the captured-answer count. Use one fresh
+R2 task for `A-S-01`; all other answer and grader lanes remain first attempts.
+No other replacement, answer repair, grader retry, or Jev retry is allowed.
 
 If an authorized correction must replace an existing planned manifest, rerun
 `freeze-lanes` with `--refresh`. This only replaces the manifest file. It does

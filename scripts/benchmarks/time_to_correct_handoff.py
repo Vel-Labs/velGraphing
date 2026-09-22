@@ -299,7 +299,7 @@ def bound_lane_identity(
     if (
         not SHA256.fullmatch(manifest_sha256)
         or digest(raw) != manifest_sha256
-        or manifest.get("schema_version") != "velgraphing-v4-luna-lane-manifest-v1"
+        or manifest.get("schema_version") != "velgraphing-v4-luna-lane-manifest-v2"
         or type(entries) is not list
     ):
         raise HandoffError("lane_manifest_identity_invalid")
@@ -313,9 +313,10 @@ def bound_lane_identity(
     command = entry.get("argv")
     if (
         set(entry) != {
-            "trial_id", "role", "thread_id", "model", "reasoning", "argv",
-            "argv_sha256",
+            "trial_id", "role", "thread_id", "canonical_task_path", "model",
+            "reasoning", "argv", "argv_sha256",
         }
+        or entry.get("canonical_task_path") != f"/root/{entry.get('thread_id', '')}"
         or type(command) is not list
         or not command
         or not all(type(argument) is str and argument for argument in command)

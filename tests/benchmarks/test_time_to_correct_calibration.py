@@ -52,11 +52,12 @@ def write_lane_manifest(
     root.mkdir(parents=True, exist_ok=True)
     command = [sys.executable, "-c", "pass"]
     raw = canonical({
-        "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
+        "schema_version": "velgraphing-v4-luna-lane-manifest-v2",
         "entries": [{
             "trial_id": trial_id,
             "role": role,
             "thread_id": thread_id,
+            "canonical_task_path": f"/root/{thread_id}",
             "model": model,
             "reasoning": reasoning,
             "argv": command,
