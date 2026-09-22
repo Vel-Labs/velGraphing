@@ -6,7 +6,7 @@
     },
     "controller": {
       "path": "scripts/benchmarks/four_arm_study_v1.py",
-      "sha256": "827933e4d891ed6a05b7a649d235b6347cff615400b11297ed8121c9efee4c87"
+      "sha256": "9f796bf0628d70d969785fef1a8ca1f801a53e08c9e83186b2137f6819c28f00"
     },
     "host": {
       "path": "scripts/benchmarks/time_to_correct_host.py",
@@ -15,7 +15,7 @@
     "lane_manifest": {
       "entry_count": 32,
       "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
-      "sha256": "4dd216489009e1f1d22db14545f96b902aae20e5a20c42ba56ad474392b61474",
+      "sha256": "dad4599b596dd985491fd38d54751cd674372cdb85ef58b36021a896ec13c545",
       "status": "frozen",
       "thread_id_semantics": "canonical_collaboration_task_name_not_opaque_host_id"
     },
@@ -38,7 +38,7 @@
     "successor_grader_response_contract_sha256": "dd517640475fe2219514ebee94a01182bbd74ff17adafeb5aa1348a3e0f6db2c",
     "successor_rubric": {
       "path": "successor-rubrics.json",
-      "sha256": "2ee818c05336c9e88c234e954320909d421ff6f8f77a4917cdd36158947b825e"
+      "sha256": "8ab6bbf27c3a8cde804f3272de245dfe572ddcff7fe11b916e3ed190ac0d5601"
     }
   },
   "classification": {
@@ -79,20 +79,12 @@
     "total_authorized_usd": "1.0000"
   },
   "remaining_authority": {
-    "absolute_python_executable": "/Users/steven/Workspace/40_Code/infrastructure/graph-engineering/.venv/bin/python",
+    "absolute_python_executable": "/opt/homebrew/opt/python@3.14/bin/python3.14",
     "answer_task_names": 16,
     "exact_host_argv_arrays": 32,
-    "final_user_reack": [
-      "request_byte_set_sha256",
-      "eight_call_cap",
-      "total_authorized_provider_budget_usd",
-      "operator_reported_spend_to_date_usd",
-      "max_additional_provider_spend_usd",
-      "lane_manifest_sha256",
-      "absolute_python_executable"
-    ],
+    "final_user_reack": [],
     "grader_task_names": 16,
-    "lane_manifest_sha256": "4dd216489009e1f1d22db14545f96b902aae20e5a20c42ba56ad474392b61474",
+    "lane_manifest_sha256": "dad4599b596dd985491fd38d54751cd674372cdb85ef58b36021a896ec13c545",
     "live_lanes_created": 0
   },
   "result_contract": {
@@ -124,7 +116,7 @@
     "token_policy": "host_reported_only_never_estimate_from_bytes"
   },
   "schema_version": "velgraphing-four-arm-successor-ttc-v1",
-  "status": "frozen_pending_final_user_reack",
+  "status": "ready_after_final_user_reack",
   "trial_policy": {
     "answer_calls_per_dispatch": 1,
     "answer_repairs": 0,

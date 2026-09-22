@@ -12,9 +12,9 @@ Source candidate at creation: `331b13ba0499bffcdb2f2b4dd79124c2dd0853ed`
 
 Current milestone: `M09 — Multi-corpus evaluation`
 
-Current gate: obtain the exact final execution re-ack for the bound current-candidate pool and fresh lane manifest
+Current gate: run the approved 16-trial successor study with at most eight Jev calls and zero retries
 
-Next action: materialize offline approval, then create the 16 answer and 16 grader lanes from the exact frozen task names
+Next action: complete the serial answer, grader, and provider lanes; qualify the sealed result against the frozen acceptance policy
 
 ## Purpose
 
@@ -591,7 +591,7 @@ receipts for Parent integration.
 | `W012` | `M06` | Parent plus Luna discovery and implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | provider-neutral instruction plan and structured skill metadata | complete | Pure caller-supplied plan, eight-skill advisory manifest, and 91-file package parity |
 | `W013` | `M07` | Parent plus Luna discovery and implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | source-bound read-only review packet and explicit consumer path | complete | Closed snapshot-bound packet; 46 focused tests and 93-file package parity passed |
 | `W014` | `M08` | Parent plus Luna discovery and implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | verified Codex and Orcastrata translation seams only | complete | Explicit Codex command seam and navigation-only Orcastrata intake verified; no lifecycle API exists |
-| `W015` | `M09` | Parent plus implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | frozen multi-corpus four-arm evaluation | active | Fresh 32-entry manifest `4dd21648...` is bound; execution and provider spend remain disabled pending exact final re-ack |
+| `W015` | `M09` | Parent plus implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | frozen multi-corpus four-arm evaluation | active | Exact final re-ack is materialized. Fresh 32-entry manifest `dad4599b...` binds the frozen GPT-5.6 Luna and GPT-6 Astra lanes to `/opt/homebrew/opt/python@3.14/bin/python3.14`; installed-copy integrity and timeout receipts pass focused tests; serial execution is approved within the eight-call cap and zero-retry rule. |
 
 ## Decision Registry
 
@@ -649,6 +649,8 @@ or accepted phase. Merge retries with identical inputs and failure signatures.
 | 2026-09-22 | `M09` | Current successor execution dry preparation | read-only integrated preflight | failed transition gate | Current preparation produces pool hash `bf6ea247...` and preflight hash `a3c4469e...`, not the frozen `3721b737...` and `4c329a1a...`; preparation fails closed. The harness also has no command that binds a newly frozen lane manifest into the pending TTC contract. Repair these two explicit transitions before lanes or calls. |
 | 2026-09-22 | `M09` | Current-candidate pool refresh and explicit lane-manifest binding | focused harness and successor validation | accepted harness repair | `freeze-successor --refresh` and `prepare-successor-execution` now bind current preflight `a3c4469e...` and pool `bf6ea247...`. `bind-successor-lanes` validates and binds a fresh 32-entry manifest plus exact Python path without inheriting approval. Historical and successor validators pass; 37 benchmark tests pass with 2 unavailable-lane skips. State remains pending, execution disabled, and provider spend unauthorized. |
 | 2026-09-22 | `M09` | Fresh M09 R1 lane freeze and pending binding | offline authority preparation | ready for re-ack | Manifest `4dd216489009e1f1d22db14545f96b902aae20e5a20c42ba56ad474392b61474` binds 16 Luna answer and 16 Astra grader task names plus the declared Python executable. Successor freeze is `5cfd441f...`; preflight is `4a51506f...`. No task, model, Jev, provider, credential, or network call occurred. |
+| 2026-09-22 | `M09` | Installed-copy manifest integrity and graph-find timeout receipts | focused harness regression checks | accepted harness repair | Existing run roots now reject unmanifested files and symlinks. Graph-find timeouts retain a hash-only process receipt and classify as `callback_timeout`. Three focused installed-path tests passed. No M09 lanes or provider calls were run; exact re-ack is still required. |
+| 2026-09-22 | `M09` | Refreshed successor freeze, pool, 32-lane manifest, and interpreter binding | offline authority preparation | approved for execution | Pool `bf6ea247...`, freeze `06edacc2...`, preflight `37baa8b0...`, and manifest `dad4599b...` validated before approval. The manifest binds 16 GPT-5.6 Luna answer lanes and 16 GPT-6 Astra grader lanes to `/opt/homebrew/opt/python@3.14/bin/python3.14`. The final exact re-ack bound request hash `80b3411f...`, total authorized USD 1.0000, operator-reported spend USD 0.0969, maximum additional USD 0.9031, eight Jev calls, and zero retries. Approval is materialized in successor contract `1dbadd5c...`; counters were zero at approval. |
 
 ## Handoff Protocol
 

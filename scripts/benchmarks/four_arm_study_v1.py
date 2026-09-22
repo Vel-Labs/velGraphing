@@ -381,14 +381,20 @@ def _install_graph_find(run_root: Path) -> tuple[Path, str, str]:
     rows = release.get("files")
     if not _is_sha256(candidate_sha256) or type(rows) is not list:
         raise StudyError("installed_adapter_invalid")
+    expected_paths = {".codex-plugin/release-manifest.json"}
+    for row in rows:
+        if type(row) is not dict or set(row) != {"path", "sha256", "size"}:
+            raise StudyError("installed_adapter_invalid")
+        relative = _safe_path(row["path"])
+        if relative in expected_paths:
+            raise StudyError("installed_adapter_invalid")
+        expected_paths.add(relative)
     installed_root = run_root / "installed-plugin/graph-engineering"
     if installed_root.exists() and (installed_root.is_symlink() or not installed_root.is_dir()):
         raise StudyError("installed_adapter_invalid")
     if not installed_root.exists():
         installed_root.mkdir(parents=True, mode=0o700)
         for row in rows:
-            if type(row) is not dict or set(row) != {"path", "sha256", "size"}:
-                raise StudyError("installed_adapter_invalid")
             relative = _safe_path(row["path"])
             source = plugin_root.joinpath(*PurePosixPath(relative).parts)
             if source.is_symlink() or not source.is_file():
@@ -406,6 +412,12 @@ def _install_graph_find(run_root: Path) -> tuple[Path, str, str]:
     installed_manifest = installed_root / ".codex-plugin/release-manifest.json"
     if not installed_manifest.is_file() or installed_manifest.read_bytes() != manifest_path.read_bytes():
         raise StudyError("installed_adapter_invalid")
+    for path in installed_root.rglob("*"):
+        if path.is_symlink() or (
+            path.is_file()
+            and path.relative_to(installed_root).as_posix() not in expected_paths
+        ):
+            raise StudyError("installed_adapter_invalid")
     for row in rows:
         target = installed_root.joinpath(*PurePosixPath(row["path"]).parts)
         if target.is_symlink() or not target.is_file():
@@ -416,6 +428,22 @@ def _install_graph_find(run_root: Path) -> tuple[Path, str, str]:
     adapter = installed_root / "skills/graph-find/scripts/graph_find.py"
     adapter_sha256 = digest(adapter.read_bytes())
     return adapter, candidate_sha256, adapter_sha256
+
+
+def _record_graph_find_process(
+    trial: Trial, argv: Sequence[str], stdout: bytes, stderr: bytes,
+    exit_code: int | None, status: str,
+) -> None:
+    trial.current.setdefault("host_processes", []).append({
+        "kind": "graph_find",
+        "argv_sha256": digest(canonical(list(argv))),
+        "input_sha256": digest(b""),
+        "stdout_sha256": digest(stdout),
+        "stderr_sha256": digest(stderr),
+        "exit_code": exit_code,
+        "timeout_limit_ns": 120_000_000_000,
+        "status": status,
+    })
 
 
 def _installed_graph_payload(
@@ -491,24 +519,24 @@ def _installed_graph_payload(
                 raise MeasurementError("installed_graph_find_jev_live_unavailable")
             child_env["TYPESAFE_API_KEY"] = api_key
         with trial.phase("candidate_discovery"):
-            completed = subprocess.run(
-                argv, cwd=str(ROOT),
-                env=child_env,
-                capture_output=True, check=False, timeout=120,
-            )
+            try:
+                completed = subprocess.run(
+                    argv, cwd=str(ROOT),
+                    env=child_env,
+                    capture_output=True, check=False, timeout=120,
+                )
+            except subprocess.TimeoutExpired as exc:
+                _record_graph_find_process(
+                    trial, argv, exc.stdout or b"", exc.stderr or b"", None, "timeout",
+                )
+                raise TimeoutError from None
     finally:
         if replay_dir is not None:
             replay_dir.cleanup()
-    trial.current.setdefault("host_processes", []).append({
-        "kind": "graph_find",
-        "argv_sha256": digest(canonical(argv)),
-        "input_sha256": digest(b""),
-        "stdout_sha256": digest(completed.stdout),
-        "stderr_sha256": digest(completed.stderr),
-        "exit_code": completed.returncode,
-        "timeout_limit_ns": 120_000_000_000,
-        "status": "completed" if completed.returncode == 0 else "failed",
-    })
+    _record_graph_find_process(
+        trial, argv, completed.stdout, completed.stderr, completed.returncode,
+        "completed" if completed.returncode == 0 else "failed",
+    )
     if completed.returncode != 0:
         raise MeasurementError("installed_graph_find_failed")
     try:

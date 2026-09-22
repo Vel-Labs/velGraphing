@@ -11,7 +11,7 @@
       },
       "controller": {
         "path": "scripts/benchmarks/four_arm_study_v1.py",
-        "sha256": "827933e4d891ed6a05b7a649d235b6347cff615400b11297ed8121c9efee4c87"
+        "sha256": "9f796bf0628d70d969785fef1a8ca1f801a53e08c9e83186b2137f6819c28f00"
       },
       "host": {
         "path": "scripts/benchmarks/time_to_correct_host.py",
@@ -41,8 +41,8 @@
       "openchain-reference-material": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
       "thealgorithms-python": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
     },
-    "successor_rubric_sha256": "2ee818c05336c9e88c234e954320909d421ff6f8f77a4917cdd36158947b825e",
-    "successor_ttc_core_sha256": "145db89ea21f7bbb0ef3d9f3c913c5f9db52555564bb0f653e87912baa6e0aa8",
+    "successor_rubric_sha256": "8ab6bbf27c3a8cde804f3272de245dfe572ddcff7fe11b916e3ed190ac0d5601",
+    "successor_ttc_core_sha256": "4bf7d5bd54369700a3e3b30cad1d9f19c64d23b00fe60784d47ef5d5f4f49a2e",
     "witness_custody_sha256": "e042c9ee45c7fcc9e36a7ad693b7f77106f12dd94f06756b9e8ae19e276be38b"
   },
   "claim_boundary": {
@@ -61,8 +61,8 @@
     "answer_repairs": 0,
     "answer_tasks_created": 0,
     "exact_host_argv_arrays": 32,
-    "execution_ready": false,
-    "final_user_reack_required": true,
+    "execution_ready": true,
+    "final_user_reack_required": false,
     "fresh_answer_lanes": 16,
     "fresh_grader_lanes": 16,
     "fresh_no_history": true,
@@ -95,7 +95,7 @@
       "total_authorized_usd": "1.0000"
     },
     "provider_calls_executed": 0,
-    "provider_spend_authorized": false,
+    "provider_spend_authorized": true,
     "task_retries": 0
   },
   "provider_boundary": {
@@ -132,7 +132,7 @@
     "token_policy": "host_reported_only_never_estimate_from_bytes"
   },
   "schema_version": "velgraphing-four-arm-successor-freeze-v1",
-  "status": "frozen_pending_final_user_reack",
+  "status": "ready_after_final_user_reack",
   "study_id": "velgraphing-four-arm-study-v1",
   "telemetry_schema": {
     "failure": [

@@ -131,6 +131,77 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             )
             self.assertEqual(observations[0]["request_sha256"], attempt["bindings"]["request_sha256"])
 
+    def test_installed_graph_find_rejects_unmanifested_files(self) -> None:
+        local = ROOT / ".velgraphing-local"
+        local.mkdir(mode=0o700, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="manifest-extra-", dir=local) as raw:
+            run_root = Path(raw)
+            study._install_graph_find(run_root)
+            extra = run_root / "installed-plugin/graph-engineering/packages/core/__init__.py"
+            extra.parent.mkdir(parents=True)
+            extra.write_text("raise RuntimeError('unmanifested module')\n", encoding="utf-8")
+            with self.assertRaisesRegex(study.StudyError, "installed_adapter_invalid"):
+                study._install_graph_find(run_root)
+
+    def test_installed_graph_find_timeout_records_redacted_process_receipt(self) -> None:
+        local = ROOT / ".velgraphing-local"
+        local.mkdir(mode=0o700, exist_ok=True)
+        identity = {
+            "run_id": "fixture-run", "trial_id": "B-S-01", "task_id": "S-01",
+            "arm": "B", "repository_id": "fixture", "repository_commit": "a" * 40,
+            "source_snapshot_sha256": "b" * 64, "dirty_state_sha256": "c" * 64,
+            "answer_model": "fixture-answer", "reasoning": "none",
+            "prompt_sha256": "d" * 64, "rubric_sha256": "e" * 64,
+            "rubric_version": "fixture-v1", "answer_lane_id": "answer-fixture",
+        }
+        with tempfile.TemporaryDirectory(prefix="graph-find-timeout-", dir=local) as raw:
+            run_root = Path(raw)
+            installed = study._install_graph_find(run_root)
+            trial = Trial(identity, Budget(0, 5_000_000_000), execution="fixture")
+
+            def prepare(current: Trial, _attempt: int) -> dict[str, object]:
+                return study._installed_graph_payload(
+                    current, task_id="S-01", prompt="Find the fixture evidence.",
+                    lane=run_root, source_manifest={"snapshot_sha256": "b" * 64},
+                    installed=installed, run_root=run_root,
+                )
+
+            def timed_out(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+                raise subprocess.TimeoutExpired(
+                    argv, kwargs["timeout"], output=b"partial stdout", stderr=b"partial stderr",
+                )
+
+            with patch.object(study.subprocess, "run", side_effect=timed_out):
+                result = trial.run(
+                    prepare,
+                    lambda *_: Answer("unreachable"),
+                    lambda *_: Grade(False, 0, 1, False, 0, "fixture-grader", "e" * 64),
+                )
+
+        attempt = result["attempts"][0]
+        self.assertEqual("callback_timeout", result["terminal_reason"])
+        self.assertEqual("prepare", attempt["failure_stage"])
+        self.assertEqual("callback_timeout", attempt["failure_reason"])
+        self.assertEqual("observed", attempt["phase_status"]["candidate_discovery"])
+        self.assertEqual([{
+            "kind": "graph_find",
+            "argv_sha256": study.digest(study.canonical([
+                sys.executable, str(installed[0]), "--root", str(run_root),
+                "--prompt", "Find the fixture evidence.", "--maximum-results",
+                str(study.RETRIEVAL_NODE_LIMIT), "--byte-budget",
+                str(study.CANDIDATE_AGGREGATE_BYTE_BUDGET), "--ranked-context", "plan",
+                "--diagnostics",
+            ])),
+            "input_sha256": study.digest(b""),
+            "stdout_sha256": study.digest(b"partial stdout"),
+            "stderr_sha256": study.digest(b"partial stderr"),
+            "exit_code": None,
+            "timeout_limit_ns": 120_000_000_000,
+            "status": "timeout",
+        }], attempt["host_processes"])
+        self.assertNotIn("partial stdout", json.dumps(result))
+        self.assertNotIn("partial stderr", json.dumps(result))
+
     def test_installed_graph_find_trial_supports_graph_off_and_d_on_replay(self) -> None:
         local = ROOT / ".velgraphing-local"
         local.mkdir(mode=0o700, exist_ok=True)
