@@ -131,11 +131,9 @@ T090 reinstalled the current `0.2.0-rc.1` package into a fresh isolated
 and request size of 3,816 bytes. It contained only the three synthetic source
 files listed above.
 
-The installed runtime made one approved shadow-mode call. It returned
-`shadow / advisory_only`, resolved `jev-1.13.0`, revalidated the source, and
-preserved required candidate `c2`. The provider observation reported 1,300
-input tokens, 49 output tokens, and 312.823 milliseconds. It remained
-non-authority-bearing and insufficient by design.
+The first live run proved the adapter path but did not retain a current-package
+hash bridge. The package-bound replacement below is the authoritative installed
+smoke. It remained non-authority-bearing and insufficient by design.
 
 The replacement proof is under
 `.velgraphing-local/t040-installed-live-r8/`. Its receipt binds the live

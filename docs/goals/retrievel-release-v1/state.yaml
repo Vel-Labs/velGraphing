@@ -575,8 +575,11 @@ checks:
   dirty_fingerprint: "clean at ab229142e9a577c88d15bacd67d5bf36cd85e1ea before T010; board files then added by Parent"
   last_verification:
     result: pass_with_measurement_gaps
-    task: T070
+    task: T090
     commands:
-      - "R4 sealed execution on candidate 463b4fba6f67ef55df3156cb1f2563f1a011c799"
-      - "result SHA-256 e78ddf4a33a1be4132725da9f7f1247d34b34c0f51b7c4f194e603df74abb6ce"
-      - "focused benchmark suite: 44 passed, 2 expected path-local skips"
+      - "R7 sealed 16 trials, 16 answer calls, 16 grader calls, 8 Jev calls, and 0 retries"
+      - "R7 result SHA-256 3bd8b2f1bb3fa9e40449004ca1d1b706d4dd6f499816c462e5a8b916f25dd3e0"
+      - "current installed-smoke receipt SHA-256 ab7d4ef2e709f4ac6374d76b4752ee0863ba5c0fd01c4209feb4ecfb9175c06e"
+      - "two projector passes produced no tracked diff"
+      - "source/package parity: 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+      - "full unittest discovery: 567 passed and 3 expected skips"
