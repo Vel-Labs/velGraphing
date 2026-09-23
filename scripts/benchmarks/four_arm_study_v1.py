@@ -436,6 +436,27 @@ def _record_graph_find_process(
     trial: Trial, argv: Sequence[str], stdout: bytes, stderr: bytes,
     exit_code: int | None, status: str,
 ) -> None:
+    validation_fields = None
+    try:
+        payload = json.loads(stdout.decode("utf-8"))
+        ranked = payload.get("ranked_context", {})
+        selection = ranked.get("selection") or {}
+        plan = ranked.get("plan") or {}
+        observation = ranked.get("jev_observation") or {}
+        validation_fields = {
+            "ranked_mode": ranked.get("mode"),
+            "ranked_status": ranked.get("status"),
+            "plan_route": plan.get("route"),
+            "plan_reason": plan.get("reason"),
+            "plan_candidate_set_sha256": plan.get("candidate_set_sha256"),
+            "selection_candidate_set_sha256": selection.get("candidate_set_sha256"),
+            "jev_status": observation.get("status"),
+            "jev_request_sha256": observation.get("request_sha256"),
+            "jev_candidate_set_sha256": observation.get("candidate_set_sha256"),
+            "jev_attempted_calls": observation.get("attempted_calls"),
+        }
+    except (UnicodeError, json.JSONDecodeError, AttributeError, TypeError):
+        pass
     trial.current.setdefault("host_processes", []).append({
         "kind": "graph_find",
         "argv_sha256": digest(canonical(list(argv))),
@@ -445,12 +466,100 @@ def _record_graph_find_process(
         "exit_code": exit_code,
         "timeout_limit_ns": 120_000_000_000,
         "status": status,
+        "validation_fields": validation_fields,
     })
 
 
 def _require_graph_plan(plan: Mapping[str, Any], *, required: bool) -> None:
     if required and plan.get("route") != "graph":
         raise MeasurementError("installed_graph_find_plan_fell_back_to_direct")
+
+
+def installed_graph_jev_preview(
+    *, prompt: str, lane: Path, source_manifest: Mapping[str, Any],
+    installed: tuple[Path, str, str],
+) -> dict[str, Any]:
+    """Bind Jev to the installed CLI's actual selected context without a call."""
+    adapter, candidate_sha256, adapter_sha256 = installed
+    argv = [
+        sys.executable, str(adapter), "--root", str(lane), "--prompt", prompt,
+        "--maximum-results", str(RETRIEVAL_NODE_LIMIT), "--byte-budget",
+        str(CANDIDATE_AGGREGATE_BYTE_BUDGET), "--context-byte-budget",
+        str(FINAL_CONTEXT_BYTE_BUDGET), "--ranked-context", "preview",
+        "--jev-mode", "rerank", "--diagnostics",
+    ]
+    try:
+        completed = subprocess.run(
+            argv, cwd=str(ROOT), env={
+                "PATH": os.environ.get("PATH", os.defpath),
+                "PYTHONIOENCODING": "utf-8",
+                "PYTHONDONTWRITEBYTECODE": "1",
+            }, capture_output=True, check=False, timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        raise MeasurementError("installed_graph_find_preview_timeout") from None
+    if completed.returncode != 0:
+        raise MeasurementError("installed_graph_find_preview_failed")
+    try:
+        payload = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        raise MeasurementError("installed_graph_find_preview_invalid") from None
+    ranked = payload.get("ranked_context")
+    diagnostics = payload.get("diagnostics")
+    if type(ranked) is not dict or type(diagnostics) is not dict:
+        raise MeasurementError("installed_graph_find_preview_invalid")
+    plan = ranked.get("plan")
+    selection = ranked.get("selection")
+    context = selection.get("context") if type(selection) is dict else None
+    preview = ranked.get("jev_preview")
+    identity = diagnostics.get("runtime_identity")
+    spans = context.get("spans") if type(context) is dict else None
+    if (
+        ranked.get("mode") != "preview" or ranked.get("status") != "selected"
+        or type(plan) is not dict or plan.get("route") not in {"direct", "graph"}
+        or type(plan.get("reason")) is not str or not plan["reason"]
+        or type(selection) is not dict or selection.get("route") != "ranked"
+        or selection.get("fail_closed") is not False
+        or selection.get("source_revalidated") is not True
+        or type(context) is not dict or context.get("fail_closed") is not False
+        or type(spans) is not list or any(type(span) is not dict for span in spans)
+        or context.get("candidate_set_sha256") != plan.get("candidate_set_sha256")
+        or context.get("source_snapshot_sha256") != source_manifest.get("snapshot_sha256")
+        or diagnostics.get("source_snapshot_sha256") != source_manifest.get("snapshot_sha256")
+        or type(identity) is not dict
+        or identity.get("candidate_sha256") != candidate_sha256
+        or identity.get("adapter_sha256") != adapter_sha256
+        or type(preview) is not dict
+        or preview.get("candidate_set_sha256") != context.get("candidate_set_sha256")
+        or not _is_sha256(preview.get("request_sha256"))
+        or type(preview.get("request_bytes")) is not int
+        or preview["request_bytes"] <= 0
+    ):
+        raise MeasurementError("installed_graph_find_preview_binding_mismatch")
+    context_bytes = 0
+    for span in spans:
+        content = span.get("content")
+        if type(content) is not str:
+            raise MeasurementError("installed_graph_find_preview_binding_mismatch")
+        context_bytes += len(content.encode("utf-8"))
+    if context_bytes > FINAL_CONTEXT_BYTE_BUDGET:
+        raise MeasurementError("installed_graph_find_preview_context_overflow")
+    return {
+        "schema_version": "velgraphing-installed-graph-jev-preview-v1",
+        "plan_route": plan["route"],
+        "plan_reason": plan["reason"],
+        "selection_route": selection["route"],
+        "selection_order_source": context.get("order_source"),
+        "candidate_set_sha256": context["candidate_set_sha256"],
+        "source_snapshot_sha256": context["source_snapshot_sha256"],
+        "candidate_sha256": candidate_sha256,
+        "adapter_sha256": adapter_sha256,
+        "context_bytes": context_bytes,
+        "final_context_byte_cap": FINAL_CONTEXT_BYTE_BUDGET,
+        "jev_request_sha256": preview["request_sha256"],
+        "jev_request_bytes": preview["request_bytes"],
+        "jev_candidate_set_sha256": preview["candidate_set_sha256"],
+    }
 
 
 def _installed_graph_payload(
@@ -3376,7 +3485,16 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
         freeze["study_id"] if execution == "observed" else "four-arm-qualification",
         _question_prompt(registration["task_id"]),
     )
-    trial = Trial(identity, Budget(0, 600_000_000_000), execution=execution)
+    retry_transient = bool(
+        successor_ttc_contract is not None
+        and successor_ttc_contract.get("policy", {}).get("retry_transient") is True
+    )
+    trial = Trial(
+        identity,
+        Budget(2, 4_200_000_000_000) if retry_transient
+        else Budget(0, 600_000_000_000),
+        execution=execution, retry_transient=retry_transient,
+    )
     jev_on = registration["arm"] in {"B", "D"}
     route = pool["identity"]["route"]
     graph_jev = route == "graph" and jev_on
@@ -3419,7 +3537,8 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
         elif graph_jev_live:
             with current.phase("operator_approval"):
                 reserved_receipt, _call_number = budget.reserve(
-                    registration["trial_id"], approved,
+                    f"{registration['trial_id']}-a{_attempt}" if retry_transient
+                    else registration["trial_id"], approved,
                 )
         elif jev_on:
             request_sha256 = pool["jev_preview"]["request_sha256"]
@@ -3428,7 +3547,10 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
                 with current.phase("operator_approval"):
                     if budget is None or registration["call_disposition"] != "planned":
                         raise MeasurementError("jev_request_not_approved")
-                receipt, call_number = budget.reserve(registration["trial_id"], request_sha256)
+                receipt, call_number = budget.reserve(
+                    f"{registration['trial_id']}-a{_attempt}" if retry_transient
+                    else registration["trial_id"], request_sha256,
+                )
                 observation = evaluate_live(
                     current, ROOT, packet, lane,
                     approved_request_sha256=request_sha256, runtime_approved=True,
@@ -3475,9 +3597,26 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
         current.coverage(source_operations=True)
         return payload
 
-    entries = {(row["trial_id"], row["role"]): row for row in manifest["entries"]}
-    answer = entries[(registration["trial_id"], "answer")]
-    grader = entries[(registration["trial_id"], "grader")]
+    entries = {
+        (row["trial_id"], row["role"], row.get("attempt", 0)): row
+        for row in manifest["entries"]
+    }
+    answer = entries[(registration["trial_id"], "answer", 0)]
+    grader = entries[(registration["trial_id"], "grader", 0)]
+    answer_retry_lanes = grader_retry_lanes = None
+    if retry_transient:
+        answer_retry_lanes = [
+            {"argv": entries[(registration["trial_id"], "answer", index)]["argv"],
+             "identity": _execution_identity(
+                 entries[(registration["trial_id"], "answer", index)]
+             )} for index in range(3)
+        ]
+        grader_retry_lanes = [
+            {"argv": entries[(registration["trial_id"], "grader", index)]["argv"],
+             "identity": _execution_identity(
+                 entries[(registration["trial_id"], "grader", index)]
+             )} for index in range(3)
+        ]
     context = {
         "required_facts": [row["fact"] for row in rubric["required_facts"]],
         "critical_facts": rubric["critical_facts"],
@@ -3495,6 +3634,8 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
         ),
         answer_execution_identity=_execution_identity(answer) if observed else None,
         grader_execution_identity=_execution_identity(grader) if observed else None,
+        answer_retry_lanes=answer_retry_lanes,
+        grader_retry_lanes=grader_retry_lanes,
     )
     revalidate_lane(ROOT, corpus, lane, before)
     study_binding = {
@@ -3509,9 +3650,9 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
     if not use_public_task_facets:
         study_binding["use_public_task_facets"] = False
     result["study_binding_sha256"] = digest(canonical(study_binding))
-    if len(result["attempts"]) != 1:
+    if not 1 <= len(result["attempts"]) <= (3 if retry_transient else 1):
         raise MeasurementError("study_retry_forbidden")
-    calls = [row.get("kind") for row in result["attempts"][0].get("model_calls", [])]
+    calls = [row.get("kind") for row in result["attempts"][-1].get("model_calls", [])]
     if result["terminal_reason"] == "passed" and (
         calls.count("answer") != 1 or calls.count("grader") != 1
     ):

@@ -12,7 +12,7 @@ import re
 from typing import Any, Mapping, Sequence
 
 import four_arm_study_v1 as base
-from time_to_correct import load_completed_trials, save_completed_trial
+from time_to_correct import TRANSIENT_MODEL_ERRORS, load_completed_trials, save_completed_trial
 from time_to_correct_calibration import (
     LiveJevBudget, bind_controller, controller_identity, handoff_argv,
     require_resumable, verify_lane,
@@ -25,15 +25,16 @@ from time_to_correct_handoff import (
 ROOT = base.ROOT
 BENCHMARK = base.DEFAULT_ROOT
 STUDY_ID = "velgraphing-m09-four-arm-repeated-v1"
-SCHEMA = "velgraphing-m09-four-arm-contract-v1"
-LANE_SCHEMA = base.LANE_MANIFEST_SCHEMA
-RESULT_SCHEMA = "velgraphing-m09-four-arm-result-v1"
+SCHEMA = "velgraphing-m09-four-arm-contract-v2"
+LANE_SCHEMA = "velgraphing-v4-luna-lane-manifest-v3"
+RESULT_SCHEMA = "velgraphing-m09-four-arm-result-v2"
 ARMS = ("A", "B", "C", "D")
 TASKS = base.TASKS
 REPEATS = (1, 2)
-JEV_CAP = 16
-CALLS = {"answer": 32, "grader": 32, "jev_max": JEV_CAP, "retries": 0}
-MAX_ADDITIONAL_USD = Decimal("0.9031")
+JEV_CAP = 48
+CALLS = {"answer_base": 32, "answer_max": 96,
+         "grader_base": 32, "grader_max": 96,
+         "jev_base_max": 16, "jev_max": JEV_CAP, "attempts_per_trial_max": 3}
 ANSWER_MODEL = "gpt-6-luna"
 ANSWER_REASONING = "medium"
 
@@ -88,16 +89,19 @@ def _manifest(freeze: Mapping[str, Any], root: Path, repeat: int,
     entries = []
     for trial_id in _round_ids(freeze, repeat):
         for role in ("answer", "grader"):
-            task_name = f"m09_{run_tag}_{trial_id.lower().replace('-', '_')}_{role}"
-            lane = freeze["lane_identity_contract"][role]
-            argv = handoff_argv(root, trial_id, role, 600, python)
-            entries.append({
-                "trial_id": trial_id, "role": role,
-                "thread_id": task_name,
-                "canonical_task_path": f"/root/{task_name}",
-                "model": lane["model"], "reasoning": lane["reasoning"],
-                "argv": argv, "argv_sha256": base.digest(base.canonical(argv)),
-            })
+            for attempt in range(3):
+                task_name = (
+                    f"m09_{run_tag}_{trial_id.lower().replace('-', '_')}_{role}_a{attempt}"
+                )
+                lane = freeze["lane_identity_contract"][role]
+                argv = handoff_argv(root, trial_id, role, 600, python, attempt)
+                entries.append({
+                    "trial_id": trial_id, "role": role, "attempt": attempt,
+                    "thread_id": task_name,
+                    "canonical_task_path": f"/root/{task_name}",
+                    "model": lane["model"], "reasoning": lane["reasoning"],
+                    "argv": argv, "argv_sha256": base.digest(base.canonical(argv)),
+                })
     return {"schema_version": LANE_SCHEMA, "entries": entries}
 
 
@@ -168,19 +172,35 @@ def _contract(freeze: Mapping[str, Any], pools: Mapping[str, Any],
               manifests: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     installed, candidate_sha, adapter_sha = base._install_graph_find(root)
     release = ROOT / "plugins/graph-engineering/.codex-plugin/release-manifest.json"
+    installed_graph_previews = {}
+    for task in TASKS:
+        corpus_id = base.TASK_CORPORA[task]
+        corpus = freeze["corpora"][corpus_id]
+        source_manifest = base._load_manifest(ROOT / corpus["manifest"])
+        installed_graph_previews[task] = base.installed_graph_jev_preview(
+            prompt=base._question_prompt(task), lane=lane_root / corpus_id,
+            source_manifest=source_manifest,
+            installed=(installed, candidate_sha, adapter_sha),
+        )
     jev_requests = {}
     for repeat in REPEATS:
         for arm in ("B", "D"):
             route = freeze["arms"][arm]["route"]
             for task in TASKS:
                 trial_id = _trial_id(f"{arm}-{task}", repeat)
-                preview = pools[f"{route}:{task}"]["jev_preview"]
+                preview = (
+                    {
+                        "request_sha256": installed_graph_previews[task]["jev_request_sha256"],
+                        "request_bytes": installed_graph_previews[task]["jev_request_bytes"],
+                    }
+                    if arm == "D" else pools[f"{route}:{task}"]["jev_preview"]
+                )
                 jev_requests[trial_id] = {
                     "request_sha256": preview["request_sha256"],
                     "request_bytes": preview["request_bytes"],
                 }
     planned_bytes = sum(row["request_bytes"] for row in jev_requests.values())
-    if len(jev_requests) != JEV_CAP:
+    if len(jev_requests) != 16:
         raise StudyError("jev_request_count_invalid")
     return {
         "schema_version": SCHEMA, "study_id": STUDY_ID,
@@ -234,7 +254,8 @@ def _contract(freeze: Mapping[str, Any], pools: Mapping[str, Any],
             "final_context_byte_cap": base.FINAL_CONTEXT_BYTE_BUDGET,
             "oracle_source_append_enabled": False,
             "rubric_derived_answer_facets_enabled": False,
-            "zero_retry": True, "independent_answer_and_grader_lanes": True,
+            "retry_transient": True, "max_trial_attempts": 3,
+            "independent_answer_and_grader_lanes": True,
             "actual_selector_route_required": True,
         },
         "lanes": {
@@ -244,20 +265,19 @@ def _contract(freeze: Mapping[str, Any], pools: Mapping[str, Any],
         "jev": {
             "model": base.jev.DEFAULT_MODEL,
             "max_calls": JEV_CAP, "requests_by_trial": jev_requests,
+            "installed_graph_previews_by_task": installed_graph_previews,
             "request_set_sha256": base.digest(base.canonical(jev_requests)),
             "planned_request_bytes": planned_bytes,
         },
         "authority": {
             "planned_calls": dict(CALLS),
-            "previously_authorized_max_additional_jev_spend_usd": str(MAX_ADDITIONAL_USD),
-            "current_remaining_provider_balance_usd": None,
-            "provider_spend_ceiling_requires_parent_review": True,
             "codex_lane_monetary_cost_usd": None,
             "parent_review_required_before_dispatch": True,
         },
         "result_rules": {
-            "required_trial_count": 32, "one_answer_and_grader_per_trial": True,
-            "no_retry": True, "route_fallback_is_not_graph": True,
+            "required_trial_count": 32, "one_answer_and_grader_per_attempt": True,
+            "retry_only_transient_model_failures": True,
+            "scored_failure_is_final": True, "route_fallback_is_not_graph": True,
             "jev_configured_is_not_jev_executed": True,
             "missing_token_and_cost_are_unknown": True,
         },
@@ -293,8 +313,6 @@ def prepare(root: Path, lane_root: Path, pool_path: Path,
         "calls": CALLS,
         "planned_jev_request_bytes": contract["jev"]["planned_request_bytes"],
         "jev_monetary_cost_usd": None,
-        "previously_authorized_max_additional_jev_spend_usd": str(MAX_ADDITIONAL_USD),
-        "current_remaining_provider_balance_usd": None,
         "codex_lane_monetary_cost_usd": None,
         "status": "prepared_pending_parent_review",
     }
@@ -308,8 +326,7 @@ def load_frozen(root: Path) -> tuple[dict[str, Any], dict[str, Any],
     if (contract.get("schema_version") != SCHEMA
             or contract.get("study_id") != STUDY_ID
             or contract.get("authority", {}).get("planned_calls") != CALLS
-            or contract.get("authority", {}).get("previously_authorized_max_additional_jev_spend_usd")
-            != str(MAX_ADDITIONAL_USD)
+            or contract.get("policy", {}).get("retry_transient") is not True
             or contract.get("policy", {}).get("oracle_source_append_enabled") is not False
             or contract.get("policy", {}).get("rubric_derived_answer_facets_enabled") is not False
             or contract.get("jev", {}).get("max_calls") != JEV_CAP):
@@ -324,7 +341,7 @@ def load_frozen(root: Path) -> tuple[dict[str, Any], dict[str, Any],
     raw_manifest, manifest = read_canonical(root / "lane-manifest.json")
     entries = manifest.get("entries")
     if (manifest.get("schema_version") != LANE_SCHEMA
-            or type(entries) is not list or len(entries) != 64):
+            or type(entries) is not list or len(entries) != 192):
         raise StudyError("lane_manifest_invalid")
     python = Path(entries[0]["argv"][0])
     if base.canonical(manifest) != base.canonical(
@@ -338,7 +355,8 @@ def load_frozen(root: Path) -> tuple[dict[str, Any], dict[str, Any],
         manifests[f"R{repeat}"] = manifest
     for entry in entries:
         if bound_lane_identity(
-            root, entry["trial_id"], entry["role"], base.digest(raw_manifest)
+            root, entry["trial_id"], entry["role"], base.digest(raw_manifest),
+            entry["attempt"],
         ) != {key: entry[key] for key in (
             "trial_id", "role", "thread_id", "model", "reasoning"
         )}:
@@ -378,19 +396,29 @@ def _validate_receipt(receipt: Mapping[str, Any], trial_id: str,
             or identity.get("task_id") != registration["task_id"]
             or receipt.get("execution") != "observed"
             or receipt.get("budget") != {
-                "max_repairs": 0, "wall_limit_ns": 600_000_000_000
+                "max_repairs": 2, "wall_limit_ns": 4_200_000_000_000
             }
-            or type(attempts) is not list or len(attempts) != 1
+            or type(attempts) is not list or not 1 <= len(attempts) <= 3
             or receipt.get("study_binding_sha256") != _receipt_binding(
                 contract, registration, pool, rubric, contract["lanes"][f"R{repeat}"]
             )):
         raise StudyError(f"trial_receipt_invalid:{trial_id}")
-    attempt = attempts[0]
+    for earlier in attempts[:-1]:
+        if (earlier.get("terminal_reason") != "needs_repair"
+                or earlier.get("failure_stage") not in {"answer", "grader"}
+                or earlier.get("failure_reason") not in
+                TRANSIENT_MODEL_ERRORS | {"callback_timeout"}):
+            raise StudyError(f"trial_retry_invalid:{trial_id}")
+    attempt = attempts[-1]
+    for row in attempts:
+        row_calls = row.get("model_calls", [])
+        row_kinds = [call.get("kind") for call in row_calls] if type(row_calls) is list else []
+        if (row_kinds.count("answer") > 1 or row_kinds.count("grader") > 1
+                or row_kinds.count("jev") > (1 if registration["arm"] in {"B", "D"} else 0)):
+            raise StudyError(f"trial_calls_invalid:{trial_id}")
     calls = attempt.get("model_calls", [])
     kinds = [row.get("kind") for row in calls] if type(calls) is list else []
-    if (kinds.count("answer") > 1 or kinds.count("grader") > 1
-            or kinds.count("jev") > (1 if registration["arm"] in {"B", "D"} else 0)
-            or receipt.get("terminal_reason") == "passed"
+    if (receipt.get("terminal_reason") == "passed"
             and (kinds.count("answer") != 1 or kinds.count("grader") != 1)):
         raise StudyError(f"trial_calls_invalid:{trial_id}")
     if "answer" in kinds:
@@ -419,9 +447,9 @@ def _validate_receipt(receipt: Mapping[str, Any], trial_id: str,
 
 def _scored_complete(receipt: Mapping[str, Any]) -> bool:
     attempts = receipt.get("attempts")
-    if type(attempts) is not list or len(attempts) != 1:
+    if type(attempts) is not list or not 1 <= len(attempts) <= 3:
         return False
-    attempt = attempts[0]
+    attempt = attempts[-1]
     grade = attempt.get("grade")
     calls = attempt.get("model_calls", [])
     kinds = [row.get("kind") for row in calls] if type(calls) is list else []
@@ -433,6 +461,18 @@ def _scored_complete(receipt: Mapping[str, Any]) -> bool:
         and attempt.get("failure_stage") is None
         and attempt.get("failure_reason") is None
         and kinds.count("answer") == 1 and kinds.count("grader") == 1
+    )
+
+
+def _transient_exhausted(receipt: Mapping[str, Any]) -> bool:
+    attempts = receipt.get("attempts")
+    if type(attempts) is not list or len(attempts) != 3:
+        return False
+    final = attempts[-1]
+    return (
+        receipt.get("terminal_reason") in {"measurement_error", "callback_timeout"}
+        and final.get("failure_stage") in {"answer", "grader"}
+        and final.get("failure_reason") in TRANSIENT_MODEL_ERRORS | {"callback_timeout"}
     )
 
 
@@ -448,37 +488,57 @@ def _result(contract: Mapping[str, Any], freeze: Mapping[str, Any],
             pool = pools[registration["pool_id"]]
             rubric = rubrics["tasks"][registration["task_id"]]
             _validate_receipt(receipt, trial_id, contract, registration, pool, rubric)
-            attempt = receipt["attempts"][0]
+            attempts = receipt["attempts"]
+            attempt = attempts[-1]
             measurement = base._v3_trial_measurement(
                 {**registration, "trial_id": trial_id}, receipt,
             )
             observation = attempt.get("candidate_observation", {})
             jev = attempt.get("jev_observation", {})
+            all_calls = [call for row in attempts for call in row.get("model_calls", [])]
+            process_attempts = {
+                kind: max(
+                    sum(process.get("kind") == kind
+                        for row in attempts for process in row.get("host_processes", [])),
+                    sum(call.get("kind") == kind for call in all_calls),
+                ) for kind in ("answer", "grader")
+            }
             rows.append({
                 "trial_id": trial_id,
                 "corpus": pool["corpus"],
                 "task_id": registration["task_id"],
                 "arm": registration["arm"],
                 "passed": receipt["terminal_reason"] == "passed",
+                "first_attempt_passed": len(attempts) == 1 and receipt["terminal_reason"] == "passed",
+                "attempt_count": len(attempts),
                 "terminal_reason": receipt["terminal_reason"],
                 "wall_ns": measurement["user_visible_wall_ns"],
                 "answer_request_bytes": measurement["answer_request_bytes"],
                 "configured_route": pool["identity"]["route"],
                 "actual_route": observation.get("selection_route"),
+                "attempt_routes": [
+                    row.get("candidate_observation", {}).get("selection_route")
+                    for row in attempts
+                ],
                 "selection_reason": observation.get("selection_reason"),
                 "selector_direct_fallback": (
                     registration["arm"] in {"C", "D"}
                     and observation.get("selection_route") == "direct"
                 ),
                 "jev_configured": registration["arm"] in {"B", "D"},
-                "jev_attempted_calls": jev.get("attempted_calls", 0),
+                "jev_attempted_calls": sum(
+                    row.get("jev_observation", {}).get("attempted_calls", 0)
+                    for row in attempts
+                ),
                 "jev_status": jev.get("status"),
                 "jev_reason": jev.get("reason"),
                 "jev_reranked": jev.get("status") == "reranked",
                 "jev_source_revalidated": jev.get(
                     "jev_source_revalidated", jev.get("source_revalidated")
                 ),
-                "model_calls": attempt.get("model_calls", []),
+                "model_calls": all_calls,
+                "answer_process_attempts": process_attempts["answer"],
+                "grader_process_attempts": process_attempts["grader"],
                 "phase_measurements": measurement,
                 "receipt_sha256": base.digest(base.canonical(receipt)),
             })
@@ -492,23 +552,27 @@ def _result(contract: Mapping[str, Any], freeze: Mapping[str, Any],
                 call for row in selected for call in row["model_calls"]
                 if call.get("kind") == kind
             ]
+            attempted = sum(
+                row["jev_attempted_calls"] if kind == "jev"
+                else row[f"{kind}_process_attempts"] for row in selected
+            )
             fields = {}
             for field in ("input_tokens", "output_tokens", "cost_usd"):
                 values = [call.get(field) for call in calls]
                 fields[field] = {
                     "reported_calls": sum(value is not None for value in values),
-                    "missing_calls": sum(value is None for value in values),
+                    "missing_calls": attempted - sum(value is not None for value in values),
                     "total": (
                         str(sum(Decimal(str(value)) for value in values))
-                        if field == "cost_usd" and calls and all(
+                        if field == "cost_usd" and attempted and len(calls) == attempted and all(
                             value is not None for value in values
                         )
-                        else sum(values) if field != "cost_usd" and calls and all(
+                        else sum(values) if field != "cost_usd" and attempted and len(calls) == attempted and all(
                             type(value) is int for value in values
                         ) else None
                     ),
                 }
-            usage[kind] = {"calls": len(calls), **fields}
+            usage[kind] = {"calls": attempted, **fields}
         return usage
 
     by_corpus_arm = {}
@@ -524,7 +588,12 @@ def _result(contract: Mapping[str, Any], freeze: Mapping[str, Any],
             by_corpus_arm[f"{task}:{arm}"] = {
                 "corpus": selected[0]["corpus"],
                 "passes": sum(row["passed"] for row in selected),
+                "first_attempt_passes": sum(row["first_attempt_passed"] for row in selected),
                 "trials": len(selected),
+                "measurement_failures": sum(
+                    not row["passed"] and row["terminal_reason"] not in {"repair_budget_exhausted"}
+                    for row in selected
+                ),
                 "mean_wall_ns": sum(walls) / len(walls) if walls else None,
                 "mean_answer_request_bytes": (
                     sum(requests) / len(requests) if requests else None
@@ -537,20 +606,26 @@ def _result(contract: Mapping[str, Any], freeze: Mapping[str, Any],
                 "selector_direct_fallbacks": sum(
                     row["selector_direct_fallback"] for row in selected
                 ),
-                "jev_executions": sum(row["jev_attempted_calls"] == 1 for row in selected),
+                "jev_executions": sum(row["jev_attempted_calls"] for row in selected),
                 "jev_reranks": sum(row["jev_reranked"] for row in selected),
                 "jev_source_accepted": sum(
                     row["jev_source_revalidated"] is True for row in selected
                 ),
+                "answer_process_attempts": sum(row["answer_process_attempts"] for row in selected),
+                "grader_process_attempts": sum(row["grader_process_attempts"] for row in selected),
                 "model_usage": reported_usage(selected),
             }
     return {
         "schema_version": RESULT_SCHEMA,
         "study_id": STUDY_ID,
         "comparison_contract_sha256": base.digest(base.canonical(contract)),
-        "status": "closed",
+        "status": ("closed" if all(
+            row["terminal_reason"] in {"passed", "repair_budget_exhausted"}
+            for row in rows
+        ) else "partial"),
         "metric_definitions": {
-            "pass": "controller terminal_reason equals passed after one independent grade",
+            "pass": "controller terminal_reason equals passed after an independent grade; retries are included",
+            "first_attempt_pass": "passed with one trial attempt",
             "wall_ns": "controller user_visible_wall_ns for each complete trial",
             "answer_request_bytes": "serialized answer host request size, not model tokens",
             "actual_route": "installed ranked_context plan route, not configured arm",
@@ -562,13 +637,11 @@ def _result(contract: Mapping[str, Any], freeze: Mapping[str, Any],
     }
 
 
-def run(root: Path, approved_contract_sha: str, approved_max_usd: str) -> dict[str, Any]:
+def run(root: Path, approved_contract_sha: str) -> dict[str, Any]:
     contract, freeze, rubrics, pools, registrations, manifests = load_frozen(root)
     contract_sha = base.digest(base.canonical(contract))
-    approved_cap = Decimal(approved_max_usd)
-    if (approved_contract_sha != contract_sha
-            or approved_cap <= 0 or approved_cap > MAX_ADDITIONAL_USD):
-        raise StudyError("parent_contract_or_spend_approval_mismatch")
+    if approved_contract_sha != contract_sha:
+        raise StudyError("parent_contract_approval_mismatch")
     if "TYPESAFE_API_KEY" not in os.environ:
         raise StudyError("jev_credential_absent")
     bind_controller(root, controller_identity(ROOT))
@@ -589,16 +662,28 @@ def run(root: Path, approved_contract_sha: str, approved_max_usd: str) -> dict[s
     budget = LiveJevBudget(root, JEV_CAP)
     for trial_id in order:
         if trial_id in receipts:
-            if not _scored_complete(receipts[trial_id]):
+            if not _scored_complete(receipts[trial_id]) and not _transient_exhausted(receipts[trial_id]):
                 raise StudyError(f"prior_failed_trial_requires_new_manifest:{trial_id}")
             continue
         require_resumable(root, trial_id, set(receipts))
         base_id, repeat_label = trial_id.rsplit("-R", 1)
         registration = {**registrations[base_id], "trial_id": trial_id}
         pool = pools[registration["pool_id"]]
+        execution_pool = pool
+        if registration["arm"] == "D":
+            graph_preview = contract["jev"]["installed_graph_previews_by_task"][
+                registration["task_id"]
+            ]
+            execution_pool = {
+                **pool,
+                "jev_preview": {
+                    "request_sha256": graph_preview["jev_request_sha256"],
+                    "request_bytes": graph_preview["jev_request_bytes"],
+                },
+            }
         manifest = manifests[f"R{repeat_label}"]
         receipt = base.execute_trial(
-            freeze, registration, pool,
+            freeze, registration, execution_pool,
             rubrics["tasks"][registration["task_id"]],
             Path(contract["inputs"]["lane_root"]), root, manifest,
             contract["lanes"][f"R{repeat_label}"], execution="observed",
@@ -612,10 +697,9 @@ def run(root: Path, approved_contract_sha: str, approved_max_usd: str) -> dict[s
         )
         save_completed_trial(root / "completed", receipt)
         receipts[trial_id] = receipt
-        if not _scored_complete(receipt):
+        if not _scored_complete(receipt) and not _transient_exhausted(receipt):
             raise StudyError(f"trial_failed_inspect_before_new_manifest:{trial_id}")
     result = _result(contract, freeze, registrations, pools, rubrics, receipts)
-    result["parent_approved_provider_spend_ceiling_usd"] = str(approved_cap)
     _write_once(root / "result.json", result)
     return result
 
@@ -633,7 +717,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     live = commands.add_parser("run")
     live.add_argument("--run-root", type=Path, required=True)
     live.add_argument("--parent-approved-contract-sha256", required=True)
-    live.add_argument("--parent-approved-max-additional-usd", required=True)
     args = parser.parse_args(argv)
     try:
         root = args.run_root.resolve()
@@ -652,7 +735,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             result = run(
                 root, args.parent_approved_contract_sha256,
-                args.parent_approved_max_additional_usd,
             )
         print(json.dumps(result, sort_keys=True))
         return 0

@@ -90,6 +90,40 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(result['phases']['repair']['inclusive_union_ns'], 35)
         self.assertEqual(result['observed_active_execution_ns'], 70)  # Not 105 with repair double-counted.
 
+    def test_transient_model_error_retries_but_scored_failure_does_not(self):
+        self.trial = Trial(identity(), Budget(2, 1000), clock=self.clock,
+                           execution='fixture', retry_transient=True)
+        calls = []
+        def answer(t, request, number):
+            calls.append(number)
+            if number == 0:
+                raise MeasurementError('invalid_answer_output')
+            return Answer('supported answer')
+        result = self.execute(answer=answer)
+        self.assertEqual('passed', result['terminal_reason'])
+        self.assertEqual([0, 1], calls)
+        self.assertEqual('invalid_answer_output', result['attempts'][0]['failure_reason'])
+        self.assertEqual(2, len(result['attempts']))
+
+        self.clock = Clock()
+        self.trial = Trial(identity(), Budget(2, 1000), clock=self.clock,
+                           execution='fixture', retry_transient=True)
+        result = self.execute((False, True))
+        self.assertEqual('repair_budget_exhausted', result['terminal_reason'])
+        self.assertEqual(1, len(result['attempts']))
+
+        self.clock = Clock()
+        self.trial = Trial(identity(), Budget(2, 1000), clock=self.clock,
+                           execution='fixture', retry_transient=True)
+        def malformed_grade(t, output, number):
+            raise MeasurementError('invalid_grader_output')
+        result = self.execute(grader=malformed_grade)
+        self.assertEqual('measurement_error', result['terminal_reason'])
+        self.assertEqual(3, len(result['attempts']))
+        self.assertTrue(all(
+            row['failure_stage'] == 'grader' for row in result['attempts']
+        ))
+
     def test_phase_observed_in_only_one_repair_attempt_is_partial(self):
         def prep(t, n):
             if n == 0:

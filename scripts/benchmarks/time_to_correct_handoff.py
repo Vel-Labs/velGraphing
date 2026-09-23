@@ -292,35 +292,44 @@ def _execution_identity(
 
 
 def bound_lane_identity(
-    root: Path, trial_id: str, lane: str, manifest_sha256: str
+    root: Path, trial_id: str, lane: str, manifest_sha256: str, attempt: int = 0
 ) -> dict[str, str]:
     raw, manifest = read_canonical(root / "lane-manifest.json")
     entries = manifest.get("entries")
     if (
         not SHA256.fullmatch(manifest_sha256)
         or digest(raw) != manifest_sha256
-        or manifest.get("schema_version") != "velgraphing-v4-luna-lane-manifest-v2"
+        or manifest.get("schema_version") not in {
+            "velgraphing-v4-luna-lane-manifest-v2",
+            "velgraphing-v4-luna-lane-manifest-v3",
+        }
         or type(entries) is not list
+        or type(attempt) is not int or attempt < 0
     ):
         raise HandoffError("lane_manifest_identity_invalid")
+    retry_manifest = manifest["schema_version"].endswith("-v3")
     matches = [
         entry for entry in entries if type(entry) is dict
         and entry.get("trial_id") == trial_id and entry.get("role") == lane
+        and (entry.get("attempt") == attempt if retry_manifest else attempt == 0)
     ]
     if len(matches) != 1:
         raise HandoffError("lane_manifest_identity_invalid")
     entry = matches[0]
     command = entry.get("argv")
     if (
-        set(entry) != {
+        set(entry) != ({
             "trial_id", "role", "thread_id", "canonical_task_path", "model",
             "reasoning", "argv", "argv_sha256",
-        }
+        } | ({"attempt"} if retry_manifest else set()))
         or entry.get("canonical_task_path") != f"/root/{entry.get('thread_id', '')}"
         or type(command) is not list
         or not command
         or not all(type(argument) is str and argument for argument in command)
         or entry.get("argv_sha256") != digest(canonical(command))
+        or retry_manifest and (
+            type(entry.get("attempt")) is not int or entry["attempt"] != attempt
+        )
     ):
         raise HandoffError("lane_manifest_identity_invalid")
     return _execution_identity(
@@ -747,7 +756,7 @@ def capture_host_response(
             request_raw, request = read_canonical_at(directory, "request.json")
             validate_response_contract(value, request.get("response_contract"))
             expected_identity = bound_lane_identity(
-                root, trial_id, lane, lane_manifest_sha256
+                root, trial_id, lane, lane_manifest_sha256, attempt
             )
             supplied_identity = value.get("execution_identity")
             if (
@@ -930,7 +939,8 @@ def main(argv: list[str] | None = None) -> int:
             }))
         elif args.command == "attest":
             expected_identity = bound_lane_identity(
-                root, args.trial_id, args.lane, args.lane_manifest_sha256
+                root, args.trial_id, args.lane, args.lane_manifest_sha256,
+                args.attempt,
             )
             if expected_identity != _execution_identity(
                 args.trial_id, args.lane, args.thread_id, args.model, args.reasoning
@@ -959,7 +969,8 @@ def main(argv: list[str] | None = None) -> int:
                 ):
                     raise HandoffError("response_draft_path_invalid")
                 expected_identity = bound_lane_identity(
-                    root, args.trial_id, args.lane, args.lane_manifest_sha256
+                    root, args.trial_id, args.lane, args.lane_manifest_sha256,
+                    args.attempt,
                 )
                 if expected_identity != _execution_identity(
                     args.trial_id, args.lane, args.thread_id, args.model, args.reasoning

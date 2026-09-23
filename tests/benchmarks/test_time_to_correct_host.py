@@ -453,6 +453,41 @@ if "response_contract" in payload:''').replace(
             grader_identity,
         )
 
+    def test_transient_answer_retry_uses_fresh_bound_lane(self):
+        def lane(role, attempt):
+            return {
+                "model": "fixture-model" if role == "answer" else "fixture-grader",
+                "reasoning": "none", "role": role, "trial_id": "trial1",
+                "thread_id": f"{role}-thread-{attempt}",
+            }
+        answer_lanes = [
+            {"argv": [sys.executable, "-c", (
+                'import sys; sys.stdout.write("{}")' if attempt == 0
+                else identified_code("answer", lane("answer", attempt))
+            )], "identity": lane("answer", attempt)} for attempt in range(3)
+        ]
+        grader_lanes = [
+            {"argv": [sys.executable, "-c", identified_code("grader", lane("grader", attempt))],
+             "identity": lane("grader", attempt)} for attempt in range(3)
+        ]
+        trial = Trial(identity(), Budget(2, 10_000_000_000),
+                      execution="fixture", retry_transient=True)
+        result = run_process_trial(
+            trial, lambda *_: {"question": "frozen question", "evidence": []},
+            answer_argv=answer_lanes[0]["argv"], grader_argv=grader_lanes[0]["argv"],
+            cwd=self.cwd, answer_timeout_s=2, grader_timeout_s=2,
+            answer_response_contract=ANSWER_RESPONSE_CONTRACT,
+            grader_response_contract=GRADER_RESPONSE_CONTRACT,
+            answer_execution_identity=answer_lanes[0]["identity"],
+            grader_execution_identity=grader_lanes[0]["identity"],
+            answer_retry_lanes=answer_lanes, grader_retry_lanes=grader_lanes,
+        )
+        self.assertEqual("passed", result["terminal_reason"])
+        self.assertEqual(2, len(result["attempts"]))
+        self.assertEqual("invalid_answer_output", result["attempts"][0]["failure_reason"])
+        self.assertEqual(lane("answer", 1), result["attempts"][1]["answer_boundary"]["execution_identity"])
+        self.assertEqual(lane("grader", 1), result["attempts"][1]["grader_boundary"]["execution_identity"])
+
     def test_grader_maximum_must_match_frozen_required_facts(self):
         answer_identity = {
             "model": "fixture-model", "reasoning": "none", "role": "answer",
