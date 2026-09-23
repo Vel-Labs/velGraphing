@@ -286,8 +286,10 @@ def compose_answer_payload(trial: Trial, root: Path, packet: Mapping[str, Any],
         raise MeasurementError("answer_evidence_invalid")
     by_id = {candidate.get("id"): candidate for candidate in candidates
              if type(candidate) is dict}
-    if (len(by_id) != len(candidates) or len(order) != len(candidates)
-            or len(set(order)) != len(order) or set(order) != set(by_id)):
+    if (len(by_id) != len(candidates) or not order
+            or any(type(candidate_id) is not str for candidate_id in order)
+            or len(set(order)) != len(order)
+            or any(candidate_id not in by_id for candidate_id in order)):
         raise MeasurementError("answer_evidence_order_invalid")
     evidence = []
     total = 0

@@ -38,7 +38,7 @@ class PacketTests(unittest.TestCase):
         self.question = "How does cancel_task request cancellation?"
 
     def run_packet(self, arm: str, trial_id: str, *, route: str,
-                   navigation=None, reverse=False):
+                   navigation=None, reverse=False, selected_count=None):
         trial = Trial(identity(arm, trial_id), Budget(0, 1_000_000_000), execution="fixture")
         retained = {}
         def prepare(current, _):
@@ -57,6 +57,8 @@ class PacketTests(unittest.TestCase):
             selected = [row["id"] for row in packet["candidates"]]
             if reverse:
                 selected.reverse()
+            if selected_count is not None:
+                selected = selected[:selected_count]
             payload = compose_answer_payload(current, self.root, packet, selected)
             current.coverage(source_operations=True)
             retained.update(packet=packet, payload=payload)
@@ -153,6 +155,15 @@ class PacketTests(unittest.TestCase):
                              EVIDENCE_BUDGET_BYTES)
         self.assertEqual(result["attempts"][0]["candidate_observation"]["evidence_bytes"],
                          sum(row["byte_end"] - row["byte_start"] for row in candidates))
+
+    def test_answer_payload_accepts_selected_subset_in_order(self):
+        result, retained = self.run_packet(
+            "A", "A-subset", route="direct", selected_count=1,
+        )
+        expected = [retained["packet"]["candidates"][0]["id"]]
+        actual = [row["id"] for row in retained["payload"]["evidence"]]
+        self.assertEqual(actual, expected)
+        self.assertEqual(result["terminal_reason"], "passed")
 
     def test_graph_defer_and_fail_closed_are_rejected(self):
         for navigation in ({"route": "defer", "fail_closed": False, "hits": [], "evidence": []},
