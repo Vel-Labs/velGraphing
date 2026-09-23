@@ -727,6 +727,37 @@ class RankedContextSelectionTests(unittest.TestCase):
             "graph-ranked-context-plan-v1",
         )
 
+    def test_product_planner_falls_back_when_graph_displaces_direct_context(self) -> None:
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
+        relationship = replace(
+            candidates[2],
+            candidate_id="relationship-c2-from-required-c0",
+            relationship_parent_candidate_id="c0",
+        )
+        graph = graph_with_relationship_edge(
+            graph, snapshot, reader, candidates[0], relationship
+        )
+        planned = plan_ranked_context(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            direct_candidates=candidates,
+            # The relationship is placed before the Direct optional candidate.
+            graph_candidates=(candidates[0], relationship, *candidates[1:]),
+        )
+        direct = select(graph, tight, snapshot, reader, candidates)
+
+        self.assertEqual(planned.route, "direct")
+        self.assertEqual(
+            planned.reason, "graph_selection_would_displace_direct_baseline"
+        )
+        self.assertEqual(
+            planned.baseline.projection.selected_candidate_ids,
+            direct.projection.selected_candidate_ids,
+        )
+
     def test_plan_task_facets_are_optional_serialized_metadata(self) -> None:
         graph, snapshot, reader, candidates = fixture()
         baseline = plan_ranked_context(

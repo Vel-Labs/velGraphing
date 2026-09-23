@@ -478,6 +478,19 @@ def plan_ranked_context(
         else "direct_baseline_no_graph_relationship_gain"
     )
     candidates = graph_candidates if use_graph else direct_candidates
+    direct_baseline = None
+    if use_graph:
+        direct_baseline = select_ranked_context(
+            graph,
+            task,
+            snapshot,
+            reader,
+            query=query,
+            candidates=direct_candidates,
+            jev_observation=None,
+            jev_enabled=jev_enabled,
+            fallback_source_paths=fallback_source_paths,
+        )
     baseline = select_ranked_context(
         graph,
         task,
@@ -489,6 +502,36 @@ def plan_ranked_context(
         jev_enabled=jev_enabled,
         fallback_source_paths=fallback_source_paths,
     )
+    if use_graph and direct_baseline is not None and (
+        not direct_baseline.projection.fail_closed
+        and (
+            baseline.projection.fail_closed
+            or not {
+                (
+                    direct_by_id[candidate_id].source_path,
+                    direct_by_id[candidate_id].source_sha256,
+                    direct_by_id[candidate_id].byte_start,
+                    direct_by_id[candidate_id].byte_end,
+                )
+                for candidate_id in direct_baseline.projection.selected_candidate_ids
+            }.issubset({
+                (
+                    graph_by_id[candidate_id].source_path,
+                    graph_by_id[candidate_id].source_sha256,
+                    graph_by_id[candidate_id].byte_start,
+                    graph_by_id[candidate_id].byte_end,
+                )
+                for candidate_id in baseline.projection.selected_candidate_ids
+                if candidate_id in graph_by_id
+            })
+        )
+    ):
+        # Graph additions must not displace context that already fits the
+        # verified Direct budget. A Direct fallback is explicit in the plan.
+        route = "direct"
+        reason = "graph_selection_would_displace_direct_baseline"
+        candidates = direct_candidates
+        baseline = direct_baseline
     query_sha256 = jev_sha256(query.encode("utf-8"))
     context_fidelity = _context_fidelity_metadata(
         candidates,

@@ -105,6 +105,30 @@ map and returns one decision for each required fact.
 This study and its sealed result are `oracle_assisted_fallback_ttc`. The result
 can describe TTC only under this frozen oracle-assisted fallback contract. It
 cannot support Direct, Graph, Jev, or comparative retrieval-performance claims.
+This label applies to the sealed R2/R3 evidence. Its oracle source append is
+distinct from the Graph-enabled selector choosing a safe Direct route.
+
+## Fresh M09 repeated four-arm comparison
+
+The current M09 study uses the same four frozen policies across two independent
+repeats: A Direct/Jev off, B Direct/Jev on, C Graph enabled/Jev off, and D Graph
+enabled/Jev on. It runs 32 trials, with one answer and one independent grade per
+trial. B and D have up to 16 Jev calls total. There are no retries.
+
+This comparison does not use the private witness map to append source spans
+after selection. It uses the normal selected context and the same 16,384-byte
+final-context cap in all arms. A Graph-enabled arm may select the Direct route
+when the selector finds that safer. Record this selector fallback separately
+from Jev fallback and oracle source append. Do not count it as a Graph-selected
+result.
+
+The two repeat manifests, candidate package, source snapshots, public question
+set, Jev request set, answer and grader contracts, and result schema must be
+bound by one comparison contract before dispatch. The study is valid when all
+bound trials and telemetry are retained, even if the result is negative.
+Product adoption remains a separate decision. Report each task and arm. Mark
+unavailable token usage and provider cost as unknown. Do not estimate cost from
+request or context bytes.
 
 Historical and successor validation are separate commands. `validate` reports
 the historical scope. `validate-successor-overlay` reports the offline

@@ -12,9 +12,9 @@ Source candidate at creation: `331b13ba0499bffcdb2f2b4dd79124c2dd0853ed`
 
 Current milestone: `M09 — Multi-corpus evaluation`
 
-Current gate: regenerate and validate the path-bound M09 manifest, then obtain exact re-ack before R2
+Current gate: Parent review of the fresh R7 contract and opaque `TYPESAFE_API_KEY` injection to its controller process. R6 was not dispatchable: its custom repeat manifests did not match the native capture manifest path and schema, and the controller refused dispatch with `jev_credential_absent` before any R6 call or trial. Run S-01, D-01, L-01, and M-02 twice per arm. Use a 16 KiB final-context cap, fresh answer and grader lanes, up to 16 Jev calls, and zero retries. Disable oracle source append. Keep sealed R2, R3, and the earlier sealed Jev R7 diagnostic unchanged. The fresh R7 comparison uses GPT-6 Luna answers at medium reasoning because the historical GPT-5.6 Luna answer model is unavailable through the approved host-native lane tool.
 
-Next action: compare each returned canonical task path with the frozen manifest before accepting a lane response
+Next action: Parent selects an available answer-lane model for the fresh contract and confirms the current provider spend ceiling. Rebind both repeat manifests and the contract, then review 32 answer, 32 grader, and up to 16 Jev calls before dispatch. Measure the candidate as-is. Record actual Direct fallback for Graph-enabled arms and distinguish it from oracle source append. A negative or corpus-specific outcome can complete the study; it does not pass the separate product-adoption gate.
 
 ## Purpose
 
@@ -506,10 +506,15 @@ Corpus classes:
 
 Primary arms:
 
-- Direct with static context;
-- Graph with static context;
-- Direct with query-aware classification;
-- Graph with query-aware classification.
+| Arm | Retrieval policy | Jev |
+| --- | --- | --- |
+| A | Direct | Off |
+| B | Direct | On |
+| C | Graph enabled | Off |
+| D | Graph enabled | On |
+
+The current M09 scope includes all four arms. Use two independent repeats for
+each arm and task. Keep historical R2 and A/C-only R3 sealed and unchanged.
 
 Measures:
 
@@ -520,12 +525,40 @@ Measures:
 - retrieval, classification, and end-to-end accepted time;
 - calls, cost, fallback, graph reuse, and hook overhead.
 
-Acceptance:
+Study acceptance:
 
-- Repeated trials support the result.
+- The full four-arm matrix completes with two independent repeats for each arm and task.
+- Every trial has its bound answer, independent grader, actual selection route, final context bytes, fallback status, and Jev outcome.
+- Retrieval, answer, grading, and end-to-end time are recorded separately. Missing model usage and provider cost remain explicit.
+- No oracle source append supplies answer evidence. Ordinary selector Direct fallback remains allowed and is counted.
+- A valid negative or corpus-specific result completes the study and remains visible.
+
+Product adoption gate:
+
 - The candidate is non-inferior on critical correctness.
-- Any context or time improvement is measured end to end.
-- Negative or corpus-specific results remain visible.
+- Any claimed context or time improvement is measured end to end.
+- A benchmark regression blocks adoption, not the validity of the completed study.
+
+Source-semantic diagnostic (offline, 2026-09-22):
+
+| Task | Public ask mapped to source | Graph relation | Direct spans safe to displace |
+| --- | --- | --- | --- |
+| `L-01` | URL shortener `Intuition` `1773:3238`, `Read path at 100K QPS` `12737:14961`, and `Scaling and Failure Modes` `21707:23513`; scalability `Vertical vs horizontal scaling` `2651:4908` and `Stateless vs stateful services` `4908:6684` | Only observed edge is README to an unrelated style-guide heading | `README.md:81-108` and real-time objectives `10-real-time-communication.md:1336-1900` are outside both named chapters. Together they free only 591 excerpt bytes. The Direct context already has the relevant chapter spans. Direct/Graph candidate union is 23 spans and 38,991 raw span bytes, above the 32,768-byte candidate packet cap. |
+| `D-01` | Keep `benchmark_sorts.py:1177-1216` as the `merge_sort` import anchor. The public ask requests the next import and that target's behavior. | Verified `imports` edge from the immediately following `benchmark_sorts.py:1217-1256` import to `quick_sort.py:257-267`; target implementation candidate is `quick_sort.py:257-1299`. | Direct-selected implementations in `unknown_sort.py`, `iterative_merge_sort.py`, `merge_insertion_sort.py`, `adaptive_merge_sort.py`, and bubble-sort files do not lie on that source-local import chain. Direct/Graph union is 55 candidates and 15,639 raw span bytes, within the 64-candidate and 32,768-byte caps. |
+| `S-01` | The named path `quick_sort.py` and exact call map to its function body `253:1299`, which contains the base case and recursive partition. | The benchmark import edge exists, but the public ask does not request dependency traversal. | Other quicksort and bubble-sort implementations are outside the named implementation path. Keep the `quick_sort.py` function spans. |
+
+Design finding: the typed public `ordered-successor` operation, required `merge-sort` and `benchmark-sorts` identifiers, adjacent import spans, and parser-verified edge provide a deterministic D-01 replacement signal. The rule can preserve the import anchor and target while it drops optional candidates outside that chain. L-01 has no useful witnessed edge, so it should remain Direct; S-01 already has the named function. Do not replace spans by raw token overlap.
+
+Successor measurement gate:
+
+- Every arm must record the configured policy, the actual installed selection route and reason, and the final context. Graph-enabled C and D may safely fall back to Direct. Count that as a selector fallback, not as Graph-selected evidence.
+- Keep selector fallback separate from oracle source append. A selector fallback is product behavior. An oracle append adds hidden-witness source spans after selection. Disable oracle appends in the fresh four-arm comparison. Preserve R2/R3 and their `oracle_assisted_fallback_ttc` classification unchanged.
+- For each B/D trial, record whether Jev was configured, dispatched, accepted, reranked, source revalidated, or fell back. The full matrix has 32 trials, 64 answer/grader lane calls, and up to 16 Jev calls. Use two separate 16-trial rounds under one authority packet. Require fresh lanes, independent graders, and zero retries.
+- Keep claim scope to this four-arm policy comparison on the frozen tasks and snapshots. Report model tokens and provider cost only when the host/provider reports them. Mark missing values unknown; do not estimate them from context or request bytes.
+- The current installed CLI candidate `15d06fae…ce47e8` was exercised on public questions with a 16,384-byte final-context cap and no rubric facts. L-01 selected Direct at 15,917 bytes; D-01 selected Direct at 16,035 bytes; S-01 selected Direct at 16,344 bytes. In all three runs the top-level Graph retrieval mode was distinct from the actual Direct selection plan. D-01's selected spans omit the imported `sorts/quick_sort.py` target. These results support measuring safe fallback, not a Graph-selection win.
+- The installed CLI exposes `diagnostics.stage_ns`. A current D-01 CLI run recorded scan 6.43 ms, graph build 129.35 ms, initial graph-find 413.82 ms, ranked-context retrieval 623.36 ms, and selection 72.91 ms. The initial graph-find and ranked-context path each run retrieval. Keep these process-clock stages separate from controller phases.
+- R3 `candidate_observation.stage_ns` exists in 8/8 C trials, while top-level Graph build/load, retrieval, and source-capture phases are missing. Its descriptive means were scan 0.006 s, graph build 0.214 s, graph-find 2.425 s, ranked-context retrieval 3.644 s, and selection 0.738 s. Outer candidate discovery averaged A 0.03 s and C 7.13 s; answer generation averaged A 84.50 s and C 100.96 s; grading averaged A 47.51 s and C 49.12 s. These values do not attribute the full wall time or prove a performance cause.
+- Keep R3 classified as oracle-assisted fallback TTC. It does not support retrieval-performance claims because the oracle could append exact-source evidence before answering. Its null token and cost telemetry also remains null. The fresh comparison removes that source append but still measures ordinary selector Direct fallback.
 
 ### M10 — Audit, package, and release
 
@@ -591,7 +624,7 @@ receipts for Parent integration.
 | `W012` | `M06` | Parent plus Luna discovery and implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | provider-neutral instruction plan and structured skill metadata | complete | Pure caller-supplied plan, eight-skill advisory manifest, and 91-file package parity |
 | `W013` | `M07` | Parent plus Luna discovery and implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | source-bound read-only review packet and explicit consumer path | complete | Closed snapshot-bound packet; 46 focused tests and 93-file package parity passed |
 | `W014` | `M08` | Parent plus Luna discovery and implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | verified Codex and Orcastrata translation seams only | complete | Explicit Codex command seam and navigation-only Orcastrata intake verified; no lifecycle API exists |
-| `W015` | `M09` | Parent plus implementation task `01a0c955-ec89-7db3-9454-8f74e2f16f58` | frozen multi-corpus four-arm evaluation | active | R1 stopped before response capture because the launcher returned `/root/m09_r1_luna_answer_a_s_01`, while the manifest bound only `m09_r1_luna_answer_a_s_01`. Its answer was incomplete. No Jev/provider call ran. Successor approval is reset. The human approved a versioned path-binding change and one A-S-01 replacement; obtain a new exact re-ack before R2. |
+| `W015` | `M09` | Parent plus implementation task `01a0ca87-2846-7a73-9f09-606b3d1a595a` | sealed A/C diagnostic; fresh four-arm repeat evaluation in preparation | active | R3 completed 16 A/C trials with 0 retries, 0 Jev calls, and 0 provider calls; result: `.velgraphing-local/velgraphing-four-arm-study-v1/m09-ac-repeated-20260922-r3/run-result.json` (SHA-256 `f0ec62245629f9c48afb60056505065d35039f97ea40fbf11bddca2c6b9510b6`). A passed 5/8 (D 1/2, L 1/2, M 2/2, S 1/2); C passed 6/8 (D 2/2, L 0/2, M 2/2, S 2/2). Mean controller wall time was A 135.11 s and C 157.24 s. Mean answer-request size was A 15,557.8 B and C 15,142.8 B (2.7% lower for C); C was 22.13 s slower (16.4%). Model token and cost telemetry is unavailable. Both C-L trials received the same answer context and scored 3/6, omitting the URL shortener's high-read ratio and immutable mapping facts present in Direct's selected evidence. The result contract classifies this as oracle-assisted fallback TTC and prohibits direct/graph retrieval-performance claims. Post-guard installed CLI uses candidate `94317d6b…adaa4c`: L-01 falls back to Direct (`graph_selection_would_displace_direct_baseline`) at 16,356/16,384 bytes and retains URL shortener span `1773:3238`; the graph-only additions are unrelated README, style-guide, and video-conferencing spans. D-01 falls back to Direct at 16,275/16,384 bytes. Its useful graph-only `sorts/quick_sort.py` span is 1,046 bytes, so it cannot fit with all Direct-selected spans retained. This guard protects the Direct baseline but removes the earlier C D-01 win; neither fallback is a Graph result. A raw-token facet prototype (candidate `7da888c4…`) was rejected after installed CLI evidence: on L-01 it selected `STYLE_GUIDE.md:13399-15879` because of the public token `both`, while displacing Direct spans `00-url-shortener.md:12737-14961` and `00-scalability.md:2651-4908`. The prototype was reverted. Current source/package candidate `15d06fae…` passes 27 selection tests, the installed ranked-context CLI test, and 93-file package parity. Its L-01, D-01, and S-01 CLI plans all route Direct at 16,356, 16,275, and 16,256 bytes. No fresh answer/grader lane or Jev/provider call started. M09 remains active and R3 remains diagnostic, not accepted performance evidence. The public-question-to-source-span map remains diagnostic. Do not force Graph selection to improve the benchmark. Bind the current candidate as-is for the fresh four-arm comparison and record selector fallbacks. |
 
 ## Decision Registry
 
@@ -655,6 +688,13 @@ or accepted phase. Merge retries with identical inputs and failure signatures.
 | 2026-09-22 | `M09` | Revoke R1 approval after lane-identity mismatch | offline fail-closed reset | stopped; execution disabled | `freeze-successor --refresh` returned the successor contract to `pending_lane_manifest_and_final_user_reack`; `validate-successor-overlay` reports `execution_ready: false`, no lane manifest bound, and zero planned calls executed. No Jev/provider call ran. The pending request requires a matching lane-launch identity path or an explicit protocol change, then a new manifest and exact re-ack. |
 
 | 2026-09-22 | `M09` | Versioned canonical task-path binding and one A-S-01 replacement | 79 benchmark and handoff tests; successor and manifest validators | pending new exact re-ack | Lane manifest v2 `5e997dde...` binds each task path and task-name alias. Successor freeze `54d904a4...` and preflight `86825074...` validate. The contract records the excluded R1 answer-agent turn and permits exactly one A-S-01 replacement. Other lanes and Jev calls retain zero retries. No new lane or provider call occurred; 2 tests skipped because frozen corpus lanes are unavailable. |
+| 2026-09-22 | `M09` | R2 sealed 16-trial diagnostic run | sealed-result and successor-overlay validators | closed; M09 not accepted | Result SHA-256 `6fd5d79e30be686f1364cb82327f5412c9f2ed382e5edf40440d89bca291ae86`; 16 scheduled attempts, 0 retries, 6 controller passes, 5 below threshold, 5 measurement errors, and 0 completed Jev provider calls. This is the raw four-arm record. Per user scope, only A/C can inform the comparison; B/D are excluded and carry no useful evidence. The scoped A/C interpretation is recorded above, including the supplemental A-L-01 grade. All results remain single observations; token telemetry is unavailable. The result classification limits claims to oracle-assisted fallback TTC and prohibits retrieval-performance conclusions. Preserve the sealed result. |
+| 2026-09-22 | `M09` | R2 A-L-01 independent regrade and A/C-only interpretation | request, answer, sealed-result hashes; fresh grader contract | supplemental grade valid; result remains sealed | The original grader returned `critical_fact_decisions`, while the frozen contract required `required_fact_decisions`; controller capture correctly rejected it. A fresh independent GPT-6 Astra grader returned 6/6 with zero unsupported claims for the same answer (`answer_sha256` `0102a2b7…184c5`). The receipt is `.velgraphing-local/velgraphing-four-arm-study-v1/m09-r3-a-l-regrade.json`; its timing is outside R2. User scope excludes Jev arms B/D. A/C remain a one-observation diagnostic, not an accepted comparison. Same selected evidence was used in R7/R2 S and L pairs; R2 changed the answer instruction but omitted the accepted public-question facet checklist. Freeze a fresh A/C replication with public-only facets before any repeatability or regression claim. |
+| 2026-09-22 | `M09` | Successor answer-facet handoff repair | focused boundary test; offline successor refresh attempt | code repair verified; fresh binding unavailable | Successor runs now pass only rubric `asks` text to the answer lane as public task facets; grader-only required facts remain private. The focused test passed. `freeze-successor --refresh` stopped before writes with `lane_identity_invalid` because the pinned v4 lane directory is absent at the repository-local path. Restore that bound lane input, refresh implementation bindings, then prepare new A/C repetitions. No answer, grader, Jev, or provider call ran. |
+| 2026-09-22 | `M09` | Fresh no-oracle four-arm repeat preparation | installed CLI L-01/D-01/S-01, two repeat manifests, call-free contract validator, four focused runner tests | pending lane-model and current-spend authority | Installed package `15d06fae…ce47e8` selected Direct under the 16,384-byte cap on L-01 (15,917 bytes), D-01 (16,035 bytes), and S-01 (16,283 bytes). D-01 omitted the imported `sorts/quick_sort.py` target. R5 contract `b23b1418…3706f1` binds 32 trials, 64 fresh lane identities, 16 maximum Jev attempts, 1,516,260 planned Jev request bytes, exact package/source/rubric/pool hashes, and zero retries. It makes no byte-based spend estimate. The previous USD 0.9031 maximum is not a verified current balance after R7. The R5 answer model `gpt-5.6-luna` is absent from the approved collaboration dispatcher, so R5 is not dispatchable. No fresh answer, grader, or Jev call ran. Keep the historical successor contract bytes bound by R2/R3. |
+| 2026-09-22 | `M09` | Fresh R6 four-arm repeat contract and model binding | call-free contract validator, four focused runner tests, scoped diff | pending Parent contract and spend review | Parent selected GPT-6 Luna medium for all answer lanes and GPT-6 Astra high for all grader lanes. R6 contract SHA-256 `2c6407be1d9e30af160cc90bb2df8af6276461608b609e700ce612e8e55beca3` binds repeat manifests `504205cb8c5fff52e314ccfc94aee91c88ea342d74f14a35e34b03896ab60490` and `8398531acca900eff36cb48d2b2c62c20e002832c55c270878d203334e4e96d6`, 32 trials, 64 lane identities, 32 answer calls, 32 grader calls, up to 16 Jev calls, zero retries, 16,384-byte final context cap, and no oracle source append. R6 validation and four focused tests passed. Planned Jev request bytes are 1,516,260; this is not a monetary cost estimate. Current TypeSafe balance and Codex lane monetary cost remain unknown. No R6 answer, grader, or Jev call ran. Keep R2/R3/R7 sealed. Do not compare R6 directly to their GPT-5.6 Luna results. |
+| 2026-09-22 | `M09` | R6 Parent authority and controller dispatch preflight | exact approved hash and spend cap passed to controller | stopped before first trial | Parent approved R6 contract `2c6407be…e55beca3`, both manifest hashes, and USD 0.9031 as the absolute additional TypeSafe ceiling; Parent accepted unknown Codex lane monetary cost. The exact controller command exited 2 with `m09 study refused: jev_credential_absent`. A presence-only check confirmed `TYPESAFE_API_KEY` is absent from this implementation process. No R6 answer, grader, Jev, or network call ran, and no trial started. Native capture validation later found a separate R6 manifest defect; use the fresh R7 contract instead. Do not paste a key into messages or files. |
+| 2026-09-22 | `M09` | R7 native manifest integration repair | call-free prepare and all-lane capture-identity validation | fresh contract pending Parent review | The native handoff reads only `lane-manifest.json` with schema `velgraphing-v4-luna-lane-manifest-v2`; R6 had two custom repeat manifests, so its response capture would have failed. Fresh comparison R7 contract SHA-256 `fde51810416077877526b66d3c18bb8164548e756127279af96ad5dedd7926fd` binds one standard 64-entry manifest SHA-256 `69b8a858803a682f8c48353ecf6894a6ba793cda0b1835e60f7984626c6f7274` for both repeats. The validator resolved all 64 identities through the real native `bound_lane_identity` path. Four focused runner tests, compilation, and `git diff --check` passed. R6 remains untouched. No R7 trial, answer, grader, Jev, or network call ran. R7 needs Parent hash approval and opaque credential injection before dispatch; prior R6 hash approval does not transfer. |
 
 ## Handoff Protocol
 

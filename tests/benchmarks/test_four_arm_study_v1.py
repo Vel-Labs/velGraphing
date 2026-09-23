@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from contextlib import contextmanager, nullcontext, redirect_stderr, redirect_stdout
 from copy import deepcopy
 from decimal import Decimal
 from io import StringIO
@@ -15,6 +15,7 @@ import sys
 import subprocess
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -38,6 +39,84 @@ CUSTODY = ROOT / study.SUCCESSOR_WITNESS_CUSTODY
 
 
 class FourArmPublicBoundaryTests(unittest.TestCase):
+    def test_fresh_comparison_can_disable_oracle_append_without_changing_legacy_mode(self) -> None:
+        selection = SimpleNamespace(
+            route="ranked",
+            projection=SimpleNamespace(
+                fail_closed=False,
+                selected_candidate_ids=["selected"],
+                required_candidate_ids=["selected"],
+            ),
+            reason="verified_ranked_context_selected",
+            order_source="baseline",
+        )
+        discovery = {
+            "graph": object(), "task": SimpleNamespace(task_id="S-01"),
+            "snapshot": object(), "reader": object(), "packet": {"query": "q"},
+            "candidates": (),
+        }
+        trial = SimpleNamespace(
+            current={"candidate_observation": {}},
+            phase=lambda _name: nullcontext(),
+        )
+        contract = {"fixture": True}
+        custody = {"fixture": True}
+        with (
+            patch.object(study, "select_ranked_context", return_value=selection),
+            patch.object(study, "compose_answer_payload", return_value={"answer": "ok"}),
+            patch.object(study, "_apply_verified_fallback_measured") as append,
+        ):
+            payload = study._select_direct_payload(
+                trial, discovery, Path("."), None, None, contract, custody,
+                oracle_source_append_enabled=False,
+            )
+        append.assert_not_called()
+        self.assertEqual({"answer": "ok"}, payload)
+        self.assertEqual(
+            {"policy": "oracle_source_append_disabled", "fallback_invocations": 0},
+            trial.current["verified_fallback"],
+        )
+
+        legacy_trial = SimpleNamespace(
+            current={"candidate_observation": {}},
+            phase=lambda _name: nullcontext(),
+        )
+        with (
+            patch.object(study, "select_ranked_context", return_value=selection),
+            patch.object(study, "compose_answer_payload", return_value={"answer": "ok"}),
+            patch.object(
+                study, "_apply_verified_fallback_measured",
+                return_value=({"query": "q"}, ["selected"], {"fallback_invocations": 1}),
+            ) as append,
+        ):
+            study._select_direct_payload(
+                legacy_trial, discovery, Path("."), None, None, contract, custody,
+            )
+        append.assert_called_once()
+        self.assertEqual({"fallback_invocations": 1}, legacy_trial.current["verified_fallback"])
+
+    def test_graph_plan_fallback_is_rejected_only_for_strict_ac_route(self) -> None:
+        direct_plan = {"route": "direct"}
+        with self.assertRaisesRegex(
+            study.MeasurementError, "installed_graph_find_plan_fell_back_to_direct",
+        ):
+            study._require_graph_plan(direct_plan, required=True)
+        self.assertIsNone(study._require_graph_plan(direct_plan, required=False))
+        self.assertIsNone(
+            study._require_graph_plan({"route": "graph"}, required=True)
+        )
+
+    def test_successor_public_asks_become_answer_facets_only(self) -> None:
+        asks = [{"id": "traffic", "text": "Explain the public traffic assumptions."}]
+        self.assertEqual(study._public_task_facets({
+            "asks": asks,
+            "required_facts": [{"fact": "hidden grader-only fact"}],
+        }), ["Explain the public traffic assumptions."])
+        with self.assertRaisesRegex(
+            study.MeasurementError, "successor_public_asks_invalid",
+        ):
+            study._public_task_facets({"asks": [{"fact": "hidden"}]})
+
     def test_direct_candidate_binding_matches_real_jev_evaluator(self) -> None:
         local = ROOT / ".velgraphing-local"
         local.mkdir(mode=0o700, exist_ok=True)
@@ -189,7 +268,8 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 sys.executable, str(installed[0]), "--root", str(run_root),
                 "--prompt", "Find the fixture evidence.", "--maximum-results",
                 str(study.RETRIEVAL_NODE_LIMIT), "--byte-budget",
-                str(study.CANDIDATE_AGGREGATE_BYTE_BUDGET), "--ranked-context", "plan",
+                str(study.CANDIDATE_AGGREGATE_BYTE_BUDGET), "--context-byte-budget",
+                str(study.FINAL_CONTEXT_BYTE_BUDGET), "--ranked-context", "plan",
                 "--diagnostics",
             ])),
             "input_sha256": study.digest(b""),
@@ -255,6 +335,7 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             }
             answer_code = (
                 "import json,sys; x=json.load(sys.stdin); raw=json.dumps(x); "
+                "assert 'task_facets' not in x; "
                 "assert 'FRESH_GRAPH_MARKER' in raw; "
                 "assert 'PRECOMPUTED_POOL_LEAK_SENTINEL' not in raw; e=x['evidence']; "
                 "a=' '.join(r['excerpt'] for r in e)+' '+' '.join('['+r['id']+']' for r in e); "
@@ -311,6 +392,17 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                  "model": "fixture-grader", "reasoning": "none",
                  "argv": [sys.executable, "-c", grader_code]},
             ]}
+            successor_grader_code = grader_code.replace(
+                "'schema_version':'velgraphing-grader-output-v1',",
+                "'schema_version':'velgraphing-grader-output-v2',",
+            ).replace(
+                "'required_fact_score':s,'required_fact_maximum':n,",
+                "'required_fact_score':s,'required_fact_maximum':n,'required_fact_decisions':d,",
+            )
+            successor_manifest = deepcopy(process_manifest)
+            successor_manifest["entries"][1]["argv"] = [
+                sys.executable, "-c", successor_grader_code,
+            ]
             before = {"restricted_state_sha256": "c" * 64}
             with (
                 patch.object(study, "verify_lane", return_value=([], before)) as verify,
@@ -320,14 +412,23 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             ):
                 result = study.execute_trial(
                     freeze, registration, pool, rubric, lane_root, run_root,
-                    process_manifest, study.digest(study.canonical(process_manifest)),
+                    successor_manifest, study.digest(study.canonical(successor_manifest)),
                     execution="fixture",
+                    successor_ttc_contract={"fixture_contract": True},
+                    oracle_source_append_enabled=False,
+                    use_public_task_facets=False,
                 )
-                verify.assert_called_once()
-                revalidate.assert_called_once()
+                strict_result = study.execute_trial(
+                    freeze, registration, pool, rubric, lane_root, run_root,
+                    process_manifest, study.digest(study.canonical(process_manifest)),
+                    execution="fixture", require_graph_selection=True,
+                )
+                self.assertEqual(2, verify.call_count)
+                self.assertEqual(2, revalidate.call_count)
 
             self.assertEqual("passed", result["terminal_reason"], result["attempts"])
             attempt = result["attempts"][0]
+            self.assertEqual("direct", attempt["candidate_observation"]["selection_route"])
             process_kinds = [row["kind"] for row in attempt["host_processes"]]
             self.assertEqual(1, process_kinds.count("graph_find"))
             self.assertEqual(1, process_kinds.count("answer"))
@@ -337,6 +438,18 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             self.assertFalse(result["usage_complete"])
             self.assertGreater(len(attempt["source_operations"]), 0)
             self.assertEqual("installed_graph_find", attempt["candidate_observation"]["route"])
+            strict_attempt = strict_result["attempts"][0]
+            self.assertNotEqual("passed", strict_result["terminal_reason"])
+            self.assertEqual(
+                "direct", strict_attempt["candidate_observation"]["selection_route"]
+            )
+            self.assertEqual(
+                "fallback_before_answer",
+                strict_attempt["candidate_observation"]["route_disposition"],
+            )
+            strict_kinds = [row["kind"] for row in strict_attempt["host_processes"]]
+            self.assertEqual(["graph_find"], strict_kinds)
+            self.assertTrue(attempt["candidate_observation"]["selection_reason"])
             self.assertEqual("observed", result["phases"]["candidate_discovery"]["status"])
             self.assertEqual("observed", result["phases"]["context_composition"]["status"])
             self.assertEqual("missing", result["phases"]["cold_graph_build"]["status"])
@@ -364,6 +477,7 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 "alpha_evidence_00",
                 "--maximum-results", str(study.RETRIEVAL_NODE_LIMIT), "--byte-budget",
                 str(study.CANDIDATE_AGGREGATE_BYTE_BUDGET),
+                "--context-byte-budget", str(study.FINAL_CONTEXT_BYTE_BUDGET),
                 "--ranked-context", "preview", "--diagnostics",
             ]
             preview_env = {

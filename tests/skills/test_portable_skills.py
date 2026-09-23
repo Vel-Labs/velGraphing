@@ -373,6 +373,7 @@ class PortableSkillTests(unittest.TestCase):
                 mode: str | None,
                 response: Path | None = None,
                 prompt: str = "find alpha evidence implementation behavior",
+                context_budget: int | None = None,
             ) -> dict[str, object]:
                 command = [
                     sys.executable,
@@ -386,6 +387,8 @@ class PortableSkillTests(unittest.TestCase):
                     "--byte-budget",
                     "1600",
                 ]
+                if context_budget is not None:
+                    command.extend(("--context-byte-budget", str(context_budget)))
                 if mode is not None:
                     command.extend(("--ranked-context", mode))
                 if response is not None:
@@ -401,6 +404,7 @@ class PortableSkillTests(unittest.TestCase):
 
             default = run(None)
             planned = run("plan")
+            bounded = run("plan", context_budget=1200)
             short_planned = run("plan", prompt="alpha_evidence_0")
             previewed = run("preview")
             preview = previewed["ranked_context"]["jev_preview"]
@@ -448,6 +452,19 @@ class PortableSkillTests(unittest.TestCase):
         self.assertFalse(planned["ranked_context"]["network_called"])
         self.assertIsNone(planned["ranked_context"]["jev_observation"])
         self.assertGreater(planned["ranked_context"]["plan"]["candidate_count"], 1)
+        self.assertEqual(
+            planned["ranked_context"]["plan"]["candidate_count"],
+            bounded["ranked_context"]["plan"]["candidate_count"],
+        )
+        self.assertLessEqual(
+            bounded["ranked_context"]["selection"]["serialized_byte_count"], 1200
+        )
+        bounded_context = bounded["ranked_context"]["selection"]["context"]
+        self.assertTrue(
+            set(bounded_context["required_candidate_ids"]).issubset(
+                bounded_context["selected_candidate_ids"]
+            )
+        )
         short_context = short_planned["ranked_context"]["selection"]["context"]
         self.assertTrue(short_context["required_candidate_ids"])
         self.assertTrue(

@@ -446,6 +446,7 @@ def _ranked_context(
     jev_mode: str,
     jev_model: str,
     jev_timeout: float,
+    context_byte_budget: int | None,
     jev_response: str | None,
     allow_network: bool,
     approved_request_sha256: str | None,
@@ -486,6 +487,7 @@ def _ranked_context(
     selection_started = time.perf_counter_ns()
     reader.operation_stage = "selection"
     try:
+        public_task_facets = tuple(sorted({facet.value for facet in facets.facets}))
         direct_candidates = ranked_candidates_from_retrieval(
             graph,
             task,
@@ -506,15 +508,20 @@ def _ranked_context(
             maximum_candidate_bytes=jev.MAX_EXCERPTS_BYTES,
             maximum_unit_bytes=jev.MAX_EXCERPT_BYTES,
         )
+        selection_task = (
+            replace(task, byte_budget=context_byte_budget)
+            if context_byte_budget is not None else task
+        )
         plan = plan_ranked_context(
             graph,
-            task,
+            selection_task,
             snapshot,
             reader,
             query=prompt,
             direct_candidates=direct_candidates,
             graph_candidates=graph_candidates,
             jev_enabled=mode != "plan",
+            task_facets=public_task_facets,
         )
     except (TypeError, ValueError, jev.JevError) as error:
         return _ranked_fallback(mode, str(error))
@@ -562,7 +569,7 @@ def _ranked_context(
     )
     selected = select_ranked_context(
         graph,
-        task,
+        selection_task,
         snapshot,
         reader,
         query=prompt,
@@ -593,6 +600,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--max-total-bytes", type=lambda value: _positive_bounded(value, "--max-total-bytes", HARD_MAX_TOTAL_BYTES), default=DEFAULT_MAX_TOTAL_BYTES)
     parser.add_argument("--maximum-results", type=lambda value: _positive_bounded(value, "--maximum-results", 200), default=6)
     parser.add_argument("--byte-budget", type=lambda value: _positive_bounded(value, "--byte-budget", HARD_MAX_TOTAL_BYTES), default=32768)
+    parser.add_argument("--context-byte-budget", type=lambda value: _positive_bounded(value, "--context-byte-budget", HARD_MAX_TOTAL_BYTES))
     parser.add_argument("--ranked-context", choices=("plan", "preview", "replay", "evaluate"))
     parser.add_argument("--jev-mode", choices=("shadow", "rerank"), default="rerank")
     parser.add_argument("--jev-model", default=jev.DEFAULT_MODEL)
@@ -670,6 +678,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     jev_mode=arguments.jev_mode,
                     jev_model=arguments.jev_model,
                     jev_timeout=arguments.jev_timeout,
+                    context_byte_budget=arguments.context_byte_budget,
                     jev_response=arguments.jev_response,
                     allow_network=arguments.allow_network,
                     approved_request_sha256=arguments.approve_request_sha256,

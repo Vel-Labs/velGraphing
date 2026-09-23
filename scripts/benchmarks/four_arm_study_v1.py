@@ -448,6 +448,11 @@ def _record_graph_find_process(
     })
 
 
+def _require_graph_plan(plan: Mapping[str, Any], *, required: bool) -> None:
+    if required and plan.get("route") != "graph":
+        raise MeasurementError("installed_graph_find_plan_fell_back_to_direct")
+
+
 def _installed_graph_payload(
     trial: Trial, *, task_id: str, prompt: str, lane: Path,
     source_manifest: Mapping[str, Any], installed: tuple[Path, str, str],
@@ -456,6 +461,7 @@ def _installed_graph_payload(
     approved_request_sha256: str | None = None,
     live_request_sha256: str | None = None,
     live_request_bytes: int | None = None,
+    require_graph_selection: bool = False,
 ) -> dict[str, Any]:
     adapter, candidate_sha256, adapter_sha256 = installed
     replay_dir = None
@@ -469,6 +475,7 @@ def _installed_graph_payload(
         sys.executable, str(adapter), "--root", str(lane), "--prompt", prompt,
         "--maximum-results", str(RETRIEVAL_NODE_LIMIT), "--byte-budget",
         str(CANDIDATE_AGGREGATE_BYTE_BUDGET),
+        "--context-byte-budget", str(FINAL_CONTEXT_BYTE_BUDGET),
     ]
     if replay_envelope is not None:
         if (
@@ -565,6 +572,8 @@ def _installed_graph_payload(
         or context.get("candidate_set_sha256") != selection.get("candidate_set_sha256")
         or context.get("source_snapshot_sha256") != expected_snapshot
         or diagnostics.get("source_snapshot_sha256") != expected_snapshot
+        or plan.get("route") not in {"direct", "graph"}
+        or type(plan.get("reason")) is not str or not plan["reason"]
         or type(identity) is not dict
         or identity.get("candidate_sha256") != candidate_sha256
         or identity.get("adapter_sha256") != adapter_sha256
@@ -795,6 +804,24 @@ def _installed_graph_payload(
         candidate_set_sha256=selection["candidate_set_sha256"],
         graph_artifact_sha256=candidate_sha256,
     )
+    if require_graph_selection and plan["route"] != "graph":
+        trial.current["candidate_observation"] = {
+            "route": "installed_graph_find",
+            "selection_route": plan["route"],
+            "selection_reason": plan["reason"],
+            "candidate_set_sha256": selection["candidate_set_sha256"],
+            "candidate_count": plan.get("candidate_count"),
+            "source_snapshot_sha256": expected_snapshot,
+            "runtime_identity": identity,
+            "stage_clock": {
+                "name": "perf_counter_ns",
+                "domain": "installed_graph_find_process",
+            },
+            "stage_ns": stages,
+            "source_read_count": len(operations),
+            "route_disposition": "fallback_before_answer",
+        }
+    _require_graph_plan(plan, required=require_graph_selection)
     evidence = []
     with trial.phase("context_composition"):
         for span in spans:
@@ -806,6 +833,8 @@ def _installed_graph_payload(
             })
     trial.current["candidate_observation"] = {
         "route": "installed_graph_find", "task_id": task_id,
+        "selection_route": plan["route"],
+        "selection_reason": plan["reason"],
         "candidate_set_sha256": selection["candidate_set_sha256"],
         "candidate_count": plan.get("candidate_count"),
         "selected_candidate_ids": selected_ids,
@@ -3116,6 +3145,17 @@ def _question_prompt(task_id: str) -> str:
     return next(row["prompt"] for row in questions["questions"] if row["id"] == task_id)
 
 
+def _public_task_facets(rubric: Mapping[str, Any]) -> list[str]:
+    asks = rubric.get("asks")
+    if (
+        type(asks) is not list or not asks
+        or any(type(row) is not dict or type(row.get("text")) is not str or not row["text"]
+               for row in asks)
+    ):
+        raise MeasurementError("successor_public_asks_invalid")
+    return [row["text"] for row in asks]
+
+
 def _discover_direct(trial: Trial, task_id: str, prompt: str, lane: Path,
                      manifest: Mapping[str, Any]) -> dict[str, Any]:
     read_number = 0
@@ -3195,7 +3235,8 @@ def _discover_direct(trial: Trial, task_id: str, prompt: str, lane: Path,
     candidate_set_sha256 = jev.sha256(jev.canonical(packet["candidates"]))
     trial.bind(candidate_set_sha256=candidate_set_sha256)
     trial.current["candidate_observation"] = {
-        "route": "direct", "candidate_set_sha256": candidate_set_sha256,
+        "route": "direct", "selection_route": "direct",
+        "candidate_set_sha256": candidate_set_sha256,
         "candidate_count": len(candidates),
         "baseline_order_sha256": digest(canonical([
             row["id"] for row in packet["candidates"]
@@ -3216,6 +3257,7 @@ def _select_direct_payload(
     observation: Mapping[str, Any] | None, approved_request_sha256: str | None,
     successor_ttc_contract: Mapping[str, Any] | None = None,
     successor_witness_custody: Mapping[str, Any] | None = None,
+    oracle_source_append_enabled: bool = True,
 ) -> dict[str, Any]:
     with trial.phase("source_capture"):
         selected = select_ranked_context(
@@ -3238,13 +3280,19 @@ def _select_direct_payload(
     packet = discovery["packet"]
     order = list(selected.projection.selected_candidate_ids)
     if successor_ttc_contract is not None:
-        if successor_witness_custody is None:
-            raise MeasurementError("source_witness_custody_missing")
-        packet, order, receipt = _apply_verified_fallback_measured(
-            trial, discovery["task"].task_id, packet, order,
-            successor_ttc_contract, successor_witness_custody,
-        )
-        trial.current["verified_fallback"] = receipt
+        if oracle_source_append_enabled:
+            if successor_witness_custody is None:
+                raise MeasurementError("source_witness_custody_missing")
+            packet, order, receipt = _apply_verified_fallback_measured(
+                trial, discovery["task"].task_id, packet, order,
+                successor_ttc_contract, successor_witness_custody,
+            )
+            trial.current["verified_fallback"] = receipt
+        else:
+            trial.current["verified_fallback"] = {
+                "policy": "oracle_source_append_disabled",
+                "fallback_invocations": 0,
+            }
     return compose_answer_payload(
         trial, lane, packet, order,
     )
@@ -3260,7 +3308,9 @@ def _selected_payload(trial: Trial, pool: Mapping[str, Any], lane: Path,
                       replay_envelope: Mapping[str, Any] | None = None,
                       live_request_sha256: str | None = None,
                       live_request_bytes: int | None = None,
-                      run_root: Path | None = None) -> dict[str, Any]:
+                      run_root: Path | None = None,
+                      require_graph_selection: bool = False,
+                      oracle_source_append_enabled: bool = True) -> dict[str, Any]:
     route = pool["identity"]["route"]
     if route == "graph":
         if observation is not None or installed is None:
@@ -3273,12 +3323,14 @@ def _selected_payload(trial: Trial, pool: Mapping[str, Any], lane: Path,
             approved_request_sha256=approved_request_sha256,
             live_request_sha256=live_request_sha256,
             live_request_bytes=live_request_bytes,
+            require_graph_selection=require_graph_selection,
         )
     if direct_discovery is None:
         raise MeasurementError("direct_discovery_missing")
     return _select_direct_payload(
         trial, direct_discovery, lane, observation, approved_request_sha256,
         successor_ttc_contract, successor_witness_custody,
+        oracle_source_append_enabled,
     )
 
 
@@ -3311,7 +3363,10 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
                   execution: str, budget: LiveJevBudget | None = None,
                   replay: Mapping[str, Any] | None = None,
                   successor_ttc_contract: Mapping[str, Any] | None = None,
-                  successor_witness_custody: Mapping[str, Any] | None = None) -> dict[str, Any]:
+                  successor_witness_custody: Mapping[str, Any] | None = None,
+                  require_graph_selection: bool = False,
+                  oracle_source_append_enabled: bool = True,
+                  use_public_task_facets: bool = True) -> dict[str, Any]:
     corpus_id = pool["corpus"]
     corpus = _corpus_binding(corpus_id, freeze)
     lane = lane_root / corpus_id
@@ -3405,7 +3460,12 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
                                     replay_envelope=replay if graph_jev_replay else None,
                                     live_request_sha256=approved if graph_jev_live else None,
                                     live_request_bytes=live_request_bytes,
-                                    run_root=run_root)
+                                    run_root=run_root,
+                                    require_graph_selection=require_graph_selection,
+                                    oracle_source_append_enabled=oracle_source_append_enabled)
+        if successor_ttc_contract is not None and use_public_task_facets:
+            # Only mirror the public question's asks; required-fact rubric text stays grader-only.
+            payload["task_facets"] = _public_task_facets(rubric)
         if graph_jev_live:
             if reserved_receipt is None:
                 raise MeasurementError("jev_call_ledger_invalid")
@@ -3444,6 +3504,10 @@ def execute_trial(freeze: Mapping[str, Any], registration: Mapping[str, Any],
     }
     if successor_ttc_contract is not None:
         study_binding["successor_ttc_contract"] = digest(canonical(successor_ttc_contract))
+    if not oracle_source_append_enabled:
+        study_binding["oracle_source_append_enabled"] = False
+    if not use_public_task_facets:
+        study_binding["use_public_task_facets"] = False
     result["study_binding_sha256"] = digest(canonical(study_binding))
     if len(result["attempts"]) != 1:
         raise MeasurementError("study_retry_forbidden")
