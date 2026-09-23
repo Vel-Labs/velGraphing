@@ -17,7 +17,7 @@ import m09_four_arm_repeated_v1 as study  # noqa: E402
 class M09FourArmContractTests(unittest.TestCase):
     def test_two_manifests_bind_64_distinct_lane_identities(self) -> None:
         freeze = json.loads((study.BENCHMARK / "freeze.json").read_text())
-        root = ROOT / ".velgraphing-local/m09-manifest-test"
+        root = ROOT / ".velgraphing-local/m09-four-arm-repeated-20260923-r9"
         first = study._manifest(study._study_freeze(freeze), root, 1,
                                 Path(sys.executable))
         second = study._manifest(study._study_freeze(freeze), root, 2,
@@ -38,6 +38,10 @@ class M09FourArmContractTests(unittest.TestCase):
             row["canonical_task_path"] == f"/root/{row['thread_id']}"
             for row in entries
         ))
+        self.assertTrue(all(row["thread_id"].startswith("m09_r9_") for row in entries))
+        with self.assertRaisesRegex(study.StudyError, "run_tag_invalid"):
+            study._manifest(study._study_freeze(freeze), root.parent / "invalid", 1,
+                            Path(sys.executable))
 
     def test_answer_receipt_requires_actual_route_and_real_jev_call(self) -> None:
         contract = {"lanes": {"R1": "a" * 64}}

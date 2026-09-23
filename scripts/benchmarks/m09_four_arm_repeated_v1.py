@@ -8,6 +8,7 @@ from decimal import Decimal
 import json
 import os
 from pathlib import Path
+import re
 from typing import Any, Mapping, Sequence
 
 import four_arm_study_v1 as base
@@ -81,10 +82,13 @@ def _study_freeze(historical: Mapping[str, Any]) -> dict[str, Any]:
 
 def _manifest(freeze: Mapping[str, Any], root: Path, repeat: int,
               python: Path) -> dict[str, Any]:
+    run_tag = root.name.rsplit("-", 1)[-1]
+    if re.fullmatch(r"r[1-9][0-9]*", run_tag) is None:
+        raise StudyError("run_tag_invalid")
     entries = []
     for trial_id in _round_ids(freeze, repeat):
         for role in ("answer", "grader"):
-            task_name = f"m09_r7_{trial_id.lower().replace('-', '_')}_{role}"
+            task_name = f"m09_{run_tag}_{trial_id.lower().replace('-', '_')}_{role}"
             lane = freeze["lane_identity_contract"][role]
             argv = handoff_argv(root, trial_id, role, 600, python)
             entries.append({
