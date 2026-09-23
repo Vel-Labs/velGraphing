@@ -183,6 +183,9 @@ def _contract(freeze: Mapping[str, Any], pools: Mapping[str, Any],
         "candidate": {
             "controller_sha256": _sha(ROOT / "scripts/benchmarks/four_arm_study_v1.py"),
             "runner_sha256": _sha(Path(__file__)),
+            "packet_builder_sha256": _sha(
+                ROOT / "scripts/benchmarks/time_to_correct_packet.py"
+            ),
             "host_sha256": _sha(ROOT / "scripts/benchmarks/time_to_correct_host.py"),
             "jev_adapter_sha256": _sha(ROOT / "scripts/benchmarks/time_to_correct_jev.py"),
             "jev_core_sha256": _sha(ROOT / "packages/core/jev.py"),
