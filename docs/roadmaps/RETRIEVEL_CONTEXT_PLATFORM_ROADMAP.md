@@ -6,15 +6,15 @@ Roadmap owner: Parent/PM
 
 Created: 2026-09-22
 
-Last updated: 2026-09-22
+Last updated: 2026-09-23
 
 Source candidate at creation: `331b13ba0499bffcdb2f2b4dd79124c2dd0853ed`
 
 Current milestone: `M09 — Multi-corpus evaluation`
 
-Current gate: Validate the R9 D-D-01-R1 repair and bounded retry runner, then freeze R10. R9 is partial diagnostic evidence. Run S-01, D-01, L-01, and M-02 twice per arm. Use a 16 KiB final-context cap, fresh answer and grader lanes, and no oracle source append. Provider billing is not a testing gate. The next contract must declare base and worst-case call counts before dispatch. Keep sealed R2, R3, R7, R8, and R9 unchanged. GPT-6 Luna medium is the answer model because the historical GPT-5.6 Luna answer model is unavailable through the approved host-native lane tool.
+Current gate: Parent review of the completed R13 four-arm policy study. The 32 bound trials finished under a 16 KiB final-context cap. Every Graph-configured trial selected Direct at runtime, so R13 cannot establish Graph-route quality or speed. Jev executed and passed source revalidation in all 16 configured trials. R2/R3 and later stopped attempts remain separate diagnostic evidence. Do not claim product adoption from R13.
 
-Next action: Review the installed D-01 canary and retry custody, then freeze a fresh four-arm contract from the clean candidate. R10 was a call-free draft and became stale after source changes; do not dispatch it. Measure the candidate as-is. Record actual Direct fallback for Graph-enabled arms and distinguish it from oracle source append. A negative or corpus-specific outcome can complete the study; it does not pass the separate product-adoption gate.
+Next action: Review the R13 receipt and decide whether M09 closes as a negative Graph-policy result or needs a separately scoped Graph-route experiment. The selector preserved Direct context in D-01 and L-01 because Graph selection would displace it; S-01 and M-02 had no useful relationship gain. Do not weaken that guard to force a benchmark win. Investigate D-01 and L-01 retrieval and answer omissions as product failures.
 
 ## Purpose
 
@@ -704,6 +704,35 @@ or accepted phase. Merge retries with identical inputs and failure signatures.
 | 2026-09-23 | `M09` | R9 stopped at D-D-01-R1 | seven preserved receipts and four Jev ledger reservations | partial diagnostic; M09 active | Commit `3e9c708` made the tracked checkout clean; the same frozen R9 contract then ran under one Parent dispatch owner. Six trials completed: A/B/C/D S-01 R1 all passed, while B/C D-01 R1 scored 1/3 and failed. C and D S-01, and C D-01 all selected the Direct route through `installed_graph_find`; these are Direct fallbacks, not Graph results. B S-01, D S-01, and B D-01 each made one real Jev call and reranked with source revalidation. B D-01's selected context omitted the import that identifies `quick_sort` after `merge_sort`, and the answer named the wrong target. C D-01 also omitted that import and named `unknown_sort.merge_sort`; these are retrieval/answer failures, not harness passes. D D-01 stopped before an answer request with `installed_graph_find_jev_binding_mismatch` during candidate discovery. Its Jev ledger entry is `reserved_unknown_if_consumed`, so a provider call cannot be asserted or excluded. The installed subprocess exited 0, but only its stdout hash was retained; the exact mismatched field is unavailable. No D D-01 answer or grader call occurred. Preserve R9; do not resume or retry it. Trace the installed Graph/Jev output and validation predicate without assuming a harness or product fault, then bind a fresh candidate and manifest only if the diagnosis supports a new hypothesis. |
 | 2026-09-23 | `M09` | Bounded retry and measurement rule review | R2/R3 and R7-R9 failure classification; runner contract inspection; scoped diff | policy updated | The rule permits up to three full trial attempts after transient answer or grader call failure. It preserves every attempt and does not retry scored failures, valid Jev fallback, source mismatch, identity mismatch, or execution-custody failure. The next contract prebinds fresh retry lane identities and enforces base and worst-case call counts. Historical R9 remains zero retry and sealed. Provider billing is not a testing gate. |
 | 2026-09-23 | `M09` | Installed Jev binding repair and bounded retry candidate | installed CLI D-01 live canary, S/D/L/M previews, replayed controller validator, 180 focused and consumer tests | source candidate proved on the failing installed path; full matrix pending | R9 bound D-01 to Graph-pool Jev request `708b…` (110,662 B), while installed selection chose Direct fallback and previewed `7e0b…` (109,650 B). The call-free preview now binds that actual request. A separate installed D-01 canary made one TypeSafe call and returned Direct fallback, Jev reranked, source revalidated, 16,371/16,384 final serialized context bytes, 33,507 input and 1,018 output tokens; provider cost was unavailable. Its output SHA-256 is `e3dd94a63ced557212e8f831d2861889e2703b757242e8c5f6b4ddabc176700d`. Replaying that output through the controller validator passed without another provider call. The retry candidate uses three full trial attempts only for transient answer/grader errors, prebinds 192 fresh lane identities, keeps all attempts, and removes the billing gate; base calls are 32 answer, 32 grader, and up to 16 Jev, with worst-case 96/96/48. The call-free R10 draft contract `a4011990…` validated before later source edits and is now stale; do not dispatch it. The focused M09 and shared TTC tests passed (180 total, one skipped). The broad benchmark suite produced 27 errors and one failure because the historical successor-rubrics validator compares frozen controller/host hashes to the changed checkout; do not rewrite sealed evidence to make it green. A fresh clean candidate and contract are needed before dispatch. |
+
+### M09 R13 four-arm checkpoint, 2026-09-23
+
+Candidate `4b4f41b015b1d25ff94c67d8dc38d5ec820f89b9` ran through the installed controller. The R13 comparison contract is `2ed032a360b0a7e389aac063a4cddd49b99adab52ac00b63e557a9693516dad6`; its lane manifest is `e3c809849321977a56db5ce170d22d5ec8027be67796276f42a4b410f5a03378`. The retained result is `.velgraphing-local/velgraphing-four-arm-study-v1/m09-four-arm-repeated-20260923-r13/result.json` (SHA-256 `7a424f9ffb3f365855dd4dcb6fa0e0fc340b6cc32fd1eb5a81e3bcbe9fe492aa`). It reports `closed`, 32 bound trial receipts, 17 passes, 33 answer process attempts, 32 grader attempts, and 16 Jev provider calls. One C-S-01-R2 answer response failed the host schema on attempt 0. Its fresh bound attempt 1 completed; both attempts remain retained. Graded wrong answers were not retried.
+
+The focused and consumer regression checks had 180 passes and one skip. A separate installed D-01 TypeSafe canary executed Jev, reranked, passed source revalidation, and replayed through the controller validator under the 16,384-byte final-context cap. The broad historical benchmark suite had 27 errors and one failure from frozen successor hash checks against the changed checkout; those historical artifacts were not rewritten. R11 stopped after a stale worker relay timed out; R12 stopped after a lane was spawned before its request existed. They are partial execution diagnostics, not comparison results. R13 checked each exact request before dispatch and used one custody owner.
+
+| Corpus | Arm | Pass | Mean wall s | Mean answer request B | Actual Direct / Graph | Selector fallback | Jev call / rerank / source accepted |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| S-01 | A | 2/2 | 104.2 | 14,689 | 2 / 0 | 0 | 0 / 0 / 0 |
+| S-01 | B | 2/2 | 95.1 | 12,117.5 | 2 / 0 | 0 | 2 / 2 / 2 |
+| S-01 | C | 2/2 | 128.4 | 14,689 | 2 / 0 | 2 | 0 / 0 / 0 |
+| S-01 | D | 2/2 | 95.4 | 12,446.5 | 2 / 0 | 2 | 2 / 2 / 2 |
+| D-01 | A | 0/2 | 98.8 | 14,623 | 2 / 0 | 0 | 0 / 0 / 0 |
+| D-01 | B | 0/2 | 90.1 | 12,162.5 | 2 / 0 | 0 | 2 / 2 / 2 |
+| D-01 | C | 0/2 | 95.7 | 14,623 | 2 / 0 | 2 | 0 / 0 / 0 |
+| D-01 | D | 0/2 | 90.7 | 12,018.5 | 2 / 0 | 2 | 2 / 2 / 2 |
+| L-01 | A | 0/2 | 138.1 | 15,439 | 2 / 0 | 0 | 0 / 0 / 0 |
+| L-01 | B | 0/2 | 104.8 | 15,701 | 2 / 0 | 0 | 2 / 2 / 2 |
+| L-01 | C | 1/2 | 121.2 | 15,439 | 2 / 0 | 2 | 0 / 0 / 0 |
+| L-01 | D | 0/2 | 123.9 | 15,642.5 | 2 / 0 | 2 | 2 / 2 / 2 |
+| M-02 | A | 2/2 | 94.6 | 14,736 | 2 / 0 | 0 | 0 / 0 / 0 |
+| M-02 | B | 2/2 | 83.0 | 14,494.5 | 2 / 0 | 0 | 2 / 2 / 2 |
+| M-02 | C | 2/2 | 90.2 | 14,563 | 2 / 0 | 2 | 0 / 0 / 0 |
+| M-02 | D | 2/2 | 86.0 | 14,552.5 | 2 / 0 | 2 | 2 / 2 / 2 |
+
+Pass means terminal `passed` after an independent grade. Mean wall time is the controller's user-visible wall time across two trials, including any retry. Request bytes measure the serialized answer host request; they are not model tokens. Actual route is the installed ranked-context plan route. Selector fallback means a Graph-configured C/D trial actually used Direct. Jev call means an observed provider attempt; rerank and source accepted are separate receipt fields. All 16 Jev calls reranked and passed exact-source revalidation. Jev receipts report 447,264 input and 12,448 output tokens. Answer and grader token usage is unavailable for the 33 answer and 32 grader process attempts, and all monetary cost fields are unavailable; do not estimate them. No oracle source append was used.
+
+All C/D trials used Direct. Eight reported no source-witnessed Graph relationship gain; eight rejected Graph selection because it would displace the Direct baseline. This is a complete comparison of the configured policies with observed fallback, but it supplies no Graph-route outcome. The L-01 C pass is a Direct fallback and must not be credited to Graph. D-01 failed 0/8 despite four accepted Jev reranks; Jev did not repair the missing answer facts. L-01 failed 7/8. S-01 and M-02 passed 16/16. An independent read-only audit validated the bound contract and rebuilt the result byte-for-byte from 32 receipts. The candidate does not meet the product-adoption gate. Parent review remains open; do not label M09 accepted until that review.
 
 ## Handoff Protocol
 
