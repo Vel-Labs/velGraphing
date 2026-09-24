@@ -439,6 +439,113 @@ class SourceRelationDerivationTests(unittest.TestCase):
 
 
 class SourceBoundExpansionTests(unittest.TestCase):
+    def test_ordered_successor_direct_candidates_use_authenticated_python_source(self) -> None:
+        caller = (
+            b"from sorts.merge_sort import merge_sort\n"
+            b"from sorts.quick_sort import quick_sort\n"
+            b"\n"
+            b"def benchmark(values):\n    return merge_sort(values)\n"
+        )
+        sources = {
+            "sorts/benchmark_sorts.py": caller,
+            "sorts/merge_sort.py": b"def merge_sort(values):\n    return values\n",
+            "sorts/quick_sort.py": (
+                b"def quick_sort(values):\n"
+                b"    if len(values) <= 1:\n        return values\n"
+                b"    pivot = values[len(values) // 2]\n"
+                b"    lower = [value for value in values if value < pivot]\n"
+                b"    equal = [value for value in values if value == pivot]\n"
+                b"    upper = [value for value in values if value > pivot]\n"
+                b"    return quick_sort(lower) + equal + quick_sort(upper)\n"
+            ),
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+        query = (
+            "In sorts/benchmark_sorts.py, follow the imported dependency "
+            "immediately after merge_sort and explain the target."
+        )
+        request = retrieval_module.ordered_successor_request_from_prompt(query)
+        self.assertEqual(("sorts/benchmark_sorts.py", "merge_sort"), request)
+        self.assertIsNone(
+            retrieval_module.ordered_successor_request_from_prompt(
+                "Which implementation is imported immediately after merge_sort?"
+            )
+        )
+        retrieval = retrieval_module.RetrievalResult(
+            "direct", "retrieved", (
+                RetrievalHit(
+                    "repo:sorts/benchmark_sorts.py", "sorts/benchmark_sorts.py",
+                    1, ("exact",), ("merge-sort",), 0,
+                ),
+            ), (), "", 0, 100.0, (), (), False,
+        )
+        candidates = ranked_candidates_from_retrieval(
+            graph, task(byte_budget=16_384), snapshot, reader, retrieval,
+            maximum_candidates=16, maximum_candidate_bytes=32_768,
+            maximum_unit_bytes=4096, ordered_successor=request,
+        )
+        self.assertEqual("sorts/benchmark_sorts.py", candidates[0].source_path)
+        self.assertEqual(
+            "from sorts.merge_sort import merge_sort\n"
+            "from sorts.quick_sort import quick_sort",
+            caller[candidates[0].byte_start:candidates[0].byte_end].decode("utf-8").strip(),
+        )
+        self.assertEqual("sorts/quick_sort.py", candidates[1].source_path)
+        self.assertTrue(candidates[0].required)
+        self.assertTrue(candidates[1].required)
+        target = sources[candidates[1].source_path][
+            candidates[1].byte_start:candidates[1].byte_end
+        ].decode("utf-8")
+        self.assertIn("pivot = values[len(values) // 2]", target)
+        self.assertIn("value == pivot", target)
+        selected = select_ranked_context(
+            graph, task(byte_budget=16_384), snapshot, reader,
+            query=query, candidates=candidates,
+        )
+        self.assertFalse(selected.projection.fail_closed)
+        self.assertTrue({candidates[0].candidate_id, candidates[1].candidate_id}.issubset(
+            selected.projection.selected_candidate_ids
+        ))
+        too_small = select_ranked_context(
+            graph, task(byte_budget=256), snapshot, reader,
+            query=query, candidates=candidates,
+        )
+        self.assertTrue(too_small.projection.fail_closed)
+        self.assertEqual("required_context_exceeds_byte_budget", too_small.projection.reason)
+        with self.assertRaisesRegex(ValueError, "required_candidate_budget_exceeded"):
+            ranked_candidates_from_retrieval(
+                graph, task(byte_budget=16_384), snapshot, reader, retrieval,
+                maximum_candidates=1, maximum_candidate_bytes=32_768,
+                maximum_unit_bytes=4096, ordered_successor=request,
+            )
+
+    def test_ordered_successor_ambiguous_anchor_fails_closed(self) -> None:
+        sources = {
+            "src/caller.py": (
+                b"from src.alpha import merge_sort\n"
+                b"from src.beta import other\n"
+                b"from src.gamma import merge_sort\n"
+                b"from src.delta import target\n"
+            ),
+            "src/alpha.py": b"def merge_sort():\n    pass\n",
+            "src/beta.py": b"def other():\n    pass\n",
+            "src/gamma.py": b"def merge_sort():\n    pass\n",
+            "src/delta.py": b"def target():\n    pass\n",
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+        retrieval = retrieval_module.RetrievalResult(
+            "direct", "retrieved", (
+                RetrievalHit("repo:src/caller.py", "src/caller.py", 1, (), (), 0),
+            ), (), "", 0, 100.0, (), (), False,
+        )
+        with self.assertRaisesRegex(ValueError, "ordered_successor_anchor_ambiguous"):
+            ranked_candidates_from_retrieval(
+                graph, task(), snapshot, reader, retrieval,
+                maximum_candidates=16, maximum_candidate_bytes=32_768,
+                maximum_unit_bytes=4096,
+                ordered_successor=("src/caller.py", "merge_sort"),
+            )
+
     def test_ordered_outgoing_relation_uses_next_verified_source_coordinate(self) -> None:
         sources = {
             "src/caller.py": (

@@ -64,7 +64,7 @@ try:  # noqa: E402
         select_ranked_context,
     )
     from packages.core import jev
-    from packages.core.retrieval import _STOPWORDS, _words
+    from packages.core.retrieval import _STOPWORDS, _words, ordered_successor_request_from_prompt
 except ModuleNotFoundError:  # packaged plugin runtime
     from core import (  # type: ignore[no-redef]
         Admission,
@@ -88,7 +88,7 @@ except ModuleNotFoundError:  # packaged plugin runtime
         select_ranked_context,
     )
     from core import jev  # type: ignore[no-redef]
-    from core.retrieval import _STOPWORDS, _words  # type: ignore[no-redef]
+    from core.retrieval import _STOPWORDS, _words, ordered_successor_request_from_prompt  # type: ignore[no-redef]
 
 
 DEFAULT_MAX_FILE_BYTES = 1024 * 1024
@@ -497,6 +497,7 @@ def _ranked_context(
             maximum_candidates=jev.MAX_CANDIDATES,
             maximum_candidate_bytes=jev.MAX_EXCERPTS_BYTES,
             maximum_unit_bytes=jev.MAX_EXCERPT_BYTES,
+            ordered_successor=ordered_successor_request_from_prompt(prompt),
         )
         graph_candidates = ranked_candidates_from_retrieval(
             graph,
@@ -507,6 +508,7 @@ def _ranked_context(
             maximum_candidates=jev.MAX_CANDIDATES,
             maximum_candidate_bytes=jev.MAX_EXCERPTS_BYTES,
             maximum_unit_bytes=jev.MAX_EXCERPT_BYTES,
+            ordered_successor=ordered_successor_request_from_prompt(prompt),
         )
         selection_task = (
             replace(task, byte_budget=context_byte_budget)
