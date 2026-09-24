@@ -6,15 +6,15 @@ Roadmap owner: Parent/PM
 
 Created: 2026-09-22
 
-Last updated: 2026-09-23
+Last updated: 2026-09-24
 
 Source candidate at creation: `331b13ba0499bffcdb2f2b4dd79124c2dd0853ed`
 
-Current milestone: `M09 — Multi-corpus evaluation`
+Current milestone: `M09 — Multi-corpus evaluation` (study closed; adoption rejected)
 
-Current gate: Parent review of the completed R13 four-arm policy study. The 32 bound trials finished under a 16 KiB final-context cap. Every Graph-configured trial selected Direct at runtime, so R13 cannot establish Graph-route quality or speed. Jev executed and passed source revalidation in all 16 configured trials. R2/R3 and later stopped attempts remain separate diagnostic evidence. Do not claim product adoption from R13.
+Current gate: Parent accepted R13 as a completed negative policy study. The 32 bound trials finished under a 16 KiB final-context cap. Every Graph-configured trial selected Direct at runtime, so R13 cannot establish Graph-route quality or speed. Jev executed and passed source revalidation in all 16 configured trials. R2/R3 and later stopped attempts remain separate diagnostic evidence. Product adoption remains rejected.
 
-Next action: Review the R13 receipt and decide whether M09 closes as a negative Graph-policy result or needs a separately scoped Graph-route experiment. The selector preserved Direct context in D-01 and L-01 because Graph selection would displace it; S-01 and M-02 had no useful relationship gain. Do not weaken that guard to force a benchmark win. Investigate D-01 and L-01 retrieval and answer omissions as product failures.
+Next action: Integrate the selected-relationship route repair, then inspect D-01, L-01, and an unaffected installed public-question canary before any separate Graph-route experiment. The selector preserved Direct context in D-01 and L-01 because Graph selection would displace it; S-01 and M-02 had no useful relationship gain. Keep that guard and the frozen R13 result.
 
 ## Purpose
 
@@ -491,7 +491,7 @@ Accepted proof:
 
 ### M09 — Multi-corpus evaluation
 
-Status: active
+Status: complete — negative policy study; product adoption rejected
 
 Objective:
 
@@ -732,7 +732,11 @@ The focused and consumer regression checks had 180 passes and one skip. A separa
 
 Pass means terminal `passed` after an independent grade. Mean wall time is the controller's user-visible wall time across two trials, including any retry. Request bytes measure the serialized answer host request; they are not model tokens. Actual route is the installed ranked-context plan route. Selector fallback means a Graph-configured C/D trial actually used Direct. Jev call means an observed provider attempt; rerank and source accepted are separate receipt fields. All 16 Jev calls reranked and passed exact-source revalidation. Jev receipts report 447,264 input and 12,448 output tokens. Answer and grader token usage is unavailable for the 33 answer and 32 grader process attempts, and all monetary cost fields are unavailable; do not estimate them. No oracle source append was used.
 
-All C/D trials used Direct. Eight reported no source-witnessed Graph relationship gain; eight rejected Graph selection because it would displace the Direct baseline. This is a complete comparison of the configured policies with observed fallback, but it supplies no Graph-route outcome. The L-01 C pass is a Direct fallback and must not be credited to Graph. D-01 failed 0/8 despite four accepted Jev reranks; Jev did not repair the missing answer facts. L-01 failed 7/8. S-01 and M-02 passed 16/16. An independent read-only audit validated the bound contract and rebuilt the result byte-for-byte from 32 receipts. The candidate does not meet the product-adoption gate. Parent review remains open; do not label M09 accepted until that review.
+All C/D trials used Direct. Eight reported no source-witnessed Graph relationship gain; eight rejected Graph selection because it would displace the Direct baseline. This is a complete comparison of the configured policies with observed fallback, but it supplies no Graph-route outcome. The L-01 C pass is a Direct fallback and must not be credited to Graph. D-01 failed 0/8 despite four accepted Jev reranks; Jev did not repair the missing answer facts. L-01 failed 7/8. S-01 and M-02 passed 16/16. An independent read-only audit validated the bound contract and rebuilt the result byte-for-byte from 32 receipts. The candidate does not meet the product-adoption gate.
+
+Parent decision, 2026-09-24: Close M09 as a negative study of the four configured policies. This accepts the retained R13 result and its limits, not product adoption or a Graph-route benefit. Keep R13, R2, R3, and stopped attempts unchanged. A later Graph-route hypothesis needs a separate pinned experiment after source-bound D-01, L-01, and unaffected canaries pass independent grading.
+
+Route repair candidate, 2026-09-24: The local continuation was tested at `e5ec524` from base `7bb3a60`, then transferred without source changes onto PR #19 head `dcaadbe`. The candidate retains the PR's selected-relationship guard and records the route after final selection. The installed study caller rejects a Graph pool whose final selection has no new relationship bundle before answer composition; the frozen M09 v1 aggregator remains unchanged. Focused selector and caller checks passed (30 tests). The source-to-package parity check passed for package candidate `4931b29b312f294a3b5e78a9e7cdb660af7b5a79bf0ac15415bb64c225a8762e`. A local `graph-find --ranked-context plan` canary selected Direct without a network call; it did not reproduce the repaired branch. The PR's eight repository-fixture tests were not rerun here because their fixture calls `git init`; the audit reported those eight passes. Before this continuation, live PR #19 was draft and both offline checks failed at the focused benchmark step; the job page did not expose the exact failing test logs. The base PR #18 reports custody and receipt failures in that step. These are separate from the route repair. Provider, independently graded public-question, and CI results for this continuation are not verified.
 
 ## Handoff Protocol
 

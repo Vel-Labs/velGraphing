@@ -310,6 +310,26 @@ class RankedContextPlan:
             raise TypeError("task_facets must be a tuple after plan construction")
         _validated_task_facets(self.task_facets)
 
+    def realized_route(
+        self,
+        direct_candidates: tuple[RankedContextCandidate, ...],
+        selected: RankedContextResult,
+    ) -> str:
+        if self.route != "graph":
+            return "direct"
+        selected_ids = set(selected.projection.selected_candidate_ids)
+        direct_ids = {candidate.candidate_id for candidate in direct_candidates}
+        return (
+            "graph"
+            if any(
+                candidate.candidate_id not in direct_ids
+                and candidate.candidate_id in selected_ids
+                and candidate.relationship_parent_candidate_id in selected_ids
+                for candidate in self.candidates
+            )
+            else "graph_pool_without_selected_relationship"
+        )
+
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
             "baseline_fail_closed": self.baseline.projection.fail_closed,
@@ -923,7 +943,9 @@ def select_ranked_context(
         reason=reason,
         jev_enabled=jev_enabled,
         jev_call_could_affect_selection=can_affect,
-        jev_observation_applied=jev_order is not None and classification_source == "jev",
+        jev_observation_applied=(
+            jev_order is not None and classification_source == "jev"
+        ),
         classification_observation_applied=jev_order is not None,
         classification_source=classification_source,
         baseline_selected_candidate_count=len(selected_ids),

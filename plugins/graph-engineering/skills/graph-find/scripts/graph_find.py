@@ -534,6 +534,7 @@ def _ranked_context(
         "mode": mode,
         "network_called": False,
         "plan": plan.to_dict(),
+        "realized_route": plan.realized_route(direct_candidates, plan.baseline),
         "reason": plan.reason,
         "schema_version": "graph-find-ranked-context-v1",
         "selection": _ranked_selection(plan.baseline),
@@ -584,6 +585,7 @@ def _ranked_context(
     result.update({
         "jev_observation": observation,
         "network_called": observation.get("execution") == "live",
+        "realized_route": plan.realized_route(direct_candidates, selected),
         "reason": selected.reason,
         "selection": _ranked_selection(selected),
         "status": "fallback" if selected.projection.fail_closed else "selected",
