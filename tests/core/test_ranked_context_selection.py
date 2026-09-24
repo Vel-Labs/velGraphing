@@ -758,6 +758,59 @@ class RankedContextSelectionTests(unittest.TestCase):
             direct.projection.selected_candidate_ids,
         )
 
+    def test_final_route_does_not_credit_relationship_pruned_by_jev(self) -> None:
+        graph, snapshot, reader, direct = fixture()
+        relationship = replace(
+            direct[2], candidate_id="relationship-c2",
+            relationship_parent_candidate_id="c1",
+        )
+        graph = graph_with_relationship_edge(
+            graph, snapshot, reader, direct[1], relationship
+        )
+        graph_candidates = (*direct[:2], relationship, direct[2])
+        fitting = select(graph, spec(), snapshot, reader, graph_candidates[:3])
+        task = replace(spec(), byte_budget=fitting.projection.serialized_byte_count + 128)
+        plan = plan_ranked_context(
+            graph, task, snapshot, reader, query=QUERY,
+            direct_candidates=direct, graph_candidates=graph_candidates,
+            jev_enabled=True,
+        )
+        reranked = select(
+            graph, task, snapshot, reader, graph_candidates,
+            observation(graph_candidates, ("c0", "c2", "c1", "relationship-c2"), snapshot),
+            jev_enabled=True, jev_observation_qualified=True,
+        )
+        self.assertEqual("graph", plan.route)
+        self.assertEqual("graph", plan.realized_route(direct, plan.baseline))
+        self.assertEqual("reranked", reranked.order_source)
+        self.assertEqual(plan.baseline.candidate_set_sha256, reranked.candidate_set_sha256)
+        self.assertNotIn("relationship-c2", reranked.projection.selected_candidate_ids)
+        self.assertEqual(
+            "graph_pool_without_selected_relationship",
+            plan.realized_route(direct, reranked),
+        )
+
+    def test_initial_plan_falls_back_when_relationship_does_not_fit(self) -> None:
+        graph, snapshot, reader, candidates = fixture()
+        relationship = replace(
+            candidates[2], candidate_id="relationship-c2",
+            relationship_parent_candidate_id="c1",
+        )
+        graph = graph_with_relationship_edge(
+            graph, snapshot, reader, candidates[1], relationship
+        )
+        baseline = select(graph, spec(), snapshot, reader, candidates[:1])
+        task = replace(spec(), byte_budget=baseline.projection.serialized_byte_count + 64)
+        plan = plan_ranked_context(
+            graph, task, snapshot, reader, query=QUERY,
+            direct_candidates=candidates[:1],
+            graph_candidates=(*candidates[:2], relationship),
+        )
+        self.assertEqual("direct", plan.route)
+        self.assertEqual("graph_selection_no_retained_relationship_gain", plan.reason)
+        self.assertEqual(baseline.projection.selected_candidate_ids,
+                         plan.baseline.projection.selected_candidate_ids)
+
     def test_plan_task_facets_are_optional_serialized_metadata(self) -> None:
         graph, snapshot, reader, candidates = fixture()
         baseline = plan_ranked_context(

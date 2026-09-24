@@ -96,15 +96,20 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
         self.assertEqual({"fallback_invocations": 1}, legacy_trial.current["verified_fallback"])
 
     def test_graph_plan_fallback_is_rejected_only_for_strict_ac_route(self) -> None:
-        direct_plan = {"route": "direct"}
         with self.assertRaisesRegex(
             study.MeasurementError, "installed_graph_find_plan_fell_back_to_direct",
         ):
-            study._require_graph_plan(direct_plan, required=True)
-        self.assertIsNone(study._require_graph_plan(direct_plan, required=False))
-        self.assertIsNone(
-            study._require_graph_plan({"route": "graph"}, required=True)
-        )
+            study._require_graph_plan("direct", required=True)
+        with self.assertRaisesRegex(
+            study.MeasurementError, "installed_graph_find_no_final_graph_relationship",
+        ):
+            study._require_graph_plan("graph_pool_without_selected_relationship", required=True)
+        with self.assertRaisesRegex(
+            study.MeasurementError, "installed_graph_find_no_final_graph_relationship",
+        ):
+            study._require_graph_plan("graph_pool_without_selected_relationship", required=False)
+        self.assertIsNone(study._require_graph_plan("direct", required=False))
+        self.assertIsNone(study._require_graph_plan("graph", required=True))
 
     def test_successor_public_asks_become_answer_facets_only(self) -> None:
         asks = [{"id": "traffic", "text": "Explain the public traffic assumptions."}]
