@@ -310,6 +310,26 @@ class RankedContextPlan:
             raise TypeError("task_facets must be a tuple after plan construction")
         _validated_task_facets(self.task_facets)
 
+    def realized_route(
+        self,
+        direct_candidates: tuple[RankedContextCandidate, ...],
+        selected: RankedContextResult,
+    ) -> str:
+        if self.route != "graph":
+            return "direct"
+        selected_ids = set(selected.projection.selected_candidate_ids)
+        direct_ids = {candidate.candidate_id for candidate in direct_candidates}
+        return (
+            "graph"
+            if any(
+                candidate.candidate_id not in direct_ids
+                and candidate.candidate_id in selected_ids
+                and candidate.relationship_parent_candidate_id in selected_ids
+                for candidate in self.candidates
+            )
+            else "graph_pool_without_selected_relationship"
+        )
+
     def to_dict(self) -> dict[str, object]:
         result: dict[str, object] = {
             "baseline_fail_closed": self.baseline.projection.fail_closed,
@@ -451,6 +471,7 @@ def plan_ranked_context(
     direct_by_id = {candidate.candidate_id: candidate for candidate in direct_candidates}
     graph_by_id = {candidate.candidate_id: candidate for candidate in graph_candidates}
     graph_adds_relationship = False
+    relationship_gain_ids: set[str] = set()
     prior_graph_candidates: dict[str, RankedContextCandidate] = {}
     for candidate in graph_candidates:
         parent_id = candidate.relationship_parent_candidate_id
@@ -465,6 +486,7 @@ def plan_ranked_context(
             )
         ):
             graph_adds_relationship = True
+            relationship_gain_ids.add(candidate.candidate_id)
         prior_graph_candidates[candidate.candidate_id] = candidate
     required_preserved = all(
         not candidate.required or graph_by_id.get(candidate.candidate_id) == candidate
@@ -532,6 +554,20 @@ def plan_ranked_context(
         reason = "graph_selection_would_displace_direct_baseline"
         candidates = direct_candidates
         baseline = direct_baseline
+    if route == "graph" and direct_baseline is not None:
+        selected_ids = set(baseline.projection.selected_candidate_ids)
+        if not any(
+            candidate_id in selected_ids
+            and graph_by_id[candidate_id].relationship_parent_candidate_id in selected_ids
+            for candidate_id in relationship_gain_ids
+        ):
+            # Pool-level edge gain is not a selected Graph contribution. Keep
+            # the verified Direct result when every new relationship bundle
+            # was pruned, without relaxing its preservation or byte budget.
+            route = "direct"
+            reason = "graph_selection_no_retained_relationship_gain"
+            candidates = direct_candidates
+            baseline = direct_baseline
     query_sha256 = jev_sha256(query.encode("utf-8"))
     context_fidelity = _context_fidelity_metadata(
         candidates,

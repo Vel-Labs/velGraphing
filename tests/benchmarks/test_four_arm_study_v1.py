@@ -96,15 +96,20 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
         self.assertEqual({"fallback_invocations": 1}, legacy_trial.current["verified_fallback"])
 
     def test_graph_plan_fallback_is_rejected_only_for_strict_ac_route(self) -> None:
-        direct_plan = {"route": "direct"}
         with self.assertRaisesRegex(
             study.MeasurementError, "installed_graph_find_plan_fell_back_to_direct",
         ):
-            study._require_graph_plan(direct_plan, required=True)
-        self.assertIsNone(study._require_graph_plan(direct_plan, required=False))
-        self.assertIsNone(
-            study._require_graph_plan({"route": "graph"}, required=True)
-        )
+            study._require_graph_plan("direct", required=True)
+        with self.assertRaisesRegex(
+            study.MeasurementError, "installed_graph_find_no_final_graph_relationship",
+        ):
+            study._require_graph_plan("graph_pool_without_selected_relationship", required=True)
+        with self.assertRaisesRegex(
+            study.MeasurementError, "installed_graph_find_no_final_graph_relationship",
+        ):
+            study._require_graph_plan("graph_pool_without_selected_relationship", required=False)
+        self.assertIsNone(study._require_graph_plan("direct", required=False))
+        self.assertIsNone(study._require_graph_plan("graph", required=True))
 
     def test_successor_public_asks_become_answer_facets_only(self) -> None:
         asks = [{"id": "traffic", "text": "Explain the public traffic assumptions."}]
@@ -278,6 +283,7 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             "exit_code": None,
             "timeout_limit_ns": 120_000_000_000,
             "status": "timeout",
+            "validation_fields": None,
         }], attempt["host_processes"])
         self.assertNotIn("partial stdout", json.dumps(result))
         self.assertNotIn("partial stderr", json.dumps(result))
@@ -444,7 +450,7 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 "direct", strict_attempt["candidate_observation"]["selection_route"]
             )
             self.assertEqual(
-                "fallback_before_answer",
+                "rejected_before_answer",
                 strict_attempt["candidate_observation"]["route_disposition"],
             )
             strict_kinds = [row["kind"] for row in strict_attempt["host_processes"]]
@@ -955,6 +961,10 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             self.assertEqual(bound, freeze["implementation_bindings"][name]["sha256"])
 
     def test_refresh_rebinds_stale_successor_and_clears_prior_authority(self) -> None:
+        if not CUSTODY.is_file():
+            self.skipTest("private successor witness custody is unavailable")
+        if not PINNED_LANES.is_dir():
+            self.skipTest("frozen v4 corpus lanes are unavailable")
         local = ROOT / ".velgraphing-local"
         local.mkdir(mode=0o700, exist_ok=True)
         names = (
@@ -1048,6 +1058,10 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 study.freeze_successor(root, LANES, CUSTODY, ROOT, refresh=True)
 
     def test_bind_successor_lanes_enables_offline_approval(self) -> None:
+        if not CUSTODY.is_file():
+            self.skipTest("private successor witness custody is unavailable")
+        if not PINNED_LANES.is_dir():
+            self.skipTest("frozen v4 corpus lanes are unavailable")
         local = ROOT / ".velgraphing-local"
         local.mkdir(mode=0o700, exist_ok=True)
         names = (

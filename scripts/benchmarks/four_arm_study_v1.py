@@ -448,6 +448,7 @@ def _record_graph_find_process(
             "ranked_status": ranked.get("status"),
             "plan_route": plan.get("route"),
             "plan_reason": plan.get("reason"),
+            "realized_route": ranked.get("realized_route"),
             "plan_candidate_set_sha256": plan.get("candidate_set_sha256"),
             "selection_candidate_set_sha256": selection.get("candidate_set_sha256"),
             "jev_status": observation.get("status"),
@@ -470,8 +471,10 @@ def _record_graph_find_process(
     })
 
 
-def _require_graph_plan(plan: Mapping[str, Any], *, required: bool) -> None:
-    if required and plan.get("route") != "graph":
+def _require_graph_plan(route: str, *, required: bool) -> None:
+    if route == "graph_pool_without_selected_relationship":
+        raise MeasurementError("installed_graph_find_no_final_graph_relationship")
+    if required and route != "graph":
         raise MeasurementError("installed_graph_find_plan_fell_back_to_direct")
 
 
@@ -668,6 +671,7 @@ def _installed_graph_payload(
     selection = ranked.get("selection")
     context = selection.get("context") if type(selection) is dict else None
     plan = ranked.get("plan")
+    realized_route = ranked.get("realized_route")
     identity = diagnostics.get("runtime_identity")
     expected_snapshot = source_manifest.get("snapshot_sha256")
     if (
@@ -682,6 +686,10 @@ def _installed_graph_payload(
         or context.get("source_snapshot_sha256") != expected_snapshot
         or diagnostics.get("source_snapshot_sha256") != expected_snapshot
         or plan.get("route") not in {"direct", "graph"}
+        or realized_route not in {
+            "direct", "graph", "graph_pool_without_selected_relationship"
+        }
+        or (plan.get("route") == "direct") != (realized_route == "direct")
         or type(plan.get("reason")) is not str or not plan["reason"]
         or type(identity) is not dict
         or identity.get("candidate_sha256") != candidate_sha256
@@ -913,11 +921,18 @@ def _installed_graph_payload(
         candidate_set_sha256=selection["candidate_set_sha256"],
         graph_artifact_sha256=candidate_sha256,
     )
-    if require_graph_selection and plan["route"] != "graph":
+    if realized_route == "graph_pool_without_selected_relationship" or (
+        require_graph_selection and realized_route != "graph"
+    ):
         trial.current["candidate_observation"] = {
             "route": "installed_graph_find",
-            "selection_route": plan["route"],
-            "selection_reason": plan["reason"],
+            "plan_route": plan["route"],
+            "selection_route": realized_route,
+            "selection_reason": (
+                "graph_relationship_pruned_after_jev"
+                if realized_route == "graph_pool_without_selected_relationship"
+                else plan["reason"]
+            ),
             "candidate_set_sha256": selection["candidate_set_sha256"],
             "candidate_count": plan.get("candidate_count"),
             "source_snapshot_sha256": expected_snapshot,
@@ -928,9 +943,9 @@ def _installed_graph_payload(
             },
             "stage_ns": stages,
             "source_read_count": len(operations),
-            "route_disposition": "fallback_before_answer",
+            "route_disposition": "rejected_before_answer",
         }
-    _require_graph_plan(plan, required=require_graph_selection)
+    _require_graph_plan(realized_route, required=require_graph_selection)
     evidence = []
     with trial.phase("context_composition"):
         for span in spans:
@@ -942,8 +957,13 @@ def _installed_graph_payload(
             })
     trial.current["candidate_observation"] = {
         "route": "installed_graph_find", "task_id": task_id,
-        "selection_route": plan["route"],
-        "selection_reason": plan["reason"],
+        "plan_route": plan["route"],
+        "selection_route": realized_route,
+        "selection_reason": (
+            "graph_relationship_pruned_after_jev"
+            if realized_route == "graph_pool_without_selected_relationship"
+            else plan["reason"]
+        ),
         "candidate_set_sha256": selection["candidate_set_sha256"],
         "candidate_count": plan.get("candidate_count"),
         "selected_candidate_ids": selected_ids,
@@ -1957,9 +1977,9 @@ def _load_successor_witness_custody(path: Path, repo_root: Path) -> dict[str, An
 def load_successor_ttc_contract(
     benchmark_root: Path = DEFAULT_ROOT, repo_root: Path = ROOT, *, custody_path: Path,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    custody = _load_successor_witness_custody(custody_path, repo_root)
     freeze, _, _ = load_bundle(benchmark_root, repo_root)
     successor = load_successor_rubrics(benchmark_root, repo_root)
-    custody = _load_successor_witness_custody(custody_path, repo_root)
     _, contract = _read_json(
         benchmark_root / SUCCESSOR_TTC_CONTRACT, "successor_ttc_contract_invalid",
     )
