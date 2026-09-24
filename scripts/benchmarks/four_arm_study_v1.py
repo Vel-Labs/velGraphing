@@ -49,6 +49,7 @@ from packages.core import (
     select_ranked_context,
 )
 from packages.core import jev
+from packages.core.retrieval import ordered_successor_request_from_prompt
 
 
 DEFAULT_ROOT = ROOT / "benchmarks/velgraphing-four-arm-study-v1"
@@ -1013,6 +1014,7 @@ def _pool(
         maximum_candidates=CANDIDATE_LIMIT,
         maximum_candidate_bytes=CANDIDATE_AGGREGATE_BYTE_BUDGET,
         maximum_unit_bytes=CANDIDATE_UNIT_BYTE_BUDGET,
+        ordered_successor=ordered_successor_request_from_prompt(prompt),
     )
     if not candidates:
         raise StudyError("candidate_pool_empty")
@@ -3357,6 +3359,7 @@ def _discover_direct(trial: Trial, task_id: str, prompt: str, lane: Path,
             maximum_candidates=CANDIDATE_LIMIT,
             maximum_candidate_bytes=CANDIDATE_AGGREGATE_BYTE_BUDGET,
             maximum_unit_bytes=CANDIDATE_UNIT_BYTE_BUDGET,
+            ordered_successor=ordered_successor_request_from_prompt(prompt),
         )
         if not candidates:
             raise MeasurementError("candidate_pool_empty")
