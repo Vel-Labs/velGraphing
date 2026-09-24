@@ -943,7 +943,7 @@ def _installed_graph_payload(
             },
             "stage_ns": stages,
             "source_read_count": len(operations),
-            "route_disposition": "fallback_before_answer",
+            "route_disposition": "rejected_before_answer",
         }
     _require_graph_plan(realized_route, required=require_graph_selection)
     evidence = []

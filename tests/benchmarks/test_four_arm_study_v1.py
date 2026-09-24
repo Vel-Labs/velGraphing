@@ -450,7 +450,7 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 "direct", strict_attempt["candidate_observation"]["selection_route"]
             )
             self.assertEqual(
-                "fallback_before_answer",
+                "rejected_before_answer",
                 strict_attempt["candidate_observation"]["route_disposition"],
             )
             strict_kinds = [row["kind"] for row in strict_attempt["host_processes"]]
