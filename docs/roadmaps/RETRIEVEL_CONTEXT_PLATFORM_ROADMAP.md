@@ -14,7 +14,7 @@ Current milestone: `M09 — Multi-corpus evaluation` (study closed; adoption rej
 
 Current gate: Parent accepted R13 as a completed negative policy study. The 32 bound trials finished under a 16 KiB final-context cap. Every Graph-configured trial selected Direct at runtime, so R13 cannot establish Graph-route quality or speed. Jev executed and passed source revalidation in all 16 configured trials. R2/R3 and later stopped attempts remain separate diagnostic evidence. Product adoption remains rejected.
 
-Next action: Integrate the selected-relationship route repair, then inspect D-01, L-01, and an unaffected installed public-question canary before any separate Graph-route experiment. The selector preserved Direct context in D-01 and L-01 because Graph selection would displace it; S-01 and M-02 had no useful relationship gain. Keep that guard and the frozen R13 result.
+Next action: Improve Direct selection for source-local ordered-successor questions through a policy shared by the Direct controller and installed Graph caller. Keep the 16,384-byte cap and the rule that Graph preserves every selected Direct span. Repeat D-01, L-01, and M-02 canaries on the new candidate before any Graph-route benchmark. Keep the frozen R13 result.
 
 ## Purpose
 
@@ -119,7 +119,7 @@ Disabling classification or hooks is normal operation, not a degraded state.
 - [x] `M06` Implement conditional instructions and structured skills.
 - [x] `M07` Implement reusable read-only background-review packets.
 - [x] `M08` Validate supported host boundaries and explicit adapters.
-- [ ] `M09` Run the multi-corpus, repeated-trial evaluation.
+- [x] `M09` Run the multi-corpus, repeated-trial evaluation (negative adoption result).
 - [ ] `M10` Complete release audit, packaging, documentation, and publication.
 
 ## Milestone Contracts
@@ -737,6 +737,8 @@ All C/D trials used Direct. Eight reported no source-witnessed Graph relationshi
 Parent decision, 2026-09-24: Close M09 as a negative study of the four configured policies. This accepts the retained R13 result and its limits, not product adoption or a Graph-route benefit. Keep R13, R2, R3, and stopped attempts unchanged. A later Graph-route hypothesis needs a separate pinned experiment after source-bound D-01, L-01, and unaffected canaries pass independent grading.
 
 Route repair candidate, 2026-09-24: The local continuation was tested at `e5ec524` from base `7bb3a60`, then transferred without source changes onto PR #19 head `dcaadbe`. The candidate retains the PR's selected-relationship guard and records the route after final selection. The installed study caller rejects a Graph pool whose final selection has no new relationship bundle before answer composition; the frozen M09 v1 aggregator remains unchanged. Focused selector and caller checks passed (30 tests). The source-to-package parity check passed for package candidate `4931b29b312f294a3b5e78a9e7cdb660af7b5a79bf0ac15415bb64c225a8762e`. A local `graph-find --ranked-context plan` canary selected Direct without a network call; it did not reproduce the repaired branch. The PR's eight repository-fixture tests were not rerun here because their fixture calls `git init`; the audit reported those eight passes. Before this continuation, live PR #19 was draft and both offline checks failed at the focused benchmark step; the job page did not expose the exact failing test logs. The base PR #18 reports custody and receipt failures in that step. These are separate from the route repair. Provider, independently graded public-question, and CI results for this continuation are not verified.
+
+PR #19 and canary checkpoint, 2026-09-24: PR #19 merged into `codex/retrievel-0.2.0-rc1` as `76b99df` after Python 3.11 and 3.13 offline checks passed on head `b8e18c1`; the merged commit passed the `Validate VelGraphing` workflow. Its narrow result is honest selected-relationship route accounting, not a Graph quality claim. At the exact installed 12-result, 32,768-byte candidate, and 16,384-byte final-context limits, fresh public-question answer and separate grader workers scored D-01 `0/3`, L-01 `6/6`, and M-02 `5/5`. All three final routes were Direct. D-01 selected neither the import after `merge_sort` nor `sorts/quick_sort.py`; the answer named the wrong target. These host-native canaries are diagnostic: exact installed CLI stdout and native lane IDs were not retained, answer/grader model usage and cost are unknown, precise end-to-end time is unknown, and no new Jev call ran. An offline anchor-first, 1,536-byte Direct reserve let the verified import and target fit in a Graph context while preserving the smaller Direct selection, but the Direct context still lacked `quick_sort.py`. Reject that reserve-only variant as a Direct correctness repair. Do not freeze a new benchmark or claim adoption until a shared selection change passes fresh source-bound canaries and an installed Graph route is observed.
 
 ## Handoff Protocol
 
