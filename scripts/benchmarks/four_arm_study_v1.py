@@ -1977,9 +1977,9 @@ def _load_successor_witness_custody(path: Path, repo_root: Path) -> dict[str, An
 def load_successor_ttc_contract(
     benchmark_root: Path = DEFAULT_ROOT, repo_root: Path = ROOT, *, custody_path: Path,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    custody = _load_successor_witness_custody(custody_path, repo_root)
     freeze, _, _ = load_bundle(benchmark_root, repo_root)
     successor = load_successor_rubrics(benchmark_root, repo_root)
-    custody = _load_successor_witness_custody(custody_path, repo_root)
     _, contract = _read_json(
         benchmark_root / SUCCESSOR_TTC_CONTRACT, "successor_ttc_contract_invalid",
     )

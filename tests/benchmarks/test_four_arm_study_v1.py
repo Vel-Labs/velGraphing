@@ -283,6 +283,7 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             "exit_code": None,
             "timeout_limit_ns": 120_000_000_000,
             "status": "timeout",
+            "validation_fields": None,
         }], attempt["host_processes"])
         self.assertNotIn("partial stdout", json.dumps(result))
         self.assertNotIn("partial stderr", json.dumps(result))
@@ -960,6 +961,10 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
             self.assertEqual(bound, freeze["implementation_bindings"][name]["sha256"])
 
     def test_refresh_rebinds_stale_successor_and_clears_prior_authority(self) -> None:
+        if not CUSTODY.is_file():
+            self.skipTest("private successor witness custody is unavailable")
+        if not PINNED_LANES.is_dir():
+            self.skipTest("frozen v4 corpus lanes are unavailable")
         local = ROOT / ".velgraphing-local"
         local.mkdir(mode=0o700, exist_ok=True)
         names = (
@@ -1053,6 +1058,10 @@ class FourArmPublicBoundaryTests(unittest.TestCase):
                 study.freeze_successor(root, LANES, CUSTODY, ROOT, refresh=True)
 
     def test_bind_successor_lanes_enables_offline_approval(self) -> None:
+        if not CUSTODY.is_file():
+            self.skipTest("private successor witness custody is unavailable")
+        if not PINNED_LANES.is_dir():
+            self.skipTest("frozen v4 corpus lanes are unavailable")
         local = ROOT / ".velgraphing-local"
         local.mkdir(mode=0o700, exist_ok=True)
         names = (
