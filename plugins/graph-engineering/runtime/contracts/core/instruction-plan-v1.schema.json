@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velcrafting.dev/contracts/core/instruction-plan-v1.schema.json",
+  "title": "RetrieVel instruction plan V1",
+  "$comment": "Digest equality, section ID uniqueness, and selected/omitted disjointness require canonical InstructionPlan.from_dict validation because JSON Schema cannot express them fully.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mandatory_sections",
+    "selected_supplemental_sections",
+    "omitted_supplemental_sections",
+    "policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "instruction-plan-v1"},
+    "mandatory_sections": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/mandatory_section"}
+    },
+    "selected_supplemental_sections": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/selected_section"}
+    },
+    "omitted_supplemental_sections": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/omitted"}
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mandatory_rules_preserved",
+        "classifier_may_omit_mandatory",
+        "tools_activated",
+        "host_interception_claimed"
+      ],
+      "properties": {
+        "mandatory_rules_preserved": {"const": true},
+        "classifier_may_omit_mandatory": {"const": false},
+        "tools_activated": {"const": false},
+        "host_interception_claimed": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "mandatory_section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_id", "source_path", "content_sha256", "content", "reason"],
+      "properties": {
+        "section_id": {"type": "string", "minLength": 1},
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))[^\\u0000/]+(?:/[^\\u0000/]+)*$"
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "content": {"type": "string"},
+        "reason": {"const": "mandatory_inherited"}
+      }
+    },
+    "selected_section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_id", "source_path", "content_sha256", "content", "reason"],
+      "properties": {
+        "section_id": {"type": "string", "minLength": 1},
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))[^\\u0000/]+(?:/[^\\u0000/]+)*$"
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "content": {"type": "string"},
+        "reason": {"const": "caller_selected"}
+      }
+    },
+    "omitted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["section_id", "source_path", "content_sha256", "reason"],
+      "properties": {
+        "section_id": {"type": "string", "minLength": 1},
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*//)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))[^\\u0000/]+(?:/[^\\u0000/]+)*$"
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "reason": {"const": "caller_not_selected"}
+      }
+    }
+  }
+}

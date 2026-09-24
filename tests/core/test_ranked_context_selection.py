@@ -13,6 +13,7 @@ from packages.core import (
     GraphRecord,
     Provenance,
     RankedContextCandidate,
+    RankedContextPlan,
     Sensitivity,
     SourceCoordinate,
     SourceIdentityV4,
@@ -82,6 +83,7 @@ def candidate(
     required: bool,
     record_id: str | None = None,
     relationship_parent_candidate_id: str | None = None,
+    source_unit_complete: bool = False,
 ) -> RankedContextCandidate:
     return RankedContextCandidate(
         identity,
@@ -92,6 +94,7 @@ def candidate(
         required,
         record_id or f"record-{identity}",
         relationship_parent_candidate_id,
+        source_unit_complete=source_unit_complete,
     )
 
 
@@ -227,6 +230,43 @@ def observation(
     }
 
 
+def classification_observation(
+    candidates: tuple[RankedContextCandidate, ...],
+    order: tuple[str, ...],
+    snapshot: SourceSnapshotV4,
+) -> dict[str, object]:
+    """Fixture custom adapter: standard library only, with no Jev import."""
+    candidate_rows = [item._packet_value() for item in candidates]
+    canonical = lambda value: (
+        json.dumps(
+            value,
+            sort_keys=True,
+            ensure_ascii=True,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+    digest = lambda raw: hashlib.sha256(raw).hexdigest()
+    return {
+        "schema_version": "retrievel-classification-observation-v1",
+        "status": "reranked",
+        "candidate_set_sha256": digest(canonical(candidate_rows)),
+        "query_sha256": digest(QUERY.encode("utf-8")),
+        "source_set_sha256": digest(canonical([
+            {"path": source.path, "sha256": source.sha256}
+            for source in snapshot.sources
+        ])),
+        "baseline_order": [item.candidate_id for item in candidates],
+        "proposed_order": list(order),
+        "required_ids": [item.candidate_id for item in candidates if item.required],
+        "request_sha256": APPROVED,
+        "source_revalidated": True,
+        "authority_bearing": False,
+        "sufficient": False,
+    }
+
+
 def select(
     graph: Graph,
     task: TaskSpec,
@@ -301,6 +341,8 @@ class RankedContextSelectionTests(unittest.TestCase):
         self.assertTrue(reranked.jev_source_revalidated)
         self.assertEqual(reranked.jev_decision.reason, "jev_rerank_applied")
         self.assertTrue(reranked.jev_decision.jev_observation_applied)
+        self.assertTrue(reranked.jev_decision.classification_observation_applied)
+        self.assertEqual(reranked.jev_decision.classification_source, "jev")
         self.assertEqual(reranked.projection.included_optional_candidate_ids, ("c2",))
         self.assertEqual(baseline.projection.selected_candidate_ids[0], "c0")
         self.assertEqual(reranked.projection.selected_candidate_ids[0], "c0")
@@ -309,6 +351,89 @@ class RankedContextSelectionTests(unittest.TestCase):
             APPROVED,
         )
         self.assertLessEqual(reranked.projection.serialized_byte_count, tight.byte_budget)
+
+    def test_provider_neutral_classification_observation_can_rerank(self) -> None:
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
+        result = select_ranked_context(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            candidates=candidates,
+            approved_request_sha256=APPROVED,
+            classification_observation=classification_observation(
+                candidates, ("c0", "c2", "c1"), snapshot
+            ),
+            jev_enabled=False,
+        )
+
+        self.assertEqual(result.order_source, "reranked")
+        self.assertFalse(result.jev_decision.jev_enabled)
+        self.assertEqual(result.jev_decision.reason, "classification_rerank_applied")
+        self.assertFalse(result.jev_decision.jev_observation_applied)
+        self.assertTrue(result.jev_decision.classification_observation_applied)
+        self.assertEqual(result.jev_decision.classification_source, "external")
+        self.assertEqual(
+            json.loads(result.jev_decision.to_json())["classification_source"],
+            "external",
+        )
+        self.assertEqual(result.projection.included_optional_candidate_ids, ("c2",))
+
+    def test_invalid_or_stale_classification_observation_retains_baseline(self) -> None:
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
+        valid = classification_observation(candidates, ("c0", "c2", "c1"), snapshot)
+        for invalid in (
+            {**valid, "proposed_order": ["c0", "c1", "c1"]},
+            {**valid, "candidate_set_sha256": "0" * 64},
+            {**valid, "status": "unavailable"},
+        ):
+            with self.subTest(invalid=invalid):
+                result = select_ranked_context(
+                    graph,
+                    tight,
+                    snapshot,
+                    reader,
+                    query=QUERY,
+                    candidates=candidates,
+                    approved_request_sha256=APPROVED,
+                    classification_observation=invalid,
+                    jev_enabled=False,
+                )
+                self.assertEqual(result.order_source, "baseline")
+                self.assertEqual(
+                    result.projection.included_optional_candidate_ids, ("c1",)
+                )
+                self.assertEqual(
+                    result.jev_decision.reason, "classification_observation_invalid"
+                )
+                self.assertFalse(result.jev_decision.jev_observation_applied)
+                self.assertFalse(result.jev_decision.classification_observation_applied)
+                self.assertEqual(result.jev_decision.classification_source, "external")
+
+    def test_native_and_normalized_observations_cannot_be_combined(self) -> None:
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
+        result = select_ranked_context(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            candidates=candidates,
+            approved_request_sha256=APPROVED,
+            jev_observation=observation(candidates, ("c0", "c2", "c1"), snapshot),
+            classification_observation=classification_observation(
+                candidates, ("c0", "c2", "c1"), snapshot
+            ),
+            jev_enabled=False,
+            jev_observation_qualified=True,
+        )
+
+        self.assertEqual(result.order_source, "baseline")
+        self.assertEqual(result.jev_decision.reason, "classification_observation_conflict")
+        self.assertFalse(result.jev_decision.jev_observation_applied)
+        self.assertFalse(result.jev_decision.classification_observation_applied)
+        self.assertEqual(result.jev_decision.classification_source, "external")
 
     def test_rerank_keeps_rank_telemetry_but_presents_same_file_spans_in_source_order(self) -> None:
         path = "src/ordered.py"
@@ -596,10 +721,251 @@ class RankedContextSelectionTests(unittest.TestCase):
         )
         telemetry = planned.to_json()
         self.assertNotIn(QUERY, telemetry)
-        self.assertNotIn("src/", telemetry)
+        self.assertIn("context_fidelity", telemetry)
         self.assertEqual(
             json.loads(telemetry)["schema_version"],
             "graph-ranked-context-plan-v1",
+        )
+
+    def test_product_planner_falls_back_when_graph_displaces_direct_context(self) -> None:
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
+        relationship = replace(
+            candidates[2],
+            candidate_id="relationship-c2-from-required-c0",
+            relationship_parent_candidate_id="c0",
+        )
+        graph = graph_with_relationship_edge(
+            graph, snapshot, reader, candidates[0], relationship
+        )
+        planned = plan_ranked_context(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            direct_candidates=candidates,
+            # The relationship is placed before the Direct optional candidate.
+            graph_candidates=(candidates[0], relationship, *candidates[1:]),
+        )
+        direct = select(graph, tight, snapshot, reader, candidates)
+
+        self.assertEqual(planned.route, "direct")
+        self.assertEqual(
+            planned.reason, "graph_selection_would_displace_direct_baseline"
+        )
+        self.assertEqual(
+            planned.baseline.projection.selected_candidate_ids,
+            direct.projection.selected_candidate_ids,
+        )
+
+    def test_final_route_does_not_credit_relationship_pruned_by_jev(self) -> None:
+        graph, snapshot, reader, direct = fixture()
+        relationship = replace(
+            direct[2], candidate_id="relationship-c2",
+            relationship_parent_candidate_id="c1",
+        )
+        graph = graph_with_relationship_edge(
+            graph, snapshot, reader, direct[1], relationship
+        )
+        graph_candidates = (*direct[:2], relationship, direct[2])
+        fitting = select(graph, spec(), snapshot, reader, graph_candidates[:3])
+        task = replace(spec(), byte_budget=fitting.projection.serialized_byte_count + 128)
+        plan = plan_ranked_context(
+            graph, task, snapshot, reader, query=QUERY,
+            direct_candidates=direct, graph_candidates=graph_candidates,
+            jev_enabled=True,
+        )
+        reranked = select(
+            graph, task, snapshot, reader, graph_candidates,
+            observation(graph_candidates, ("c0", "c2", "c1", "relationship-c2"), snapshot),
+            jev_enabled=True, jev_observation_qualified=True,
+        )
+        self.assertEqual("graph", plan.route)
+        self.assertEqual("graph", plan.realized_route(direct, plan.baseline))
+        self.assertEqual("reranked", reranked.order_source)
+        self.assertEqual(plan.baseline.candidate_set_sha256, reranked.candidate_set_sha256)
+        self.assertNotIn("relationship-c2", reranked.projection.selected_candidate_ids)
+        self.assertEqual(
+            "graph_pool_without_selected_relationship",
+            plan.realized_route(direct, reranked),
+        )
+
+    def test_initial_plan_falls_back_when_relationship_does_not_fit(self) -> None:
+        graph, snapshot, reader, candidates = fixture()
+        relationship = replace(
+            candidates[2], candidate_id="relationship-c2",
+            relationship_parent_candidate_id="c1",
+        )
+        graph = graph_with_relationship_edge(
+            graph, snapshot, reader, candidates[1], relationship
+        )
+        baseline = select(graph, spec(), snapshot, reader, candidates[:1])
+        task = replace(spec(), byte_budget=baseline.projection.serialized_byte_count + 64)
+        plan = plan_ranked_context(
+            graph, task, snapshot, reader, query=QUERY,
+            direct_candidates=candidates[:1],
+            graph_candidates=(*candidates[:2], relationship),
+        )
+        self.assertEqual("direct", plan.route)
+        self.assertEqual("graph_selection_no_retained_relationship_gain", plan.reason)
+        self.assertEqual(baseline.projection.selected_candidate_ids,
+                         plan.baseline.projection.selected_candidate_ids)
+
+    def test_plan_task_facets_are_optional_serialized_metadata(self) -> None:
+        graph, snapshot, reader, candidates = fixture()
+        baseline = plan_ranked_context(
+            graph, spec(), snapshot, reader, query=QUERY,
+            direct_candidates=candidates, graph_candidates=candidates,
+            jev_enabled=True,
+        )
+        with_facets = plan_ranked_context(
+            graph, spec(), snapshot, reader, query=QUERY,
+            direct_candidates=candidates, graph_candidates=candidates,
+            jev_enabled=True, task_facets=["implementation", "consequence"],
+        )
+
+        self.assertNotIn("task_facets", json.loads(baseline.to_json()))
+        self.assertEqual(with_facets.task_facets, ("implementation", "consequence"))
+        self.assertEqual(
+            json.loads(with_facets.to_json())["task_facets"],
+            ["implementation", "consequence"],
+        )
+        self.assertEqual(with_facets.route, baseline.route)
+        self.assertEqual(with_facets.candidates, baseline.candidates)
+        self.assertEqual(with_facets.baseline, baseline.baseline)
+
+    def test_plan_task_facets_reject_invalid_values(self) -> None:
+        graph, snapshot, reader, candidates = fixture()
+        invalid = (
+            "implementation",
+            {"implementation"},
+            [""],
+            [" implementation"],
+            ["implementation", "implementation"],
+            ["implementation\nconsequence"],
+            ["facet"] * 21,
+        )
+        for task_facets in invalid:
+            with self.subTest(task_facets=task_facets):
+                with self.assertRaises((TypeError, ValueError)):
+                    plan_ranked_context(
+                        graph, spec(), snapshot, reader, query=QUERY,
+                        direct_candidates=candidates, graph_candidates=candidates,
+                        task_facets=task_facets,
+                    )
+
+    def test_plan_context_fidelity_reports_complete_excerpt_and_omitted_modes(self) -> None:
+        graph, snapshot, reader, candidates, tight = self.tight_fixture()
+        complete = replace(candidates[1], source_unit_complete=True)
+        self.assertEqual(complete.candidate_id, candidates[1].candidate_id)
+        self.assertEqual(complete._packet_value(), candidates[1]._packet_value())
+        with self.assertRaises(TypeError):
+            replace(candidates[1], source_unit_complete=1)
+        complete_candidates = (candidates[0], complete, candidates[2])
+        complete_plan = plan_ranked_context(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            direct_candidates=complete_candidates,
+            graph_candidates=complete_candidates,
+            task_facets=["optional"],
+        )
+        bounded_plan = plan_ranked_context(
+            graph,
+            tight,
+            snapshot,
+            reader,
+            query=QUERY,
+            direct_candidates=candidates,
+            graph_candidates=candidates,
+            task_facets=["optional"],
+        )
+
+        complete_fidelity = complete_plan.to_dict()["context_fidelity"]
+        complete_decisions = {
+            item["candidate_id"]: item
+            for item in complete_fidelity["decisions"]
+        }
+        bounded_fidelity = bounded_plan.to_dict()["context_fidelity"]
+        bounded_decisions = {
+            item["candidate_id"]: item
+            for item in bounded_fidelity["decisions"]
+        }
+        self.assertEqual(complete_decisions["c0"]["mode"], "excerpt")
+        self.assertEqual(complete_decisions["c1"]["mode"], "source_unit")
+        self.assertEqual(complete_decisions["c2"]["mode"], "omit")
+        self.assertTrue(complete_decisions["c0"]["included"])
+        self.assertTrue(complete_decisions["c1"]["included"])
+        self.assertFalse(complete_decisions["c2"]["included"])
+        self.assertEqual(bounded_decisions["c1"]["mode"], "excerpt")
+        self.assertEqual(
+            complete_plan.baseline.projection.selected_candidate_ids,
+            bounded_plan.baseline.projection.selected_candidate_ids,
+        )
+
+    def test_plan_context_fidelity_reuse_state_requires_current_identity(self) -> None:
+        graph, snapshot, reader, candidates = fixture()
+
+        def build(
+            *,
+            query: str = QUERY,
+            task: TaskSpec | None = None,
+            current_snapshot: SourceSnapshotV4 = snapshot,
+            current_candidates: tuple[RankedContextCandidate, ...] = candidates,
+            prior_plan: RankedContextPlan | None = None,
+        ) -> RankedContextPlan:
+            return plan_ranked_context(
+                graph,
+                task or spec(),
+                current_snapshot,
+                reader,
+                query=query,
+                direct_candidates=current_candidates,
+                graph_candidates=current_candidates,
+                task_facets=["optional"],
+                prior_plan=prior_plan,
+            )
+
+        first = build()
+        same = build(prior_plan=first)
+        changed_query = build(query=QUERY + " changed", prior_plan=first)
+        wider = build(
+            task=replace(spec(), byte_budget=spec().byte_budget + 1),
+            prior_plan=first,
+        )
+        changed_snapshot = SourceSnapshotV4(
+            (*snapshot.sources, SourceIdentityV4(
+                "src/other.py", 5, hashlib.sha256(b"other").hexdigest()
+            ))
+        )
+        changed_snapshot_plan = build(
+            current_snapshot=changed_snapshot, prior_plan=first
+        )
+        changed_candidates = (*candidates[:2], replace(candidates[2], candidate_id="c2-new"))
+        changed_candidate_plan = build(
+            current_candidates=changed_candidates, prior_plan=first
+        )
+        without_prior = build()
+
+        def state(plan: RankedContextPlan) -> str:
+            return plan.to_dict()["context_fidelity"]["reuse_state"]
+
+        self.assertEqual(state(first), "rebuild")
+        self.assertEqual(state(same), "reuse")
+        self.assertEqual(state(changed_query), "refresh")
+        self.assertEqual(state(wider), "widen")
+        self.assertEqual(state(changed_snapshot_plan), "rebuild")
+        self.assertEqual(state(changed_candidate_plan), "rebuild")
+        self.assertEqual(state(without_prior), "rebuild")
+        self.assertEqual(
+            first.baseline.projection.selected_candidate_ids,
+            same.baseline.projection.selected_candidate_ids,
+        )
+        self.assertEqual(
+            first.baseline.projection.selected_candidate_ids,
+            without_prior.baseline.projection.selected_candidate_ids,
         )
 
     def test_unqualified_or_invalid_jev_observation_retains_baseline(self) -> None:

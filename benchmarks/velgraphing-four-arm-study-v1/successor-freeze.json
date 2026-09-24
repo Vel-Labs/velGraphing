@@ -1,0 +1,209 @@
+{
+  "bindings": {
+    "fact_witness_map_sha256": "430aaebf981f370b6a8005168252d2676a3a361c0d705b7faa43479c87a5b5ad",
+    "fallback_allowlist_sha256": "75e4c72c5a3b945a8bd1cfdbb994341cd185060ce33450c23357fe0f8583d122",
+    "historical_freeze_sha256": "960393967f933d2640e642f70f59296805021d697b4c3defbe65aec45bb8b1ed",
+    "historical_preflight_sha256": "4c329a1a6fcc004d4a2b566b66fefbd3e2a1152c615f6d131d78c199c3c7f4f8",
+    "implementation": {
+      "calibration": {
+        "path": "scripts/benchmarks/time_to_correct_calibration.py",
+        "sha256": "a015b481053dc54cb338db22ef321453f10ca7eff44b8fa93b58de1767217235"
+      },
+      "controller": {
+        "path": "scripts/benchmarks/four_arm_study_v1.py",
+        "sha256": "3478fdaeaea6b59f7ac84defca43f0f70fbeaf871200b21bf55ed94593e2d226"
+      },
+      "host": {
+        "path": "scripts/benchmarks/time_to_correct_host.py",
+        "sha256": "7397a269af33f3384e63b611b272e1990cb7f33d6a845a7e9c863af2fcd35885"
+      }
+    },
+    "package_candidate": {
+      "candidate_sha256": "efd2f9010d2718ea684db1aaddd5ebbeaf553746513eac0f89251c49e610fa78",
+      "manifest_path": "plugins/graph-engineering/.codex-plugin/release-manifest.json",
+      "manifest_sha256": "1a8380099d964691ed3981cc6e2a1fa110a84cdbfc095d42633ebd17868d5690",
+      "name": "graph-engineering",
+      "version": "0.2.0-rc.1"
+    },
+    "pool_bindings": {
+      "direct:D-01": "d5ff853da5725875aa6fa812569ddc02a70b23352d8c59b27fecb79937609fb6",
+      "direct:L-01": "ea70e8352988940102be3e58459027e99cf301dcc5f35b935baa062608175da2",
+      "direct:M-02": "7f951d76ba2a69cfbd49e890e46554174eec5253b796097edf764c1071b4c498",
+      "direct:S-01": "0c97557b80d65483ab0484a6ef05570d262da49716fb624de777636423704c49",
+      "graph:D-01": "b0e2df0e7bae33ec64b909b1bf1f1f2675ab613c576354770cfe668f47deee5b",
+      "graph:L-01": "8f2851e56b0e15cafa457e428d7d6e77a22d61e3635ce8c79ef07f60de65d93e",
+      "graph:M-02": "924d32fa3097327ac1c3e85b3171a614de04d4a266003c2e9ba6aea1f370a30e",
+      "graph:S-01": "7dc43f5ff265b3b43f1a5c9183bf7cf8d2d4a55fe7dfd8b6b88499db45712b33"
+    },
+    "request_byte_set_sha256": "80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94",
+    "source_snapshots": {
+      "engineering-handbook": "594aa47760172eba049e18c5f3a2f602a7b96b73a315756876955d7be81cd402",
+      "openchain-reference-material": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
+      "thealgorithms-python": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
+    },
+    "successor_rubric_sha256": "38fe9d2fa34a9426335d4e77b3e6ca77fd2a4181a469bde9e3848049eb94445b",
+    "successor_ttc_core_sha256": "7a889db6d9251bc7edadc11a4ad368bfacf6056d6cfc5610dc38bd8177ce3725",
+    "witness_custody_sha256": "e042c9ee45c7fcc9e36a7ad693b7f77106f12dd94f06756b9e8ae19e276be38b"
+  },
+  "claim_boundary": {
+    "allowed": [
+      "oracle_assisted_fallback_ttc_under_frozen_contract"
+    ],
+    "prohibited": [
+      "direct_retrieval_performance",
+      "graph_retrieval_performance",
+      "jev_retrieval_performance",
+      "direct_graph_or_jev_comparative_retrieval_performance"
+    ]
+  },
+  "execution_policy": {
+    "answer_calls_per_trial": 1,
+    "answer_repairs": 0,
+    "answer_tasks_created": 0,
+    "exact_host_argv_arrays": 32,
+    "execution_ready": false,
+    "final_user_reack_required": true,
+    "fresh_answer_lanes": 16,
+    "fresh_grader_lanes": 16,
+    "fresh_no_history": true,
+    "grader_calls_per_trial": 1,
+    "grader_tasks_created": 0,
+    "jev_max_calls": 8,
+    "jev_retries": 0,
+    "lane_reuse": false,
+    "live_lanes_created": 0,
+    "max_additional_provider_spend_usd": "0.9031",
+    "planned_jev_calls": 8,
+    "provider_budget_authority": {
+      "currency": "USD",
+      "historical_reservation_reconciliation": {
+        "amount_usd": "0.359789241",
+        "attributable_to_operator_reported_account_level_spend": false,
+        "basis": "historical_request_byte_based_total_reservation",
+        "charged": false,
+        "counts_as_spend": false,
+        "status": "retired_historical_only",
+        "subtract_again_from_remaining_budget": false
+      },
+      "max_additional_spend_usd": "0.9031",
+      "operator_reported_calls_to_date": 108,
+      "operator_reported_spend_to_date_usd": "0.0969",
+      "operator_reported_tokens_to_date": 2371440,
+      "provider_verified": false,
+      "remaining_authorized_usd": "0.9031",
+      "source": "operator_provided_typesafe_account_truth",
+      "total_authorized_usd": "1.0000"
+    },
+    "provider_calls_executed": 0,
+    "provider_spend_authorized": false,
+    "task_retries": 0
+  },
+  "provider_boundary": {
+    "provider_performance_publication": "forbidden_without_separate_provider_permission",
+    "provider_specific_results": "private_without_separate_permission",
+    "request_bytes_are_not_a_cost_or_reservation_bound": true
+  },
+  "result_contract": {
+    "required_fields": [
+      "answer_call_count",
+      "attempt_count",
+      "claim_boundary",
+      "classification",
+      "confirmed_ttc_ns_by_trial",
+      "controller_sha256",
+      "fact_witness_map_sha256",
+      "fallback_allowlist_sha256",
+      "grader_call_count",
+      "host_sha256",
+      "lane_manifest_sha256",
+      "pool_bindings",
+      "request_byte_set_sha256",
+      "source_snapshots",
+      "successor_grader_response_contract_sha256",
+      "successor_rubric_sha256",
+      "successor_ttc_contract_sha256",
+      "usage_missingness",
+      "verified_fallback_invocations",
+      "verifier_policy_sha256",
+      "wall_time_ns_by_trial",
+      "witness_custody_sha256"
+    ],
+    "schema_version": "velgraphing-four-arm-result-v2",
+    "token_policy": "host_reported_only_never_estimate_from_bytes"
+  },
+  "schema_version": "velgraphing-four-arm-successor-freeze-v1",
+  "status": "pending_lane_manifest_and_final_user_reack",
+  "study_id": "velgraphing-four-arm-study-v1",
+  "telemetry_schema": {
+    "failure": [
+      "failure_class",
+      "missingness"
+    ],
+    "quality": [
+      "accepted_correctness",
+      "first_pass_correctness"
+    ],
+    "time_ms": [
+      "user_visible_wall",
+      "user_visible_wall_excluding_operator_approval",
+      "discovery",
+      "graph_build",
+      "graph_load",
+      "source_capture",
+      "provider",
+      "selection_and_context_composition",
+      "answer",
+      "grading",
+      "fallback_and_repair",
+      "operator_approval"
+    ],
+    "unknown_policy": "Every unavailable value is null with an explicit missingness reason; never infer tokens from bytes.",
+    "usage": [
+      "answer_input_tokens",
+      "answer_output_tokens",
+      "answer_cached_input_tokens",
+      "grader_input_tokens",
+      "grader_output_tokens",
+      "grader_cached_input_tokens",
+      "provider_input_tokens",
+      "provider_output_tokens",
+      "provider_cached_input_tokens",
+      "provider_cost_usd",
+      "request_bytes",
+      "context_bytes"
+    ]
+  },
+  "trial_matrix": {
+    "arms": {
+      "A": "edge-disabled frozen-shortlist baseline; Jev off",
+      "B": "edge-disabled frozen-shortlist baseline; Jev on",
+      "C": "relationship-enabled frozen-shortlist arm; Jev off",
+      "D": "relationship-enabled frozen-shortlist arm; Jev on"
+    },
+    "dispatch_order": [
+      "A-S-01",
+      "B-S-01",
+      "C-S-01",
+      "D-S-01",
+      "B-D-01",
+      "C-D-01",
+      "D-D-01",
+      "A-D-01",
+      "C-L-01",
+      "D-L-01",
+      "A-L-01",
+      "B-L-01",
+      "D-M-02",
+      "A-M-02",
+      "B-M-02",
+      "C-M-02"
+    ],
+    "tasks": [
+      "S-01",
+      "D-01",
+      "L-01",
+      "M-02"
+    ],
+    "trial_count": 16
+  }
+}

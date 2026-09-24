@@ -63,6 +63,13 @@ _IMPORT = re.compile(
 _MARKDOWN_LINK = re.compile(rb"\[([^\]\r\n]+)\]\(([^)\r\n]+)\)")
 _RELATION_MARKDOWN_HEADING = re.compile(r"(?m)^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
 _RELATION_MARKDOWN_LINK = re.compile(r"\[[^\]\n]+\]\(([^)\n]+)\)")
+_ORDERED_SUCCESSOR_PATH = re.compile(
+    r"(?<![A-Za-z0-9_./-])((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.py)(?![A-Za-z0-9_.-])"
+)
+_ORDERED_SUCCESSOR_ANCHOR = re.compile(
+    r"\bimported\s+dependency\s+immediately\s+after\s+[`'\"]?([A-Za-z_][A-Za-z0-9_]*)[`'\"]?\b",
+    re.IGNORECASE,
+)
 
 _STOPWORDS = frozenset(
     {
@@ -517,12 +524,13 @@ def ranked_candidates_from_retrieval(
     maximum_candidates: int,
     maximum_candidate_bytes: int,
     maximum_unit_bytes: int,
+    ordered_successor: tuple[str, str] | None = None,
 ) -> tuple[RankedContextCandidate, ...]:
     """Build one explicitly capped, Jev-compatible candidate shortlist.
 
     Candidate ranges are source-bound units. A bounded fallback range is not a
-    completeness claim. Required status comes only from caller-declared proof
-    obligation evidence.
+    completeness claim. Required status comes from caller-declared proof
+    obligations or a uniquely verified explicit ordered successor.
     """
 
     from .selection import RankedContextCandidate
@@ -540,6 +548,15 @@ def ranked_candidates_from_retrieval(
             raise ValueError(f"{label}_invalid")
     if retrieval.fail_closed:
         raise ValueError("retrieval_failed_closed")
+    if ordered_successor is not None and (
+        type(ordered_successor) is not tuple
+        or len(ordered_successor) != 2
+        or not _valid_source_path(ordered_successor[0])
+        or not ordered_successor[0].endswith(".py")
+        or type(ordered_successor[1]) is not str
+        or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", ordered_successor[1])
+    ):
+        raise ValueError("ordered_successor_request_invalid")
     source_bytes = _read_verified_source_bytes(snapshot, reader)
     sources = {source.path: source for source in snapshot.sources}
     records = graph.record_map()
@@ -557,6 +574,7 @@ def ranked_candidates_from_retrieval(
         relationship_direction: str | None = None,
         relationship_relation: str | None = None,
         relationship_sensitivity: Sensitivity | None = None,
+        source_unit_complete: bool = False,
     ) -> RankedContextCandidate:
         record = records.get(record_id)
         source = sources.get(path)
@@ -591,6 +609,7 @@ def ranked_candidates_from_retrieval(
             path, digest, start, end, required, record_id, parent_id,
             relationship_edge_id, relationship_direction, relationship_relation,
             relationship_sensitivity,
+            source_unit_complete=source_unit_complete,
         )
 
     required: list[RankedContextCandidate] = []
@@ -682,6 +701,7 @@ def ranked_candidates_from_retrieval(
                 candidate = make_candidate(
                     hit.record_id, hit.source_path, source.sha256, start, end,
                     required=False,
+                    source_unit_complete=units[(start, end)][1],
                 )
             except JevError as error:
                 if str(error) == "unsupported_source_type":
@@ -832,6 +852,7 @@ def ranked_candidates_from_retrieval(
         for start, end in sorted(units, key=unit_priority):
             candidate = make_candidate(
                 record.record_id, path, source.sha256, start, end, required=False,
+                source_unit_complete=units[(start, end)][1],
             )
             if candidate.candidate_id in completion_ids:
                 continue
@@ -845,6 +866,133 @@ def ranked_candidates_from_retrieval(
         if offset < len(candidates := completion_by_path[path])
     ][:_MAX_EVIDENCE_COMPLETIONS]
     primary = [*required, *completion, *optional]
+    ordered_successor_candidates: list[RankedContextCandidate] = []
+    if ordered_successor is not None:
+        caller_path, anchor_symbol = ordered_successor
+        caller_records = [
+            record for record in records.values()
+            if record.provenance.path == caller_path
+        ]
+        caller = sources.get(caller_path)
+        caller_raw = source_bytes.get(caller_path)
+        if (
+            len(caller_records) != 1 or caller is None or caller_raw is None
+        ):
+            raise ValueError("ordered_successor_caller_unavailable")
+        caller_record = caller_records[0]
+        if (
+            caller_record.provenance.sha256 != caller.sha256
+            or caller_record.content.encode("utf-8") != caller_raw
+            or not is_authenticated_eligible(caller_record, task.allowed_sensitivities)
+        ):
+            raise ValueError("ordered_successor_caller_unavailable")
+        try:
+            caller_tree = ast.parse(caller_raw.decode("utf-8"))
+        except (UnicodeDecodeError, SyntaxError) as error:
+            raise ValueError("ordered_successor_caller_unreadable") from error
+        import_events: list[tuple[ast.alias | None, ast.ImportFrom | ast.Import]] = []
+        for statement in caller_tree.body:
+            if isinstance(statement, ast.ImportFrom):
+                import_events.extend((alias, statement) for alias in statement.names)
+            elif isinstance(statement, ast.Import):
+                import_events.extend((None, statement) for _ in statement.names)
+        anchors = [
+            index for index, (alias, statement) in enumerate(import_events)
+            if (
+                alias is not None
+                and isinstance(statement, ast.ImportFrom)
+                and (alias.asname or alias.name) == anchor_symbol
+            )
+        ]
+        if len(anchors) != 1:
+            raise ValueError("ordered_successor_anchor_ambiguous")
+        successor_index = anchors[0] + 1
+        if successor_index >= len(import_events):
+            raise ValueError("ordered_successor_missing")
+        anchor_alias, anchor_import = import_events[anchors[0]]
+        successor_alias, successor_import = import_events[successor_index]
+        if (
+            anchor_alias is None
+            or not isinstance(anchor_import, ast.ImportFrom)
+            or successor_alias is None
+            or not isinstance(successor_import, ast.ImportFrom)
+            or successor_alias.name == "*"
+        ):
+            raise ValueError("ordered_successor_import_unsupported")
+        module = _relation_resolved_module(caller_path, successor_import)
+        module_paths = [
+            path for path in sources if _relation_module_name(path) == module
+        ]
+        if module is None or len(module_paths) != 1:
+            raise ValueError("ordered_successor_module_ambiguous")
+        target_path = module_paths[0]
+        target_source = sources[target_path]
+        target_raw = source_bytes.get(target_path)
+        target_records = [
+            record for record in records.values()
+            if record.provenance.path == target_path
+        ]
+        if (
+            target_raw is None
+            or len(target_records) != 1
+            or target_records[0].provenance.sha256 != target_source.sha256
+            or target_records[0].content.encode("utf-8") != target_raw
+            or not is_authenticated_eligible(target_records[0], task.allowed_sensitivities)
+        ):
+            raise ValueError("ordered_successor_target_unavailable")
+        try:
+            target_tree = ast.parse(target_raw.decode("utf-8"))
+        except (UnicodeDecodeError, SyntaxError) as error:
+            raise ValueError("ordered_successor_target_unreadable") from error
+        declarations = [
+            node for node in target_tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            and node.name == successor_alias.name
+        ]
+        if len(declarations) != 1:
+            raise ValueError("ordered_successor_declaration_ambiguous")
+        anchor_statement_bounds = _relation_ast_range(caller_raw, anchor_import)
+        successor_statement_bounds = _relation_ast_range(caller_raw, successor_import)
+        if anchor_statement_bounds is None or successor_statement_bounds is None:
+            raise ValueError("ordered_successor_import_unreadable")
+        anchor_start = anchor_statement_bounds[0]
+        successor_end = successor_statement_bounds[1]
+        if anchor_start >= successor_end:
+            raise ValueError("ordered_successor_import_order_invalid")
+        declaration = declarations[0]
+        declaration_name = _relation_declaration_name_ranges(target_raw).get(
+            (declaration.lineno, "class" if isinstance(declaration, ast.ClassDef) else "def", declaration.name)
+        )
+        if declaration_name is None:
+            raise ValueError("ordered_successor_declaration_unreadable")
+        target_start, target_end, target_complete = _bounded_source_unit_bounds(
+            target_raw, target_path, *declaration_name, maximum_unit_bytes
+        )
+        if not target_complete:
+            raise ValueError("ordered_successor_unit_incomplete")
+        ordered_successor_candidates = [
+            make_candidate(
+                caller_record.record_id, caller_path, caller.sha256,
+                anchor_start, successor_end, required=True, source_unit_complete=True,
+            ),
+            make_candidate(
+                target_records[0].record_id, target_path, target_source.sha256,
+                target_start, target_end, required=True, source_unit_complete=True,
+            ),
+        ]
+    priority_ids = {candidate.candidate_id for candidate in ordered_successor_candidates}
+    required_ids = {candidate.candidate_id for candidate in required}
+    for candidate in ordered_successor_candidates:
+        if candidate.candidate_id not in required_ids:
+            required.append(candidate)
+            required_ids.add(candidate.candidate_id)
+    primary = [
+        *required,
+        *(
+            candidate for candidate in primary
+            if candidate.candidate_id not in required_ids
+        ),
+    ]
 
     primary_ids = {candidate.candidate_id for candidate in primary}
     supports_by_parent: dict[str, list[RankedContextCandidate]] = defaultdict(list)
@@ -917,7 +1065,7 @@ def ranked_candidates_from_retrieval(
         )
         if parent is None:
             continue
-        start, end, _ = _bounded_source_unit_bounds(
+        start, end, source_unit_complete = _bounded_source_unit_bounds(
             raw, coordinate.source_path, coordinate.byte_start,
             coordinate.byte_end, maximum_unit_bytes,
         )
@@ -932,6 +1080,7 @@ def ranked_candidates_from_retrieval(
                 relationship_direction=support.direction,
                 relationship_relation=support.relation,
                 relationship_sensitivity=support.sensitivity,
+                source_unit_complete=source_unit_complete,
             )
         except JevError as error:
             if str(error) == "unsupported_source_type":
@@ -945,7 +1094,10 @@ def ranked_candidates_from_retrieval(
     ordered: list[RankedContextCandidate] = list(required)
     for candidate in required:
         ordered.extend(supports_by_parent.get(candidate.candidate_id, ()))
-    nonrequired = [*completion, *optional]
+    nonrequired = [
+        candidate for candidate in [*completion, *optional]
+        if candidate.candidate_id not in required_ids
+    ]
     relationship_parents = [
         candidate for candidate in nonrequired
         if supports_by_parent.get(candidate.candidate_id)
@@ -991,7 +1143,23 @@ def ranked_candidates_from_retrieval(
         retained.append(candidate)
         retained_ids.add(candidate.candidate_id)
         used += size
+    if ordered_successor_candidates and not priority_ids.issubset(retained_ids):
+        raise ValueError("ordered_successor_candidate_budget_exceeded")
     return tuple(retained)
+
+
+def ordered_successor_request_from_prompt(
+    prompt: str,
+) -> tuple[str, str] | None:
+    """Extract one explicit Python source path and ordered-import anchor."""
+
+    if type(prompt) is not str:
+        return None
+    paths = _ORDERED_SUCCESSOR_PATH.findall(prompt)
+    anchors = _ORDERED_SUCCESSOR_ANCHOR.findall(prompt)
+    if len(paths) != 1 or len(anchors) != 1 or not _valid_source_path(paths[0]):
+        return None
+    return paths[0], anchors[0]
 
 
 @dataclass(frozen=True)
@@ -3422,6 +3590,7 @@ __all__ = [
     "SourceRelationCoverage", "SourceRelationResult",
     "TagKind", "build_repository_file_cards", "build_repository_tag_index",
     "compile_prompt", "compile_proof_obligations", "match_proof_obligation", "match_proof_obligations",
-    "derive_source_relations", "graph_find", "retrieve", "retrieve_hybrid", "ranked_candidates_from_retrieval",
+    "derive_source_relations", "graph_find", "retrieve", "retrieve_hybrid",
+    "ranked_candidates_from_retrieval", "ordered_successor_request_from_prompt",
     "navigate", "compose_navigation_context",
 ]

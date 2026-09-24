@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for improving VelGraphing. Keep changes source-bound, small, and
+Thank you for improving RetrieVel. Keep changes source-bound, small, and
 readable. Repository source is authoritative; generated plugin runtime files
 must be regenerated from source.
 

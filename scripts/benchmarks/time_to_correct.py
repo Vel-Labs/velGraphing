@@ -58,6 +58,15 @@ class _ControllerDeadline(Exception):
     """Private signal for the controller-owned wall deadline."""
 
 
+TRANSIENT_MODEL_ERRORS = frozenset({
+    "process_unavailable", "process_response_timeout",
+    "process_response_malformed", "process_output_invalid_json",
+    "process_output_not_canonical", "invalid_answer_output",
+    "invalid_grader_output", "grader_required_fact_decisions_mismatch",
+    "answer_evidence_citation_missing",
+})
+
+
 def canonical(value: Any) -> bytes:
     return json.dumps(value, sort_keys=True, ensure_ascii=True, allow_nan=False,
                       separators=(",", ":")).encode("utf-8")
@@ -163,7 +172,8 @@ class Trial:
 
     def __init__(self, identity: Mapping[str, Any], budget: Budget = Budget(), *,
                  clock: Callable[[], int] = time.monotonic_ns,
-                 execution: str = "observed", pass_recall_min: float = 0.9) -> None:
+                 execution: str = "observed", pass_recall_min: float = 0.9,
+                 retry_transient: bool = False) -> None:
         if set(identity) != IDENTITY or identity["arm"] not in {"A", "B", "C", "D"}:
             raise MeasurementError("invalid_trial_identity")
         for key, value in identity.items():
@@ -177,6 +187,9 @@ class Trial:
             raise MeasurementError("invalid_execution_kind")
         if type(pass_recall_min) not in (int, float) or not math.isfinite(pass_recall_min) or not 0 <= pass_recall_min <= 1:
             raise MeasurementError("invalid_pass_threshold")
+        if type(retry_transient) is not bool:
+            raise MeasurementError("invalid_retry_policy")
+        self.retry_transient = retry_transient
         self.pass_recall_min = float(pass_recall_min)
         self.identity = MappingProxyType(dict(identity))
         self.budget = budget
@@ -422,19 +435,25 @@ class Trial:
                     self.stamp("first_passing_answer")
                     reason = "passed"
                 else:
-                    reason = "repair_budget_exhausted" if number == self.budget.max_repairs else "needs_repair"
+                    reason = ("repair_budget_exhausted" if self.retry_transient
+                              or number == self.budget.max_repairs else "needs_repair")
             except _ControllerDeadline:
                 reason = "deadline_exceeded"
                 self.current["failure_stage"] = "controller"
                 self.current["failure_reason"] = reason
             except TimeoutError:
-                reason = "callback_timeout"
+                reason = ("needs_repair" if self.retry_transient
+                          and stage in {"answer", "grader"}
+                          and number < self.budget.max_repairs else "callback_timeout")
                 self.current["failure_stage"] = stage
-                self.current["failure_reason"] = reason
+                self.current["failure_reason"] = "callback_timeout"
             except (KeyboardInterrupt, InterruptedError):
                 reason = "cancelled"
             except MeasurementError as exc:
-                reason = "measurement_error"
+                reason = ("needs_repair" if self.retry_transient
+                          and stage in {"answer", "grader"}
+                          and exc.reason in TRANSIENT_MODEL_ERRORS
+                          and number < self.budget.max_repairs else "measurement_error")
                 self.current["failure_stage"] = stage
                 self.current["failure_reason"] = exc.reason
             except (Exception, SystemExit):

@@ -13,7 +13,7 @@ from typing import Any, Mapping
 import uuid
 
 from time_to_correct import (Answer, Budget, Grade, MeasurementError, Trial, canonical, digest,
-                             identifier, load_completed_trials, save_completed_trial,
+                             identifier, integer, load_completed_trials, save_completed_trial,
                              summarize)
 from time_to_correct_graph import observe_graph_find
 from time_to_correct_handoff import (HandoffError, atomic_write, atomic_write_at,
@@ -366,9 +366,10 @@ def _python_executable(value: str | Path | None) -> str:
 
 
 def handoff_argv(run_root: Path, trial_id: str, lane: str, wait_seconds: float,
-                 python_executable: str | Path | None = None) -> list[str]:
+                 python_executable: str | Path | None = None,
+                 attempt: int = 0) -> list[str]:
     return [_python_executable(python_executable), str(HANDOFF_PATH), "wait", "--run-root", str(run_root),
-            "--trial-id", trial_id, "--attempt", "0", "--lane", lane,
+            "--trial-id", trial_id, "--attempt", str(integer(attempt)), "--lane", lane,
             "--wait-seconds", str(wait_seconds)]
 
 

@@ -30,8 +30,8 @@ do not force writing, design, or implementation tasks into one synthetic score.
 ## Upstream Feedback
 
 Classify each reproducible finding as a target-repository problem, benchmark
-harness problem, documentation gap, measurement gap, or VelGraphing product
-problem. Offer an upstream issue only for a VelGraphing product problem. First
+harness problem, documentation gap, measurement gap, or RetrieVel product
+problem. Offer an upstream issue only for a RetrieVel product problem. First
 show the exact sanitized issue draft from the report template. Exclude private
 operator details, repository identities, absolute paths, proprietary source,
 prompts, secrets, business data, and unrelated benchmark data. Explain that
@@ -41,7 +41,7 @@ from retrieval accuracy, graph coverage, source verification, fallback routing,
 context or tool efficiency, setup or update reliability, benchmark accuracy,
 documentation, and usability. Then ask:
 
-> I found a reproducible VelGraphing improvement: `<one-sentence summary>`.
+> I found a reproducible RetrieVel improvement: `<one-sentence summary>`.
 >
 > Your name, repository identity, local paths, private source, prompts, and
 > business data will not be shared. The public issue will contain only the
@@ -49,7 +49,7 @@ documentation, and usability. Then ask:
 > reproduction.
 >
 > This issue could help improve:
-> - `<specific VelGraphing capability>`
+> - `<specific RetrieVel capability>`
 > - `<optional related capability>`
 >
 > Would you like me to open this exact sanitized issue in

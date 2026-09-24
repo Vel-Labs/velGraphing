@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
-from typing import Any
+from typing import Any, Sequence
 
 from .jev import PACKET_VERSION, canonical as jev_canonical, sha256 as jev_sha256, validate_packet
 
@@ -53,6 +53,27 @@ _REVERSE_RELATIONS = frozenset(
         "tests", "uses",
     }
 )
+_MAX_TASK_FACETS = 20
+_CLASSIFICATION_OBSERVATION_SCHEMA = "retrievel-classification-observation-v1"
+
+
+def _validated_task_facets(value: object) -> tuple[str, ...]:
+    if type(value) not in {list, tuple}:
+        raise TypeError("task_facets must be a list or tuple of strings")
+    facets = tuple(value)
+    if (
+        len(facets) > _MAX_TASK_FACETS
+        or any(
+            type(facet) is not str
+            or not facet
+            or facet != facet.strip()
+            or any(ord(character) < 32 for character in facet)
+            for facet in facets
+        )
+        or len(facets) != len(set(facets))
+    ):
+        raise ValueError("task_facets must be unique, bounded, and printable")
+    return facets
 
 
 @dataclass(frozen=True)
@@ -169,8 +190,11 @@ class RankedContextCandidate:
     relationship_direction: str | None = None
     relationship_relation: str | None = None
     relationship_sensitivity: Sensitivity | None = None
+    source_unit_complete: bool = False
 
     def __post_init__(self) -> None:
+        if type(self.source_unit_complete) is not bool:
+            raise TypeError("source_unit_complete must be an exact boolean")
         if type(self.record_id) is not str or not self.record_id:
             raise ValueError("record_id must be a non-empty string")
         if (
@@ -236,6 +260,8 @@ class RankedContextJevDecision:
     baseline_omitted_candidate_count: int
     baseline_omitted_excerpt_bytes: int
     relationship_candidate_signal: bool
+    classification_observation_applied: bool = False
+    classification_source: str = "none"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -243,6 +269,8 @@ class RankedContextJevDecision:
             "baseline_omitted_excerpt_bytes": self.baseline_omitted_excerpt_bytes,
             "baseline_selected_candidate_count": self.baseline_selected_candidate_count,
             "baseline_selected_excerpt_bytes": self.baseline_selected_excerpt_bytes,
+            "classification_observation_applied": self.classification_observation_applied,
+            "classification_source": self.classification_source,
             "jev_call_could_affect_selection": self.jev_call_could_affect_selection,
             "jev_enabled": self.jev_enabled,
             "jev_observation_applied": self.jev_observation_applied,
@@ -274,9 +302,36 @@ class RankedContextPlan:
     reason: str
     candidates: tuple[RankedContextCandidate, ...]
     baseline: RankedContextResult
+    task_facets: tuple[str, ...] = ()
+    context_fidelity: dict[str, object] | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.task_facets) is not tuple:
+            raise TypeError("task_facets must be a tuple after plan construction")
+        _validated_task_facets(self.task_facets)
+
+    def realized_route(
+        self,
+        direct_candidates: tuple[RankedContextCandidate, ...],
+        selected: RankedContextResult,
+    ) -> str:
+        if self.route != "graph":
+            return "direct"
+        selected_ids = set(selected.projection.selected_candidate_ids)
+        direct_ids = {candidate.candidate_id for candidate in direct_candidates}
+        return (
+            "graph"
+            if any(
+                candidate.candidate_id not in direct_ids
+                and candidate.candidate_id in selected_ids
+                and candidate.relationship_parent_candidate_id in selected_ids
+                for candidate in self.candidates
+            )
+            else "graph_pool_without_selected_relationship"
+        )
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        result: dict[str, object] = {
             "baseline_fail_closed": self.baseline.projection.fail_closed,
             "candidate_count": len(self.candidates),
             "candidate_set_sha256": self.baseline.candidate_set_sha256,
@@ -285,9 +340,103 @@ class RankedContextPlan:
             "route": self.route,
             "schema_version": "graph-ranked-context-plan-v1",
         }
+        if self.task_facets:
+            result["task_facets"] = list(self.task_facets)
+        if self.context_fidelity is not None:
+            result["context_fidelity"] = self.context_fidelity
+        return result
 
     def to_json(self) -> str:
         return _canonical_json(self.to_dict())
+
+
+def _context_reuse_state(
+    prior_plan: RankedContextPlan | None,
+    *,
+    query_sha256: str,
+    source_snapshot_sha256: str,
+    candidate_set_sha256: str,
+    byte_budget: int,
+    task_facets: tuple[str, ...],
+) -> str:
+    if prior_plan is None or type(prior_plan.context_fidelity) is not dict:
+        return "rebuild"
+    prior = prior_plan.context_fidelity
+    if (
+        prior.get("source_snapshot_sha256") != source_snapshot_sha256
+        or prior.get("candidate_set_sha256") != candidate_set_sha256
+    ):
+        return "rebuild"
+    if (
+        prior.get("query_sha256") != query_sha256
+        or prior.get("requested_task_facets") != list(task_facets)
+    ):
+        return "refresh"
+    prior_budget = prior.get("byte_budget")
+    if type(prior_budget) is not int:
+        return "rebuild"
+    if prior_budget == byte_budget:
+        return "reuse"
+    return "widen" if byte_budget > prior_budget else "refresh"
+
+
+def _context_fidelity_metadata(
+    candidates: tuple[RankedContextCandidate, ...],
+    baseline: RankedContextResult,
+    *,
+    query_sha256: str,
+    source_snapshot_sha256: str,
+    byte_budget: int,
+    task_facets: tuple[str, ...],
+    prior_plan: RankedContextPlan | None,
+) -> dict[str, object]:
+    selected_ids = set(baseline.projection.selected_candidate_ids)
+    decisions: list[dict[str, object]] = []
+    for candidate in candidates:
+        if candidate.candidate_id in selected_ids:
+            mode = "source_unit" if candidate.source_unit_complete else "excerpt"
+            reason = (
+                "selected_complete_source_unit"
+                if candidate.source_unit_complete
+                else "selected_bounded_excerpt"
+            )
+        elif candidate.required:
+            mode = "excerpt"
+            reason = "required_candidate_deferred"
+        else:
+            mode = "omit"
+            reason = "optional_candidate_not_selected"
+        decisions.append({
+            "candidate_id": candidate.candidate_id,
+            "included": candidate.candidate_id in selected_ids,
+            "mode": mode,
+            "reason": reason,
+            "source_path": candidate.source_path,
+            "source_sha256": candidate.source_sha256,
+            "byte_start": candidate.byte_start,
+            "byte_end": candidate.byte_end,
+            "source_unit_complete": candidate.source_unit_complete,
+        })
+    return {
+        "schema_version": "graph-ranked-context-fidelity-v1",
+        "query_sha256": query_sha256,
+        "source_snapshot_sha256": source_snapshot_sha256,
+        "candidate_set_sha256": baseline.candidate_set_sha256,
+        "byte_budget": byte_budget,
+        "reuse_state": _context_reuse_state(
+            prior_plan,
+            query_sha256=query_sha256,
+            source_snapshot_sha256=source_snapshot_sha256,
+            candidate_set_sha256=baseline.candidate_set_sha256,
+            byte_budget=byte_budget,
+            task_facets=task_facets,
+        ),
+        "remaining_byte_budget": max(
+            0, byte_budget - baseline.projection.serialized_byte_count
+        ),
+        "requested_task_facets": list(task_facets),
+        "decisions": decisions,
+    }
 
 
 def plan_ranked_context(
@@ -301,6 +450,8 @@ def plan_ranked_context(
     graph_candidates: tuple[RankedContextCandidate, ...],
     jev_enabled: bool = False,
     fallback_source_paths: tuple[str, ...] = (),
+    task_facets: Sequence[str] = (),
+    prior_plan: RankedContextPlan | None = None,
 ) -> RankedContextPlan:
     """Choose a verified shortlist and plan optional Jev use without a provider call."""
 
@@ -314,9 +465,13 @@ def plan_ranked_context(
             raise TypeError(f"{name} must be a tuple of exact RankedContextCandidate values")
     if type(jev_enabled) is not bool:
         raise TypeError("jev_enabled must be an exact boolean")
+    if prior_plan is not None and type(prior_plan) is not RankedContextPlan:
+        raise TypeError("prior_plan must be an exact RankedContextPlan or None")
+    validated_task_facets = _validated_task_facets(task_facets)
     direct_by_id = {candidate.candidate_id: candidate for candidate in direct_candidates}
     graph_by_id = {candidate.candidate_id: candidate for candidate in graph_candidates}
     graph_adds_relationship = False
+    relationship_gain_ids: set[str] = set()
     prior_graph_candidates: dict[str, RankedContextCandidate] = {}
     for candidate in graph_candidates:
         parent_id = candidate.relationship_parent_candidate_id
@@ -331,6 +486,7 @@ def plan_ranked_context(
             )
         ):
             graph_adds_relationship = True
+            relationship_gain_ids.add(candidate.candidate_id)
         prior_graph_candidates[candidate.candidate_id] = candidate
     required_preserved = all(
         not candidate.required or graph_by_id.get(candidate.candidate_id) == candidate
@@ -344,6 +500,19 @@ def plan_ranked_context(
         else "direct_baseline_no_graph_relationship_gain"
     )
     candidates = graph_candidates if use_graph else direct_candidates
+    direct_baseline = None
+    if use_graph:
+        direct_baseline = select_ranked_context(
+            graph,
+            task,
+            snapshot,
+            reader,
+            query=query,
+            candidates=direct_candidates,
+            jev_observation=None,
+            jev_enabled=jev_enabled,
+            fallback_source_paths=fallback_source_paths,
+        )
     baseline = select_ranked_context(
         graph,
         task,
@@ -355,7 +524,63 @@ def plan_ranked_context(
         jev_enabled=jev_enabled,
         fallback_source_paths=fallback_source_paths,
     )
-    return RankedContextPlan(route, reason, candidates, baseline)
+    if use_graph and direct_baseline is not None and (
+        not direct_baseline.projection.fail_closed
+        and (
+            baseline.projection.fail_closed
+            or not {
+                (
+                    direct_by_id[candidate_id].source_path,
+                    direct_by_id[candidate_id].source_sha256,
+                    direct_by_id[candidate_id].byte_start,
+                    direct_by_id[candidate_id].byte_end,
+                )
+                for candidate_id in direct_baseline.projection.selected_candidate_ids
+            }.issubset({
+                (
+                    graph_by_id[candidate_id].source_path,
+                    graph_by_id[candidate_id].source_sha256,
+                    graph_by_id[candidate_id].byte_start,
+                    graph_by_id[candidate_id].byte_end,
+                )
+                for candidate_id in baseline.projection.selected_candidate_ids
+                if candidate_id in graph_by_id
+            })
+        )
+    ):
+        # Graph additions must not displace context that already fits the
+        # verified Direct budget. A Direct fallback is explicit in the plan.
+        route = "direct"
+        reason = "graph_selection_would_displace_direct_baseline"
+        candidates = direct_candidates
+        baseline = direct_baseline
+    if route == "graph" and direct_baseline is not None:
+        selected_ids = set(baseline.projection.selected_candidate_ids)
+        if not any(
+            candidate_id in selected_ids
+            and graph_by_id[candidate_id].relationship_parent_candidate_id in selected_ids
+            for candidate_id in relationship_gain_ids
+        ):
+            # Pool-level edge gain is not a selected Graph contribution. Keep
+            # the verified Direct result when every new relationship bundle
+            # was pruned, without relaxing its preservation or byte budget.
+            route = "direct"
+            reason = "graph_selection_no_retained_relationship_gain"
+            candidates = direct_candidates
+            baseline = direct_baseline
+    query_sha256 = jev_sha256(query.encode("utf-8"))
+    context_fidelity = _context_fidelity_metadata(
+        candidates,
+        baseline,
+        query_sha256=query_sha256,
+        source_snapshot_sha256=snapshot.snapshot_sha256,
+        byte_budget=task.byte_budget,
+        task_facets=validated_task_facets,
+        prior_plan=prior_plan,
+    )
+    return RankedContextPlan(
+        route, reason, candidates, baseline, validated_task_facets, context_fidelity
+    )
 
 
 def select_ranked_context(
@@ -368,6 +593,7 @@ def select_ranked_context(
     candidates: tuple[RankedContextCandidate, ...],
     approved_request_sha256: str | None = None,
     jev_observation: Any = None,
+    classification_observation: Any = None,
     jev_enabled: bool = False,
     jev_observation_qualified: bool = False,
     fallback_source_paths: tuple[str, ...] = (),
@@ -392,6 +618,19 @@ def select_ranked_context(
         raise TypeError("fallback_source_paths must be a tuple of strings")
     if type(jev_enabled) is not bool or type(jev_observation_qualified) is not bool:
         raise TypeError("Jev controls must be exact booleans")
+    observation_conflict = (
+        jev_observation is not None and classification_observation is not None
+    )
+    classification_source = (
+        "external"
+        if classification_observation is not None
+        else "jev"
+        if jev_observation is not None
+        else "none"
+    )
+    classification_active = (
+        jev_enabled or classification_observation is not None
+    )
 
     packet = validate_packet({
         "schema_version": PACKET_VERSION,
@@ -419,6 +658,8 @@ def select_ranked_context(
         jev_enabled=jev_enabled,
         jev_call_could_affect_selection=False,
         jev_observation_applied=False,
+        classification_observation_applied=False,
+        classification_source=classification_source,
         baseline_selected_candidate_count=0,
         baseline_selected_excerpt_bytes=0,
         baseline_omitted_candidate_count=0,
@@ -617,13 +858,17 @@ def select_ranked_context(
     )
     reason = (
         "jev_disabled"
-        if not jev_enabled
+        if not classification_active
         else "no_optional_candidates"
         if not any(not candidate.required for candidate in candidates)
         else "all_optional_candidates_fit"
         if not omitted_optional
         else "optional_order_cannot_change_selection"
         if not can_affect
+        else "classification_observation_conflict"
+        if observation_conflict
+        else "classification_observation_invalid"
+        if classification_observation is not None
         else "jev_observation_missing"
         if jev_observation is None
         else "jev_observation_not_qualified"
@@ -633,20 +878,35 @@ def select_ranked_context(
     selected_projection = baseline_projection
     jev_order = None
     if (
-        jev_enabled
+        classification_active
         and can_affect
-        and jev_observation_qualified
+        and not observation_conflict
+        and (
+            classification_observation is not None
+            or jev_observation_qualified
+        )
         and _valid_digest(approved_request_sha256)
     ):
-        jev_order = _controlled_jev_order(
-            jev_observation,
-            baseline_order,
-            required_ids,
-            candidate_set_sha256,
-            query_sha256,
-            source_set_sha256,
-            approved_request_sha256,
-        )
+        if classification_observation is not None:
+            jev_order = _controlled_classification_order(
+                classification_observation,
+                baseline_order,
+                required_ids,
+                candidate_set_sha256,
+                query_sha256,
+                source_set_sha256,
+                approved_request_sha256,
+            )
+        else:
+            jev_order = _controlled_jev_order(
+                jev_observation,
+                baseline_order,
+                required_ids,
+                candidate_set_sha256,
+                query_sha256,
+                source_set_sha256,
+                approved_request_sha256,
+            )
         if jev_order is not None:
             reranked_projection = _ranked_projection_for_order(
                 task,
@@ -666,16 +926,28 @@ def select_ranked_context(
                 != provider_bound_selected
             ):
                 selected_projection = reranked_projection
-                reason = "jev_rerank_applied"
+                reason = (
+                    "classification_rerank_applied"
+                    if classification_source == "external"
+                    else "jev_rerank_applied"
+                )
             else:
                 jev_order = None
-                reason = "jev_rerank_no_selection_effect"
+                reason = (
+                    "classification_rerank_no_selection_effect"
+                    if classification_source == "external"
+                    else "jev_rerank_no_selection_effect"
+                )
     selected_ids = set(baseline_projection.selected_candidate_ids)
     decision = RankedContextJevDecision(
         reason=reason,
         jev_enabled=jev_enabled,
         jev_call_could_affect_selection=can_affect,
-        jev_observation_applied=jev_order is not None,
+        jev_observation_applied=(
+            jev_order is not None and classification_source == "jev"
+        ),
+        classification_observation_applied=jev_order is not None,
+        classification_source=classification_source,
         baseline_selected_candidate_count=len(selected_ids),
         baseline_selected_excerpt_bytes=sum(
             candidate.byte_end - candidate.byte_start
@@ -922,6 +1194,56 @@ def _controlled_jev_order(
     ):
         return None
     return tuple(order)
+
+
+def _controlled_classification_order(
+    observation: Any,
+    baseline_order: tuple[str, ...],
+    required_ids: tuple[str, ...],
+    candidate_set_sha256: str,
+    query_sha256: str,
+    source_set_sha256: str,
+    approved_request_sha256: str | None,
+) -> tuple[str, ...] | None:
+    if type(observation) is not dict or set(observation) != {
+        "schema_version",
+        "status",
+        "candidate_set_sha256",
+        "query_sha256",
+        "source_set_sha256",
+        "baseline_order",
+        "proposed_order",
+        "required_ids",
+        "request_sha256",
+        "source_revalidated",
+        "authority_bearing",
+        "sufficient",
+    } or observation.get("schema_version") != _CLASSIFICATION_OBSERVATION_SCHEMA:
+        return None
+    native_observation = {
+        "schema_version": "velgraphing-jev-observation-v1",
+        "status": observation["status"],
+        "mode": "rerank",
+        "authority_bearing": observation["authority_bearing"],
+        "sufficient": observation["sufficient"],
+        "source_revalidated": observation["source_revalidated"],
+        "baseline_order": observation["baseline_order"],
+        "required_ids": observation["required_ids"],
+        "order": observation["proposed_order"],
+        "candidate_set_sha256": observation["candidate_set_sha256"],
+        "query_sha256": observation["query_sha256"],
+        "source_set_sha256": observation["source_set_sha256"],
+        "request_sha256": observation["request_sha256"],
+    }
+    return _controlled_jev_order(
+        native_observation,
+        baseline_order,
+        required_ids,
+        candidate_set_sha256,
+        query_sha256,
+        source_set_sha256,
+        approved_request_sha256,
+    )
 
 
 def _ranked_payload(

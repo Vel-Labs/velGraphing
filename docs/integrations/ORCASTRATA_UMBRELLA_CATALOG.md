@@ -4,13 +4,13 @@ This guide supports three integration paths:
 
 | Path | Use it when | Starting point |
 | --- | --- | --- |
-| Use [Orcastrata Max](https://github.com/Vel-Labs/orcastrata-max) | You want its umbrella view of repository, GoalBuddy, and WorkGraph references. | Export its canonical umbrella catalog and pass it to the VelGraphing adapter. |
+| Use [Orcastrata Max](https://github.com/Vel-Labs/orcastrata-max) | You want its umbrella view of repository, GoalBuddy, and WorkGraph references. | Export its canonical umbrella catalog and pass it to the RetrieVel adapter. |
 | Build a compatible producer | Your orchestrator can emit the same closed JSONL contract. | Follow the contract and validation rules below. |
 | Build a related adapter | Your data has different meaning or fields. | Reuse the provenance and fallback model, but define a new `artifact_type` and schema version. |
 
 ## Status
 
-VelGraphing implements a consumer-owned, navigation-only Orcastrata adapter at
+RetrieVel implements a consumer-owned, navigation-only Orcastrata adapter at
 `adapters/orcastrata-umbrella-catalog/`. The producer contract is
 `assets/contracts/umbrella-catalog-v1.md` in the Orcastrata package. Its machine
 fixtures are `assets/templates/umbrella-catalog-v1-schema.json` and
@@ -24,7 +24,7 @@ start Orcastrata, inspect unrelated projects, or change repository state.
 - Orcastrata owns catalog generation and source validation.
 - GoalBuddy owns lifecycle and acceptance truth.
 - WorkGraph owns dependency, readiness, scope, validation, and evidence truth.
-- VelGraphing owns consumer admission, graph mapping, retention, and federation.
+- RetrieVel owns consumer admission, graph mapping, retention, and federation.
 - GitHub is a synchronized collaboration surface. It is not execution truth.
 
 The adapter must never write graph conclusions or lifecycle state back to
@@ -79,7 +79,7 @@ shows the admission and stale-data boundaries.
 
 Map each admitted record to the smallest useful project-owned graph:
 
-| Catalog field | VelGraphing meaning |
+| Catalog field | RetrieVel meaning |
 | --- | --- |
 | `umbrella_id` | Stable `Umbrella` node identity |
 | `references.github_repository` | `Repository` node reference |

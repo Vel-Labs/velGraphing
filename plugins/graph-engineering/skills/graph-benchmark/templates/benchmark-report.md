@@ -15,7 +15,7 @@ result, and most important limitation in two or three sentences.>`
 | --- | --- |
 | Benchmark ID | `<stable-id>` |
 | Date | `<YYYY-MM-DD>` |
-| VelGraphing version | `<version and candidate identity>` |
+| RetrieVel version | `<version and candidate identity>` |
 | Repository snapshots | `<repository, commit/tree or complete snapshot hash>` |
 | Task set | `<count, tracks, difficulty distribution>` |
 | Difficulty calibration | `<how difficulty was assigned and checked>` |
@@ -128,9 +128,9 @@ unsupported claims, prohibited writes, and authority violations.
 
 | Finding | Class | Reproducible | Sanitized | Proposed action |
 | --- | --- | --- | --- | --- |
-| `<one-sentence finding>` | `<target repository | harness | documentation | measurement | VelGraphing product>` | `<yes or no>` | `<yes or no>` | `<local recommendation or upstream issue draft>` |
+| `<one-sentence finding>` | `<target repository | harness | documentation | measurement | RetrieVel product>` | `<yes or no>` | `<yes or no>` | `<local recommendation or upstream issue draft>` |
 
-For each reproducible VelGraphing product finding, show this draft before
+For each reproducible RetrieVel product finding, show this draft before
 requesting publication authority:
 
 ```text
@@ -140,7 +140,7 @@ Observed behavior:
 <What happened without private repository details.>
 
 Expected behavior:
-<What VelGraphing should do instead.>
+<What RetrieVel should do instead.>
 
 Evidence:
 <Sanitized route comparison and stable identities.>
@@ -152,7 +152,7 @@ Acceptance check:
 <Observable condition that closes the issue.>
 
 What this could improve:
-- <One specific VelGraphing capability.>
+- <One specific RetrieVel capability.>
 - <Optional related capability.>
 
 Privacy review:

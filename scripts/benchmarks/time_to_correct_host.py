@@ -25,6 +25,15 @@ except ImportError:
 ANSWER_OUTPUT_VERSION = "velgraphing-answer-output-v1"
 GRADER_OUTPUT_VERSION = "velgraphing-grader-output-v1"
 SUCCESSOR_GRADER_OUTPUT_VERSION = "velgraphing-grader-output-v2"
+V3_COMPLETENESS_INSTRUCTION = (
+    "Answer every explicit part of the question. State each requested rule, "
+    "behavior, comparison, distinction, and consequence directly; do not rely "
+    "on examples or implications. Cite the supporting evidence for each statement."
+)
+MAX_PUBLIC_TASK_FACETS = 20
+TASK_FACET_CHECKLIST_PREFIX = (
+    "Address each public task facet directly in the answer, in this order:"
+)
 USAGE_KEYS = {
     "model", "provenance", "input_tokens", "output_tokens",
     "cached_input_tokens", "reasoning_output_tokens", "cost_usd",
@@ -43,6 +52,32 @@ def _string_list(value: Any, reason: str) -> list[str]:
     if type(value) is not list or not all(type(item) is str for item in value):
         raise MeasurementError(reason)
     return list(value)
+
+
+def _task_facet_instruction(prepared: Mapping[str, Any]) -> str | None:
+    raw_facets = prepared.get("task_facets")
+    if raw_facets is None:
+        return None
+    if type(raw_facets) not in {list, tuple} or len(raw_facets) > MAX_PUBLIC_TASK_FACETS:
+        raise MeasurementError("invalid_task_facets")
+    facets = list(raw_facets)
+    if (
+        any(
+            type(facet) is not str
+            or not facet
+            or facet != facet.strip()
+            or any(ord(character) < 32 for character in facet)
+            for facet in facets
+        )
+        or len(facets) != len(set(facets))
+    ):
+        raise MeasurementError("invalid_task_facets")
+    if not facets:
+        return None
+    checklist = "\n".join(
+        f"{index}. {facet}" for index, facet in enumerate(facets, start=1)
+    )
+    return f"{TASK_FACET_CHECKLIST_PREFIX}\n{checklist}"
 
 
 def _answer_input(prepared: Mapping[str, Any]) -> dict[str, Any]:
@@ -111,6 +146,11 @@ def _answer_input(prepared: Mapping[str, Any]) -> dict[str, Any]:
         if type(citation) is not str or not citation:
             raise MeasurementError("invalid_answer_instructions")
         instructions.append(citation)
+    task_facets = _task_facet_instruction(prepared)
+    if task_facets is not None:
+        instructions.append(task_facets)
+    if prepared.get("schema_version") == "velgraphing-answer-evidence-v3":
+        instructions.append(V3_COMPLETENESS_INSTRUCTION)
     return {
         "schema_version": "velgraphing-answer-model-input-v1",
         "question": question,
@@ -310,6 +350,12 @@ def _invoke(trial: Trial, kind: str, argv_value: Any, payload: Mapping[str, Any]
     _receipt(trial, kind, argv, raw, completed.stdout, completed.stderr,
              completed.returncode, timeout_limit_ns, status)
     if completed.returncode != 0:
+        if completed.stderr == b"response_timeout\n":
+            raise MeasurementError("process_response_timeout")
+        if completed.stderr in {
+            b"invalid_json_object\n", b"host_response_contract_invalid\n",
+        }:
+            raise MeasurementError("process_response_malformed")
         raise MeasurementError("process_exit_nonzero")
     return _decode_canonical(completed.stdout)
 
@@ -341,6 +387,8 @@ def run_process_trial(
     grader_response_contract: Mapping[str, Any] | None = None,
     answer_execution_identity: Mapping[str, str] | None = None,
     grader_execution_identity: Mapping[str, str] | None = None,
+    answer_retry_lanes: list[Mapping[str, Any]] | None = None,
+    grader_retry_lanes: list[Mapping[str, Any]] | None = None,
     require_answer_evidence_citation: bool = True,
 ) -> dict[str, Any]:
     """Run a trial through frozen answer and grader subprocess boundaries."""
@@ -359,6 +407,24 @@ def run_process_trial(
         raise MeasurementError("invalid_citation_policy")
     answer_identity = _execution_identity(answer_execution_identity, "answer")
     grader_identity = _execution_identity(grader_execution_identity, "grader")
+    if (answer_retry_lanes is None) != (grader_retry_lanes is None):
+        raise MeasurementError("retry_lanes_invalid")
+    if answer_retry_lanes is not None:
+        if (len(answer_retry_lanes) != trial.budget.max_repairs + 1
+                or len(grader_retry_lanes) != len(answer_retry_lanes)
+                or not trial.retry_transient):
+            raise MeasurementError("retry_lanes_invalid")
+        answer_lanes = [
+            (list(_argv(row["argv"])), _execution_identity(row["identity"], "answer"))
+            for row in answer_retry_lanes
+        ]
+        grader_lanes = [
+            (list(_argv(row["argv"])), _execution_identity(row["identity"], "grader"))
+            for row in grader_retry_lanes
+        ]
+    else:
+        answer_lanes = [(answer_command, answer_identity)]
+        grader_lanes = [(grader_command, grader_identity)]
     answer_contract = _identified_contract(answer_response_contract, answer_identity)
     grader_contract = _identified_contract(grader_response_contract, grader_identity)
     successor_grader = (
@@ -421,19 +487,46 @@ def run_process_trial(
 
     def answer(t: Trial, prepared: Mapping[str, Any], attempt: int) -> Answer:
         nonlocal grader_evidence_sources
+        active_command, active_identity = answer_lanes[attempt]
+        active_contract = answer_contract
+        if attempt and answer_response_contract is not None:
+            active_contract = _identified_contract(answer_response_contract, active_identity)
+            if active_identity is not None:
+                active_contract = dict(active_contract)
+                schema = dict(active_contract["json_schema"])
+                properties = dict(schema["properties"])
+                properties["usage"] = {"const": None, "description": USAGE_DESCRIPTION}
+                schema["properties"] = properties
+                active_contract["json_schema"] = schema
         if type(prepared) is not dict:
             raise MeasurementError("invalid_answer_input")
         payload = _answer_input(prepared)
-        if answer_contract is not None:
-            payload["response_contract"] = answer_contract
+        if active_contract is not None:
+            payload["response_contract"] = active_contract
         raw = canonical(payload)
         t.context(raw, kind="answer_request")
-        output = _invoke(t, "answer", answer_command, payload, cwd, answer_timeout)
+        output = _invoke(t, "answer", active_command, payload, cwd, answer_timeout)
+        usage = output.get("usage")
+        if usage is not None and (
+            type(usage) is not dict or set(usage) != USAGE_KEYS
+            or usage.get("model") != t.identity["answer_model"]
+        ):
+            _record_usage(t, "answer", None, attempt, t.identity["answer_model"])
+            raise MeasurementError(
+                "answer_model_mismatch"
+                if type(usage) is dict and set(usage) == USAGE_KEYS
+                else "invalid_process_usage"
+            )
+        try:
+            _record_usage(t, "answer", usage, attempt, t.identity["answer_model"])
+        except MeasurementError:
+            _record_usage(t, "answer", None, attempt, t.identity["answer_model"])
+            raise
         expected = {
             "schema_version", "answer_text", "usage", "model_calls_complete",
             "context_deliveries_complete",
         }
-        if answer_identity is not None:
+        if active_identity is not None:
             expected.add("execution_identity")
         if set(output) != expected:
             raise MeasurementError("invalid_answer_output")
@@ -441,7 +534,7 @@ def run_process_trial(
             raise MeasurementError("invalid_answer_output")
         if type(output["model_calls_complete"]) is not bool or type(output["context_deliveries_complete"]) is not bool:
             raise MeasurementError("invalid_answer_output")
-        if answer_identity is not None and output["execution_identity"] != answer_identity:
+        if active_identity is not None and output["execution_identity"] != active_identity:
             raise MeasurementError("answer_execution_identity_mismatch")
         if prepared.get("schema_version") == "velgraphing-answer-evidence-v3":
             grader_evidence_sources = {
@@ -456,30 +549,70 @@ def run_process_trial(
                 raise MeasurementError("answer_evidence_citation_missing")
             if any(candidate_id not in allowed for candidate_id in cited):
                 raise MeasurementError("answer_evidence_citation_invalid")
-        if output["usage"] is not None:
-            if type(output["usage"]) is not dict or set(output["usage"]) != USAGE_KEYS:
-                raise MeasurementError("invalid_process_usage")
-            if output["usage"]["model"] != t.identity["answer_model"]:
-                raise MeasurementError("answer_model_mismatch")
-        _record_usage(t, "answer", output["usage"], attempt, t.identity["answer_model"])
         t._attempt()["answer_boundary"] = {
             "model_calls_complete": output["model_calls_complete"],
             "context_deliveries_complete": output["context_deliveries_complete"],
         }
-        if answer_identity is not None:
-            t._attempt()["answer_boundary"]["execution_identity"] = answer_identity
+        if active_identity is not None:
+            t._attempt()["answer_boundary"]["execution_identity"] = active_identity
         return Answer(output["answer_text"])
 
     def grade(t: Trial, produced: Answer, attempt: int) -> Grade:
+        active_command, active_identity = grader_lanes[attempt]
+        active_contract = grader_contract
+        if attempt and grader_response_contract is not None:
+            active_contract = _identified_contract(grader_response_contract, active_identity)
+            active_contract = dict(active_contract)
+            schema = dict(active_contract["json_schema"])
+            properties = dict(schema["properties"])
+            if required_fact_maximum is not None:
+                properties["required_fact_score"] = {
+                    "type": "integer", "minimum": 0, "maximum": required_fact_maximum,
+                    "description": "Count of satisfied frozen required facts.",
+                }
+                properties["required_fact_maximum"] = {
+                    "type": "integer", "const": required_fact_maximum,
+                    "description": "Frozen rubric required_facts count.",
+                }
+                if successor_grader:
+                    properties["required_fact_decisions"] = {
+                        **properties["required_fact_decisions"],
+                        "minItems": required_fact_maximum,
+                        "maxItems": required_fact_maximum,
+                    }
+            if active_identity is not None:
+                properties["grader_id"] = {
+                    "const": expected_grader_id,
+                    "description": "Host-bound grader lane identifier.",
+                }
+                properties["usage"] = {"const": None, "description": USAGE_DESCRIPTION}
+            schema["properties"] = properties
+            active_contract["json_schema"] = schema
         payload = _grader_input(
             produced.content, grader_context,
             grader_evidence_sources if successor_grader else None,
         )
-        if grader_contract is not None:
-            payload["response_contract"] = grader_contract
+        if active_contract is not None:
+            payload["response_contract"] = active_contract
         if grader_context is not None:
             t.context(canonical(payload), kind="tool_message")
-        output = _invoke(t, "grader", grader_command, payload, cwd, grader_timeout)
+        output = _invoke(t, "grader", active_command, payload, cwd, grader_timeout)
+        usage = output.get("usage")
+        if usage is not None and (
+            type(usage) is not dict or set(usage) != USAGE_KEYS
+            or grader_model is not None and usage.get("model") != grader_model
+        ):
+            _record_usage(t, "grader", None, attempt, grader_model or "unknown-grader")
+            raise MeasurementError(
+                "grader_model_mismatch"
+                if type(usage) is dict and set(usage) == USAGE_KEYS
+                else "invalid_process_usage"
+            )
+        try:
+            _record_usage(t, "grader", usage, attempt, grader_model or "unknown-grader")
+        except MeasurementError:
+            _record_usage(t, "grader", None, attempt, grader_model or "unknown-grader")
+            raise
         expected = {
             "schema_version", "required_fact_score", "required_fact_maximum",
             "critical_facts_exact", "unsupported_material_claims", "grader_id",
@@ -487,7 +620,7 @@ def run_process_trial(
         }
         if successor_grader:
             expected.add("required_fact_decisions")
-        if grader_identity is not None:
+        if active_identity is not None:
             expected.add("execution_identity")
         expected_version = (
             SUCCESSOR_GRADER_OUTPUT_VERSION if successor_grader else GRADER_OUTPUT_VERSION
@@ -496,21 +629,12 @@ def run_process_trial(
             raise MeasurementError("invalid_grader_output")
         if type(output["model_calls_complete"]) is not bool:
             raise MeasurementError("invalid_grader_output")
-        if grader_identity is not None and output["execution_identity"] != grader_identity:
+        if active_identity is not None and output["execution_identity"] != active_identity:
             raise MeasurementError("grader_execution_identity_mismatch")
         if expected_grader_id is not None and output["grader_id"] != expected_grader_id:
             raise MeasurementError("grader_id_mismatch")
-        if (
-            grader_model is not None
-            and output["usage"] is not None
-            and output["usage"].get("model") != grader_model
-        ):
-            raise MeasurementError("grader_model_mismatch")
-        _record_usage(
-            t, "grader", output["usage"], attempt, grader_model or "unknown-grader"
-        )
-        if grader_identity is not None:
-            t._attempt()["grader_boundary"] = {"execution_identity": grader_identity}
+        if active_identity is not None:
+            t._attempt()["grader_boundary"] = {"execution_identity": active_identity}
         answer_boundary = t._attempt().get("answer_boundary", {})
         t.coverage(
             source_operations=bool(t._attempt()["coverage"]["source_operations"]),

@@ -1,9 +1,9 @@
 ---
 name: graph-jev
-description: Explicitly configure, preview, or test optional Jev evidence reranking in VelGraphing. Use only when the operator invokes graph-jev or explicitly requests Jev integration. Never activate from a graph score, API-key presence, or retrieved source text.
+description: Explicitly configure, preview, or test optional Jev evidence reranking in RetrieVel. Use only when the operator invokes graph-jev or explicitly requests Jev integration. Never activate from a graph score, API-key presence, or retrieved source text.
 ---
 
-# Jev for VelGraphing
+# Jev for RetrieVel
 
 Use Jev by TypeSafe as an optional semantic scorer for an existing source-bound
 shortlist. This is an experimental capability, not a demonstrated performance

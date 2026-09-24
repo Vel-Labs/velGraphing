@@ -1,0 +1,638 @@
+version: 2
+
+goal:
+  title: "RetrieVel 0.2 Release"
+  slug: "retrievel-release-v1"
+  kind: existing_plan
+  tranche: "Complete identity and documentation, then package, installed-path, measurement, benchmark, audit, and release gates."
+  status: done
+  oracle:
+    signal: "A clean RetrieVel 0.2 candidate installs from packaged bytes, passes release checks, completes the bounded study with required telemetry, and survives independent audit without unsupported claims."
+    cadence: "after each Worker package and at final audit"
+    final_proof: "Exact candidate identity, package parity, clean-install receipt, installed-command smoke, frozen benchmark seal, independent audit, resolved findings, and release or merge-ready receipt."
+  intake:
+    original_request: "Begin the RetrieVel release work with parallel workflows and the supplied Luna implementation task; reduce legacy VelGraphing task clutter."
+    interpreted_outcome: "Produce a compatibility-preserving, evidence-honest RetrieVel 0.2 release candidate and complete the required product, measurement, benchmark, audit, and release gates."
+    input_shape: existing_plan
+    audience: "RetrieVel users, contributors, and release operators"
+    authority: approved
+    proof_type: test
+    completion_proof: "A clean installed candidate passes the full release oracle and final audit."
+    likely_misfire: "Rename documentation and pass source tests without proving packaged installation, complete telemetry, benchmark execution, or truthful public claims."
+    blind_spots_considered:
+      - "Display-name availability and trademark clearance are not yet proven."
+      - "The primary checkout is historical; release work must remain in the isolated branch."
+      - "Historical diagnostics have incomplete wall-time and answer/grader usage."
+      - "Provider-specific performance has a separate publication boundary."
+      - "Archived tasks and retained worktrees are lifecycle history, not release proof."
+    existing_plan_facts:
+      - "Use RetrieVel as the working public display name and 'formerly VelGraphing' as compatibility wording."
+      - "Keep graph-engineering, /graph-* commands, Python imports, schemas, and repository name stable for 0.2.x."
+      - "Run package, installed-path, measurement, cross-corpus benchmark, audit, and release gates in order."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  exact_human_approval_can_terminal_wait: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  goal_pressure_requires_oracle: true
+  no_completion_on_weak_proof: true
+  slice_policy:
+    max_consecutive_tiny_tasks: 2
+    prefer_vertical_slices: true
+    judge_picks_largest_safe_slice: true
+    worker_completes_whole_slice: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+visual_board:
+  selected: none
+  local:
+    status: not_requested
+    url: null
+    command: "node <skill-path>/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/retrievel-release-v1"
+
+active_task: null
+
+tasks:
+  - id: T010
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "Establish the compatibility-preserving RetrieVel identity and refresh the public documentation and benchmark index."
+    allowed_files:
+      - README.md
+      - docs/INDEX.md
+      - benchmarks/README.md
+      - CHANGELOG.md
+      - docs/architecture/PRODUCT_IDENTITY_AND_COMPATIBILITY.md
+    verify:
+      - "git diff --check"
+      - "bounded Markdown target existence check"
+      - "PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py"
+    stop_if:
+      - "The exact base is not ab229142e9a577c88d15bacd67d5bf36cd85e1ea."
+      - "A required change falls outside allowed_files."
+      - "A public claim requires private or incomplete evidence."
+      - "Another writer overlaps an allowed file."
+    receipt:
+      result: done
+      commit: c4f094a11e320bef90535c14db6a64b08e0eb529
+      summary: "Established the RetrieVel display-name and compatibility contract in five documentation paths without changing package or runtime bytes."
+      changed_files:
+        - README.md
+        - docs/INDEX.md
+        - benchmarks/README.md
+        - CHANGELOG.md
+        - docs/architecture/PRODUCT_IDENTITY_AND_COMPATIBILITY.md
+      commands:
+        - cmd: "git diff --check"
+          status: pass
+        - cmd: "bounded standard-library Markdown target existence check"
+          status: pass
+        - cmd: "PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py"
+          status: pass
+      validation:
+        - "git diff --check: passed"
+        - "14 internal Markdown targets: passed"
+        - "source/package parity: passed, 87 files, candidate f47d377d6a51d66cd6b790f5d4a900f41719877b84def61e08bc548a5673e4c1"
+      boundary: "No package version, installed metadata, runtime, provider, network, install, push, or publication action."
+  - id: T020
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit the identity and documentation candidate for compatibility, stale claims, broken links, and unsupported evidence language."
+    inputs:
+      - "T010 receipt"
+      - "T010 commit"
+    constraints:
+      - "Read-only."
+      - "Review the exact commit."
+    expected_output:
+      - "accept | repair"
+      - "blocking findings"
+      - "next Worker packet"
+    receipt:
+      result: done
+      decision: ACCEPT
+      summary: "Exact-commit Luna audit accepted c4f094a as a display-name-only compatibility change with no broken links or unsupported benchmark claims."
+      caveat: "README retrieval-path statements still require implementation-source confirmation during the package slice."
+      constraints_forward:
+        - "Preserve graph-engineering, /graph-* commands, imports, schemas, repository URLs, frozen benchmark IDs, and .velgraphing-local paths."
+        - "Keep provider-specific performance private without separate publication authority."
+  - id: T030
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Build and validate the compatibility-preserving RetrieVel 0.2.0 release candidate package."
+    allowed_files:
+      - README.md
+      - .agents/plugins/marketplace.json
+      - package.json
+      - pyproject.toml
+      - scripts/package/verify_source_package_parity.py
+      - scripts/benchmarks/four_arm_study_v1.py
+      - tests/parity/test_source_package_parity.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - CONTRIBUTING.md
+      - SECURITY.md
+      - docs/integrations/ORCASTRATA_UMBRELLA_CATALOG.md
+      - plugins/graph-engineering/.codex-plugin/plugin.json
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - plugins/graph-engineering/README.md
+      - plugins/graph-engineering/skills/graph-benchmark/SKILL.md
+      - plugins/graph-engineering/skills/graph-benchmark/templates/benchmark-report.md
+      - plugins/graph-engineering/skills/graph-jev/SKILL.md
+      - plugins/graph-engineering/skills/graph-jev/agents/openai.yaml
+      - plugins/graph-engineering/skills/graph-jev/references/usage.md
+    verify:
+      - "python version parser accepts 0.2.0-rc.1 as a prerelease"
+      - "projector twice; second pass produces no tracked diff"
+      - "write and verify release manifest"
+      - "focused scaffold, skill, and parity tests"
+      - "git diff --check"
+    stop_if:
+      - "T020 has not accepted the identity contract."
+      - "The package-ID migration boundary is ambiguous."
+      - "A change requires renaming a frozen benchmark ID, .velgraphing-local path, command, import, schema, or repository URL."
+      - "A generated runtime file would need a hand edit."
+    repair_context: "Source review showed README.md did not distinguish default body-free /graph-find output from explicit ranked-context planning. Parent added README.md to correct that claim. Full-suite release validation then showed the historical four-arm bundle reads the current release manifest instead of the manifest at its frozen product commit. Repair that historical binding without changing frozen study artifacts."
+    receipt:
+      result: done
+      commits:
+        - 064650c03e2b546c283829a821a29402263b5f00
+        - ddaa6da87d3106dd6c7cdf18a05c266cf4b09541
+      summary: "Prepared RetrieVel 0.2.0-rc.1, corrected its retrieval-path wording, and repaired historical study validation so it reads the package manifest at the frozen product commit."
+      package_candidate_sha256: 21f8b725d3f4f204d49f627cff31047bdf6bcd7c155b96ec61b80c3aba2bcad0
+      changed_files:
+        - README.md
+        - .agents/plugins/marketplace.json
+        - package.json
+        - pyproject.toml
+        - scripts/package/verify_source_package_parity.py
+        - tests/parity/test_source_package_parity.py
+        - CONTRIBUTING.md
+        - SECURITY.md
+        - docs/integrations/ORCASTRATA_UMBRELLA_CATALOG.md
+        - plugins/graph-engineering/.codex-plugin/plugin.json
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - plugins/graph-engineering/README.md
+        - plugins/graph-engineering/skills/graph-benchmark/SKILL.md
+        - plugins/graph-engineering/skills/graph-benchmark/templates/benchmark-report.md
+        - plugins/graph-engineering/skills/graph-jev/SKILL.md
+        - plugins/graph-engineering/skills/graph-jev/agents/openai.yaml
+        - plugins/graph-engineering/skills/graph-jev/references/usage.md
+        - scripts/benchmarks/four_arm_study_v1.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+      commands:
+        - cmd: "projector twice and release-manifest write/verify"
+          status: pass
+        - cmd: "six unittest discovery suites with the declared repository virtualenv"
+          status: pass
+        - cmd: "PYTHONDONTWRITEBYTECODE=1 python3 scripts/package/verify_source_package_parity.py"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      validation:
+        - "projector: two passes, no generated runtime diff"
+        - "package parity: passed, 87 files"
+        - "scaffold: 11 passed"
+        - "core: 284 passed"
+        - "adapters: 18 passed"
+        - "skills: 37 passed"
+        - "benchmarks: 192 passed, 25 expected skips"
+        - "parity: 10 passed"
+        - "exact-commit Luna package audit: ACCEPT"
+      boundary: "No install, provider call, network action, push, or publication action. Historical benchmark artifacts and compatibility identifiers remain unchanged."
+  - id: T040
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Install the frozen candidate into an isolated environment and verify command discovery, offline behavior, one bounded live smoke, fallback, and removal."
+    allowed_files:
+      - docs/goals/retrievel-release-v1/notes/T040-installed-path.md
+    verify:
+      - "install exact packaged candidate into an isolated CODEX_HOME"
+      - "verify command discovery and status without a provider key"
+      - "run one exact approved live smoke and verify safe fallback"
+      - "remove the isolated installation and confirm cleanup"
+    stop_if:
+      - "T030 has not frozen a package candidate."
+      - "A live request lacks exact scope, hash, and budget authority."
+    receipt:
+      result: done
+      summary: "The current package passed isolated install, discovery, offline replay, failure fallback, one exact synthetic live shadow call, package-byte verification, removal, and cleanup."
+      changed_files:
+        - docs/goals/retrievel-release-v1/notes/T040-installed-path.md
+      commands:
+        - cmd: "isolated local marketplace install and package-byte verification"
+          status: pass
+        - cmd: "installed runtime status, replay, missing-key fallback, and malformed-response fallback"
+          status: pass
+        - cmd: "installed runtime synthetic shadow evaluation for exact request SHA-256 747673913325bd4d5992f6c05c38cfaf123e76adc8f55bfa0e5f5bc66a42d829"
+          status: pass
+        - cmd: "isolated plugin removal and CODEX_HOME cleanup"
+          status: pass
+      request_sha256: 747673913325bd4d5992f6c05c38cfaf123e76adc8f55bfa0e5f5bc66a42d829
+      live_observation:
+        status: shadow
+        reason: advisory_only
+        attempted_calls: 1
+        model: jev-1.13.0
+        input_tokens: 1300
+        output_tokens: 49
+        elapsed_ms: 297.637
+        source_revalidated: true
+        authority_bearing: false
+        sufficient: false
+        package_candidate_sha256: 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107
+        installed_manifest_sha256: 3e6389bd70b2de2ef2e59bab1197d881f5f40bc23914391802235fcc3e5a6099
+        installed_runtime_sha256: 7daba616d59be40efc4a61f7d3561587316b0bf476e9182cbf041fdc712c9c09
+        receipt_sha256: ab7d4ef2e709f4ac6374d76b4752ee0863ba5c0fd01c4209feb4ecfb9175c06e
+      boundary: "The live call used only the packaged synthetic fixture. No credential value, repository source, or private source was retained. Desktop command-picker reload remains unverified."
+  - id: T050
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Repair the smallest remaining end-to-end measurement transport gap and prove one complete canary."
+    allowed_files:
+      - plugins/graph-engineering/skills/graph-find/scripts/graph_find.py
+      - plugins/graph-engineering/.codex-plugin/release-manifest.json
+      - scripts/benchmarks/four_arm_study_v1.py
+      - tests/skills/test_portable_skills.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - docs/goals/retrievel-release-v1/notes/T050-measurement-repair.md
+    verify:
+      - "prove the installed graph-find path runs during Trial.prepare instead of before the timed trial"
+      - "transport scan, graph build or expansion, selection, source-read, fallback, candidate, context-byte, Jev, answer, grader, and accepted-correctness measurements into the existing Trial schema"
+      - "run one credential-free installed-path trial through an accepted grader result with complete non-provider telemetry"
+      - "project packaged bytes, regenerate and verify the release manifest, and run focused skill and benchmark tests"
+      - "run the full repository suite once after the repaired candidate is frozen"
+    stop_if:
+      - "The candidate identity or installed path is not frozen."
+      - "The repair would rewrite historical results."
+    receipt:
+      result: done
+      commits:
+        - d1c8512196b1047c9443c75feb855ef03fbb0399
+        - c4d362fa67c28ab73982a62eb036a8dc507dc308
+        - c7301d83b3dd92d676e48bbc86ae00403c52feca
+        - 04a17d4907db9a9040aeca380c1bbbef63ecfb18
+        - a496154e8e51b357e5c988d6a6354b5154a9e731
+      summary: "Graph/off performs fresh installed-path discovery inside Trial.prepare and completed a credential-free answer/grader canary. Graph/on replay transports a request-bound reranked selection through one answer and one independent grader with zero provider calls. The observed Graph/on controller now binds exact approval hash and request bytes, reserves one call, launches one installed child with no retry, preserves unknown-consumption accounting on failure, validates reranked or safe-fallback output, and keeps provider totals incomplete unless the parent observes them. Independent Luna audits accepted the repaired paths."
+      package_candidate_sha256: 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107
+      changed_files:
+        - plugins/graph-engineering/skills/graph-find/scripts/graph_find.py
+        - plugins/graph-engineering/.codex-plugin/release-manifest.json
+        - scripts/benchmarks/four_arm_study_v1.py
+        - tests/skills/test_portable_skills.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+        - docs/goals/retrievel-release-v1/notes/T050-measurement-repair.md
+      commands:
+        - cmd: "focused portable-skill and benchmark unittest discovery"
+          status: pass
+        - cmd: "clean-export six-suite validation on a496154e8e51b357e5c988d6a6354b5154a9e731"
+          status: pass
+        - cmd: "clean-export source/package parity"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      validation:
+        - "clean exact-candidate suite: scaffold 11, core 284, adapters 18, skills 38, benchmarks 193 with 25 expected skips, parity 10"
+        - "package parity: passed, 87 files"
+        - "independent Luna measurement audit: ACCEPT"
+        - "Graph/on replay production-path test: 28 benchmark tests passed, 24 expected private-data skips"
+        - "independent Luna Graph/on replay audit: ACCEPT"
+        - "observed Graph/on controller/subprocess simulation: 28 benchmark tests passed, 24 expected private-data skips"
+        - "clean exact-commit a496154 suite: scaffold 11, core 284, adapters 18, skills 38, benchmarks 193 with 25 expected skips, parity 10"
+        - "clean exact-commit package parity: passed, 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+        - "independent Luna observed-host re-audit: ACCEPT"
+      remaining: "No accepted live adapter or provider result exists. T040 remains blocked on exact current smoke approval and a credential-bearing operator process. T060 must freeze the successor study before T070 can request bounded live authority."
+  - id: T060
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: high
+    objective: "Freeze the smallest current-candidate successor study with four task types, four arms, independent rubrics, exact snapshots, telemetry, an eight-call maximum, and explicit claim boundaries."
+    allowed_files:
+      - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+      - scripts/benchmarks/four_arm_study_v1.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - docs/goals/retrievel-release-v1/notes/T060-study-freeze.md
+    verify:
+      - "bind the current controller, installed package candidate, source snapshots, corrected rubrics, pool hashes, request-byte set, and private witness custody"
+      - "prove four tasks by four arms, fresh-lane requirements, at most eight Jev calls, zero retries, and no provider-specific publication authority"
+      - "validate from the pinned local v4 corpus lanes without answer, grader, provider, credential, or network calls"
+      - "run focused benchmark tests and git diff --check"
+    stop_if:
+      - "The successor freeze would rewrite the historical freeze or sealed results."
+      - "The current source snapshots or private witness custody cannot be reproduced exactly."
+      - "Any command would invoke an answer, grader, provider, credential, or network path."
+    receipt:
+      result: done
+      commit: c5aa657eedd49423faed8407d4b7ac01fa92153f
+      summary: "Frozen a separate current-candidate successor study for four tasks by four arms. Its original USD 1.00 maximum-additional figure was superseded by T070 operator-provided TypeSafe account truth: USD 1.0000 total, USD 0.0969 reported spent across 108 calls and 2,371,440 tokens, and USD 0.9031 remaining and maximum additional spend. This account snapshot is not provider-verified. The T070 receipt records the refreshed freeze. Execution remains disabled pending final exact user re-ack."
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+        - scripts/benchmarks/four_arm_study_v1.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+        - docs/goals/retrievel-release-v1/notes/T060-study-freeze.md
+      commands:
+        - cmd: "freeze-successor against pinned local v4 lanes"
+          status: pass
+        - cmd: "prepare-successor-execution and exact local pool SHA verification"
+          status: pass
+        - cmd: "validate-successor-overlay"
+          status: pass
+        - cmd: "focused benchmark unittest discovery"
+          status: pass
+        - cmd: "clean-export six-suite validation on c5aa657eedd49423faed8407d4b7ac01fa92153f"
+          status: pass
+        - cmd: "clean-export source/package parity"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      validation:
+        - "successor matrix: 16 trials, 8 pools, 8 planned Jev calls, 0 retries, 0 answer/grader/provider calls"
+        - "focused benchmark suite: 31 passed, 2 expected path-local skips"
+        - "clean exact-commit suite: scaffold 11, core 284, adapters 18, skills 38, benchmarks 196 with 28 expected skips, parity 10"
+        - "package parity: passed, 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+        - "independent Luna T060 re-audit: ACCEPT"
+      freeze_sha256: 36438e19c2e51a723825a921f3457e1127e1e5744424eb9526ab743a79bea56b
+      preflight_sha256: e9439a7ee7c173d41d93afb932a3a08d5342d667ac261def5ce8e8d8b6df88df
+      pool_artifact_sha256: 3721b7378848d024e073cfa67bce44249b62551835ce236c22837119fee16d7b
+      boundary: "Historical freeze, preflight, and sealed results are unchanged. No lane task, provider call, credential access, network call, push, or publication occurred."
+  - id: T070
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Execute and seal the approved cross-corpus four-arm study with fresh answer and grader lanes."
+    allowed_files:
+      - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+      - scripts/benchmarks/four_arm_study_v1.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - docs/goals/retrievel-release-v1/notes/T060-study-freeze.md
+      - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
+      - docs/goals/retrievel-release-v1/state.yaml
+    verify:
+      - "freeze a unique 32-entry fresh lane manifest and bind its exact hash and Python executable"
+      - "obtain final exact user re-ack for request-byte-set hash, eight-call cap, total authorized USD 1.0000, operator-reported spend-to-date USD 0.0969, maximum additional spend USD 0.9031, lane-manifest hash, and Python executable"
+      - "execute serially with one answer and one independent grader per trial, zero retries, and at most eight Jev calls"
+      - "seal the private source-free result and retain complete timing, correctness, usage missingness, and failure classifications"
+      - "run focused validation and git diff --check"
+    stop_if:
+      - "T060 is not execution-ready."
+      - "Provider approval, key environment, call cap, or budget binding is absent."
+    receipt:
+      result: done
+      execution_result: r4_sealed_observed
+      candidate_commit: 463b4fba6f67ef55df3156cb1f2563f1a011c799
+      summary: "Executed and sealed the frozen R4 study: 16 answer calls, 16 independent grader calls, 8 live Jev calls, 0 retries, and 12 passed trials."
+      changed_files:
+        - benchmarks/velgraphing-four-arm-study-v1/successor-ttc-contract.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-rubrics.json
+        - scripts/benchmarks/four_arm_study_v1.py
+        - tests/benchmarks/test_four_arm_study_v1.py
+        - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+        - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
+        - docs/goals/retrievel-release-v1/state.yaml
+      commands:
+        - cmd: "approve-successor with request hash 80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94, 8 Jev calls, USD 0.9031, R4 manifest e6ab860654c138dc93b8815a2d539e816e59b2c75dbce12778e015e69da2cb39, and the approved Python executable"
+          status: pass
+        - cmd: "validate-successor-overlay"
+          status: pass
+        - cmd: "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest tests.benchmarks.test_time_to_correct_jev tests.benchmarks.test_four_arm_study_v1 -v"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      validation:
+        - "44 Jev timing and four-arm contract tests passed, 2 expected path-local skips"
+        - "execution_ready: true; provider_spend_authorized: true; final_user_reack: []"
+        - "R3 sealed 16 trials with 13 answer calls, 10 grader calls, 4 provider calls, 3 passes, and zero retries"
+        - "R3 is diagnostic only because all four Direct-plus-Jev lanes failed before provider dispatch on a canonical hash collision"
+        - "R4 Direct discovery and the real Jev evaluator now retain matching candidate and request bindings and reach an injected transport as reranked"
+        - "R4 closed as observed with 16 reported trials, 16 answer calls, 16 grader calls, 8 provider calls, and 0 retries"
+        - "pass counts: Direct/off 3 of 4, Direct/on 2 of 4, Graph/off 4 of 4, Graph/on 3 of 4"
+        - "Graph/on and Direct/off both passed 3 of 4; all-trial mean wall time was 245.373 seconds versus 247.663 seconds"
+        - "Direct/on retained 111,816 provider input tokens and 3,112 output tokens; Graph/on provider usage is missing as model_call_incomplete"
+        - "answer and grader host token usage is unavailable for all arms"
+        - "historical freeze.json and preflight.json remain unchanged"
+      successor_ttc_contract_canonical_sha256: bffe794e51f57015b629c832565d084246525016cbf4ab7c9c671889c99fef8d
+      successor_freeze_sha256: c0908969c9e3aa39e6f0c058bcf05817aeb8b24ddaa1a8c468ea5668029033cb
+      successor_preflight_sha256: 71a70fc83e65f46d99bc8d84b2bd48a8d0984fa2a95a3d25facea3a2509b9577
+      result_sha256: e78ddf4a33a1be4132725da9f7f1247d34b34c0f51b7c4f194e603df74abb6ce
+      boundary: "R4 is sealed oracle-assisted fallback TTC evidence. It does not establish general retrieval performance or complete all-model token and cost results. No retry, push, or release action occurred."
+  - id: T080
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Run independent product, evidence, package, and release audits and specify one bounded repair if required."
+    inputs:
+      - "Frozen T070 candidate and result"
+    constraints:
+      - "Read-only audit first."
+      - "No duplicate audit without a material candidate change."
+    expected_output:
+      - "accept | repair | reject"
+      - "Exact blocking findings"
+      - "Release claim boundary"
+    receipt:
+      result: done
+      decision: repair
+      candidate_commit: 0849755149f7a1072bd219c4c4119252473d4bd9
+      summary: "R4 counters and A-versus-D arithmetic verify, but five answer lanes lack the required capture custody chain. R4 is a partial diagnostic, not a promotion-grade four-arm result."
+      findings:
+        - "B-D-01 answer attested raw output directly without a canonical capture draft"
+        - "B-L-01, B-M-02, and C-D-01 answers lack retained raw and completion-attestation custody"
+        - "C-M-02 retained a raw JSON string and a Parent-normalized inner object"
+        - "Graph-plus-Jev provider usage and Graph phase telemetry remain incomplete"
+        - "The current packaged live smoke and fresh clean-tree package qualification remain required"
+      validation:
+        - "27 of 32 lanes passed response-contract, identity, and custody review"
+        - "A Direct/off and D Graph/on retain all 8 lane captures and their narrow arithmetic"
+        - "focused benchmark validation: 44 passed, 2 expected path-local skips"
+      boundary: "R4 remains immutable partial diagnostic evidence. A fresh full R5 is required after the shared custody repair."
+  - id: T090
+    type: worker
+    assignee: Worker
+    status: done
+    reasoning_hint: medium
+    objective: "Resolve accepted audit findings, run final release qualification, and prepare the merge and release receipt."
+    allowed_files:
+      - scripts/benchmarks/time_to_correct_handoff.py
+      - tests/benchmarks/test_time_to_correct_handoff.py
+      - tests/benchmarks/test_four_arm_study_v1.py
+      - tests/benchmarks/test_time_to_correct_calibration.py
+      - benchmarks/velgraphing-four-arm-study-v1/PROTOCOL.md
+      - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+      - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+      - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
+      - docs/goals/retrievel-release-v1/notes/T040-installed-path.md
+      - docs/goals/retrievel-release-v1/state.yaml
+    verify:
+      - "enforce raw-response, canonical-draft, capture-receipt, and execution-identity custody before attestation"
+      - "freeze and execute a fresh 16-lane R5 with zero retries and at most eight Jev calls"
+      - "run the current packaged synthetic installed live smoke"
+      - "run clean-tree projector idempotence, source/package parity, and full validation"
+      - "obtain one fresh independent audit"
+    stop_if:
+      - "T080 has not produced an accepted repair or release decision."
+      - "Publication authority is absent."
+    receipt:
+      result: done
+      candidate_commit_before_receipt: 7348b59
+      summary: "Repaired benchmark response custody, completed the fresh R7 study, bound a current-package installed live smoke, and passed release-level validation."
+      changed_files:
+        - scripts/benchmarks/time_to_correct_handoff.py
+        - tests/benchmarks/test_time_to_correct_calibration.py
+        - benchmarks/velgraphing-four-arm-study-v1/successor-freeze.json
+        - benchmarks/velgraphing-four-arm-study-v1/successor-preflight.json
+        - docs/goals/retrievel-release-v1/notes/T040-installed-path.md
+        - docs/goals/retrievel-release-v1/notes/T070-study-execution.md
+        - docs/goals/retrievel-release-v1/state.yaml
+      benchmark:
+        run: retrievel-0.2.0-rc1-t090-r7
+        result_sha256: 3bd8b2f1bb3fa9e40449004ca1d1b706d4dd6f499816c462e5a8b916f25dd3e0
+        trials: 16
+        answer_calls: 16
+        grader_calls: 16
+        jev_calls: 8
+        retries: 0
+        passed_trials: 10
+        lane_custody_passed: 32
+        lane_custody_total: 32
+      installed_smoke:
+        request_sha256: 747673913325bd4d5992f6c05c38cfaf123e76adc8f55bfa0e5f5bc66a42d829
+        receipt_sha256: ab7d4ef2e709f4ac6374d76b4752ee0863ba5c0fd01c4209feb4ecfb9175c06e
+        package_candidate_sha256: 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107
+        status: pass
+      commands:
+        - cmd: "R7 frozen serial controller with 16 answer lanes, 16 independent grader lanes, and 8 approved Jev calls"
+          status: pass
+        - cmd: "current-package isolated install, synthetic live smoke, removal, and cleanup"
+          status: pass
+        - cmd: "two projector passes and source/package parity"
+          status: pass
+        - cmd: "six unittest discovery suites with the declared shared repository interpreter"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      validation:
+        - "projector ran twice; second pass produced no tracked projection change"
+        - "source/package parity passed: 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+        - "scaffold 11, core 284, adapters 18, skills 38, benchmarks 206 with 3 expected skips, parity 10"
+        - "the full discovery used the existing declared shared repository interpreter because this isolated worktree has no .venv; literal npm test was not run"
+        - "git diff --check passed"
+      audit:
+        decision: repair_then_route_to_T999
+        accepted_evidence:
+          - "R7 aggregate and all 32 custody chains"
+          - "fresh full unittest discovery and source/package parity"
+        repaired_findings:
+          - "current installed package identity is now bound to the live smoke"
+          - "projector idempotence and exact validation are recorded"
+      boundary: "R7 proves frozen-controller execution and optional live adapter compatibility. It does not prove comparative retrieval, correctness, wall-time, token, cost, or general optimization benefit."
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit the complete goal against the release oracle and close collaboration and task lifecycle state."
+    inputs:
+      - "All task receipts"
+      - "Final candidate identity"
+      - "Release validation"
+      - "Current task and collaboration inventory"
+    constraints:
+      - "Do not implement."
+      - "Reject completion while required work remains queued or active."
+      - "Archive terminal non-persistent child tasks before completion."
+    expected_output:
+      - "complete | not_complete"
+      - "full_outcome_complete: true | false"
+      - "missing evidence"
+      - "final lifecycle receipt"
+    receipt:
+      result: done
+      decision: complete
+      full_outcome_complete: true
+      candidate_commit_before_closeout: 6308ce798a67e19bb8033cb4f4b728f4cb95795b
+      summary: "The RetrieVel 0.2.0-rc.1 candidate is clean, pushed, mergeable, package-bound, live-smoke validated, benchmark-sealed, independently audited, and CI-green within its stated evidence boundary."
+      pull_request:
+        number: 18
+        url: "https://github.com/Vel-Labs/velGraphing/pull/18"
+        state: open
+        mergeable: true
+      ci:
+        run_id: 35688460394
+        head_sha: 6308ce798a67e19bb8033cb4f4b728f4cb95795b
+        result: success
+        checks:
+          - "offline (3.11): success"
+          - "offline (3.13): success"
+      validation:
+        - "timeout qualification passed 10 consecutive Python 3.11 runs"
+        - "Python 3.11 benchmark suite: 206 passed, 3 expected skips"
+        - "shared declared interpreter: scaffold 11, core 284, adapters 18, skills 38, benchmarks 206 with 3 expected skips, parity 10"
+        - "two projector passes were byte-identical and produced no tracked projection change"
+        - "source/package parity passed: 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+        - "git diff --check passed"
+      collaboration_cleanup:
+        live_collaboration_agents: 0
+        completed_collaboration_agents: 4
+        addressable_non_persistent_child_tasks: 0
+        preserved_persistent_task: "01a0c48a-1626-7001-a727-44706c122d87 Implement RetrieVel 0.2 release"
+        note: "The completed collaboration agents are not standalone app tasks and expose no opaque task IDs for archival. The human-supplied implementation task is preserved as an authorized persistent session."
+      audit:
+        decision: accepted
+        candidate_commit: 6308ce798a67e19bb8033cb4f4b728f4cb95795b
+        auditor: t999_exact_closeout_audit
+        blocking_findings: 0
+      boundary: "The candidate is merge-ready, not merged or released. R7 proves controlled execution and optional live Jev adapter compatibility. It does not prove general correctness, retrieval, wall-clock, token, cost, or optimization benefit. Desktop command-picker reload remains unverified."
+
+checks:
+  dirty_fingerprint: "clean at ab229142e9a577c88d15bacd67d5bf36cd85e1ea before T010; board files then added by Parent"
+  last_verification:
+    result: pass_with_explicit_claim_boundary
+    task: T999
+    commands:
+      - "R7 sealed 16 trials, 16 answer calls, 16 grader calls, 8 Jev calls, and 0 retries"
+      - "R7 result SHA-256 3bd8b2f1bb3fa9e40449004ca1d1b706d4dd6f499816c462e5a8b916f25dd3e0"
+      - "current installed-smoke receipt SHA-256 ab7d4ef2e709f4ac6374d76b4752ee0863ba5c0fd01c4209feb4ecfb9175c06e"
+      - "two projector passes produced no tracked diff"
+      - "source/package parity: 87 files, candidate 112a9b2d30057a12654c0a7237aa76aae011de2e7d22e91a6bd83803c9fd2107"
+      - "full unittest discovery: 567 passed and 3 expected skips"
+      - "Python 3.11 benchmark suite: 206 passed and 3 expected skips"
+      - "GitHub Actions run 35688460394: offline Python 3.11 and Python 3.13 checks passed on 6308ce798a67e19bb8033cb4f4b728f4cb95795b"

@@ -1,13 +1,13 @@
 {
   "name": "graph-engineering",
-  "version": "0.1.6",
+  "version": "0.2.0-rc.1",
   "description": "Source-verified graph navigation for coding agents.",
   "author": {
     "name": "Velcrafting"
   },
   "skills": "./skills/",
   "interface": {
-    "displayName": "VelGraphing",
+    "displayName": "RetrieVel",
     "shortDescription": "Source-verified repository graph navigation.",
     "longDescription": "Start, update, audit, and benchmark source-bound repository graphs while preserving canonical source and authority boundaries.",
     "developerName": "Velcrafting",

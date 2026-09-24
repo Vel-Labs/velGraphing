@@ -1,10 +1,10 @@
-# VelGraphing
+# RetrieVel
 
-VelGraphing provides source-verified graph navigation for coding agents. This
-directory is the portable plugin package boundary. The compatibility package
-ID remains `graph-engineering`.
+RetrieVel, formerly VelGraphing, provides source-verified graph navigation for
+coding agents. This directory is the portable plugin package boundary. The
+compatibility package ID remains `graph-engineering`.
 
-The current `0.1.6` source package contains six public commands:
+The `0.2.0-rc.1` release candidate contains six public commands:
 
 - `/graph-find` returns bounded, source-verified pointers for a repository prompt.
 - `/graph-start` prepares the smallest source-bound setup.
@@ -15,7 +15,7 @@ The current `0.1.6` source package contains six public commands:
 
 Graph Benchmark includes a reusable report template for multi-track quality,
 efficiency, safety, cold-build, warm-session, and task-level evidence.
-It can also prepare a sanitized VelGraphing issue draft and request explicit
+It can also prepare a sanitized RetrieVel issue draft and request explicit
 operator approval before opening one upstream issue.
 
 Advanced Graph Engineering and Graph Steward skills remain available. The
@@ -63,7 +63,7 @@ repository writes require separate approval after that preview.
 
 ## Optional Jev module
 
-[Jev for VelGraphing](skills/graph-jev/SKILL.md) is a separately invoked,
+[Jev for RetrieVel](skills/graph-jev/SKILL.md) is a separately invoked,
 experimental source-bound reranker powered by TypeSafe. It is off by default;
 no key, external skill, SDK, or network is required for ordinary graph use.
 Users provide their own `TYPESAFE_API_KEY` and explicitly approve outbound source

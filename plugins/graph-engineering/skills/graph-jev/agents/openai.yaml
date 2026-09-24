@@ -1,5 +1,5 @@
 interface:
-  display_name: "Jev for VelGraphing"
+  display_name: "Jev for RetrieVel"
   short_description: "Optional source-bound evidence reranking"
   default_prompt: "Use $graph-jev to preview and test Jev evidence reranking."
 policy:

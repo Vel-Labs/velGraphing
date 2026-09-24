@@ -1,14 +1,16 @@
-# VelGraphing Repository Index
+# RetrieVel Repository Index
 
-Use this page to locate current product source. Retained goal and benchmark
-evidence is historical evidence, not current product truth or performance proof.
-Raw local provider reports under `/reports/` remain excluded from the public
-repository.
+The current public display name is RetrieVel, formerly VelGraphing. Use this
+page to locate current product source. Retained goal and benchmark evidence is
+historical evidence, not current product truth or performance proof. Raw local
+provider reports under `/reports/` remain excluded from the public repository.
 
 ## Product Map
 
 | Concern | Canonical source |
 | --- | --- |
+| Product overview | `../README.md` |
+| Product identity and compatibility | `architecture/PRODUCT_IDENTITY_AND_COMPATIBILITY.md` |
 | Core graph and retrieval APIs | `../packages/core/` |
 | Portable contracts | `../contracts/core/` |
 | Knowledge Compiler adapter | `../adapters/knowledge-compiler/` |
@@ -19,6 +21,7 @@ repository.
 | Projection ownership | `architecture/SOURCE_OWNERSHIP_AND_PORTABILITY.md` |
 | Package identity | `architecture/PACKAGING_AND_PARITY.md` |
 | Compact benchmark evidence | `../benchmarks/README.md` |
+| Query-aware context platform roadmap | `roadmaps/RETRIEVEL_CONTEXT_PLATFORM_ROADMAP.md` |
 | Pre-publication red-team | `reviews/velgraphing-prepublication-red-team-2026-09-02/report-source.md` |
 
 ## Jev pilot

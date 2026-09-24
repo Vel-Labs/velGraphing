@@ -373,6 +373,7 @@ class PortableSkillTests(unittest.TestCase):
                 mode: str | None,
                 response: Path | None = None,
                 prompt: str = "find alpha evidence implementation behavior",
+                context_budget: int | None = None,
             ) -> dict[str, object]:
                 command = [
                     sys.executable,
@@ -386,6 +387,8 @@ class PortableSkillTests(unittest.TestCase):
                     "--byte-budget",
                     "1600",
                 ]
+                if context_budget is not None:
+                    command.extend(("--context-byte-budget", str(context_budget)))
                 if mode is not None:
                     command.extend(("--ranked-context", mode))
                 if response is not None:
@@ -401,6 +404,7 @@ class PortableSkillTests(unittest.TestCase):
 
             default = run(None)
             planned = run("plan")
+            bounded = run("plan", context_budget=1200)
             short_planned = run("plan", prompt="alpha_evidence_0")
             previewed = run("preview")
             preview = previewed["ranked_context"]["jev_preview"]
@@ -448,6 +452,19 @@ class PortableSkillTests(unittest.TestCase):
         self.assertFalse(planned["ranked_context"]["network_called"])
         self.assertIsNone(planned["ranked_context"]["jev_observation"])
         self.assertGreater(planned["ranked_context"]["plan"]["candidate_count"], 1)
+        self.assertEqual(
+            planned["ranked_context"]["plan"]["candidate_count"],
+            bounded["ranked_context"]["plan"]["candidate_count"],
+        )
+        self.assertLessEqual(
+            bounded["ranked_context"]["selection"]["serialized_byte_count"], 1200
+        )
+        bounded_context = bounded["ranked_context"]["selection"]["context"]
+        self.assertTrue(
+            set(bounded_context["required_candidate_ids"]).issubset(
+                bounded_context["selected_candidate_ids"]
+            )
+        )
         short_context = short_planned["ranked_context"]["selection"]["context"]
         self.assertTrue(short_context["required_candidate_ids"])
         self.assertTrue(
@@ -469,6 +486,45 @@ class PortableSkillTests(unittest.TestCase):
         self.assertFalse(
             fallback["ranked_context"]["selection"]["jev_decision"]["jev_observation_applied"]
         )
+
+    def test_graph_find_diagnostics_are_opt_in_and_measure_source_reads(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-diagnostics-") as raw:
+            root = Path(raw)
+            source = root / "src" / "cancel.py"
+            source.parent.mkdir()
+            source.write_text(
+                "def cancel_task(task):\n    return task.cancel()\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "src/cancel.py"], check=True)
+            command = [
+                sys.executable, str(script), "--root", str(root), "--prompt",
+                "find cancel_task implementation", "--ranked-context", "plan",
+            ]
+            plain = subprocess.run(command, text=True, capture_output=True, check=False)
+            measured = subprocess.run(
+                [*command, "--diagnostics"], text=True, capture_output=True,
+                check=False, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+        self.assertEqual(0, plain.returncode, plain.stdout + plain.stderr)
+        self.assertEqual(0, measured.returncode, measured.stdout + measured.stderr)
+        plain_payload = json.loads(plain.stdout)
+        diagnostics = json.loads(measured.stdout)["diagnostics"]
+        self.assertNotIn("diagnostics", plain_payload)
+        self.assertEqual(
+            hashlib.sha256(script.read_bytes()).hexdigest(),
+            diagnostics["runtime_identity"]["adapter_sha256"],
+        )
+        self.assertTrue(diagnostics["runtime_identity"]["candidate_sha256"])
+        self.assertGreater(diagnostics["stage_ns"]["scan"], 0)
+        self.assertGreater(diagnostics["stage_ns"]["graph_build"], 0)
+        self.assertGreater(diagnostics["stage_ns"]["retrieval"], 0)
+        self.assertGreater(diagnostics["stage_ns"]["selection"], 0)
+        self.assertTrue(any(row["stage"] == "scan" for row in diagnostics["source_operations"]))
+        self.assertTrue(any(row["stage"] == "selection" for row in diagnostics["source_operations"]))
 
     def test_graph_find_rebuilds_from_current_tracked_bytes(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"

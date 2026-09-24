@@ -6,17 +6,19 @@
     },
     "controller": {
       "path": "scripts/benchmarks/four_arm_study_v1.py",
-      "sha256": "fbffeec3d75e24f8b30ec02f798933006bc545899c20123a3ebeeddec986fe22"
+      "sha256": "3478fdaeaea6b59f7ac84defca43f0f70fbeaf871200b21bf55ed94593e2d226"
     },
     "host": {
       "path": "scripts/benchmarks/time_to_correct_host.py",
-      "sha256": "4e89e9283870ca164a9a82fb93d65b60c9027b76d85ef5e99670d278e1fa1393"
+      "sha256": "7397a269af33f3384e63b611b272e1990cb7f33d6a845a7e9c863af2fcd35885"
     },
     "lane_manifest": {
       "entry_count": 32,
-      "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
+      "schema_version": "velgraphing-v4-luna-lane-manifest-v2",
       "sha256": null,
-      "status": "pending_parent_freeze"
+      "status": "pending_parent_freeze",
+      "task_path_semantics": "exact_parent_relative_collaboration_task_path",
+      "thread_id_semantics": "canonical_collaboration_task_name_not_opaque_host_id"
     },
     "pool_bindings": {
       "direct:D-01": "d5ff853da5725875aa6fa812569ddc02a70b23352d8c59b27fecb79937609fb6",
@@ -37,7 +39,7 @@
     "successor_grader_response_contract_sha256": "dd517640475fe2219514ebee94a01182bbd74ff17adafeb5aa1348a3e0f6db2c",
     "successor_rubric": {
       "path": "successor-rubrics.json",
-      "sha256": "f863147640b47342d9c066f42d245708a58ba47f8ec235d5fa1459de0ccfbd41"
+      "sha256": "38fe9d2fa34a9426335d4e77b3e6ca77fd2a4181a469bde9e3848049eb94445b"
     }
   },
   "classification": {
@@ -57,20 +59,53 @@
   },
   "fact_witness_map_sha256": "430aaebf981f370b6a8005168252d2676a3a361c0d705b7faa43479c87a5b5ad",
   "fallback_allowlist_sha256": "75e4c72c5a3b945a8bd1cfdbb994341cd185060ce33450c23357fe0f8583d122",
+  "provider_budget_authority": {
+    "currency": "USD",
+    "historical_reservation_reconciliation": {
+      "amount_usd": "0.359789241",
+      "attributable_to_operator_reported_account_level_spend": false,
+      "basis": "historical_request_byte_based_total_reservation",
+      "charged": false,
+      "counts_as_spend": false,
+      "status": "retired_historical_only",
+      "subtract_again_from_remaining_budget": false
+    },
+    "max_additional_spend_usd": "0.9031",
+    "operator_reported_calls_to_date": 108,
+    "operator_reported_spend_to_date_usd": "0.0969",
+    "operator_reported_tokens_to_date": 2371440,
+    "provider_verified": false,
+    "remaining_authorized_usd": "0.9031",
+    "source": "operator_provided_typesafe_account_truth",
+    "total_authorized_usd": "1.0000"
+  },
   "remaining_authority": {
     "absolute_python_executable": null,
-    "answer_thread_ids": 16,
+    "answer_task_names": 16,
     "exact_host_argv_arrays": 32,
     "final_user_reack": [
       "request_byte_set_sha256",
       "eight_call_cap",
-      "total_reservation_usd",
+      "total_authorized_provider_budget_usd",
+      "operator_reported_spend_to_date_usd",
+      "max_additional_provider_spend_usd",
       "lane_manifest_sha256",
       "absolute_python_executable"
     ],
-    "grader_thread_ids": 16,
+    "grader_task_names": 16,
     "lane_manifest_sha256": null,
     "live_lanes_created": 0
+  },
+  "replacement_authority": {
+    "authorized_replacements": 1,
+    "excluded_prior_dispatch": {
+      "answer_agent_turns": 1,
+      "captured_answer_calls": 0,
+      "reason": "launcher_task_path_mismatch",
+      "run_id": "retrievel-0.2.0-rc1-m09-r1",
+      "status": "request_written_response_unavailable"
+    },
+    "trial_id": "A-S-01"
   },
   "result_contract": {
     "required_fields": [

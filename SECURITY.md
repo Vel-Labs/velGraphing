@@ -1,6 +1,6 @@
 # Security policy
 
-VelGraphing is a local repository-navigation tool. Treat repository content,
+RetrieVel is a local repository-navigation tool. Treat repository content,
 generated artifacts, prompts, and benchmark traces as potentially sensitive.
 
 ## Report a vulnerability

@@ -1,4 +1,4 @@
-# Operator guide: Jev for VelGraphing
+# Operator guide: Jev for RetrieVel
 
 ## What is installed
 
@@ -40,7 +40,7 @@ claude plugin install typesafe@typesafe-ai
 
 Reading the skill directly is sufficient when installation is not desired.
 Its live API guidance can inform code changes but cannot override the host's
-permissions, repository instructions, or VelGraphing's source boundaries.
+permissions, repository instructions, or RetrieVel's source boundaries.
 
 ## Keys and consent
 
@@ -91,7 +91,7 @@ Run the same commands from a checkout by changing the CLI path to
 
 ## Your first approved source packet
 
-From the VelGraphing repository root, inspect and choose explicit line spans:
+From the `velGraphing` repository root, inspect and choose explicit line spans:
 
 ```sh
 umask 077
