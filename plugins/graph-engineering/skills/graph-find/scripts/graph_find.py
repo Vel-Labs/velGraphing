@@ -52,6 +52,7 @@ try:  # noqa: E402
         SourceSnapshotV4,
         TaskSpec,
         TrustClass,
+        assist,
         graph_find,
     )
 except ModuleNotFoundError:  # packaged plugin runtime
@@ -66,6 +67,7 @@ except ModuleNotFoundError:  # packaged plugin runtime
         SourceSnapshotV4,
         TaskSpec,
         TrustClass,
+        assist,
         graph_find,
     )
 
@@ -155,7 +157,7 @@ def _repository_root(root: Path) -> None:
 
 def _read_regular(
     root: Path, relative: PurePosixPath, maximum: int
-) -> tuple[bytes | None, str | None, tuple[int, int] | None]:
+) -> tuple[bytes | None, str | None, tuple[int, int] | None, int]:
     path = root.joinpath(*relative.parts)
     _reject_symlink_components(root, path)
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
@@ -166,21 +168,21 @@ def _read_regular(
     try:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
-            return None, "non_regular", None
+            return None, "non_regular", None, 0
         inode = (metadata.st_dev, metadata.st_ino)
         if metadata.st_size > maximum:
-            return None, "max_file_bytes", inode
+            return None, "max_file_bytes", inode, 0
         with os.fdopen(descriptor, "rb", closefd=False) as stream:
             data = stream.read(maximum + 1)
     finally:
         os.close(descriptor)
     if len(data) > maximum:
-        return None, "max_file_bytes", inode
+        return None, "max_file_bytes", inode, len(data)
     try:
         data.decode("utf-8", "strict")
     except UnicodeDecodeError as error:
-        return None, "invalid_utf8", inode
-    return data, None, inode
+        return None, "invalid_utf8", inode, len(data)
+    return data, None, inode, len(data)
 
 
 class SnapshotReader:
@@ -204,13 +206,21 @@ class SnapshotReader:
 
 
 def _scan(
-    root: Path, max_file_bytes: int, max_total_bytes: int
+    root: Path,
+    max_file_bytes: int,
+    max_total_bytes: int,
+    excluded_path_prefixes: tuple[str, ...] = (),
 ) -> tuple[Graph, SourceSnapshotV4, SnapshotReader, dict[str, object]]:
     _repository_root(root)
+    exclusions = tuple(
+        sorted({_safe_relative(value) for value in excluded_path_prefixes})
+    )
     paths = _git(root, "ls-files", "-z", "--cached").split(b"\x00")
     sources: dict[str, bytes] = {}
     inodes: set[tuple[int, int]] = set()
     total = 0
+    total_read = 0
+    path_scope_excluded = 0
     skipped: list[dict[str, str]] = []
     sensitive_paths_excluded = 0
     for encoded in sorted(item for item in paths if item):
@@ -221,7 +231,11 @@ def _scan(
         if _is_sensitive_path(relative):
             sensitive_paths_excluded += 1
             continue
-        data, skip_reason, inode = _read_regular(root, relative, max_file_bytes)
+        if any(relative == prefix or prefix in relative.parents for prefix in exclusions):
+            path_scope_excluded += 1
+            continue
+        data, skip_reason, inode, bytes_read = _read_regular(root, relative, max_file_bytes)
+        total_read += bytes_read
         if inode is not None and inode in inodes:
             raise InputError(f"tracked path aliases another file: {relative}")
         if inode is not None:
@@ -267,14 +281,17 @@ def _scan(
         reason_counts["sensitive_paths_excluded"] = sensitive_paths_excluded
     scan_complete = not any(
         item["reason"] in {"max_file_bytes", "max_total_bytes"} for item in skipped
-    ) and not sensitive_paths_excluded
+    ) and not sensitive_paths_excluded and not path_scope_excluded
     metadata = {
+        "excluded_path_prefixes": [path.as_posix() for path in exclusions],
         "files_scanned": len(sources),
         "files_skipped": skipped,
+        "path_scope_excluded": path_scope_excluded,
         "skip_counts": dict(sorted(reason_counts.items())),
         "sensitive_paths_excluded": sensitive_paths_excluded,
         "scan_complete": scan_complete,
         "source_bytes": total,
+        "source_bytes_read": total_read,
         "max_file_bytes": max_file_bytes,
         "max_total_bytes": max_total_bytes,
     }
@@ -300,13 +317,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--max-total-bytes", type=lambda value: _positive_bounded(value, "--max-total-bytes", HARD_MAX_TOTAL_BYTES), default=DEFAULT_MAX_TOTAL_BYTES)
     parser.add_argument("--maximum-results", type=lambda value: _positive_bounded(value, "--maximum-results", 200), default=6)
     parser.add_argument("--byte-budget", type=lambda value: _positive_bounded(value, "--byte-budget", HARD_MAX_TOTAL_BYTES), default=32768)
+    parser.add_argument("--deliver", action="store_true", help="include source text selected by retrieval")
+    parser.add_argument("--follow-up-path", action="append", default=[], help="read one explicit Git-tracked source path from the admitted snapshot")
+    parser.add_argument("--exclude-path-prefix", action="append", default=[], help="exclude a Git path or directory subtree before source reads; repeat for multiple paths")
     arguments = parser.parse_args(argv)
     if not arguments.prompt.strip():
         parser.error("--prompt must be non-empty")
     try:
         root = _canonical_root(arguments.root)
         graph, snapshot, reader, scan_metadata = _scan(
-            root, arguments.max_file_bytes, arguments.max_total_bytes
+            root,
+            arguments.max_file_bytes,
+            arguments.max_total_bytes,
+            tuple(arguments.exclude_path_prefix),
         )
         terms = tuple(sorted(set(token.casefold() for token in _TOKEN.findall(arguments.prompt))))
         task = TaskSpec(
@@ -325,11 +348,104 @@ def main(argv: Sequence[str] | None = None) -> int:
             semantic_candidates=tuple(arguments.semantic_candidate),
             maximum_results=arguments.maximum_results,
         )
+        retrieval_route = result.route
+        retrieval_reason = result.reason
+        scan_caveats: list[str] = []
         if scan_metadata["sensitive_paths_excluded"]:
+            scan_caveats.append("sensitive_paths_excluded")
             result = replace(result, route="defer", reason="sensitive_paths_excluded")
-        elif not scan_metadata["scan_complete"]:
+        elif any(
+            item["reason"] in {"max_file_bytes", "max_total_bytes"}
+            for item in scan_metadata["files_skipped"]
+        ):
+            scan_caveats.append("repository_scan_incomplete")
             result = replace(result, route="defer", reason="repository_scan_incomplete")
-        payload = result.to_dict()
+        elif scan_metadata["path_scope_excluded"]:
+            scan_caveats.append("source_scope_excluded")
+            result = replace(result, route="defer", reason="source_scope_excluded")
+        deliver = arguments.deliver or bool(arguments.follow_up_path)
+        payload = result.to_delivery_dict() if deliver else result.to_dict()
+        if scan_caveats:
+            payload["retrieval_route"] = retrieval_route
+            payload["retrieval_reason"] = retrieval_reason
+            payload["scan_caveats"] = scan_caveats
+        if deliver:
+            payload["acquisition"] = {
+                "source_bytes_read": scan_metadata["source_bytes_read"],
+                "source_bytes_in_snapshot": scan_metadata["source_bytes"],
+                "files_scanned": scan_metadata["files_scanned"],
+                "meaning": "bytes read from non-sensitive tracked regular files; includes invalid UTF-8 and cap probes",
+            }
+            graph_context_bytes = len(result._context.encode("utf-8"))
+            follow_up_source_bytes = 0
+            follow_up_envelope_bytes = 0
+            follow_up_charge_bytes = 0
+            delivery_limit = arguments.byte_budget
+        if arguments.follow_up_path:
+            if len(arguments.follow_up_path) > arguments.maximum_results:
+                parser.error("--follow-up-path count must not exceed --maximum-results")
+            paths = tuple(sorted(set(arguments.follow_up_path)))
+            remaining_delivery_budget = max(0, delivery_limit - graph_context_bytes)
+            if remaining_delivery_budget:
+                try:
+                    follow_up = assist(
+                        graph,
+                        replace(task, byte_budget=remaining_delivery_budget),
+                        snapshot,
+                        reader,
+                        required_source_paths=paths,
+                        fallback_source_paths=paths,
+                        required_escalation=True,
+                    )
+                except ValueError as error:
+                    if "context failure envelope exceeds byte budget" not in str(error):
+                        raise
+                    follow_up_payload = None
+                    follow_up_route = "defer"
+                    follow_up_reason = "shared_delivery_budget_exhausted"
+                else:
+                    follow_up_payload = json.loads(follow_up.projection.content)
+                    documents = follow_up_payload.get("documents", [])
+                    follow_up_source_bytes = sum(
+                        document.get("byte_count", 0)
+                        for document in documents
+                        if isinstance(document, dict)
+                        and isinstance(document.get("byte_count", 0), int)
+                    )
+                    follow_up_envelope_bytes = follow_up.projection.byte_count
+                    follow_up_charge_bytes = follow_up_source_bytes
+                    follow_up_route = follow_up.route
+                    follow_up_reason = follow_up.reason
+            else:
+                follow_up_payload = None
+                follow_up_route = "defer"
+                follow_up_reason = "shared_delivery_budget_exhausted"
+            payload["follow_up"] = {
+                "route": follow_up_route,
+                "reason": follow_up_reason,
+                "source_bytes": follow_up_source_bytes,
+                "envelope_bytes": follow_up_envelope_bytes,
+                "source_snapshot_sha256": snapshot.snapshot_sha256,
+                "payload": follow_up_payload,
+            }
+        if deliver:
+            delivered_total_bytes = graph_context_bytes + follow_up_charge_bytes
+            remaining_delivery_budget = max(0, delivery_limit - delivered_total_bytes)
+            payload["delivered_total_bytes"] = delivered_total_bytes
+            payload["remaining_byte_budget"] = remaining_delivery_budget
+            payload["delivery_budget"] = {
+                "limit_bytes": delivery_limit,
+                "graph_context_bytes": graph_context_bytes,
+                "follow_up_source_bytes": follow_up_charge_bytes,
+                "delivered_content_bytes": delivered_total_bytes,
+                "remaining_bytes": remaining_delivery_budget,
+                "meaning": (
+                    "one shared UTF-8 content budget for graph context plus follow-up source text; "
+                    "follow-up envelope bytes are separately measured and constrained to the remaining budget"
+                ),
+            }
+            if follow_up_source_bytes:
+                payload["follow_up"]["envelope_bytes"] = follow_up_envelope_bytes
         payload["scan"] = scan_metadata
         json.dump(payload, sys.stdout, sort_keys=True, separators=(",", ":"))
         sys.stdout.write("\n")

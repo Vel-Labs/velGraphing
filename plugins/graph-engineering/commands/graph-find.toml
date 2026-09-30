@@ -1,2 +1,2 @@
-description = "Find source-verified repository pointers for a prompt"
-prompt = "Invoke $graph-find for this repository task: {{args}}"
+description = "Find and deliver source-verified repository evidence for a prompt"
+prompt = "Invoke $graph-find and return bounded source text with exact references and unresolved evidence for this repository task: {{args}}"

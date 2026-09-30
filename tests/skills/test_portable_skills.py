@@ -11,6 +11,14 @@ import tomllib
 import unittest
 from pathlib import Path
 
+from packages.core.retrieval import (
+    GraphFindResult,
+    RepositoryTag,
+    RetrievalHit,
+    TagKind,
+    _verified_spans,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SKILLS_ROOT = PROJECT_ROOT / "plugins" / "graph-engineering" / "skills"
@@ -347,6 +355,185 @@ class PortableSkillTests(unittest.TestCase):
         self.assertNotIn("untracked.txt", result.stdout)
         self.assertTrue(all("source_path" in item for item in payload["evidence"]))
 
+    def test_graph_find_delivery_includes_verified_text_and_bounded_follow_up(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        source_text = "def refresh_token(token):\n    return token + '-current'\n"
+        source_bytes = source_text.encode("utf-8")
+        with tempfile.TemporaryDirectory(prefix="graph-find-delivery-") as raw:
+            root = Path(raw)
+            source = root / "src" / "auth.py"
+            source.parent.mkdir()
+            source.write_bytes(source_bytes)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "src/auth.py"], check=True)
+
+            def run_find(*extra: str, prompt: str) -> dict[str, object]:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(script),
+                        "--root",
+                        str(root),
+                        "--prompt",
+                        prompt,
+                        *extra,
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                return json.loads(result.stdout)
+
+            delivered = run_find("--deliver", prompt="find refresh_token")
+            recovered = run_find(
+                "--follow-up-path",
+                "src/auth.py",
+                prompt="Find the nonexistent Zephyr Obelisk florfle cleanup handler.",
+            )
+            combined = run_find(
+                "--deliver",
+                "--follow-up-path",
+                "src/auth.py",
+                "--byte-budget",
+                "4096",
+                prompt="find refresh_token",
+            )
+            exhausted = run_find(
+                "--deliver",
+                "--follow-up-path",
+                "src/auth.py",
+                "--byte-budget",
+                "80",
+                prompt="find refresh_token",
+            )
+
+        self.assertEqual("graph", delivered["route"])
+        self.assertIn("def refresh_token(token):", delivered["context"])
+        self.assertEqual(len(delivered["context"].encode("utf-8")), delivered["delivered_context_bytes"])
+        self.assertEqual(delivered["scan"]["source_bytes_read"], delivered["acquisition"]["source_bytes_read"])
+        self.assertEqual(delivered["scan"]["source_bytes"], delivered["acquisition"]["source_bytes_in_snapshot"])
+        evidence = next(item for item in delivered["evidence"] if item["source_path"] == "src/auth.py")
+        excerpt = source_bytes[evidence["byte_start"] : evidence["byte_end"]]
+        self.assertEqual(hashlib.sha256(source_bytes).hexdigest(), evidence["source_sha256"])
+        self.assertEqual(hashlib.sha256(excerpt).hexdigest(), evidence["excerpt_sha256"])
+        self.assertIn(excerpt.decode("utf-8"), delivered["context"])
+        self.assertEqual("defer", recovered["route"])
+        self.assertEqual("direct", recovered["follow_up"]["route"])
+        document = recovered["follow_up"]["payload"]["documents"][0]
+        self.assertEqual(source_text, document["content"])
+        self.assertEqual(hashlib.sha256(source_bytes).hexdigest(), document["source_sha256"])
+        delivery_budget = combined["delivery_budget"]
+        self.assertEqual(4096, delivery_budget["limit_bytes"])
+        self.assertEqual(combined["delivered_context_bytes"], delivery_budget["graph_context_bytes"])
+        self.assertEqual(document["byte_count"], combined["follow_up"]["source_bytes"])
+        self.assertLessEqual(combined["follow_up"]["envelope_bytes"], 4096 - delivery_budget["graph_context_bytes"])
+        self.assertLessEqual(combined["follow_up"]["source_bytes"], combined["follow_up"]["envelope_bytes"])
+        self.assertEqual(
+            delivery_budget["graph_context_bytes"] + combined["follow_up"]["source_bytes"],
+            combined["delivered_total_bytes"],
+        )
+        self.assertEqual(combined["delivered_total_bytes"], delivery_budget["delivered_content_bytes"])
+        self.assertEqual(4096 - combined["delivered_total_bytes"], combined["remaining_byte_budget"])
+        self.assertLessEqual(combined["delivered_total_bytes"], 4096)
+        self.assertEqual("graph", exhausted["route"])
+        self.assertEqual("shared_delivery_budget_exhausted", exhausted["follow_up"]["reason"])
+        self.assertIsNone(exhausted["follow_up"]["payload"])
+        self.assertEqual(exhausted["delivered_context_bytes"], exhausted["delivered_total_bytes"])
+        self.assertEqual(80 - exhausted["delivered_total_bytes"], exhausted["remaining_byte_budget"])
+
+    def test_graph_find_follow_up_defers_for_excluded_and_over_budget_sources(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-follow-up-limits-") as raw:
+            root = Path(raw)
+            (root / "public.py").write_text("def public_item():\n    return 1\n", encoding="utf-8")
+            (root / "large.txt").write_text("x" * 40000, encoding="utf-8")
+            (root / ".env").write_text("private_value=must_not_escape\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+
+            def run_follow_up(path: str, *extra: str) -> tuple[dict[str, object], str]:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(script),
+                        "--root",
+                        str(root),
+                        "--prompt",
+                        "find absent Zephyr Obelisk",
+                        "--follow-up-path",
+                        path,
+                        *extra,
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                return json.loads(result.stdout), result.stdout
+
+            excluded, excluded_output = run_follow_up(".env")
+            over_budget, over_budget_output = run_follow_up("large.txt")
+
+        self.assertEqual("defer", excluded["follow_up"]["route"])
+        self.assertEqual("fallback_sources_unavailable", excluded["follow_up"]["payload"]["reason"])
+        self.assertNotIn("must_not_escape", excluded_output)
+        self.assertNotIn('"source_path":".env"', excluded_output)
+        self.assertEqual("defer", over_budget["follow_up"]["route"])
+        self.assertEqual("fallback_context_exceeds_byte_budget", over_budget["follow_up"]["payload"]["reason"])
+        self.assertEqual([], over_budget["follow_up"]["payload"]["documents"])
+        self.assertNotIn("x" * 128, over_budget_output)
+
+    def test_graph_find_source_prefix_exclusion_applies_to_delivery_and_follow_up(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        allowed = b"def other_current_item():\n    return 'current'\n"
+        excluded = b"def cache_control_new():\n    return 'historical_answer_must_not_escape'\n"
+        sibling = b"def cache_control_new():\n    return 'allowed sibling'\n"
+        with tempfile.TemporaryDirectory(prefix="graph-find-scope-") as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "benchmarks" / "responses").mkdir(parents=True)
+            (root / "benchmarks" / "responses-old").mkdir()
+            (root / "src" / "cache.py").write_bytes(allowed)
+            (root / "benchmarks" / "responses" / "answer.py").write_bytes(excluded)
+            (root / "benchmarks" / "responses-old" / "current.py").write_bytes(sibling)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find cache_control_new",
+                    "--deliver",
+                    "--exclude-path-prefix",
+                    "benchmarks/responses",
+                    "--follow-up-path",
+                    "benchmarks/responses/answer.py",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("defer", payload["route"])
+        self.assertEqual("source_scope_excluded", payload["reason"])
+        self.assertEqual("graph", payload["retrieval_route"])
+        self.assertEqual("verified_tag_context_selected", payload["retrieval_reason"])
+        self.assertIn("def cache_control_new():", payload["context"])
+        self.assertTrue(payload["evidence"])
+        self.assertEqual(["benchmarks/responses"], payload["scan"]["excluded_path_prefixes"])
+        self.assertEqual(1, payload["scan"]["path_scope_excluded"])
+        self.assertEqual(len(allowed) + len(sibling), payload["acquisition"]["source_bytes_read"])
+        self.assertEqual(len(allowed) + len(sibling), payload["acquisition"]["source_bytes_in_snapshot"])
+        self.assertNotIn("historical_answer_must_not_escape", result.stdout)
+        self.assertEqual("defer", payload["follow_up"]["route"])
+        self.assertEqual("fallback_sources_unavailable", payload["follow_up"]["payload"]["reason"])
+
     def test_graph_find_rebuilds_from_current_tracked_bytes(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
         with tempfile.TemporaryDirectory(prefix="graph-find-fresh-") as raw:
@@ -453,10 +640,10 @@ class PortableSkillTests(unittest.TestCase):
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
         with tempfile.TemporaryDirectory(prefix="graph-find-skip-") as raw:
             root = Path(raw)
-            (root / "usable.py").write_text(
-                "def refresh_token():\n    return 'ok'\n", encoding="utf-8"
-            )
-            (root / "binary.bin").write_bytes(b"\xff\xfe\x00")
+            usable_bytes = b"def refresh_token():\n    return 'ok'\n"
+            invalid_bytes = b"\xff\xfe\x00"
+            (root / "usable.py").write_bytes(usable_bytes)
+            (root / "binary.bin").write_bytes(invalid_bytes)
             subprocess.run(["git", "init", "-q", str(root)], check=True)
             subprocess.run(
                 ["git", "-C", str(root), "add", "usable.py", "binary.bin"], check=True
@@ -469,6 +656,7 @@ class PortableSkillTests(unittest.TestCase):
                     str(root),
                     "--prompt",
                     "find refresh_token",
+                    "--deliver",
                 ],
                 text=True,
                 capture_output=True,
@@ -479,6 +667,11 @@ class PortableSkillTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual({"invalid_utf8": 1}, payload["scan"]["skip_counts"])
         self.assertEqual("binary.bin", payload["scan"]["files_skipped"][0]["path"])
+        self.assertEqual(
+            len(usable_bytes) + len(invalid_bytes),
+            payload["acquisition"]["source_bytes_read"],
+        )
+        self.assertEqual(len(usable_bytes), payload["acquisition"]["source_bytes_in_snapshot"])
 
     def test_graph_find_subprocess_excludes_sensitive_paths_without_names(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
@@ -523,6 +716,70 @@ class PortableSkillTests(unittest.TestCase):
         self.assertTrue(payload["scan"]["scan_complete"] is False)
         for name in sensitive_names:
             self.assertNotIn(name, result.stdout)
+        self.assertNotIn("refresh_token=secret", result.stdout)
+
+    def test_graph_find_does_not_claim_evidence_completeness_after_budget_omission(self) -> None:
+        source_path = "src/markers.py"
+        record_id = f"repo:{source_path}"
+        raw = (
+            b"def alpha_marker():\n    return 1\n"
+            + b"# distant source content\n" * 60
+            + b"def omega_marker():\n    return 2\n"
+        )
+        first_start = raw.index(b"alpha_marker")
+        second_start = raw.index(b"omega_marker")
+        tags = (
+            RepositoryTag(
+                TagKind.SYMBOL,
+                "alpha_marker",
+                record_id,
+                source_path,
+                first_start,
+                first_start + len(b"alpha_marker"),
+            ),
+            RepositoryTag(
+                TagKind.SYMBOL,
+                "omega_marker",
+                record_id,
+                source_path,
+                second_start,
+                second_start + len(b"omega_marker"),
+            ),
+        )
+        hit = RetrievalHit(record_id, source_path, 100, ("exact",), ("alpha", "omega"), 0)
+        source_sha256 = hashlib.sha256(raw).hexdigest()
+        first_end = raw.index(b"\n")
+        byte_budget = len(f"[{source_path}:0-{first_end}]\n".encode()) + first_end
+        spans, evidence, context = _verified_spans(
+            (hit,),
+            {record_id: tags},
+            {record_id: {"alpha_marker", "omega_marker"}},
+            {},
+            {},
+            {},
+            {source_path: raw},
+            {source_path: source_sha256},
+            byte_budget,
+        )
+
+        self.assertEqual(1, len(spans))
+        self.assertEqual(1, len(evidence))
+        self.assertIn("alpha_marker", context)
+        self.assertNotIn("omega_marker", context)
+        result = GraphFindResult(
+            route="graph",
+            reason="verified_tag_context_selected",
+            hits=(hit,),
+            evidence=evidence,
+            source_snapshot_sha256=source_sha256,
+            context_bytes=len(context.encode("utf-8")),
+            facet_coverage_percent=100.0,
+            recommended_fallback_paths=(),
+            fail_closed=False,
+            _context=context,
+        ).to_delivery_dict()
+        self.assertEqual("not_assessed", result["omissions"]["completeness_assessment"])
+        self.assertNotIn("complete", result["omissions"])
 
     @property
     def graphctl(self) -> Path:

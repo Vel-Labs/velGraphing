@@ -391,6 +391,7 @@ class GraphFindResult:
     unresolved_obligation_ids: tuple[str, ...] = ()
     unresolved_critical_obligation_ids: tuple[str, ...] = ()
     remaining_byte_budget: int = 0
+    _context: str = ""
 
     def to_dict(self) -> dict[str, object]:
         """Serialize only ranked hits, exact pointers, and routing metadata."""
@@ -412,6 +413,26 @@ class GraphFindResult:
             "score_meaning": (
                 "deterministic_ranking_diagnostic_not_probability_authority_or_answer_confidence"
             ),
+        }
+
+    def to_delivery_dict(self) -> dict[str, object]:
+        """Serialize the source text produced by retrieval with its evidence."""
+
+        return {
+            **self.to_dict(),
+            "context": self._context,
+            "delivered_context_bytes": len(self._context.encode("utf-8")),
+            "omissions": {
+                "completeness_assessment": "not_assessed",
+                "reason": self.reason,
+                "unresolved_obligation_ids": list(self.unresolved_obligation_ids),
+                "unresolved_critical_obligation_ids": list(
+                    self.unresolved_critical_obligation_ids
+                ),
+                "recommended_follow_up_paths": (
+                    [] if self.route == "graph" else list(self.recommended_fallback_paths)
+                ),
+            },
         }
 
 
@@ -965,6 +986,7 @@ def graph_find(
         unresolved_obligation_ids=result.unresolved_obligation_ids,
         unresolved_critical_obligation_ids=result.unresolved_critical_obligation_ids,
         remaining_byte_budget=result.remaining_byte_budget,
+        _context=result.context,
     )
 
 

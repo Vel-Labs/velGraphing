@@ -10,7 +10,7 @@ remain authoritative. The graph is a derived navigation layer.
 
 | Command | Purpose |
 | --- | --- |
-| `/graph-find` | Find source-verified pointers for a repository prompt. |
+| `/graph-find` | Find and deliver source-verified evidence for a repository prompt. |
 | `/graph-start` | Inspect a repository and prepare the smallest useful graph setup. |
 | `/graph-update` | Refresh an existing graph after source changes. |
 | `/graph-audit` | Measure graph readiness and effectiveness. |
@@ -175,8 +175,16 @@ publication, and consumer adoption require separate proof.
 repository root. It excludes secret-like paths before reading them. Binary,
 unsupported, and over-limit files are skipped or cause a `defer` route when
 the scan is incomplete. Graph exports contain source pointers and metadata,
-not complete source bodies. The command keeps its graph in memory and performs
-no network, provider, repository-write, or persistent-index operation.
+not complete source bodies. Its `--deliver` mode returns selected text with
+exact source paths, hashes, byte ranges, and excerpt hashes. An explicit
+`--follow-up-path` reads a tracked source file from the same snapshot only when
+the remaining shared `--byte-budget` fits. The output reports combined delivered
+content bytes and separately reports follow-up source bytes and its serialized
+envelope bytes. Repeat `--exclude-path-prefix` to apply the same deliberate
+source scope across comparison arms; any exclusion keeps the public route at
+`defer` and reports the underlying retrieval route and reason separately.
+The command keeps its graph in memory and performs no network, provider,
+repository-write, or persistent-index operation.
 
 ## License
 
