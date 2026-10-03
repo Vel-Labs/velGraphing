@@ -11,6 +11,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from enum import Enum
+import ast
 import hashlib
 import json
 import math
@@ -1056,9 +1057,7 @@ def retrieve(
                     unit = _complete_unit_bounds(
                         source_bytes[source_path], source_path, tag.byte_start, tag.byte_end
                     )
-                    if not (unit[0] <= tag.byte_start < tag.byte_end <= unit[1]):
-                        unit = _line_window(source_bytes[source_path], tag.byte_start, tag.byte_end, 1200)
-                    if not (unit[0] <= tag.byte_start < tag.byte_end <= unit[1]):
+                    if unit is None or not (unit[0] <= tag.byte_start < tag.byte_end <= unit[1]):
                         continue
                     unit_tags[unit].add(tag.value)
                 for unit, values in unit_tags.items():
@@ -1753,7 +1752,7 @@ def _verified_spans(
             for obligation_id in sorted(span_obligations):
                 authority_groups[obligations[obligation_id].authority_class].append(obligation_id)
         else:
-            authority_groups = {AuthorityClass.RUNTIME: []}
+            authority_groups = {_authority_class_for_source_path(hit.source_path): []}
         for authority_class, authority_ids in sorted(
             authority_groups.items(), key=lambda item: item[0].value
         ):
@@ -1870,7 +1869,7 @@ def _path_values(path: str) -> tuple[str, ...]:
 
 
 def _authority_class_for_source_path(path: str) -> AuthorityClass:
-    """Classify a source path for evidence ordering only."""
+    """Classify a source role without granting task or write authority."""
 
     normalized = path.casefold()
     basename = posixpath.basename(normalized)
@@ -2009,119 +2008,92 @@ def _json_unit_bounds(raw: bytes, start: int, end: int) -> tuple[int, int] | Non
     return None
 
 
-def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[int, int]:
-    """Find a bounded complete source unit around a verified anchor."""
+def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[int, int] | None:
+    """Return a certified complete unit, never a heuristic fragment.
 
-    if not raw:
-        return 0, 0
-    line_start = raw.rfind(b"\n", 0, start) + 1
-    line_end = raw.find(b"\n", end)
-    line_end = len(raw) if line_end < 0 else line_end + 1
+    Python uses its byte parser; existing JavaScript uses its grammar; JSON
+    requires a validated container. Plain ATX
+    Markdown sections retain their structural rule. Unparseable or unsupported
+    units return None so callers retain an unresolved source fallback.
+    """
+
+    if (type(raw) is not bytes or type(path) is not str or type(start) is not int
+            or type(end) is not int or not 0 <= start < end <= len(raw)):
+        return None
+    if raw[start] & 0b11000000 == 0b10000000 or (end < len(raw) and raw[end] & 0b11000000 == 0b10000000):
+        return None
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
-        return _line_window(raw, start, end, 1200)
-    lines = text.splitlines(keepends=True)
-    offsets: list[int] = []
-    position = 0
-    for line in lines:
-        offsets.append(position)
-        position += len(line.encode("utf-8"))
-    anchor_line = 0
-    for index, offset in enumerate(offsets):
-        if offset <= start < (offset + len(lines[index].encode("utf-8"))):
-            anchor_line = index
-            break
-
-    basename = posixpath.basename(path).lower()
-    is_markdown = path.lower().endswith(".md") or basename in {"readme.md", "agents.md"}
-    if is_markdown:
-        heading_line = None
-        heading_level = None
-        for index in range(anchor_line, -1, -1):
-            match = re.match(r"^\s{0,3}(#{1,6})\s+", lines[index])
-            if match:
-                heading_line = index
-                heading_level = len(match.group(1))
-                break
-        if heading_line is not None and heading_level is not None:
-            finish = len(lines)
-            for index in range(heading_line + 1, len(lines)):
-                match = re.match(r"^\s{0,3}(#{1,6})\s+", lines[index])
-                if match and len(match.group(1)) <= heading_level:
-                    finish = index
-                    break
-            return offsets[heading_line], offsets[finish] if finish < len(offsets) else len(raw)
-
-    config_suffixes = (".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf")
-    is_config_path = path.lower().endswith(config_suffixes) or any(
-        token in basename for token in ("config", "settings", "manifest")
-    )
-    if is_config_path:
-        stripped = lines[anchor_line].lstrip()
-        if path.lower().endswith(".json"):
-            return _json_unit_bounds(raw, start, end) or _line_window(raw, start, end, 1200)
-        # Non-JSON mapping assignments use a conservative brace heuristic.
-        # Retrieval checks that its selected unit still contains every credited tag.
-        opening = raw.find(b"{", line_start, line_end)
-        if opening >= 0:
-            depth = 0
-            for index in range(opening, len(raw)):
-                if raw[index:index + 1] == b"{":
-                    depth += 1
-                elif raw[index:index + 1] == b"}":
-                    depth -= 1
-                    if depth == 0:
-                        return line_start, index + 1
-        indentation = len(lines[anchor_line]) - len(stripped)
-        finish = anchor_line + 1
-        while finish < len(lines):
-            candidate = lines[finish]
-            if candidate.strip() and len(candidate) - len(candidate.lstrip()) <= indentation:
-                break
-            finish += 1
-        return offsets[anchor_line], offsets[finish] if finish < len(offsets) else len(raw)
-
-    declaration = None
-    for index in range(anchor_line, -1, -1):
-        if re.match(r"^\s*(?:async\s+)?(?:def|class)\s+[A-Za-z_][A-Za-z0-9_]*", lines[index]):
-            declaration = index
-            break
-    if declaration is not None:
-        declaration_text = lines[declaration]
-        indentation = len(declaration_text) - len(declaration_text.lstrip())
-        begin = declaration
-        while begin > 0 and re.match(r"^\s*@(\w|[.])+", lines[begin - 1]):
-            begin -= 1
-        finish = declaration + 1
-        while finish < len(lines):
-            candidate = lines[finish]
-            if candidate.strip():
-                candidate_indent = len(candidate) - len(candidate.lstrip())
-                if candidate_indent <= indentation:
-                    break
-            finish += 1
-        return offsets[begin], offsets[finish] if finish < len(offsets) else len(raw)
-
-    brace_declaration = None
-    for index in range(anchor_line, -1, -1):
-        if re.search(r"\b(?:function|class)\s+[A-Za-z_$][\w$]*|=>\s*\{", lines[index]):
-            brace_declaration = index
-            break
-    if brace_declaration is not None:
-        opening = raw.find(b"{", offsets[brace_declaration], line_end)
-        if opening >= 0:
-            depth = 0
-            for index in range(opening, len(raw)):
-                if raw[index:index + 1] == b"{":
-                    depth += 1
-                elif raw[index:index + 1] == b"}":
-                    depth -= 1
-                    if depth == 0:
-                        close_end = raw.find(b"\n", index)
-                        return offsets[brace_declaration], len(raw) if close_end < 0 else close_end + 1
-
-    return _line_window(raw, start, end, 1200)
+        return None
+    physical_lines = raw.splitlines(keepends=True)
+    offsets = [0]
+    for line in physical_lines:
+        offsets.append(offsets[-1] + len(line))
+    if path.lower().endswith(".py"):
+        try:
+            # Parse exact bytes: Python validates encoding declarations and BOM
+            # consistency before producing its physical-line AST coordinates.
+            tree = ast.parse(raw)
+        except (SyntaxError, ValueError, RecursionError, UnicodeError, LookupError):
+            return None
+        declarations = [n for n in ast.walk(tree)
+                        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+        for nodes in (declarations, tree.body):
+            units = []
+            for node in nodes:
+                decorators = getattr(node, "decorator_list", ())
+                begin = min([node.lineno, *(d.lineno for d in decorators)]) - 1
+                finish = node.end_lineno
+                if finish is None or not 0 <= begin < finish < len(offsets):
+                    continue
+                unit_start, unit_end = offsets[begin], offsets[finish]
+                if unit_start <= start < end <= unit_end:
+                    while finish < len(physical_lines) and not physical_lines[finish].strip():
+                        finish += 1
+                    units.append((unit_start, offsets[finish]))
+            if units:
+                return min(units, key=lambda bounds: (bounds[1] - bounds[0], bounds[0]))
+        return None
+    if path.lower().endswith((".js", ".jsx", ".mjs", ".cjs")):
+        # Reuse the maintained grammar; unavailable/error trees cannot certify
+        # complete units. Never count braces in strings or incomplete syntax.
+        try:
+            from .javascript_coordinates import JavaScriptCoordinateProvider
+            from .source_coordinates import SourceFile, SourceSnapshot
+            result = JavaScriptCoordinateProvider().index(SourceSnapshot((SourceFile(path, raw),)))
+        except (ImportError, ValueError, TypeError, RuntimeError, RecursionError):
+            return None
+        if not result.supported:
+            return None
+        units = [(c.byte_start, c.byte_end) for c in result.coordinates
+                 if c.occurrence_role == "unknown" and c.byte_start <= start < end <= c.byte_end]
+        return min(units, key=lambda bounds: (bounds[1] - bounds[0], bounds[0])) if units else None
+    if path.lower().endswith(".json"):
+        return _json_unit_bounds(raw, start, end)
+    if path.lower().endswith(".md"):
+        lines = [line.decode("utf-8") for line in physical_lines]
+        # Certify only plain ATX structure. Embedded blocks require a richer
+        # parser; apparent headings inside them cannot establish complete units.
+        if any("<" in line or re.match(
+                r"^ {0,3}(?:`{3,}|~{3,}|>|[-+*][ \t]|[0-9]+[.)][ \t])|^(?: {4}|\t)\S|^ *[-=]+ *$", line)
+               for line in lines):
+            return None
+        anchor_line = next((i for i in range(len(lines)) if offsets[i] <= start < offsets[i + 1]), None)
+        if anchor_line is None:
+            return None
+        for begin in range(anchor_line, -1, -1):
+            heading = re.match(r"^ {0,3}(#{1,6})[ \t]+", lines[begin])
+            if heading:
+                level = len(heading.group(1))
+                finish = begin + 1
+                while finish < len(lines):
+                    candidate = re.match(r"^ {0,3}(#{1,6})[ \t]+", lines[finish])
+                    if candidate and len(candidate.group(1)) <= level:
+                        break
+                    finish += 1
+                return offsets[begin], offsets[finish]
+    return None
 
 
 def _line_window(raw: bytes, start: int, end: int, maximum: int) -> tuple[int, int]:

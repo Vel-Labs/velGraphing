@@ -16,9 +16,11 @@ import graph_find as adapter
 try:
     from packages.core import Graph, TaskSpec, Sensitivity, select
     from packages.core.retrieval import _complete_unit_bounds
+    from packages.core.repository_build import python_import_relations
 except ModuleNotFoundError:
     from core import Graph, TaskSpec, Sensitivity, select
     from core.retrieval import _complete_unit_bounds
+    from core.repository_build import python_import_relations
 
 
 def digest(raw):
@@ -29,6 +31,12 @@ def bounded(value, maximum=64):
     if type(value) is not int or not 1 <= value <= maximum:
         raise ValueError(f"limit must be an integer in 1..{maximum}")
     return value
+
+
+class UnitUnavailable(ValueError):
+    def __init__(self, node):
+        self.node = node
+        super().__init__("complete_unit_unavailable")
 
 
 class Session:
@@ -86,59 +94,38 @@ class Session:
             self.nodes[fid] = {"id": fid, "kind": "file", "parent": directory, "path": path, "source_sha256": source_hash,
                                "byte_start": 0, "byte_end": len(raw)}
             added.append(self.nodes[fid])
-            anchors = list(re.finditer(rb"(?m)^[ \t]*(?:(?:async[ \t]+)?(?:def|class)[ \t]+\w+|#{1,6}[ \t]+[^\n]+)", raw))
-            bounds = {_complete_unit_bounds(raw, path, a.start(), a.end()): a.group().decode("utf-8").strip()
-                      for a in anchors}
+            # A UTF-8 BOM is a Python byte-input prefix, not declaration text.
+            # Keep every anchor and delivered bound in original-source offsets.
+            prefix = 3 if raw.startswith(b"\xef\xbb\xbf") else 0
+            anchors = list(re.finditer(rb"(?m)^[ \t]*(?:(?:async[ \t]+)?(?:def|class)[ \t]+\w+|#{1,6}[ \t]+[^\n]+)", raw[prefix:]))
+            bounds = {}
+            for anchor in anchors:
+                start, end = anchor.start() + prefix, anchor.end() + prefix
+                label = anchor.group().decode("utf-8").strip()
+                unit = _complete_unit_bounds(raw, path, start, end)
+                if unit is None:
+                    if len(self.nodes) >= 512:
+                        raise ValueError("graph_node_budget_exhausted")
+                    uid = f"unresolved:{path}:{start}:{digest(raw[start:end])[:16]}"
+                    self.nodes[uid] = {"id": uid, "kind": "unresolved_unit", "parent": fid,
+                                       "path": path, "source_sha256": source_hash, "label": label[:160],
+                                       "reason": "complete_unit_unavailable"}
+                    added.append(self.nodes[uid])
+                else:
+                    bounds[unit] = label
             for (start, end), label in sorted(bounds.items()):
                 if len(self.nodes) >= 512:
                     raise ValueError("graph_node_budget_exhausted")
-                if start >= end:
-                    continue
                 uid = f"unit:{path}:{start}:{end}:{digest(raw[start:end])[:16]}"
                 self.nodes[uid] = {"id": uid, "kind": "unit", "parent": fid, "path": path,
                                    "source_sha256": source_hash, "byte_start": start, "byte_end": end,
-                                   "excerpt_sha256": digest(raw[start:end]),
-                                   "label": label[:160]}
+                                   "excerpt_sha256": digest(raw[start:end]), "label": label[:160]}
                 added.append(self.nodes[uid])
         return added
 
     def relations(self, path):
-        # ponytail: static Python imports only; add other language parsers when a matched task needs them.
         self.fresh(path)
-        raw = self.reader.sources[path]
-        if not path.endswith(".py"):
-            return []
-        try:
-            tree = ast.parse(raw.decode("utf-8"))
-        except SyntaxError:
-            return []
-        package = list(PurePosixPath(path).parent.parts)
-        lines = raw.splitlines(keepends=True)
-        offsets = [0]
-        for line in lines:
-            offsets.append(offsets[-1] + len(line))
-        edges = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                modules = [a.name.split(".") for a in node.names]
-            elif isinstance(node, ast.ImportFrom):
-                base = package[:len(package) - node.level + 1] if node.level else []
-                if node.level > len(package):
-                    continue
-                base += node.module.split(".") if node.module else []
-                modules = [base] + [base + a.name.split(".") for a in node.names]
-            else:
-                continue
-            start, end = offsets[node.lineno - 1], offsets[node.end_lineno]
-            for module in modules:
-                stem = "/".join(module)
-                for target in (stem + ".py", stem + "/__init__.py"):
-                    if target in self.reader.sources and target != path:
-                        witness = {"path": path, "source_sha256": digest(raw), "byte_start": start,
-                                   "byte_end": end, "excerpt_sha256": digest(raw[start:end])}
-                        edges.append({"kind": "imports", "from": "file:" + path, "to": "file:" + target,
-                                      "witness": witness})
-        return sorted({json.dumps(e, sort_keys=True): e for e in edges}.values(), key=lambda e: e["to"])
+        return python_import_relations(self.reader.sources[path], path, self.reader.sources)
 
     def action(self, action):
         if self.steps >= 32:
@@ -192,6 +179,8 @@ class Session:
             return {"nodes": self.admit(targets), "edges": [e for e in edges if e["to"][5:] in targets],
                     "omitted_targets": len({e["to"] for e in edges}) - len(targets)}
         node = self.nodes[action["id"]]
+        if node["kind"] == "unresolved_unit":
+            raise UnitUnavailable(node)
         key = (node["path"], node["byte_start"], node["byte_end"])
         raw = self.reader.sources[node["path"]][node["byte_start"]:node["byte_end"]]
         if any(p == key[0] and start <= key[1] and end >= key[2] for p, start, end in self.seen):
@@ -215,6 +204,10 @@ class Session:
             status, reason = "ok", "completeness_not_assessed"
         except (KeyError, OSError, TypeError, ValueError) as error:
             result, status, reason = {}, "defer", str(error)
+            if isinstance(error, UnitUnavailable):
+                result = {"unresolved_units": [error.node], "fallback_obligations": [
+                    {"path": error.node["path"], "file_id": error.node["parent"],
+                     "required_read": "complete_file", "reason": "complete_unit_unavailable"}]}
         output = {"schema_version": "graph-tools-v1", "result": result, "status": status, "reason": reason,
                   "sufficient": False, "authority_bearing": False, "snapshot_sha256": self.snapshot.snapshot_sha256,
                   **self.identity, "budget": {"limit_bytes": self.limit, "delivered_content_bytes": self.used,

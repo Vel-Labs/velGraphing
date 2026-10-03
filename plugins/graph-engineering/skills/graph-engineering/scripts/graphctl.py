@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import hashlib
 import json
 import os
 import re
 import stat
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -890,6 +892,202 @@ def command_readiness(args: argparse.Namespace) -> int:
     return 0
 
 
+def repository_modules():
+    """Resolve the existing source/portable core and repository adapter lazily."""
+    script = Path(__file__).resolve()
+    source = next((p for p in script.parents if (p / "packages/core").is_dir()), None)
+    if source is not None:
+        sys.path.insert(0, str(source))
+        from packages.core import repository_build as builder
+        plugin = source / "plugins/graph-engineering"
+        identity_paths = list((source / "packages/core").glob("*.py"))
+    else:
+        plugin = next((p for p in script.parents if (p / "runtime/core").is_dir()), None)
+        if plugin is None:
+            raise InputError("repository build requires the existing source or portable core")
+        sys.path.insert(0, str(plugin / "runtime"))
+        from core import repository_build as builder
+        identity_paths = list((plugin / "runtime/core").glob("*.py"))
+        source = plugin
+    adapter_path = plugin / "skills/graph-find/scripts/graph_find.py"
+    spec = importlib.util.spec_from_file_location("graphctl_repository_adapter", adapter_path)
+    adapter = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(adapter)
+    identity_paths += [script, adapter_path]
+    identity = {str(p.relative_to(source)): builder.digest(p.read_bytes()) for p in sorted(identity_paths)}
+    return builder, adapter, {"source_files": identity, "python": list(sys.version_info[:3])}
+
+
+BUILD_EXCLUDED_COMPONENTS = frozenset({
+    ".git", ".ssh", ".aws", ".azure", ".gcloud", ".venv", "node_modules",
+    "__pycache__", ".velgraphing-local", "dist", "build",
+})
+BUILD_EXCLUDED_PREFIXES = ("plugins/graph-engineering/runtime",)
+
+
+def repository_sensitive(adapter, relative):
+    name = relative.name.casefold()
+    return adapter._is_sensitive_path(relative) or name.startswith(".env.") or bool(
+        {p.casefold() for p in relative.parts} & {".ssh", ".aws", ".azure", ".gcloud"})
+
+
+def read_map_document(path):
+    """Only explicit regular JSON inputs; never follow document aliases."""
+    p = Path(path)
+    p = p if p.is_absolute() else Path.cwd() / p
+    current = Path(p.anchor)
+    metadata = inspect_component(current, "map input root")
+    for component in p.parts[1:]:
+        if component == "..":
+            raise InputError("map input path must not contain traversal aliases")
+        current = current / component
+        metadata = inspect_component(current, "map input component")
+        if current != p and not stat.S_ISDIR(metadata.st_mode):
+            raise InputError("map input parent must be a directory")
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+        raise InputError("map input must be a regular non-aliased file")
+    if metadata.st_size > 64 * 1024 * 1024:
+        raise InputError("map input exceeds 64 MiB")
+    if p.name.casefold() == ".env" or p.name.casefold().startswith(".env."):
+        raise InputError("sensitive map input is not allowed")
+    return read_json(str(p))
+
+
+def repository_inventory(root, adapter, explicit_inventory):
+    if explicit_inventory:
+        paths = read_map_document(explicit_inventory)
+        if type(paths) is not list or any(type(p) is not str for p in paths):
+            raise InputError("inventory must be a JSON list of project-relative paths")
+        return sorted(set(paths)), "explicit_list; caller owns ignore filtering", 0
+    adapter._repository_root(root)
+    raw = adapter._git(root, "ls-files", "--cached", "--others", "--exclude-standard", "--deduplicate", "-z")
+    paths = sorted(set(raw.decode("utf-8", "strict").strip("\0").split("\0")) - {""})
+    # --no-index also filters accidentally tracked ignored files. No contents read.
+    ignored = subprocess.run(["git", "-C", str(root), "check-ignore", "--no-index", "--stdin", "-z"],
+                             input=b"\0".join(p.encode() for p in paths) + b"\0",
+                             capture_output=True)
+    if ignored.returncode not in (0, 1):
+        raise InputError("cannot apply repository ignore policy")
+    excluded = set(ignored.stdout.decode("utf-8", "strict").strip("\0").split("\0")) - {""}
+    return [p for p in paths if p not in excluded], "git_nonignored_working_tree", len(excluded)
+
+
+def command_repository_build(args):
+    try:
+        builder, adapter, identity = repository_modules()
+        root = adapter._canonical_root(args.root)
+        if str(root.resolve()) != args.root:
+            raise InputError("root must not contain symlink aliases")
+        output = Path(args.output)
+        if not output.is_absolute() or output.is_symlink() or output.resolve().is_relative_to(root):
+            raise InputError("first-slice output must be an absolute path outside the input repository")
+        if not output.parent.is_dir() or output.parent.resolve() != output.parent:
+            raise InputError("output parent must exist without symlink aliases")
+        if output.exists():
+            raise InputError("output already exists; choose a new file and use --previous for updates")
+        if not 1 <= args.max_file_bytes <= adapter.HARD_MAX_FILE_BYTES or not 1 <= args.max_total_bytes <= adapter.HARD_MAX_TOTAL_BYTES:
+            raise InputError("source byte limits exceed existing adapter bounds")
+        includes = tuple(sorted(set(args.include)))
+        for value in includes:
+            if value != ".":
+                adapter._safe_relative(value)
+        exclusions = tuple(sorted(set(BUILD_EXCLUDED_PREFIXES + tuple(args.exclude_path_prefix))))
+        for value in exclusions:
+            adapter._safe_relative(value)
+        paths, inventory_mode, ignored_count = repository_inventory(root, adapter, args.inventory)
+        sources, inodes = {}, set()
+        excluded_counts = Counter(ignored=ignored_count)
+        unsupported = []
+        total = 0
+        for path in paths:
+            relative = adapter._safe_relative(path)
+            if repository_sensitive(adapter, relative):
+                excluded_counts["sensitive"] += 1
+                continue
+            parts = {part.casefold() for part in relative.parts}
+            if parts & BUILD_EXCLUDED_COMPONENTS or any(path == p or path.startswith(p + "/") for p in exclusions):
+                excluded_counts["generated_or_local"] += 1
+                continue
+            if not any(p == "." or path == p or path.startswith(p + "/") for p in includes):
+                excluded_counts["outside_scope"] += 1
+                continue
+            adapter._reject_symlink_components(root, root / path)
+            try:
+                metadata = (root / path).lstat()
+            except FileNotFoundError:
+                unsupported.append(dict(path=path, reason="deleted_or_missing"))
+                continue
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+                raise InputError("source inventory contains a non-regular file or hardlink")
+            inode = (metadata.st_dev, metadata.st_ino)
+            if inode in inodes:
+                raise InputError("source inventory contains aliased files")
+            inodes.add(inode)
+            reason = "max_file_bytes" if metadata.st_size > args.max_file_bytes else (
+                "max_total_bytes" if total + metadata.st_size > args.max_total_bytes else None)
+            if reason:
+                unsupported.append(dict(path=path, reason=reason))
+                continue
+            raw = safe_file_bytes(root / path, metadata, args.max_file_bytes)
+            after = (root / path).lstat()
+            if (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns) != (
+                    after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns):
+                raise InputError("source changed during capture")
+            try:
+                raw.decode("utf-8", "strict")
+            except UnicodeDecodeError:
+                unsupported.append(dict(path=path, reason="invalid_utf8"))
+                continue
+            if total + len(raw) > args.max_total_bytes:
+                raise InputError("source changed beyond total byte cap")
+            sources[path] = raw
+            total += len(raw)
+        if not sources:
+            raise InputError("scope has no usable source files")
+        reader = adapter.SnapshotReader(root, sources)
+        snapshot = adapter.SourceSnapshotV4(tuple(adapter.SourceIdentityV4(p, len(b), builder.digest(b))
+                                                   for p, b in sorted(sources.items())))
+        graph = adapter.Graph(tuple(adapter.GraphRecord(
+            record_id="repo:" + p, kind="source", title=p, content=b.decode("utf-8"),
+            provenance=adapter.Provenance(p, builder.digest(b), "working-tree-bytes", True),
+            trust=adapter.TrustClass.VERIFIED_SOURCE, sensitivity=adapter.Sensitivity.INTERNAL,
+            freshness=adapter.Freshness.CURRENT, admission=adapter.Admission.VERIFIER, eligible=True)
+            for p, b in sorted(sources.items())))
+        policy = dict(includes=list(includes), excluded_prefixes=list(exclusions),
+                      excluded_components=sorted(BUILD_EXCLUDED_COMPONENTS), inventory=inventory_mode,
+                      max_file_bytes=args.max_file_bytes, max_total_bytes=args.max_total_bytes,
+                      sensitive_policy="existing graph-find plus env families and credential directories")
+        scan = dict(files=len(sources), source_bytes=total, excluded_counts=dict(sorted(excluded_counts.items())),
+                    unsupported=unsupported, declared_inventory_complete=not unsupported,
+                    semantics_complete=False)
+        manifest = builder.build_manifest(graph, snapshot, reader, namespace=args.namespace,
+                                          policy=policy, scan=scan, builder=identity)
+        previous = read_map_document(args.previous) if args.previous else None
+        delta = builder.changes(previous, manifest)
+        payload = builder.canonical(manifest)
+        # Exclusive creation preserves old maps and never changes repository files.
+        with output.open("xb") as handle:
+            handle.write(payload)
+        emit(dict(status="built", output=str(output), output_bytes=len(payload),
+                  manifest_sha256=manifest["manifest_sha256"], snapshot_sha256=snapshot.snapshot_sha256,
+                  counts=dict(files=len(manifest["files"]), symbols=len(manifest["symbols"]),
+                              relationships=len(manifest["relationships"]), keywords=len(manifest["keywords"])),
+                  scan=scan, changes=delta, update_method="full_rebuild", authority_bearing=False))
+        return 0
+    except (ValueError, TypeError, KeyError, OSError, UnicodeError) as exc:
+        raise InputError(str(exc)) from exc
+
+
+def command_repository_search(args):
+    try:
+        builder, _, _ = repository_modules()
+        result = builder.search_manifest(read_map_document(args.map), args.query, args.limit)
+        emit(result)
+        return 0
+    except (ValueError, TypeError, KeyError, OSError) as exc:
+        raise InputError(str(exc)) from exc
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = JsonArgumentParser(prog="graphctl.py", description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -925,6 +1123,23 @@ def build_parser() -> argparse.ArgumentParser:
     readiness_parser.add_argument("--source-revision")
     readiness_parser.add_argument("--source-observed-at")
     readiness_parser.set_defaults(handler=command_readiness)
+
+    repository_parser = subparsers.add_parser("retrievel-build", help="build offline source-bound repository views")
+    repository_parser.add_argument("--root", required=True)
+    repository_parser.add_argument("--include", action="append", required=True)
+    repository_parser.add_argument("--output", required=True)
+    repository_parser.add_argument("--previous")
+    repository_parser.add_argument("--namespace", default="repository")
+    repository_parser.add_argument("--inventory", help="explicit JSON path list for a non-Git scope; caller filters ignores")
+    repository_parser.add_argument("--exclude-path-prefix", action="append", default=[])
+    repository_parser.add_argument("--max-file-bytes", type=int, default=DEFAULT_MAX_FILE_BYTES)
+    repository_parser.add_argument("--max-total-bytes", type=int, default=16 * 1024 * 1024)
+    repository_parser.set_defaults(handler=command_repository_build)
+    search_parser = subparsers.add_parser("retrievel-search", help="search saved map metadata; direct source remains authoritative")
+    search_parser.add_argument("--map", required=True)
+    search_parser.add_argument("--query", required=True)
+    search_parser.add_argument("--limit", type=int, default=10)
+    search_parser.set_defaults(handler=command_repository_search)
     return parser
 
 

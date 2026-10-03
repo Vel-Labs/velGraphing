@@ -1248,6 +1248,49 @@ class ProgressiveNavigationTests(unittest.TestCase):
             )
 
 
+class OrdinaryEvidenceClassTests(unittest.TestCase):
+    def test_unobligated_delivery_distinguishes_source_roles(self):
+        cases = (
+            ("docs/BOUNDARY.md", b"# Boundary guard\nboundary_guard source implementation.\n", AuthorityClass.DOCUMENTATION),
+            ("tests/test_boundary.py", b"def test_boundary_guard():\n    assert boundary_guard()\n", AuthorityClass.TEST),
+            ("contracts/boundary.schema.json", b'{"boundary_guard": true}\n', AuthorityClass.CONTRACT),
+            ("policy/boundary.py", b"boundary_guard = True\n", AuthorityClass.POLICY),
+            ("config/settings.toml", b"boundary_guard = true\n", AuthorityClass.CONFIGURATION),
+            ("src/boundary.py", b"def boundary_guard():\n    return True\n", AuthorityClass.RUNTIME),
+        )
+        for path, raw, expected in cases:
+            with self.subTest(path=path):
+                graph, snapshot, reader = single_source_fixture(raw, path)
+                result = graph_find(graph, task(), "find boundary_guard source implementation", snapshot, reader, proof_obligations=())
+                self.assertTrue(result.evidence)
+                self.assertEqual({item.authority_class for item in result.evidence}, {expected})
+                self.assertEqual({item["authority_class"] for item in result.to_delivery_dict()["evidence"]}, {expected.value})
+                for item in result.evidence:
+                    self.assertEqual(item.source_sha256, hashlib.sha256(raw).hexdigest())
+                    self.assertEqual(item.excerpt_sha256, hashlib.sha256(raw[item.byte_start:item.byte_end]).hexdigest())
+                    self.assertEqual(item.obligation_ids, ())
+
+    def test_mixed_delivery_keeps_source_roles_and_incomplete_assessment(self):
+        sources = {
+            "src/boundary.py": b"def boundary_guard():\n    return True\n",
+            "tests/test_boundary.py": b"def test_boundary_guard():\n    assert boundary_guard()\n",
+            "docs/BOUNDARY.md": b"# Boundary guard\nboundary_guard source implementation.\n",
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+        result = graph_find(graph, task(), "find boundary_guard source implementation", snapshot, reader, proof_obligations=())
+        classes = {item.source_path: item.authority_class for item in result.evidence}
+        self.assertEqual(classes, {
+            "src/boundary.py": AuthorityClass.RUNTIME,
+            "tests/test_boundary.py": AuthorityClass.TEST,
+            "docs/BOUNDARY.md": AuthorityClass.DOCUMENTATION,
+        })
+        delivered = result.to_delivery_dict()
+        self.assertEqual(delivered["omissions"]["completeness_assessment"], "not_assessed")
+        self.assertEqual(result.covered_obligation_ids, ())
+        self.assertEqual(result.context_bytes, len(delivered["context"].encode("utf-8")))
+        self.assertLessEqual(result.context_bytes, task().byte_budget)
+
+
 class GraphFindTests(unittest.TestCase):
     def test_graph_find_compiles_obligations_for_short_prompts(self) -> None:
         graph, snapshot, reader = fixture()
@@ -1405,15 +1448,42 @@ class BoundedCorrectnessRegressionTests(unittest.TestCase):
                     if path.endswith(".json"):
                         json.loads(excerpt, parse_int=str, parse_float=str)
 
-    def test_graph_find_does_not_credit_an_anchor_outside_bounded_fallback(self) -> None:
+    def test_complete_configuration_assignment_is_delivered_or_refused_by_full_budget(self) -> None:
+        # Preserve the historical long valid assignment. Parse-only units no
+        # longer substitute the old truncated 1200-byte fallback around its key.
         raw = b'NOTE = {"note": "}' + b'x' * 1800 + b'", "special_anchor": True}\n'
         path = "settings.py"
         graph, snapshot, reader = multi_source_fixture({path: raw})
         obligation = ProofObligation("anchor", AuthorityClass.CONFIGURATION, source_hints=(path,), anchor_hints=("special-anchor",), critical=True)
         result = graph_find(graph, task(), "find special_anchor", snapshot, reader, proof_obligations=(obligation,))
+        self.assertEqual(result.route, "graph")
+        self.assertEqual(result.covered_obligation_ids, ("anchor",))
+        self.assertEqual(result.evidence[0].byte_start, 0)
+        self.assertEqual(result.evidence[0].byte_end, len(raw))
+        result = graph_find(graph, task(byte_budget=len(raw) - 1), "find special_anchor", snapshot, reader, proof_obligations=(obligation,))
         self.assertEqual(result.route, "defer")
         self.assertEqual(result.covered_obligation_ids, ())
         self.assertEqual(result.unresolved_critical_obligation_ids, ("anchor",))
+        self.assertEqual(result.recommended_fallback_paths, (path,))
+        self.assertEqual(result.context_bytes, 0)
+
+    def test_unparseable_complete_unit_retains_critical_source_fallback(self) -> None:
+        cases = (
+            b"def alpha_gate(\n    value,\n    return value\n",
+            b"\xef\xbb\xbf# coding: latin-1\ndef alpha_gate(value):\n    return value\n",
+        )
+        for raw in cases:
+            with self.subTest(raw=raw):
+                path = "source.py"
+                graph, snapshot, reader = multi_source_fixture({path: raw})
+                obligation = ProofObligation("complete-alpha", AuthorityClass.RUNTIME, source_hints=(path,), anchor_hints=("alpha-gate",), critical=True)
+                result = graph_find(graph, task(), "find alpha_gate", snapshot, reader, proof_obligations=(obligation,))
+                self.assertEqual(result.route, "defer")
+                self.assertEqual(result.covered_obligation_ids, ())
+                self.assertEqual(result.unresolved_critical_obligation_ids, ("complete-alpha",))
+                self.assertEqual(result.recommended_fallback_paths, (path,))
+                self.assertEqual(result.evidence, ())
+                self.assertEqual(result.context_bytes, 0)
 
     def test_progressive_context_accounts_for_multibyte_payloads_and_three_joins(self) -> None:
         from packages.core.retrieval import NavigationResult, SourcePreview
