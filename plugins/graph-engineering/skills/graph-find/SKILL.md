@@ -5,6 +5,10 @@ description: Find source-verified repository evidence for a prompt. Deliver boun
 
 # Graph Find
 
+For an explicitly requested build/inspect/expand/source-read sequence, use the
+[offline tool loop](references/tool-loop.md). Live Jev action selection remains
+unverified. The existing one-shot command below keeps its current contract.
+
 Run `scripts/graph_find.py` with an explicit absolute Git repository root and a
 prompt. The adapter reads only Git-tracked, regular UTF-8 files. It builds the
 verified `Graph` and `SourceSnapshotV4` in memory, then invokes the existing

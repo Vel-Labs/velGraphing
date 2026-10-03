@@ -112,7 +112,9 @@ def adapt_serialized_candidate(serialized: str | bytes | bytearray) -> dict[str,
 
     try:
         record = json.loads(serialized)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except UnicodeDecodeError:
+        return _rejection("invalid_json", "Input is not valid JSON text encoding.")
+    except json.JSONDecodeError as exc:
         return _rejection("invalid_json", f"Input is not valid JSON: {exc.msg}.")
 
     rejected = _validate(record)

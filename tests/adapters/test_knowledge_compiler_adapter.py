@@ -46,6 +46,14 @@ class KnowledgeCompilerAdapterTests(unittest.TestCase):
         self.assertFalse(result["accepted"])
         self.assertEqual("invalid_json", result["rejection"]["code"])
 
+    def test_invalid_unicode_bytes_return_typed_rejection(self):
+        for raw in (b'\xff', bytearray(b'{"candidate": "\xff"}')):
+            with self.subTest(raw=raw):
+                result = self.adapt(raw)
+                self.assertEqual("GraphCandidateRejectionV1", result["schema_version"])
+                self.assertFalse(result["accepted"])
+                self.assertEqual("invalid_json", result["rejection"]["code"])
+
     def test_missing_digest_returns_typed_rejection(self):
         record = copy.deepcopy(self.record)
         del record["source"]["sha256"]

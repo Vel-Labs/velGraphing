@@ -30,6 +30,12 @@ class NavigationV4Tests(unittest.TestCase):
         self.assertEqual(1, len(references))
         self.assertEqual("call", references.items[0].coordinate.occurrence_role)
 
+    def test_public_coordinate_result_has_a_distinct_export(self) -> None:
+        from packages.core import NavigationResult, NavigationV4Result
+        result = self.navigator.find_symbols("helper", role="definition")
+        self.assertIs(type(result), NavigationV4Result)
+        self.assertIsNot(NavigationV4Result, NavigationResult)
+
     def test_exact_read_and_enclosing_unit(self) -> None:
         result = self.navigator.read_symbol("greet")
         self.assertEqual(b"def greet(name)", result.items[0].content)

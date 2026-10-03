@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from enum import Enum
 import hashlib
+import json
 import math
 import posixpath
 import re
@@ -716,12 +717,16 @@ def _expected_repository_tags(
             key=lambda item: (
                 _tag_priority(item.kind), item.value, item.byte_start or -1,
             ),
-        )[:_MAX_TAGS_PER_RECORD]
+        )
+        record_tag_count = 0
         for tag in record_tags:
             identity = (tag.record_id, tag.kind.value, tag.value)
             if identity not in seen:
                 seen.add(identity)
                 tags.append(tag)
+                record_tag_count += 1
+                if record_tag_count == _MAX_TAGS_PER_RECORD:
+                    break
     tags.sort(key=lambda item: (item.value, item.kind.value, item.record_id, item.byte_start or -1))
     vocabulary = tuple(sorted({tag.value for tag in tags}))
     return tuple(tags), vocabulary
@@ -875,7 +880,7 @@ def compile_prompt(
             if phrase in index.vocabulary:
                 lexical_candidates.append(PromptFacet(FacetKind.PHRASE, phrase, 7))
 
-    intents = _intent_facets(content_words)
+    intents = _intent_facets(words)
     typed_candidates = [*intents, *_derived_facets(intents, content_words)]
 
     vocabulary = set(index.vocabulary)
@@ -1051,6 +1056,10 @@ def retrieve(
                     unit = _complete_unit_bounds(
                         source_bytes[source_path], source_path, tag.byte_start, tag.byte_end
                     )
+                    if not (unit[0] <= tag.byte_start < tag.byte_end <= unit[1]):
+                        unit = _line_window(source_bytes[source_path], tag.byte_start, tag.byte_end, 1200)
+                    if not (unit[0] <= tag.byte_start < tag.byte_end <= unit[1]):
+                        continue
                     unit_tags[unit].add(tag.value)
                 for unit, values in unit_tags.items():
                     if _obligation_unit_matches(obligation, source_path, values):
@@ -1443,10 +1452,11 @@ def compose_navigation_context(
             continue
         seen_payloads.add(payload_key)
         payload_bytes = len(preview.text.encode("utf-8"))
-        if byte_budget is not None and used + payload_bytes > byte_budget:
+        separator_bytes = 2 if raw_parts else 0
+        if byte_budget is not None and used + separator_bytes + payload_bytes > byte_budget:
             return failure("context_byte_budget_exceeded")
         raw_parts.append(preview.text)
-        used += payload_bytes
+        used += separator_bytes + payload_bytes
     return NavigationContext(
         selected_primary,
         selected_supporting,
@@ -1729,7 +1739,8 @@ def _verified_spans(
             continue
         excerpt = raw[start:end]
         header = f"[{hit.source_path}:{start}-{end}]\n".encode("utf-8")
-        if used + len(header) + len(excerpt) > byte_budget:
+        separator_bytes = 2 if chunks else 0
+        if used + separator_bytes + len(header) + len(excerpt) > byte_budget:
             continue
         try:
             text = excerpt.decode("utf-8")
@@ -1760,7 +1771,7 @@ def _verified_spans(
                 )
             )
         chunks.append(header.decode("utf-8") + text)
-        used += len(header) + len(excerpt)
+        used += separator_bytes + len(header) + len(excerpt)
         if obligations:
             selected_intervals[record_id].append((start, end))
     return tuple(spans), tuple(evidence), "\n\n".join(chunks)
@@ -1968,6 +1979,36 @@ def _byte_bounds(content: str, start: int, end: int) -> tuple[int, int]:
     return len(content[:start].encode("utf-8")), len(content[:end].encode("utf-8"))
 
 
+def _json_unit_bounds(raw: bytes, start: int, end: int) -> tuple[int, int] | None:
+    """Return the smallest valid JSON container enclosing the exact anchor."""
+
+    try:
+        json.loads(raw.decode("utf-8"), parse_int=str, parse_float=str)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        return None
+    stack: list[tuple[int, int]] = []
+    quoted = False
+    escaped = False
+    for index, value in enumerate(raw):
+        if quoted:
+            if escaped:
+                escaped = False
+            elif value == ord("\\"):
+                escaped = True
+            elif value == ord('"'):
+                quoted = False
+            continue
+        if value == ord('"'):
+            quoted = True
+        elif value in (ord("{"), ord("[")):
+            stack.append((index, value))
+        elif value in (ord("}"), ord("]")):
+            opening, _ = stack.pop()  # Syntax and delimiter pairing were validated above.
+            if opening <= start < end <= index + 1:
+                return opening, index + 1
+    return None
+
+
 def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[int, int]:
     """Find a bounded complete source unit around a verified anchor."""
 
@@ -2019,19 +2060,9 @@ def _complete_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[
     if is_config_path:
         stripped = lines[anchor_line].lstrip()
         if path.lower().endswith(".json"):
-            opening = max(raw.rfind(b"{", 0, line_start), raw.rfind(b"[", 0, line_start))
-            if opening >= 0:
-                close = b"}" if raw[opening:opening + 1] == b"{" else b"]"
-                depth = 0
-                for index in range(opening, len(raw)):
-                    if raw[index:index + 1] == raw[opening:opening + 1]:
-                        depth += 1
-                    elif raw[index:index + 1] == close:
-                        depth -= 1
-                        if depth == 0:
-                            return opening, index + 1
-        # Python or JavaScript mapping assignments use the same bounded brace
-        # rule as JSON configuration, while scalar settings remain one block.
+            return _json_unit_bounds(raw, start, end) or _line_window(raw, start, end, 1200)
+        # Non-JSON mapping assignments use a conservative brace heuristic.
+        # Retrieval checks that its selected unit still contains every credited tag.
         opening = raw.find(b"{", line_start, line_end)
         if opening >= 0:
             depth = 0

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import hashlib
+import json
 import unittest
 
 from packages.core import (
@@ -323,6 +324,33 @@ class ProofObligationCompilerTests(unittest.TestCase):
 
 
 class ObligatedEvidencePackingTests(unittest.TestCase):
+    def test_utf8_context_separator_is_charged_before_admission(self) -> None:
+        sources = {
+            "src/über/alpha.py": "def alpha_marker():\n    return 'café'\n".encode(),
+            "src/東京/beta.py": "def beta_marker():\n    return 'λ'\n".encode(),
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = obligated_facets(
+            ProofObligation("alpha", AuthorityClass.RUNTIME, anchor_hints=("alpha-marker",)),
+            ProofObligation("beta", AuthorityClass.RUNTIME, anchor_hints=("beta-marker",)),
+        )
+        def pack(budget: int):
+            return retrieve(
+                graph, task(byte_budget=budget), index, facets, snapshot, reader,
+                channels=("exact",), expand_one_hop=False,
+            )
+        full = pack(1000)
+        self.assertEqual(len(full.spans), 2)
+        exact = full.context_bytes
+        self.assertEqual(pack(exact).context, full.context)
+        for budget in (exact - 1, exact - 2):
+            with self.subTest(budget=budget):
+                result = pack(budget)
+                self.assertEqual(len(result.spans), 1)
+                self.assertEqual(result.context_bytes, len(result.context.encode()))
+                self.assertLessEqual(result.context_bytes, budget)
+
     def test_critical_runtime_precedes_oversized_documentation(self) -> None:
         sources = {
             "src/runtime.py": b"def critical_runtime():\n    return 'small proof'\n",
@@ -382,6 +410,69 @@ class ObligatedEvidencePackingTests(unittest.TestCase):
         parallel = retrieve(graph, task(), index, facets, snapshot, Reader(reader.sources), parallel=True)
         self.assertEqual(serial, parallel)
 
+
+class IntentAndTagCapacityTests(unittest.TestCase):
+    def test_intent_triggers_survive_lexical_stopword_filtering(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        for prompt, expected in (
+            ("Where are token refresh and expiry enforced?", "locate"),
+            ("How does token refresh read expiry?", "trace"),
+            ("Which source handles token refresh?", "locate"),
+        ):
+            with self.subTest(prompt=prompt):
+                facets = compile_prompt(prompt, index)
+                self.assertIn((FacetKind.INTENT, expected), {(f.kind, f.value) for f in facets.facets})
+                self.assertFalse(any(f.kind is FacetKind.ENTITY and f.value in {"where", "how", "which", "are", "does"} for f in facets.facets))
+                self.assertEqual(facets, compile_prompt(prompt, index))
+
+    def test_intent_detection_uses_whole_words_and_preserves_default(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        for prompt in ("Somewhere token expiry", "Showcase ownership details", "Token expiry details"):
+            with self.subTest(prompt=prompt):
+                facets = compile_prompt(prompt, index)
+                intents = {f.value for f in facets.facets if f.kind is FacetKind.INTENT}
+                self.assertEqual(intents, {"explain"})
+                self.assertFalse(any(f.kind is FacetKind.RELATION and f.value == "owns" for f in facets.facets))
+
+    def test_repeated_tag_occurrences_do_not_consume_unique_tag_capacity(self) -> None:
+        from packages.core.retrieval import TagKind
+        raw = (b"alpha_marker\n" * 4100) + b"def provenance_guard():\n    return True\n"
+        graph, snapshot, reader = single_source_fixture(raw)
+        first = build_repository_tag_index(graph, snapshot, reader)
+        second = build_repository_tag_index(graph, snapshot, Reader(reader.sources))
+        self.assertEqual(first, second)
+        identities = [(tag.record_id, tag.kind, tag.value) for tag in first.tags]
+        self.assertEqual(len(identities), len(set(identities)))
+        guard = next((tag for tag in first.tags if tag.kind is TagKind.SYMBOL and tag.value == "provenance-guard"), None)
+        self.assertIsNotNone(guard)
+        self.assertEqual(raw[guard.byte_start:guard.byte_end], b"provenance_guard")
+        alpha = next(tag for tag in first.tags if tag.kind is TagKind.SYMBOL and tag.value == "alpha-marker")
+        self.assertEqual((alpha.byte_start, alpha.byte_end), (0, len(b"alpha_marker")))
+        self.assertNotIn("invented-guard", first.vocabulary)
+
+    def test_unique_tag_cap_preserves_priority_order_and_first_occurrence(self) -> None:
+        from packages.core.retrieval import TagKind
+        raw = b"alpha_marker\n" * 4100 + b"".join(f"zzslot{n:04d}\n".encode() for n in range(5000))
+        sources = {"src/z.py": raw, "src/a.py": raw}
+        graph, snapshot, reader = multi_source_fixture(sources)
+        index = build_repository_tag_index(graph, snapshot, reader)
+        reverse_graph = Graph(tuple(reversed(graph.records)))
+        self.assertEqual(index, build_repository_tag_index(reverse_graph, snapshot, Reader(sources)))
+        for path in sorted(sources):
+            tags = index.by_record()["repo:" + path]
+            self.assertEqual(len(tags), 4096)
+            self.assertTrue(all(tag.source_path == path for tag in tags))
+            paths = {tag.value for tag in tags if tag.kind is TagKind.PATH}
+            # Three path tags precede symbols. The remaining 4093 slots contain
+            # alpha, alpha-marker, marker, then zzslot0000 through zzslot4089.
+            self.assertEqual(paths, {"src", path.rsplit("/", 1)[1][0], path.rsplit("/", 1)[1].replace(".", "-")})
+            values = {tag.value for tag in tags if tag.kind is TagKind.SYMBOL}
+            self.assertIn("zzslot4089", values)
+            self.assertNotIn("zzslot4090", values)
+            self.assertFalse(any(tag.kind is TagKind.KEYWORD for tag in tags))
+            self.assertEqual(len({(tag.kind, tag.value) for tag in tags}), len(tags))
 
 class TagIndexTests(unittest.TestCase):
     def test_repository_tags_are_source_bound_and_deterministic(self) -> None:
@@ -1285,6 +1376,84 @@ class GraphFindTests(unittest.TestCase):
         self.assertEqual(result.reason, "tag_match_crosses_authentication_boundary")
         self.assertEqual(result.hits, ())
         self.assertEqual(result.evidence, ())
+
+
+class BoundedCorrectnessRegressionTests(unittest.TestCase):
+    def test_graph_find_delivers_every_credited_configuration_anchor(self) -> None:
+        cases = (
+            ("settings.json", b'{"note": "}", "special_anchor": true}\n'),
+            ("settings.json", json.dumps({"note": 'quoted " } \\ [', "nested": {"special_anchor": True}}, ensure_ascii=False, indent=2).encode()),
+            ("settings.json", json.dumps({"note": "λ } [", "items": [{"special_anchor": True}]} , ensure_ascii=False).encode()),
+            ("settings.json", b'{"number": ' + b'9' * 5000 + b', "special_anchor": true}'),
+            ("settings.py", b'NOTE = {"note": "}", "special_anchor": True}\n'),
+        )
+        for path, raw in cases:
+            with self.subTest(path=path, raw=raw):
+                graph, snapshot, reader = multi_source_fixture({path: raw})
+                obligation = ProofObligation(
+                    "anchor", AuthorityClass.CONFIGURATION,
+                    source_hints=(path,), anchor_hints=("special-anchor",), critical=True,
+                )
+                result = graph_find(graph, task(), "find special_anchor", snapshot, reader, proof_obligations=(obligation,))
+                self.assertEqual(result.route, "graph")
+                self.assertEqual(result.covered_obligation_ids, ("anchor",))
+                self.assertIn("special_anchor", result.to_delivery_dict()["context"])
+                for item in result.evidence:
+                    excerpt = raw[item.byte_start:item.byte_end]
+                    self.assertIn(b"special_anchor", excerpt)
+                    self.assertEqual(hashlib.sha256(excerpt).hexdigest(), item.excerpt_sha256)
+                    if path.endswith(".json"):
+                        json.loads(excerpt, parse_int=str, parse_float=str)
+
+    def test_graph_find_does_not_credit_an_anchor_outside_bounded_fallback(self) -> None:
+        raw = b'NOTE = {"note": "}' + b'x' * 1800 + b'", "special_anchor": True}\n'
+        path = "settings.py"
+        graph, snapshot, reader = multi_source_fixture({path: raw})
+        obligation = ProofObligation("anchor", AuthorityClass.CONFIGURATION, source_hints=(path,), anchor_hints=("special-anchor",), critical=True)
+        result = graph_find(graph, task(), "find special_anchor", snapshot, reader, proof_obligations=(obligation,))
+        self.assertEqual(result.route, "defer")
+        self.assertEqual(result.covered_obligation_ids, ())
+        self.assertEqual(result.unresolved_critical_obligation_ids, ("anchor",))
+
+    def test_progressive_context_accounts_for_multibyte_payloads_and_three_joins(self) -> None:
+        from packages.core.retrieval import NavigationResult, SourcePreview
+        sources = {"a.py": "λ".encode(), "b.py": "東京".encode(), "c.py": "café".encode()}
+        _, snapshot, reader = multi_source_fixture(sources)
+        previews = tuple(SourcePreview("repo:" + path, path, hashlib.sha256(raw).hexdigest(), 0, len(raw), hashlib.sha256(raw).hexdigest(), raw.decode(), source_snapshot_sha256=snapshot.snapshot_sha256) for path, raw in sorted(sources.items()))
+        result = NavigationResult("navigate", "verified_source_previews_selected", (), previews, snapshot.snapshot_sha256)
+        exact = sum(map(len, sources.values())) + 4
+        for budget in (exact - 1, exact):
+            with self.subTest(budget=budget):
+                context = compose_navigation_context(result, snapshot, reader, primary=previews[:2], supporting=previews[2:], byte_budget=budget)
+                self.assertEqual(context.fail_closed, budget < exact)
+                self.assertEqual(context.context_bytes, len(context.answer_context.encode()))
+                self.assertLessEqual(context.context_bytes, budget)
+
+    def test_progressive_context_charges_join_bytes_at_exact_boundary(self) -> None:
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = compile_prompt("Trace how refresh_token reads token expiry configuration and which tests validate changes", index)
+        result = navigate(graph, task(), index, facets, snapshot, reader)
+        previews = result.previews[:2]
+        self.assertEqual(len(previews), 2)
+        exact = sum(len(item.text.encode()) for item in previews) + 2
+        for budget in (exact - 1, exact):
+            with self.subTest(budget=budget):
+                context = compose_navigation_context(result, snapshot, reader, primary=(previews[0],), supporting=(previews[1],), byte_budget=budget)
+                self.assertEqual(context.fail_closed, budget < exact)
+                self.assertEqual(context.context_bytes, len(context.answer_context.encode()))
+                self.assertLessEqual(context.context_bytes, budget)
+
+    def test_public_navigation_result_is_the_actual_progressive_return_type(self) -> None:
+        from packages.core import NavigationResult
+        graph, snapshot, reader = fixture()
+        index = build_repository_tag_index(graph, snapshot, reader)
+        facets = compile_prompt("Trace how refresh_token reads token expiry configuration and which tests validate changes", index)
+        result = navigate(graph, task(), index, facets, snapshot, reader)
+        self.assertIs(type(result), NavigationResult)
+        reconstructed = NavigationResult(**result.__dict__)
+        context = compose_navigation_context(reconstructed, snapshot, reader, primary=(result.previews[0],))
+        self.assertFalse(context.fail_closed)
 
 
 if __name__ == "__main__":

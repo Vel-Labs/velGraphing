@@ -116,6 +116,8 @@ class PortableSkillTests(unittest.TestCase):
                 "SKILL.md",
                 "agents/openai.yaml",
                 "scripts/graph_find.py",
+                "scripts/graph_tools.py",
+                "references/tool-loop.md",
             },
         }
         for skill_name, resources in expected.items():
