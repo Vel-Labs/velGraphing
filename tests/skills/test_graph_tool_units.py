@@ -30,6 +30,19 @@ SOURCE = (
 
 
 class GraphToolUnitProtocolTests(unittest.TestCase):
+    def test_body_comment_does_not_replace_complete_function_label(self):
+        raw = b'def alpha_gate():\n    # explain the source gate\n    return 1\n\ndef beta_gate():\n    return 2\n'
+        with tempfile.TemporaryDirectory() as folder:
+            session = self.session(Path(folder).resolve(), raw=raw)
+            with patch.object(session, 'git_identity', return_value=session.identity):
+                built = session.dispatch({'op': 'build', 'intent': 'alpha_gate', 'limit': 1})
+                node = next(n for n in built['result']['nodes'] if n['kind'] == 'unit' and n['byte_start'] == 0)
+                self.assertEqual(node['label'], 'def alpha_gate')
+                read = session.dispatch({'op': 'read', 'id': node['id']})
+                self.assertEqual(read['status'], 'ok')
+                self.assertIn('# explain the source gate', read['result']['document']['text'])
+                self.assertNotIn('def beta_gate', read['result']['document']['text'])
+
     def session(self, root, raw=SOURCE, budget=4096, path="source.py"):
         (root / path).write_bytes(raw)
         digest = hashlib.sha256(raw).hexdigest()
@@ -113,6 +126,26 @@ class GraphToolUnitProtocolTests(unittest.TestCase):
                 self.assertNotIn("beta_gate", doc["text"])
                 self.assertNotIn("class Outer", doc["text"])
                 self.assertEqual(doc["text"].encode(), raw[doc["byte_start"]:doc["byte_end"]])
+
+    def test_declaration_label_wins_over_comments_inside_decorated_unit(self):
+        for declaration in ('def alpha_gate():', 'async def alpha_gate():', 'class alpha_gate:'):
+            for comment in ('', '# explain the source gate\n'):
+                text = '@decorator\n' + comment + declaration + '\n    # body comment\n    return_value = 1\n\ndef beta_gate():\n    return 2\n'
+                with self.subTest(declaration=declaration, comment=comment), tempfile.TemporaryDirectory() as folder:
+                    raw = text.encode()
+                    session = self.session(Path(folder).resolve(), raw=raw)
+                    node, binding = self.actions(session)
+                    self.assertEqual(node['label'], declaration.split('(')[0].rstrip(':'))
+                    result = self.read(session, node, binding)
+                    self.assertEqual(result['status'], 'ok')
+                    document = result['result']['document']
+                    excerpt = raw[document['byte_start']:document['byte_end']]
+                    self.assertEqual(document['byte_start'], 0)
+                    self.assertEqual(document['text'].encode(), excerpt)
+                    self.assertEqual(document['source_sha256'], hashlib.sha256(raw).hexdigest())
+                    self.assertEqual(document['excerpt_sha256'], hashlib.sha256(excerpt).hexdigest())
+                    self.assertIn(declaration, document['text'])
+                    self.assertNotIn('beta_gate', document['text'])
 
     def assert_complete_read(self, path, text):
         raw = text.encode()

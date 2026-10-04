@@ -24,13 +24,14 @@ part of this checkpoint.
 
 ## One workflow
 
-Run from the checkout root with the existing isolated base interpreter. Choose
+Run from the checkout root with the existing project virtualenv. It has the
+maintained JavaScript grammar. Choose
 a new output path; build refuses to overwrite an existing map.
 
 ```sh
 retrievel_root="$PWD"
 retrievel_output_dir="$(mktemp -d)"
-retrievel_py=/opt/homebrew/opt/python@3.14/bin/python3.14
+retrievel_py="$retrievel_root/.venv/bin/python"
 retrievel_cli="$retrievel_root/plugins/graph-engineering/skills/graph-engineering/scripts/graphctl.py"
 "$retrievel_py" -I -B "$retrievel_cli" retrievel-build \
   --root "$retrievel_root" --include . --namespace velgraphing \
@@ -57,8 +58,9 @@ campaign was rerun merely to make this Git checkpoint.
 
 Base Python lacks the optional JavaScript grammar; one JavaScript-positive unit
 check fails there. The same full unit suite passes in the project virtualenv.
-Portable loading through that virtualenv still has a `packages.core`/`core`
-model-type collision. Canonical strict parity intentionally refuses the ignored
+The portable adapter now selects its colocated `core` namespace. It no longer
+imports the editable `packages.core` namespace from the virtualenv. The isolated
+base interpreter still supports build/search without JavaScript unit parsing. Canonical strict parity intentionally refuses the ignored
 cache with `private_or_machine_path`; the cache was preserved.
 
 Installed/native command identity, evaluator adoption, matched retrieval science
@@ -78,3 +80,40 @@ Next: choose one bounded repository task, verify current source, and use direct
 fallback when needed. Resolve the portable import-policy limitation before
 claiming native loading. Run optional discovery and later packing/answer
 comparisons only under their exact approved payload and execution scopes.
+
+## Local dogfood continuation
+
+The first natural-language deletion/rebuild question put the builder sixth and
+omitted the CLI owner from the six-hit result. Common prose words incorrectly
+received exact-declaration priority. Exact priority now applies to standalone
+identifiers, backtick identifiers and visibly written code identifiers. On the
+same frozen map, the builder and CLI owner rank first and second. Four required
+complete function bodies were authenticated after following map pointers and
+direct fallback. This is one development question, not a quality benchmark.
+
+Disposable change/deletion rebuilding removed the old symbols/import and added
+the replacement. Old saved maps remain stale metadata and require source checks.
+The documented foreground tool loop returned complete source bodies. Its shared
+source budget and current-byte checks remain intact.
+
+Eleven build methods and thirteen project-virtualenv complete-unit methods pass in
+the repair candidate. An exact portable export now builds under both the base
+interpreter and the previously failing project virtualenv. Model classes and
+the shared import resolver resolve inside that export. Clean package parity
+passes with 90 members; candidate identity:
+
+`e73c7a4addaf7bfd846ae7fef96b323fc6003b08f357999a3ed3b8db31802301`
+
+These bounded source/test/generated/doc repairs remain uncommitted after the
+local checkpoint. No global environment, parser dependency, installed plugin
+cache or Git history was changed. The external Jev dispatch gate remains open.
+
+A body comment could replace a function unit label while its complete body
+remained correct. The tool loop now prefers the first declaration label over comment anchors,
+including comments between a decorator and its declaration.
+A dedicated regression verifies the label and full body, including the comment.
+
+Explicit lowercase call syntax such as `source()` and `Where is source()?`
+retains exact-declaration priority. The common-prose negative control stays
+green. Four independent review methods pass, with normal decorated function,
+async function and class controls preserving complete physical byte spans.

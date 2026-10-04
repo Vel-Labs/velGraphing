@@ -190,8 +190,17 @@ def search_manifest(manifest, query, limit=10):
         for posting in manifest["keywords"].get(term, ()):
             tag = manifest["tags"][posting]
             scores[tag["source_path"]] += 2 if tag["kind"] in {"path", "symbol"} else 1
+    # Common prose words can also be function names. Give exact-name priority
+    # only to a standalone identifier or an explicitly written code identifier.
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", query.strip()):
+        explicit_names = named_terms
+    else:
+        explicit_names = {_canonical(t) for t in re.findall(r"`([A-Za-z_][A-Za-z0-9_]*)`", query)}
+        explicit_names |= {_canonical(t) for t in re.findall(r"\b([A-Za-z_][A-Za-z0-9_]*)[ \t]*\(", query)}
+        explicit_names |= {_canonical(t) for t in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", query)
+                           if "_" in t or any(c.isupper() for c in t[1:])}
     exact_declarations = {s["source_path"] for s in manifest["symbols"]
-                          if _canonical(s["name"]) in named_terms}
+                          if _canonical(s["name"]) in explicit_names}
     for path in exact_declarations:
         scores.setdefault(path, 0)
     ranked = sorted(scores, key=lambda path: (path not in exact_declarations, -scores[path], path))[:limit]

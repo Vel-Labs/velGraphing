@@ -13,11 +13,11 @@ import time
 
 sys.dont_write_bytecode = True
 import graph_find as adapter
-try:
+if adapter._source_root is not None:
     from packages.core import Graph, TaskSpec, Sensitivity, select
     from packages.core.retrieval import _complete_unit_bounds
     from packages.core.repository_build import python_import_relations
-except ModuleNotFoundError:
+else:
     from core import Graph, TaskSpec, Sensitivity, select
     from core.retrieval import _complete_unit_bounds
     from core.repository_build import python_import_relations
@@ -112,7 +112,11 @@ class Session:
                                        "reason": "complete_unit_unavailable"}
                     added.append(self.nodes[uid])
                 else:
-                    bounds[unit] = label
+                    # Decorator comments can precede the declaration anchor.
+                    # Preserve the first declaration, or the first comment when
+                    # the certified unit contains no declaration anchor.
+                    if unit not in bounds or (bounds[unit].startswith("#") and not label.startswith("#")):
+                        bounds[unit] = label
             for (start, end), label in sorted(bounds.items()):
                 if len(self.nodes) >= 512:
                     raise ValueError("graph_node_budget_exhausted")

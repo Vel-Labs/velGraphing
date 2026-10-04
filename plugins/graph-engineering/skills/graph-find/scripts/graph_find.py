@@ -40,7 +40,7 @@ else:
     if _runtime_root is not None:
         sys.path.insert(0, str(_runtime_root))
 
-try:  # noqa: E402
+if _source_root is not None:  # noqa: E402
     from packages.core import (
         Admission,
         Freshness,
@@ -55,7 +55,9 @@ try:  # noqa: E402
         assist,
         graph_find,
     )
-except ModuleNotFoundError:  # packaged plugin runtime
+else:  # packaged plugin runtime must not import an editable source namespace
+    if _runtime_root is None:
+        raise ModuleNotFoundError("colocated graph core runtime is unavailable")
     from core import (  # type: ignore[no-redef]
         Admission,
         Freshness,

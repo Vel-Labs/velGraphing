@@ -4,6 +4,8 @@ import hashlib
 import importlib.util
 import io
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -20,6 +22,64 @@ from packages.core.repository_build import validate_manifest, python_import_rela
 
 
 class RepositoryBuild(unittest.TestCase):
+    def test_function_call_queries_prioritize_declaration_over_comment_postings(self):
+        self.files['app/a_noise.py'] = b'# source source source source source source source source\n'
+        self.files['app/z_owner.py'] = b'def source():\n    return 1\n'
+        for path in ('app/a_noise.py', 'app/z_owner.py'):
+            (self.root / path).write_bytes(self.files[path])
+        self.inventory.write_text(json.dumps(list(self.files)))
+        self.build('calls.json')
+        for query in ('source()', 'Where is source()?', 'source(value)', 'source ()', 'module.source()'):
+            with self.subTest(query=query):
+                result = self.run_cli(['retrievel-search', '--map', str(self.work / 'calls.json'),
+                                       '--query', query, '--limit', '1'])
+                self.assertEqual(result['hits'][0]['path'], 'app/z_owner.py')
+                self.assertTrue(result['hits'][0]['exact_declaration_match'])
+
+    def test_natural_question_does_not_prioritize_common_word_declarations(self):
+        self.files['app/noise.py'] = b'def source():\n    return 0\n'
+        (self.root / 'app/noise.py').write_bytes(self.files['app/noise.py'])
+        (self.root / 'app/reader.py').write_bytes(b'def rebuild_deleted_symbols_imports(source):\n    return source\n')
+        self.inventory.write_text(json.dumps(list(self.files)))
+        self.build('natural.json')
+        result = self.run_cli(['retrievel-search', '--map', str(self.work / 'natural.json'),
+                               '--query', 'How does rebuild handle deleted symbols and imports from source?'])
+        self.assertEqual(result['hits'][0]['path'], 'app/reader.py')
+        self.assertFalse(any(h['exact_declaration_match'] for h in result['hits']))
+        explicit = self.run_cli(['retrievel-search', '--map', str(self.work / 'natural.json'), '--query', '`source`'])
+        self.assertEqual(explicit['hits'][0]['path'], 'app/noise.py')
+        self.assertTrue(explicit['hits'][0]['exact_declaration_match'])
+
+    def test_portable_colocated_core_wins_over_available_source_namespace(self):
+        portable = self.work / 'portable'
+        plugin = ROOT / 'plugins/graph-engineering'
+        shutil.copytree(plugin / 'runtime/core', portable / 'runtime/core', ignore=shutil.ignore_patterns('__pycache__'))
+        for path in ('skills/graph-engineering/scripts/graphctl.py',
+                     'skills/graph-find/scripts/graph_find.py', 'skills/graph-find/scripts/graph_tools.py'):
+            target = portable / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(plugin / path, target)
+        code = '''import importlib.util,sys
+from pathlib import Path
+source, portable, fixture, inventory, output = map(Path, sys.argv[1:])
+sys.path.insert(0, str(source))
+sys.path.insert(0, str(portable/'skills/graph-find/scripts'))
+spec=importlib.util.spec_from_file_location('portable_ctl',portable/'skills/graph-engineering/scripts/graphctl.py')
+ctl=importlib.util.module_from_spec(spec);spec.loader.exec_module(ctl)
+builder,adapter,identity=ctl.repository_modules()
+import graph_tools
+assert adapter.SourceSnapshotV4 is builder.SourceSnapshotV4
+assert graph_tools.Graph is adapter.Graph
+assert graph_tools.python_import_relations is builder.python_import_relations
+assert adapter.Graph.__module__.startswith('core.')
+raise SystemExit(ctl.main(['retrievel-build','--root',str(fixture),'--include','.',
+ '--inventory',str(inventory),'--output',str(output)]))
+'''
+        result = subprocess.run([sys.executable, '-B', '-c', code, str(ROOT), str(portable), str(self.root),
+                                 str(self.inventory), str(self.work / 'portable.json')], capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertEqual(json.loads((self.work / 'portable.json').read_text())['files'][1]['source_path'], 'app/main.py')
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.work = Path(self.tmp.name).resolve()
