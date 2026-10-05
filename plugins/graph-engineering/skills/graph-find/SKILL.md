@@ -64,3 +64,31 @@ are counted. If file or total-byte caps skip supported text, the result sets
 `scan_complete: false`, uses `route: defer`, and reports
 `repository_scan_incomplete`. The command fails when no usable source remains.
 File and total-byte limits are explicit CLI controls with safe defaults.
+
+## Named complete-source recovery
+
+A question that names a supported source file can return
+`named_source_recovery.needs_recovery: true`. Read the target status, actual
+candidate paths, source hash and `next_build`. Compound and hidden filenames
+are supported within the admitted corpus. A basename can match several paths.
+Do not invent a unique path or a source hash for an ambiguous target.
+
+When complete named source is still missing, the adapter can withhold selected
+context before delivery. Withheld text has no delivered-byte charge. For an
+explicit same-request follow-up, it can release that unemitted reservation and
+retry the existing snapshot-local projection once. It keeps the original
+budget. Already delivered bytes are never refunded. Inspect the actual
+delivery fields and recovery status; withholding does not prove an answer.
+
+For one uniquely admitted pending target, a receiving caller can pass
+`remaining_byte_budget` to the offline native tool. Bind the scoped `next_build`
+to the handoff snapshot. Read the complete file node returned by that build.
+Preserve prior delivered charges. Follow the
+[receiving contract](references/tool-loop.md).
+
+The reviewed task-owned source client implements that bounded receiving path.
+It is separate from the installed plugin. It rejects ambiguous or multiple
+pending targets and does not produce an answer. Its operator bundle supplies
+the exact launch paths, interpreter, receipts and reopening instructions.
+Explicit full-path recovery uses a separate question and retains the original
+refusal. It is not automatic candidate selection.

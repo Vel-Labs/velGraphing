@@ -154,6 +154,14 @@ def validate_manifest(manifest):
     if [(f["source_path"], f["source_sha256"], f["bytes"]) for f in manifest["files"]] != [
             (s.path, s.sha256, s.byte_length) for s in snapshot.sources]:
         raise ValueError("file view disagrees with snapshot")
+    tags, keywords = manifest.get("tags"), manifest.get("keywords")
+    if type(tags) is not list or type(keywords) is not dict:
+        raise ValueError("repository map tags must be an array and keywords must be an object")
+    for keyword, postings in keywords.items():
+        if type(keyword) is not str or type(postings) is not list:
+            raise ValueError("repository map keyword postings must be arrays keyed by strings")
+        if any(type(posting) is not int or not 0 <= posting < len(tags) for posting in postings):
+            raise ValueError("repository map keyword posting must be an integer within the tag range")
     return snapshot
 
 

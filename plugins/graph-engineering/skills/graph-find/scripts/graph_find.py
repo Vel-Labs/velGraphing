@@ -310,6 +310,112 @@ def _positive_bounded(value: str, label: str, ceiling: int) -> int:
     return number
 
 
+_SOURCE_MENTION = re.compile(
+    r"(?<![\w./\\:-])(?:\.?[\w-]+(?:\.[\w-]+)*/)*"
+    r"(?:\.[\w-]+(?:\.[\w-]+)*|[\w-]+(?:\.[\w-]+)*\.[A-Za-z][A-Za-z0-9_]{0,15})"
+    r"(?![\w/\\-]|\.(?=\S))"
+)
+_SOURCE_URI = re.compile(
+    r"(?<!\S)\S*://\S+|(?<![\w+./\\-])[A-Za-z][A-Za-z0-9+.-]*:\S+"
+)
+
+
+def _named_source_recovery(payload, prompt, sources, maximum_results):
+    """Report explicit filename custody gaps; never infer semantic sufficiency.
+
+    Resolve only inside the admitted snapshot. A hint neither admits a node
+    nor authorizes a read. Complete follow-up content must match exact bytes.
+    """
+    # URI query/fragment text is not a local source reference. Keep the
+    # original prompt for ranking and build intent; mask only name discovery.
+    mentions = sorted(set(_SOURCE_MENTION.findall(_SOURCE_URI.sub(" ", prompt))))
+    documents = (payload.get("follow_up", {}).get("payload") or {}).get("documents", [])
+    targets, hints = [], []
+    for mention in mentions[:16]:
+        paths = sorted(path for path in sources if
+                       (path == mention if "/" in mention else PurePosixPath(path).name == mention))
+        target = {"mention": mention, "candidate_count": len(paths),
+                  "candidate_paths": paths[:maximum_results]}
+        if len(paths) != 1:
+            target["status"] = "ambiguous" if paths else "not_admitted_or_not_found"
+        else:
+            path = paths[0]
+            raw = sources[path]
+            source_hash = hashlib.sha256(raw).hexdigest()
+            complete = any(
+                isinstance(doc, dict) and doc.get("source_path") == path and
+                doc.get("source_sha256") == source_hash and
+                type(doc.get("byte_count")) is int and doc["byte_count"] == len(raw) and
+                isinstance(doc.get("content"), str) and doc["content"].encode("utf-8") == raw
+                for doc in documents
+            )
+            target.update(source_sha256=source_hash,
+                          status="complete_source_delivered" if complete else "complete_source_read_needed")
+            if not complete:
+                hints.append(path)
+                target["next_build"] = {"op": "build", "intent": prompt, "scope": path, "limit": 1}
+                target["next_read"] = "Select only the complete file node returned by successful build."
+        targets.append(target)
+    needed = len(mentions) > 16 or any(t["status"] != "complete_source_delivered" for t in targets)
+    payload["named_source_recovery"] = {
+        "needs_recovery": needed, "targets": targets,
+        "omitted_mentions": max(0, len(mentions) - 16),
+        "assessment": "explicit_file_mentions_only; semantic_completeness_not_assessed",
+        "handoff": "new_request_local_JSONL_session; build_then_read_returned_file_with_identity_and_budget_checks",
+    }
+    if needed:
+        # A recovery handoff carries the remaining content allowance forward.
+        # Keep ranking pointers, but reserve source delivery for complete reads.
+        payload["ranked_context_bytes_withheld"] = len(payload.get("context", "").encode("utf-8"))
+        payload["context"] = ""
+        payload["context_bytes"] = payload["delivered_context_bytes"] = 0
+        budget = payload["delivery_budget"]
+        delivered = budget["follow_up_source_bytes"]
+        remaining = max(0, budget["limit_bytes"] - delivered)
+        budget.update(graph_context_bytes=0, delivered_content_bytes=delivered,
+                      remaining_bytes=remaining)
+        payload.update(delivered_total_bytes=delivered, remaining_byte_budget=remaining)
+        payload.setdefault("retrieval_route", payload["route"])
+        payload.setdefault("retrieval_reason", payload["reason"])
+        if payload["route"] == "graph":
+            payload.update(route="defer", reason="named_source_recovery_required")
+        payload["recommended_fallback_paths"] = sorted(set(payload.get("recommended_fallback_paths", [])) | set(hints))
+
+
+
+def _follow_up_delivery(graph, task, snapshot, reader, paths, byte_budget):
+    """Select complete sources from the same snapshot within one allowance."""
+    follow_up_payload = None
+    source_bytes = envelope_bytes = 0
+    route, reason = "defer", "shared_delivery_budget_exhausted"
+    if byte_budget:
+        try:
+            follow_up = assist(
+                graph, replace(task, byte_budget=byte_budget), snapshot, reader,
+                required_source_paths=paths, fallback_source_paths=paths,
+                required_escalation=True,
+            )
+        except ValueError as error:
+            if "context failure envelope exceeds byte budget" not in str(error):
+                raise
+        else:
+            follow_up_payload = json.loads(follow_up.projection.content)
+            source_bytes = sum(
+                document.get("byte_count", 0)
+                for document in follow_up_payload.get("documents", [])
+                if isinstance(document, dict)
+                and isinstance(document.get("byte_count", 0), int)
+            )
+            envelope_bytes = follow_up.projection.byte_count
+            route, reason = follow_up.route, follow_up.reason
+    return {
+        "route": route, "reason": reason, "source_bytes": source_bytes,
+        "envelope_bytes": envelope_bytes,
+        "source_snapshot_sha256": snapshot.snapshot_sha256,
+        "payload": follow_up_payload,
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, help="absolute canonical Git repository root")
@@ -388,48 +494,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 parser.error("--follow-up-path count must not exceed --maximum-results")
             paths = tuple(sorted(set(arguments.follow_up_path)))
             remaining_delivery_budget = max(0, delivery_limit - graph_context_bytes)
-            if remaining_delivery_budget:
-                try:
-                    follow_up = assist(
-                        graph,
-                        replace(task, byte_budget=remaining_delivery_budget),
-                        snapshot,
-                        reader,
-                        required_source_paths=paths,
-                        fallback_source_paths=paths,
-                        required_escalation=True,
-                    )
-                except ValueError as error:
-                    if "context failure envelope exceeds byte budget" not in str(error):
-                        raise
-                    follow_up_payload = None
-                    follow_up_route = "defer"
-                    follow_up_reason = "shared_delivery_budget_exhausted"
-                else:
-                    follow_up_payload = json.loads(follow_up.projection.content)
-                    documents = follow_up_payload.get("documents", [])
-                    follow_up_source_bytes = sum(
-                        document.get("byte_count", 0)
-                        for document in documents
-                        if isinstance(document, dict)
-                        and isinstance(document.get("byte_count", 0), int)
-                    )
-                    follow_up_envelope_bytes = follow_up.projection.byte_count
-                    follow_up_charge_bytes = follow_up_source_bytes
-                    follow_up_route = follow_up.route
-                    follow_up_reason = follow_up.reason
-            else:
-                follow_up_payload = None
-                follow_up_route = "defer"
-                follow_up_reason = "shared_delivery_budget_exhausted"
-            payload["follow_up"] = {
-                "route": follow_up_route,
-                "reason": follow_up_reason,
-                "source_bytes": follow_up_source_bytes,
-                "envelope_bytes": follow_up_envelope_bytes,
-                "source_snapshot_sha256": snapshot.snapshot_sha256,
-                "payload": follow_up_payload,
-            }
+            payload["follow_up"] = _follow_up_delivery(
+                graph, task, snapshot, reader, paths, remaining_delivery_budget,
+            )
+            follow_up_source_bytes = payload["follow_up"]["source_bytes"]
+            follow_up_envelope_bytes = payload["follow_up"]["envelope_bytes"]
+            follow_up_charge_bytes = follow_up_source_bytes
         if deliver:
             delivered_total_bytes = graph_context_bytes + follow_up_charge_bytes
             remaining_delivery_budget = max(0, delivery_limit - delivered_total_bytes)
@@ -449,6 +519,49 @@ def main(argv: Sequence[str] | None = None) -> int:
             if follow_up_source_bytes:
                 payload["follow_up"]["envelope_bytes"] = follow_up_envelope_bytes
         payload["scan"] = scan_metadata
+        if deliver:
+            withheld_context_bytes = 0
+            if arguments.follow_up_path and graph_context_bytes and not follow_up_source_bytes:
+                # Probe only the public recovery decision. Nothing has been
+                # emitted; clone the budget before the helper mutates it.
+                probe = {**payload, "delivery_budget": dict(payload["delivery_budget"])}
+                _named_source_recovery(probe, arguments.prompt, reader.sources, arguments.maximum_results)
+                initial = payload["follow_up"]
+                initial_payload_reason = (initial["payload"] or {}).get("reason")
+                budget_refusal = (
+                    initial["reason"] == "shared_delivery_budget_exhausted"
+                    or initial_payload_reason in {
+                        "fallback_context_exceeds_byte_budget", "required_context_exceeds_byte_budget",
+                    }
+                )
+                if (probe["named_source_recovery"]["needs_recovery"] and budget_refusal
+                        and all(path in reader.sources for path in paths)):
+                    # One snapshot-only retry reallocates snippets already
+                    # destined to be withheld. Successful no-gap context and
+                    # unavailable/identity refusals keep their first result.
+                    withheld_context_bytes = graph_context_bytes
+                    payload["follow_up"] = _follow_up_delivery(
+                        graph, task, snapshot, reader, paths, delivery_limit,
+                    )
+                    payload["follow_up"]["allocation"] = {
+                        "attempts": 2,
+                        "initial_budget_bytes": delivery_limit - graph_context_bytes,
+                        "initial_reason": initial["reason"],
+                        "initial_payload_reason": initial_payload_reason,
+                        "withheld_graph_context_bytes": graph_context_bytes,
+                        "final_budget_bytes": delivery_limit,
+                    }
+                    delivered = payload["follow_up"]["source_bytes"]
+                    remaining = delivery_limit - delivered
+                    payload.update(context="", context_bytes=0, delivered_context_bytes=0,
+                                   delivered_total_bytes=delivered, remaining_byte_budget=remaining)
+                    payload["delivery_budget"].update(
+                        graph_context_bytes=0, follow_up_source_bytes=delivered,
+                        delivered_content_bytes=delivered, remaining_bytes=remaining,
+                    )
+            _named_source_recovery(payload, arguments.prompt, reader.sources, arguments.maximum_results)
+            if withheld_context_bytes:
+                payload["ranked_context_bytes_withheld"] = withheld_context_bytes
         json.dump(payload, sys.stdout, sort_keys=True, separators=(",", ":"))
         sys.stdout.write("\n")
         return 0

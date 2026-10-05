@@ -18,7 +18,7 @@ CLI = ROOT / 'plugins/graph-engineering/skills/graph-engineering/scripts/graphct
 spec = importlib.util.spec_from_file_location('build_graphctl', CLI)
 ctl = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ctl)
-from packages.core.repository_build import validate_manifest, python_import_relations
+from packages.core.repository_build import canonical, digest, validate_manifest, python_import_relations
 
 
 class RepositoryBuild(unittest.TestCase):
@@ -146,6 +146,46 @@ raise SystemExit(ctl.main(['retrievel-build','--root',str(fixture),'--include','
         self.assertEqual(result['hits'][0]['path'], 'app/reader.py')
         self.assertTrue(result['hits'][0]['exact_declaration_match'])
         self.assertEqual(result['freshness'], 'not_checked')
+
+    def test_checksum_valid_invalid_posting_indices_fail_closed(self):
+        _, manifest = self.build('valid.json')
+        for posting in (999999, len(manifest['tags']), -1, '0', 0.0, True, False, None):
+            with self.subTest(posting=posting, kind=type(posting).__name__):
+                invalid = dict(manifest, keywords={**manifest['keywords'], 'authenticate': [posting]})
+                invalid['manifest_sha256'] = digest(canonical({
+                    k: v for k, v in invalid.items() if k != 'manifest_sha256'}))
+                with self.assertRaisesRegex(ValueError, 'integer within the tag range'):
+                    validate_manifest(invalid)
+                document = self.work / 'invalid-posting.json'
+                document.write_bytes(canonical(invalid))
+                error = self.run_cli(['retrievel-search', '--map', str(document),
+                                      '--query', 'authenticate'], 2)
+                self.assertFalse(error['valid'])
+                self.assertIn('integer within the tag range', error['error'])
+                # Validation rejects every keyword, even if the query does not use it.
+                self.run_cli(['retrievel-search', '--map', str(document), '--query', 'unrelated'], 2)
+
+    def test_checksum_valid_invalid_posting_containers_fail_closed(self):
+        _, manifest = self.build('valid.json')
+        cases = [('keywords', None), ('keywords', []), ('tags', None), ('tags', {}),
+                 *[('keywords', {'authenticate': value}) for value in (None, '0', 0, {}, True)],
+                 ('keywords', {0: [0]})]
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                invalid = dict(manifest, **{field: value})
+                invalid['manifest_sha256'] = digest(canonical({
+                    k: v for k, v in invalid.items() if k != 'manifest_sha256'}))
+                with self.assertRaisesRegex(ValueError, 'repository map'):
+                    validate_manifest(invalid)
+                # JSON object keys are strings. The nonstring-key case is API-only.
+                if field == 'keywords' and type(value) is dict and 0 in value:
+                    continue
+                document = self.work / 'invalid-container.json'
+                document.write_bytes(canonical(invalid))
+                error = self.run_cli(['retrievel-search', '--map', str(document),
+                                      '--query', 'authenticate'], 2)
+                self.assertFalse(error['valid'])
+                self.assertIn('repository map', error['error'])
 
     def test_changed_deleted_renamed_inputs_remove_postings_symbols_and_dependents(self):
         _, first = self.build('before.json')
