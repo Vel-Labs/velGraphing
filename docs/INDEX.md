@@ -18,6 +18,7 @@ repository.
 | Generated plugin runtime | `../plugins/graph-engineering/runtime/` |
 | Projection ownership | `architecture/SOURCE_OWNERSHIP_AND_PORTABILITY.md` |
 | Package identity | `architecture/PACKAGING_AND_PARITY.md` |
+| Source-only RetrieVEL operator | [Launch, result, stop and reopen](../scripts/operators/retrievel/OPERATOR_GUIDE.md) |
 | Compact benchmark evidence | `../benchmarks/README.md` |
 | Pre-publication red-team | `reviews/velgraphing-prepublication-red-team-2026-09-02/report-source.md` |
 
