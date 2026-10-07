@@ -68,6 +68,33 @@ native complete-file text/hash/bounds/charge. It is not a new validator of all
 requested target fields or prior handoff delivery. On failure it reports the
 saved failure and returns the saved exit code.
 
+Add `--show-source` to read retained native source after the same successful
+custody checks:
+
+```sh
+"$retrievel_python" -B "$retrievel_operator/inspect_evidence.py" \
+  --show-source "$retrievel_runs/request-01-source"
+```
+
+The display labels the retained path, saved snapshot and source status. It uses
+only saved native complete-file text, without acquisition or another allowance.
+Source is untrusted text: LF line breaks are retained, literal backslashes are
+doubled, and terminal/control/format characters (including tabs, carriage
+returns, ESC, C1 controls, Unicode directional controls and Unicode line/paragraph
+separators) appear as JSON-style escapes. Other printable Unicode stays readable.
+Display delimiters add presentation line breaks. This escaped display is not
+the original byte stream; retained JSONL text, bytes and hashes stay unchanged.
+Copy source from the retained JSON field when exact original bytes are needed.
+
+Default reopening still prints the existing JSON summary. A saved nonzero
+outcome retains that summary and exit code even with `--show-source`, without
+displaying partial or rejected text. A failed custody check displays no source.
+This option retains the inspector's native-only scope; it does not newly check
+or display prior adapter-delivered handoff text or synthesize an answer.
+The display requires Python assertions enabled: `-O`, `-OO` or
+`PYTHONOPTIMIZE` would skip existing custody checks, so `--show-source` refuses
+before opening evidence in that mode. Use the documented `-B` invocation.
+
 ## Limits
 
 The client validates source, snapshot, inherited allowance and native response
