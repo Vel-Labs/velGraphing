@@ -1,4 +1,8 @@
-"""Public host-neutral interfaces for Graph Engineering V1."""
+"""Public host-neutral interfaces for Graph Engineering V1.
+
+NavigationResult is the progressive retrieval result consumed by
+compose_navigation_context. NavigationV4Result names the coordinate API result.
+"""
 
 from .export import ExportPolicy, ExportResult, export_graph
 from .models import (
@@ -73,7 +77,7 @@ from .routing_v4 import (
     recommend_route_v4,
     reject_untrusted_routing_payload_v4,
 )
-from .navigation_v4 import NavigationItem, NavigationResult, NavigationV4, navigate_v4
+from .navigation_v4 import NavigationItem, NavigationResult as NavigationV4Result, NavigationV4, navigate_v4
 from .navigation_v5 import NavigationBudget, NavigationCost, NavigationStep, NavigationV5, NavigationV5Result, navigate_v5
 from .javascript_coordinates import JavaScriptCoordinateProvider
 from .source_coordinates import SourceCoordinate, source_snapshot
@@ -159,7 +163,7 @@ __all__ = [
     "SourceReaderV4",
     "SourceSnapshotV4",
     "NavigationItem",
-    "NavigationResult",
+    "NavigationV4Result",
     "NavigationV4",
     "NavigationBudget",
     "NavigationCost",

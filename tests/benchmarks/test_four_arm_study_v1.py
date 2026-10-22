@@ -29,22 +29,55 @@ from time_to_correct_calibration import _v3_trial_measurement  # noqa: E402
 from time_to_correct_host import _answer_input, _grader_input  # noqa: E402
 
 CUSTODY = ROOT / study.SUCCESSOR_WITNESS_CUSTODY
+RELEASE_MANIFEST = Path("plugins/graph-engineering/.codex-plugin/release-manifest.json")
+FROZEN_PACKAGE = ROOT / "tests/fixtures/four-arm-frozen-package/release-manifest.json"
+
+
+@contextmanager
+def frozen_package_root():
+    # Stay beneath ROOT so the real Git ancestry check still sees this repository.
+    with tempfile.TemporaryDirectory(prefix="four-arm-frozen-", dir=ROOT) as directory:
+        root = Path(directory)
+        for relative in {*study.CORPUS_MANIFESTS.values(), *study.IMPLEMENTATION_PATHS.values()}:
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, target)
+        release = root / RELEASE_MANIFEST
+        release.parent.mkdir(parents=True)
+        shutil.copyfile(FROZEN_PACKAGE, release)
+        yield root
 
 
 class FourArmPublicBoundaryTests(unittest.TestCase):
     def test_tracked_historical_bundle_validates_without_private_custody(self) -> None:
-        freeze, questions, rubrics = study.load_bundle()
+        with frozen_package_root() as root:
+            freeze, questions, rubrics = study.load_bundle(BENCHMARK, repo_root=root)
         self.assertEqual(tuple(freeze["tasks"]), study.TASKS)
         self.assertEqual(len(questions["questions"]), 4)
         self.assertEqual(len(rubrics["tasks"]), 4)
 
     def test_successor_overlay_fails_closed_without_private_custody(self) -> None:
-        with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(
+        with frozen_package_root() as root, self.assertRaisesRegex(
             study.StudyError, "successor_witness_custody_path_invalid",
         ):
             study.load_successor_ttc_contract(
-                custody_path=Path(directory) / "missing.json",
+                BENCHMARK, repo_root=root, custody_path=root / "missing.json",
             )
+
+    def test_current_package_cannot_inherit_historical_study_identity(self) -> None:
+        with frozen_package_root() as root:
+            study.load_bundle(BENCHMARK, repo_root=root)
+            shutil.copyfile(ROOT / RELEASE_MANIFEST, root / RELEASE_MANIFEST)
+            with self.assertRaisesRegex(study.StudyError, "package_binding_invalid"):
+                study.load_bundle(BENCHMARK, repo_root=root)
+
+    def test_frozen_package_still_rejects_changed_bound_source(self) -> None:
+        with frozen_package_root() as root:
+            study.load_bundle(BENCHMARK, repo_root=root)
+            with (root / study.IMPLEMENTATION_PATHS["retrieval"]).open("ab") as source:
+                source.write(b"\n# altered fixture\n")
+            with self.assertRaisesRegex(study.StudyError, "implementation_binding_invalid"):
+                study.load_bundle(BENCHMARK, repo_root=root)
 
 
 class FourArmStudyTests(unittest.TestCase):

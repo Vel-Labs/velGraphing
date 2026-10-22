@@ -12,6 +12,7 @@ from packages.core import (
     FacetKind,
     Freshness,
     GraphFindResult,
+    NavigationResult,
     Graph,
     GraphEdge,
     GraphRecord,
@@ -1939,6 +1940,7 @@ class ProgressiveNavigationTests(unittest.TestCase):
             self.graph, task(), self.index, self.facets, self.snapshot, self.reader,
             channels=("exact", "sparse"), expand_one_hop=True, maximum_results=4,
         )
+        self.assertIs(type(result), NavigationResult)
         self.assertFalse(result.fail_closed)
         self.assertTrue(result.previews)
         self.assertTrue(all(preview.source_snapshot_sha256 == self.snapshot.snapshot_sha256 for preview in result.previews))

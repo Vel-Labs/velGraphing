@@ -157,6 +157,12 @@ for the frozen question, rubric, route controls, and limits.
 Generated plugin runtime files mirror canonical source. Run the projector after
 an intentional source change.
 
+The public Python API exports `NavigationResult` for `navigate` and
+`compose_navigation_context`, and `NavigationV4Result` for coordinate operations
+such as `NavigationV4.find_symbols`. Coordinate callers that imported
+`NavigationResult` from `packages.core` should use `NavigationV4Result` there.
+Direct imports from `packages.core.navigation_v4` keep their existing names.
+
 ## Validate
 
 ```sh
