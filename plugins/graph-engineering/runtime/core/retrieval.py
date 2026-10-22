@@ -1012,6 +1012,7 @@ class GraphFindResult:
     unresolved_critical_obligation_ids: tuple[str, ...] = ()
     remaining_byte_budget: int = 0
     relationship_supports: tuple[RelationshipSupport, ...] = ()
+    _context: str = ""
 
     def to_dict(self) -> dict[str, object]:
         """Serialize only ranked hits, exact pointers, and routing metadata."""
@@ -1034,6 +1035,26 @@ class GraphFindResult:
             "score_meaning": (
                 "deterministic_ranking_diagnostic_not_probability_authority_or_answer_confidence"
             ),
+        }
+
+    def to_delivery_dict(self) -> dict[str, object]:
+        """Serialize the source text produced by retrieval with its evidence."""
+
+        return {
+            **self.to_dict(),
+            "context": self._context,
+            "delivered_context_bytes": len(self._context.encode("utf-8")),
+            "omissions": {
+                "completeness_assessment": "not_assessed",
+                "reason": self.reason,
+                "unresolved_obligation_ids": list(self.unresolved_obligation_ids),
+                "unresolved_critical_obligation_ids": list(
+                    self.unresolved_critical_obligation_ids
+                ),
+                "recommended_follow_up_paths": (
+                    [] if self.route == "graph" else list(self.recommended_fallback_paths)
+                ),
+            },
         }
 
 
@@ -1936,7 +1957,7 @@ def compile_prompt(
             if phrase in index.vocabulary:
                 lexical_candidates.append(PromptFacet(FacetKind.PHRASE, phrase, 7))
 
-    intents = _intent_facets(content_words)
+    intents = _intent_facets(words)
     typed_candidates = [*intents, *_derived_facets(intents, content_words)]
     if any(
         left == "immediately" and right == "after"
@@ -2081,6 +2102,7 @@ def graph_find(
         unresolved_critical_obligation_ids=result.unresolved_critical_obligation_ids,
         remaining_byte_budget=result.remaining_byte_budget,
         relationship_supports=result.relationship_supports,
+        _context=result.context,
     )
 
 
@@ -2149,9 +2171,11 @@ def retrieve(
                 for tag in tags:
                     if tag.byte_start is None or tag.value not in relevant_values:
                         continue
-                    unit = _complete_unit_bounds(
+                    unit = _certified_unit_bounds(
                         source_bytes[source_path], source_path, tag.byte_start, tag.byte_end
                     )
+                    if unit is None or not (unit[0] <= tag.byte_start < tag.byte_end <= unit[1]):
+                        continue
                     unit_tags[unit].add(tag.value)
                 for unit, values in unit_tags.items():
                     if _obligation_unit_matches(obligation, source_path, values):
@@ -2659,10 +2683,11 @@ def compose_navigation_context(
             continue
         seen_payloads.add(payload_key)
         payload_bytes = len(preview.text.encode("utf-8"))
-        if byte_budget is not None and used + payload_bytes > byte_budget:
+        separator_bytes = 2 if raw_parts else 0
+        if byte_budget is not None and used + separator_bytes + payload_bytes > byte_budget:
             return failure("context_byte_budget_exceeded")
         raw_parts.append(preview.text)
-        used += payload_bytes
+        used += separator_bytes + payload_bytes
     return NavigationContext(
         selected_primary,
         selected_supporting,
@@ -2949,7 +2974,8 @@ def _verified_spans(
             continue
         excerpt = raw[start:end]
         header = f"[{hit.source_path}:{start}-{end}]\n".encode("utf-8")
-        if used + len(header) + len(excerpt) > byte_budget:
+        separator_bytes = 2 if chunks else 0
+        if used + separator_bytes + len(header) + len(excerpt) > byte_budget:
             continue
         try:
             text = excerpt.decode("utf-8")
@@ -2962,7 +2988,7 @@ def _verified_spans(
             for obligation_id in sorted(span_obligations):
                 authority_groups[obligations[obligation_id].authority_class].append(obligation_id)
         else:
-            authority_groups = {AuthorityClass.RUNTIME: []}
+            authority_groups = {_authority_class_for_source_path(hit.source_path): []}
         for authority_class, authority_ids in sorted(
             authority_groups.items(), key=lambda item: item[0].value
         ):
@@ -2980,7 +3006,7 @@ def _verified_spans(
                 )
             )
         chunks.append(header.decode("utf-8") + text)
-        used += len(header) + len(excerpt)
+        used += separator_bytes + len(header) + len(excerpt)
         if obligations:
             selected_intervals[record_id].append((start, end))
     return tuple(spans), tuple(evidence), "\n\n".join(chunks)
@@ -3079,7 +3105,7 @@ def _path_values(path: str) -> tuple[str, ...]:
 
 
 def _authority_class_for_source_path(path: str) -> AuthorityClass:
-    """Classify a source path for evidence ordering only."""
+    """Classify a source role without granting task or write authority."""
 
     normalized = path.casefold()
     basename = posixpath.basename(normalized)
@@ -3381,6 +3407,124 @@ def _bounded_source_unit_bounds(
                 return paragraph_start, paragraph_end, True
     window_start, window_end = _line_window(raw, start, end, maximum)
     return window_start, window_end, False
+
+
+def _json_unit_bounds(raw: bytes, start: int, end: int) -> tuple[int, int] | None:
+    """Return the smallest valid JSON container enclosing the exact anchor."""
+
+    try:
+        json.loads(raw.decode("utf-8"), parse_int=str, parse_float=str)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        return None
+    stack: list[tuple[int, int]] = []
+    quoted = False
+    escaped = False
+    for index, value in enumerate(raw):
+        if quoted:
+            if escaped:
+                escaped = False
+            elif value == ord("\\"):
+                escaped = True
+            elif value == ord('"'):
+                quoted = False
+            continue
+        if value == ord('"'):
+            quoted = True
+        elif value in (ord("{"), ord("[")):
+            stack.append((index, value))
+        elif value in (ord("}"), ord("]")):
+            opening, _ = stack.pop()  # Syntax and delimiter pairing were validated above.
+            if opening <= start < end <= index + 1:
+                return opening, index + 1
+    return None
+
+
+def _certified_unit_bounds(raw: bytes, path: str, start: int, end: int) -> tuple[int, int] | None:
+    """Return a certified complete unit, never a heuristic fragment.
+
+    Python uses its byte parser; existing JavaScript uses its grammar; JSON
+    requires a validated container. Plain ATX
+    Markdown sections retain their structural rule. Unparseable or unsupported
+    units return None so callers retain an unresolved source fallback.
+    """
+
+    if (type(raw) is not bytes or type(path) is not str or type(start) is not int
+            or type(end) is not int or not 0 <= start < end <= len(raw)):
+        return None
+    if raw[start] & 0b11000000 == 0b10000000 or (end < len(raw) and raw[end] & 0b11000000 == 0b10000000):
+        return None
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    physical_lines = raw.splitlines(keepends=True)
+    offsets = [0]
+    for line in physical_lines:
+        offsets.append(offsets[-1] + len(line))
+    if path.lower().endswith(".py"):
+        try:
+            # Parse exact bytes: Python validates encoding declarations and BOM
+            # consistency before producing its physical-line AST coordinates.
+            tree = ast.parse(raw)
+        except (SyntaxError, ValueError, RecursionError, UnicodeError, LookupError):
+            return None
+        declarations = [n for n in ast.walk(tree)
+                        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+        for nodes in (declarations, tree.body):
+            units = []
+            for node in nodes:
+                decorators = getattr(node, "decorator_list", ())
+                begin = min([node.lineno, *(d.lineno for d in decorators)]) - 1
+                finish = node.end_lineno
+                if finish is None or not 0 <= begin < finish < len(offsets):
+                    continue
+                unit_start, unit_end = offsets[begin], offsets[finish]
+                if unit_start <= start < end <= unit_end:
+                    while finish < len(physical_lines) and not physical_lines[finish].strip():
+                        finish += 1
+                    units.append((unit_start, offsets[finish]))
+            if units:
+                return min(units, key=lambda bounds: (bounds[1] - bounds[0], bounds[0]))
+        return None
+    if path.lower().endswith((".js", ".jsx", ".mjs", ".cjs")):
+        # Reuse the maintained grammar; unavailable/error trees cannot certify
+        # complete units. Never count braces in strings or incomplete syntax.
+        try:
+            from .javascript_coordinates import JavaScriptCoordinateProvider
+            from .source_coordinates import SourceFile, SourceSnapshot
+            result = JavaScriptCoordinateProvider().index(SourceSnapshot((SourceFile(path, raw),)))
+        except (ImportError, ValueError, TypeError, RuntimeError, RecursionError):
+            return None
+        if not result.supported:
+            return None
+        units = [(c.byte_start, c.byte_end) for c in result.coordinates
+                 if c.occurrence_role == "unknown" and c.byte_start <= start < end <= c.byte_end]
+        return min(units, key=lambda bounds: (bounds[1] - bounds[0], bounds[0])) if units else None
+    if path.lower().endswith(".json"):
+        return _json_unit_bounds(raw, start, end)
+    if path.lower().endswith(".md"):
+        lines = [line.decode("utf-8") for line in physical_lines]
+        # Certify only plain ATX structure. Embedded blocks require a richer
+        # parser; apparent headings inside them cannot establish complete units.
+        if any("<" in line or re.match(
+                r"^ {0,3}(?:`{3,}|~{3,}|>|[-+*][ \t]|[0-9]+[.)][ \t])|^(?: {4}|\t)\S|^ *[-=]+ *$", line)
+               for line in lines):
+            return None
+        anchor_line = next((i for i in range(len(lines)) if offsets[i] <= start < offsets[i + 1]), None)
+        if anchor_line is None:
+            return None
+        for begin in range(anchor_line, -1, -1):
+            heading = re.match(r"^ {0,3}(#{1,6})[ \t]+", lines[begin])
+            if heading:
+                level = len(heading.group(1))
+                finish = begin + 1
+                while finish < len(lines):
+                    candidate = re.match(r"^ {0,3}(#{1,6})[ \t]+", lines[finish])
+                    if candidate and len(candidate.group(1)) <= level:
+                        break
+                    finish += 1
+                return offsets[begin], offsets[finish]
+    return None
 
 
 def _line_window(raw: bytes, start: int, end: int, maximum: int) -> tuple[int, int]:

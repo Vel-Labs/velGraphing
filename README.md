@@ -61,6 +61,24 @@ the [orchestration catalog integration guide](docs/integrations/ORCASTRATA_UMBRE
 for the JSONL contract, validation rules, minimum graph mapping, and failure
 behavior.
 
+## Bounded source delivery and local operator
+
+`/graph-find` keeps its pointer-only default. In an explicit source request,
+`--deliver` includes verified text and `--follow-up-path` requests complete named
+files within one shared byte allowance. The offline JSONL tool adds bounded
+build, inspect, expand and read operations. Unestablished units defer to an
+explicit complete-file read; they do not become partial “complete” units.
+Ranked-context remains a separate opt-in mode, with its existing ranking and
+verified relationship support.
+
+From a source checkout, the [RetrieVEL operator](scripts/operators/retrievel/OPERATOR_GUIDE.md)
+receives those named-source handoffs, retains exact source and receipts, and
+reopens saved evidence without reacquiring the source. It supports interruption
+and reports complete, partial or failed source delivery. It runs no answer
+model or evaluator and grants no action authority. The operator does not install
+or replace the plugin. See the [tool-loop contract](plugins/graph-engineering/skills/graph-find/references/tool-loop.md)
+for budgets, freshness checks and supported formats.
+
 ## Optional Jev integration
 
 Use `/graph-jev` to preview and test an optional Jev-powered evidence reranker.

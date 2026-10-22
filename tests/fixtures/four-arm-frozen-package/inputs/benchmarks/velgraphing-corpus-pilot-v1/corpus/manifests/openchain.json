@@ -1,0 +1,340 @@
+{
+  "commit": "62a42b6e6267f68f053787c88ec944c82c0e2f0d",
+  "excludes": [
+    "OpenChain-Adoption-Guides/Adoption-Guide-For-All-OpenChain-Standards/en/Adoption-Guide-For-All-OpenChain-Standards.md"
+  ],
+  "includes": [
+    "README.md",
+    "LICENSE",
+    "OpenChain-Processes-and-FAQ/faq.md",
+    "OpenChain-Processes-and-FAQ/processes.md",
+    "OpenChain-Processes-and-FAQ/**/*.md",
+    "OpenChain-Adoption-Guides/**/*.md",
+    "OpenChain-Explainers-For-Internal-Teams/**/*.md",
+    "OpenChain-For-Mergers-and-Acquisitions/**/*.md",
+    "OpenChain-Standards-Self-Certification/**/*.md"
+  ],
+  "repository": "git-object-source",
+  "schema_version": "velgraphing-corpus-source-manifest-v1",
+  "skipped": {},
+  "snapshot_sha256": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
+  "source_bytes": 607402,
+  "source_count": 63,
+  "sources": [
+    {
+      "byte_length": 7048,
+      "path": "LICENSE",
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+    },
+    {
+      "byte_length": 13587,
+      "path": "OpenChain-Adoption-Guides/Adoption-PlayBooks-ISO-IEC-5230-(OpenChain 2.1)/en/Large-Company/OpenChain Playbook - Large Company.md",
+      "sha256": "4c581b3be7fa07b15e68868272e1217b6f95f90764c9e7133142c89ac8a60a74"
+    },
+    {
+      "byte_length": 11139,
+      "path": "OpenChain-Adoption-Guides/Adoption-PlayBooks-ISO-IEC-5230-(OpenChain 2.1)/en/Medium-Company/OpenChain PlayBook - Medium Company.md",
+      "sha256": "d998a21a4398ac07090cb135ca28b6446d6dab2d18cac40e4cc91544c747cd70"
+    },
+    {
+      "byte_length": 11229,
+      "path": "OpenChain-Adoption-Guides/Adoption-PlayBooks-ISO-IEC-5230-(OpenChain 2.1)/en/Small-Company/OpenChain PlayBook - Small Company.md",
+      "sha256": "401e4ce7a7f43c1e3bb9a4ab102301462ded6a732a6d5e7f4415f3af5914ef15"
+    },
+    {
+      "byte_length": 8298,
+      "path": "OpenChain-Adoption-Guides/Legacy/Onboarding-Handout/ja/Translation-Tools/README.md",
+      "sha256": "0304ee5c15a8dbe0abbb78376cb4d4ec444500f62efe8efc699d54853fdf0de4"
+    },
+    {
+      "byte_length": 27,
+      "path": "OpenChain-Adoption-Guides/Legacy/Onboarding-Handout/pt/README.md",
+      "sha256": "44d105648e36bb0c14a87d26154d6887ef07549f3a28e7baa8c4943808664f4c"
+    },
+    {
+      "byte_length": 89,
+      "path": "OpenChain-Adoption-Guides/Legacy/Onboarding-Handout/zh-Hans/README.md",
+      "sha256": "d10e7c9b46575914ecfcda273768dcbe35459caa425f39401493a03454de92d8"
+    },
+    {
+      "byte_length": 27,
+      "path": "OpenChain-Adoption-Guides/Legacy/Onboarding-Slides/pt/README.md",
+      "sha256": "44d105648e36bb0c14a87d26154d6887ef07549f3a28e7baa8c4943808664f4c"
+    },
+    {
+      "byte_length": 1782,
+      "path": "OpenChain-Adoption-Guides/Legacy/OpenChain-Path-to-Conformance/en/path-to-conformance-version-1.md",
+      "sha256": "62d1f77824541d4f36c482f78bc308ef52421ca07c58cd8f024ad4ea1b15a51b"
+    },
+    {
+      "byte_length": 19718,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Explainer_C_Suite.md",
+      "sha256": "ac25059648e4f60f1929b1e00acfd3ffa11e7fb5b175eb0cc942536686badfc8"
+    },
+    {
+      "byte_length": 19860,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Explainer_Compliance_Risk_Legal.md",
+      "sha256": "68bb5a9d00820eae10592054875d068b02d072b9d4588d7f7ae1294823400ea3"
+    },
+    {
+      "byte_length": 20308,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Explainer_Dev_Team_Leader.md",
+      "sha256": "851d7609b83a5db72c5c81f11686d74b8a44496d521b4bb74655fa4c9229ea3d"
+    },
+    {
+      "byte_length": 20120,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Explainer_Developers.md",
+      "sha256": "27b89183b8d155ac6cf2dc6ac695f533b90b907884f2839afa2c8d27d8c6fa6c"
+    },
+    {
+      "byte_length": 1545,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Explainer_Explainers.md",
+      "sha256": "f8abac2208bb5daa00e92d10cb85ccbd8abdc7033ea457e61952ceea8527d06f"
+    },
+    {
+      "byte_length": 19139,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Explainer_HR_department.md",
+      "sha256": "1a64d61601832f5e998f6c874636a6c2265fe2557bd8ba1cc9b56128c69a8677"
+    },
+    {
+      "byte_length": 19342,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Explainer_Procurement.md",
+      "sha256": "5ceb02e469f8741ca492b65196f9a62ae31676e50fe041299dfafe7955189091"
+    },
+    {
+      "byte_length": 20183,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Explainer_Sales_Marketing.md",
+      "sha256": "20c40afdcf9de4430556fa5aa8a1290a003bb0929dc2b28a5ba81ee43602f43d"
+    },
+    {
+      "byte_length": 19332,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Explainer_Training.md",
+      "sha256": "d8a55435504cdc5d03bbe0de629db03b3b38e2f98f1983035ed7057da3e5d6cd"
+    },
+    {
+      "byte_length": 1194,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Legacy/Managers/2.0/en/OpenChain For Managers - Version 1.0.md",
+      "sha256": "cf16eaac8967d57bfc894841abe4e8199939a9e1f3b757ed61fa6f9657f27ec5"
+    },
+    {
+      "byte_length": 1181,
+      "path": "OpenChain-Explainers-For-Internal-Teams/en/Legacy/Managers/2.0/en/OpenChain For Managers - Version 2.0.md",
+      "sha256": "602e72e642a7747897e84955ea6b1fc7739424ca1aa8cf6e059d3a6724cf9cd2"
+    },
+    {
+      "byte_length": 115981,
+      "path": "OpenChain-For-Mergers-and-Acquisitions/OpenChain-2.0-(Pre-ISO-IEC-5230)/en/Assessment-Of-OS-Practices-In-Merger-and-Acquisition.md",
+      "sha256": "f4dd69f4dab28a7ef9c2b4da66c07131cb6f66d7898aa6c7810875cb95f68fc7"
+    },
+    {
+      "byte_length": 29624,
+      "path": "OpenChain-Processes-and-FAQ/faq.md",
+      "sha256": "e4551ed84565530a94e1f5238d6a62e2dd52a1c99e2e4390405a642b3e66635b"
+    },
+    {
+      "byte_length": 240,
+      "path": "OpenChain-Processes-and-FAQ/jp/README.md",
+      "sha256": "8d66c5e87a21b58bb72f40a796f2f61322ac689ca771e2a926b8775e84d4f585"
+    },
+    {
+      "byte_length": 11499,
+      "path": "OpenChain-Processes-and-FAQ/processes.md",
+      "sha256": "3ea9867399e389a7e5f6e2c516ef3cf2966b50b4672cdc04658e46d5d29b998b"
+    },
+    {
+      "byte_length": 7768,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/de/Legacy-Version/DIS-18974-Self-Certification-Checklist-2.0.md",
+      "sha256": "8910aabfb51f2b8cca3cf77e364e03bc49f0f6619e9eafa851960f36ac719a61"
+    },
+    {
+      "byte_length": 7761,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/de/Legacy-Version/Security-Assurance-1.1/de/OpenChain Security Assurance Specification - Self-Certification Checklist.md",
+      "sha256": "041016be2a89e563c790e1ebbc41b1424bc1740b8affbf7236000621cea2332f"
+    },
+    {
+      "byte_length": 7189,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/de/iso-18974-2023-Self-Certification-Checklist.md",
+      "sha256": "4b68fa5ef0815215c223c4aafce11c7670f1467c734b23c9c9c8908db2813f11"
+    },
+    {
+      "byte_length": 6266,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/en/Legacy-Version/DIS-18974-Self-Certification-Checklist-1.0.md",
+      "sha256": "cd46d2cd9af3a80954764ece612a95163febf62b58a8e57ae0281b7daf888016"
+    },
+    {
+      "byte_length": 6276,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/en/Legacy-Version/DIS-18974-Self-Certification-Checklist-2.0.md",
+      "sha256": "c2a28a80aa493c950cf576679d66ce85739cf912546a31edd9f366ff0974da83"
+    },
+    {
+      "byte_length": 6280,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/en/Legacy-Version/ISO-18974-Self-Certification-Checklist-3.0.md",
+      "sha256": "f51b9579b2d28233f93119a1de7a6b35fce9b8e2945650964a3be144364dbb33"
+    },
+    {
+      "byte_length": 6259,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/en/Legacy-Version/Security-Assurance-1.1/en/Security-Assurance-1-1-Checklist-Version-1.md",
+      "sha256": "1f2c99da4efa78445b0cae3975a64514a9487b3f899568574cae7bfeb71cd42c"
+    },
+    {
+      "byte_length": 6269,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/en/Legacy-Version/Security-Assurance-1.1/en/Security-Assurance-1-1-Checklist-Version-2.md",
+      "sha256": "38b258fb055101c960d2fee2dc78426307699cf9b47cb99786f20b172e1d1c48"
+    },
+    {
+      "byte_length": 5701,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/en/iso-18974-2023-Self-Certification-Checklist.md",
+      "sha256": "b73eb08b59791ff01c26983b07034a95e4327192aced8bf0221d2069b34f4c0c"
+    },
+    {
+      "byte_length": 7326,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/ja/iso-18974-2023-Self-Certification-Checklist.md",
+      "sha256": "e4100c7ab80c7e66ba31eae3e868533af5b1efe1c4100d5864bde2109d44667c"
+    },
+    {
+      "byte_length": 7009,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/ko/iso-18974-2023-Self-Certification-Checklist.md",
+      "sha256": "7e18efd828a66173aa0574b589c792b8d1c994e65967c5199dea41c356685d95"
+    },
+    {
+      "byte_length": 5315,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/zh-Hans/Legacy-Version/DIS-18974-Self-Certification-Checklist-1.0.md",
+      "sha256": "d654fd793891b8c7fae8a5add4e51afb8fa86835216beab5bda278672c98529c"
+    },
+    {
+      "byte_length": 5331,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/zh-Hans/Legacy-Version/DIS-18974-Self-Certification-Checklist-2.0.md",
+      "sha256": "95c59a230c474e38014cc4613f4b2d099f6c0951bc9d4eccdf2ee0a0f28cb8d2"
+    },
+    {
+      "byte_length": 5303,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/zh-Hans/Legacy-Version/Security-Assurance-1.1/zh-Hans/Security-Assurance-1-1-Checklist-Version-1.md",
+      "sha256": "5220943e13e0b89ca95b45d2b743758b68478e7d1a913d9bab6d754c86de446c"
+    },
+    {
+      "byte_length": 5319,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/zh-Hans/Legacy-Version/Security-Assurance-1.1/zh-Hans/Security-Assurance-1-1-Checklist-Version-2.md",
+      "sha256": "dea0b7320dfccdec1d8ee959c502d03939fcb617bc9d304c3b811a6c1d41c691"
+    },
+    {
+      "byte_length": 5128,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/zh-Hans/iso-18974-2023-Self-Certification-Checklist.md",
+      "sha256": "14af57835c2f589e1d9d87e284a83bef9cc377e2819879f6e9befd553fde5510"
+    },
+    {
+      "byte_length": 5339,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/zh-Hant/Legacy-Version/DIS-18974-Self-Certification-Checklist-2.0.md",
+      "sha256": "94a170e826bed99de864c5de460b3c988aeeb767237fdd92d4b218948c11102e"
+    },
+    {
+      "byte_length": 4689,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-18974/zh-Hant/iso-18974-2023-Self-Certification-Checklist.md",
+      "sha256": "3c7c427ff368ae90019bb0b05c91dad293aa83cb3f90d48e59de1227ecf74b4b"
+    },
+    {
+      "byte_length": 7277,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-5230/de/iso-5230-2020-Self-Certification-Checklist.md",
+      "sha256": "4e1d61350df089121870875b309344c4a210def550a849d2c5a7abfed2d2509c"
+    },
+    {
+      "byte_length": 5944,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-5230/en/Legacy-Version/iso-5230-2020-Self-Certification-Checklist-1.0.md",
+      "sha256": "d93cd6cd77747dd483041a32d62b5bc561413c2fc80a14e783e1dde36dacfa3c"
+    },
+    {
+      "byte_length": 5944,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-5230/en/Legacy-Version/iso-5230-2020-Self-Certification-Checklist-1.1.md",
+      "sha256": "d93cd6cd77747dd483041a32d62b5bc561413c2fc80a14e783e1dde36dacfa3c"
+    },
+    {
+      "byte_length": 5957,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-5230/en/Legacy-Version/iso-5230-2020-Self-Certification-Checklist-1.2.md",
+      "sha256": "1b2ee50e7fb4b95d521fce73bfd823bba57015c228f246e5fe5e98f732066557"
+    },
+    {
+      "byte_length": 5760,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-5230/en/iso-5230-2020-Self-Certification-Checklist.md",
+      "sha256": "01b6d746897974b2f4c90f0d4a1d0b607d92696df2aedb58ef55b97c09970152"
+    },
+    {
+      "byte_length": 7459,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-5230/ja/iso-5230-2020-Self-Certification-Checklist.md",
+      "sha256": "7ead6b6039944186c823e2f3b9943b5a49ac4a02c093ac2ad7e8c17479993e39"
+    },
+    {
+      "byte_length": 7072,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-5230/ko/iso-5230-2020-Self-Certification-Checklist.md",
+      "sha256": "81a6efaee6c237bfea2770e4ee0dea3146daa8a6a2b0e868665f56777aca0169"
+    },
+    {
+      "byte_length": 5064,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-5230/zh-Hans/iso-5230-2020-Self-Certification-Checklist.md",
+      "sha256": "ab200d3d42f8ad2955ef47a021f8fa06a36b6549d6f7ec4c141d95ec15bd2baf"
+    },
+    {
+      "byte_length": 4430,
+      "path": "OpenChain-Standards-Self-Certification/Checklist/ISO-IEC-5230/zh-Hant/iso-5230-2020-Self-Certification-Checklist.md",
+      "sha256": "db8c5b9fd81dab3b99bf37ee23072437406057bcd02d3333381c28d8c28853c5"
+    },
+    {
+      "byte_length": 8725,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/Legacy-Version/ISO-IEC-18974/de/DIS-18974-Self-Certification-Questionnaire-Version-1.md",
+      "sha256": "757c5ffaaf6acc856f1f0a1a47ae4d27daaed8ad6717f30301efee249b37cf18"
+    },
+    {
+      "byte_length": 7080,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/Legacy-Version/ISO-IEC-18974/en/DIS-18974-Self-Certification-Questionnaire-Version-1.md",
+      "sha256": "195563d169e74810d41dbbe6320c4a36ae64b53e27da3e0fedaec1e96a857b21"
+    },
+    {
+      "byte_length": 6389,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/Legacy-Version/ISO-IEC-18974/zh-Hans/DIS-18974-Self-Certification-Questionnaire-Version-1.md",
+      "sha256": "edde2736f0a9bc783241dcf3563b2a91483b9f751847eea322a72b0078003761"
+    },
+    {
+      "byte_length": 6154,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/Legacy-Version/ISO-IEC-18974/zh-Hant/DIS-18974-Self-Certification-Questionnaire-Version-1.md",
+      "sha256": "7117c0c17dc9a0d3cf84c9dd509dd468636b31e7bcc120c83e62aa344dc36ce3"
+    },
+    {
+      "byte_length": 6360,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/Legacy-Version/ISO-IEC-5230/en/ISO5230-2020-Questionnaire-Version-3.md",
+      "sha256": "eff100c2865623d2317d7dd20f4d54dd59e8e963fc26c2a394f0686a94a02999"
+    },
+    {
+      "byte_length": 21,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/Legacy-Version/OpenChain-License-Compliance-1.2/jp/Translation-Tools/README.md",
+      "sha256": "69fdbfd4f0f376305109c0da66bad3713dc2fff265f09f17a2dd9cdae16b1843"
+    },
+    {
+      "byte_length": 6360,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/Legacy-Version/OpenChain-License-Compliance-2.1/en/ISO5230-2020-Questionnaire-Version-3.md",
+      "sha256": "eff100c2865623d2317d7dd20f4d54dd59e8e963fc26c2a394f0686a94a02999"
+    },
+    {
+      "byte_length": 8718,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/Legacy-Version/Security-Assurance-1.1/de/OpenChain Security Assurance Specification - Self-Certification Questionnaire.md",
+      "sha256": "edf6192d1d1df83d88402367195628ca2e02a76b80f22cc6a6af1f174b4ffdf6"
+    },
+    {
+      "byte_length": 7047,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/Legacy-Version/Security-Assurance-1.1/en/Security-Assurance-1-1-Questionnaire-Version-1.md",
+      "sha256": "3c64cc190eebbd0d848b9b67009dc3dafd69cec94456849f5fe83f2feaa4863d"
+    },
+    {
+      "byte_length": 6389,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/Legacy-Version/Security-Assurance-1.1/zh-Hans/Security-Assurance-1-1-Questionnaire-Version-1.md",
+      "sha256": "7df05a62a68562e1fcfc57ed91a6c8163f1e649c43ae270543af68163346ec4d"
+    },
+    {
+      "byte_length": 395,
+      "path": "OpenChain-Standards-Self-Certification/Questionnaire/README.md",
+      "sha256": "c94c8f75a7aed9c49f13fe121163a122e3e7f0374d4224bd7888d83d09c59d32"
+    },
+    {
+      "byte_length": 5837,
+      "path": "README.md",
+      "sha256": "bcf4d961ae07fd857813be6eb2c58fe7e88c53c1e0f54a4b4e096d7e0ecfea83"
+    }
+  ]
+}

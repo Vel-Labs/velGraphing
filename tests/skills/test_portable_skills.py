@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import importlib.util
 import os
 import re
 import subprocess
@@ -10,6 +11,14 @@ import tempfile
 import tomllib
 import unittest
 from pathlib import Path
+
+from packages.core.retrieval import (
+    GraphFindResult,
+    RepositoryTag,
+    RetrievalHit,
+    TagKind,
+    _verified_spans,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -108,6 +117,8 @@ class PortableSkillTests(unittest.TestCase):
                 "SKILL.md",
                 "agents/openai.yaml",
                 "scripts/graph_find.py",
+                "scripts/graph_tools.py",
+                "references/tool-loop.md",
             },
         }
         for skill_name, resources in expected.items():
@@ -297,6 +308,380 @@ class PortableSkillTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertEqual("pass", json.loads(result.stdout)["status"])
 
+    @staticmethod
+    def _named_source_adapter():
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        spec = importlib.util.spec_from_file_location("portable_graph_find_adapter", script)
+        adapter = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(adapter)
+        return adapter
+
+    def _named_source_payload(self):
+        return {'route': 'graph', 'reason': 'verified_tag_context_selected',
+                'recommended_fallback_paths': [], 'delivered_total_bytes': 12,
+                'remaining_byte_budget': 88, 'context': 'ranked text!',
+                'context_bytes': 12, 'delivered_context_bytes': 12,
+                'delivery_budget': {'limit_bytes': 100, 'graph_context_bytes': 12,
+                                    'follow_up_source_bytes': 0,
+                                    'delivered_content_bytes': 12, 'remaining_bytes': 88}}
+
+    def test_graph_find_named_source_missing_target_signals_recovery_without_charging_or_fabricating_source(self):
+        p = self._named_source_payload()
+        self._named_source_adapter()._named_source_recovery(p, 'How does engine.py validate source?',
+                                       {'src/engine.py': b'complete'}, 2)
+        self.assertEqual(p['route'], 'defer')
+        self.assertEqual(p['retrieval_route'], 'graph')
+        t = p['named_source_recovery']['targets'][0]
+        self.assertEqual(t['next_build']['scope'], 'src/engine.py')
+        self.assertEqual(t['status'], 'complete_source_read_needed')
+        self.assertEqual((p['delivered_total_bytes'], p['remaining_byte_budget']), (0, 100))
+        self.assertEqual((p['context'], p['ranked_context_bytes_withheld']), ('', 12))
+        self.assertNotIn('document', p)
+        p = self._named_source_payload()
+        self._named_source_adapter()._named_source_recovery(p, 'Explain engine.py.', {'src/engine.py': b'complete'}, 2)
+        self.assertTrue(p['named_source_recovery']['needs_recovery'])
+        self.assertEqual(p['named_source_recovery']['targets'][0]['mention'], 'engine.py')
+
+    def test_graph_find_named_source_ambiguous_unavailable_and_path_boundaries_do_not_invent_unique_read(self):
+        p = self._named_source_payload()
+        self._named_source_adapter()._named_source_recovery(p, 'engine.py absent.py',
+                                       {'a/engine.py': b'a', 'b/engine.py': b'b'}, 1)
+        targets = p['named_source_recovery']['targets']
+        self.assertTrue(p['named_source_recovery']['needs_recovery'])
+        self.assertEqual(p['recommended_fallback_paths'], [])
+        self.assertTrue(all('next_build' not in t for t in targets))
+        self.assertEqual({t['status'] for t in targets}, {'ambiguous', 'not_admitted_or_not_found'})
+        p = self._named_source_payload()
+        self._named_source_adapter()._named_source_recovery(p, '../engine.py https://outside/engine.py',
+                                       {'src/engine.py': b'a'}, 2)
+        self.assertEqual(p['named_source_recovery']['targets'], [])
+        p = self._named_source_payload()
+        self._named_source_adapter()._named_source_recovery(p, 'a/engine.py',
+                                       {'a/engine.py': b'a', 'b/engine.py': b'b'}, 2)
+        self.assertEqual(p['recommended_fallback_paths'], ['a/engine.py'])
+
+    def test_graph_find_named_source_only_exact_complete_followup_clears_named_gap_not_semantic_assessment(self):
+        raw = b'complete'; p = self._named_source_payload()
+        doc = {'source_path': 'src/engine.py', 'source_sha256': hashlib.sha256(raw).hexdigest(),
+               'byte_count': len(raw), 'content': raw.decode()}
+        p['follow_up'] = {'payload': {'documents': [doc]}}
+        self._named_source_adapter()._named_source_recovery(p, 'engine.py', {'src/engine.py': raw}, 2)
+        self.assertFalse(p['named_source_recovery']['needs_recovery'])
+        self.assertEqual((p['context'], p['remaining_byte_budget']), ('ranked text!', 88))
+        self.assertIn('semantic_completeness_not_assessed', p['named_source_recovery']['assessment'])
+        doc['content'] = 'wrong'
+        self._named_source_adapter()._named_source_recovery(p, 'engine.py', {'src/engine.py': raw}, 2)
+        self.assertTrue(p['named_source_recovery']['needs_recovery'])
+
+    def test_graph_find_named_source_partial_recovery_preserves_complete_followup_charge_and_document(self):
+        p = self._named_source_payload(); raw = b'complete'
+        doc = {'source_path': 'src/engine.py', 'source_sha256': hashlib.sha256(raw).hexdigest(),
+               'byte_count': len(raw), 'content': raw.decode()}
+        p['follow_up'] = {'payload': {'documents': [doc]}}
+        p['delivery_budget']['follow_up_source_bytes'] = len(raw)
+        self._named_source_adapter()._named_source_recovery(p, 'engine.py other.py',
+                                       {'src/engine.py': raw, 'src/other.py': b'other'}, 2)
+        self.assertTrue(p['named_source_recovery']['needs_recovery'])
+        self.assertEqual(p['follow_up']['payload']['documents'], [doc])
+        self.assertEqual((p['delivered_total_bytes'], p['remaining_byte_budget']), (8, 92))
+        self.assertEqual(p['delivery_budget']['graph_context_bytes'], 0)
+
+    def test_graph_find_named_source_scan_defer_reason_preserved_and_mentions_bounded(self):
+        p = self._named_source_payload();p.update(route='defer', reason='source_scope_excluded')
+        self._named_source_adapter()._named_source_recovery(p, ' '.join(f'name{i}.py' for i in range(20)), {}, 2)
+        self.assertEqual(p['reason'], 'source_scope_excluded')
+        self.assertEqual(p['named_source_recovery']['omitted_mentions'], 4)
+        self.assertTrue(p['named_source_recovery']['needs_recovery'])
+
+
+    def test_graph_find_named_source_subprocess_handoff_and_complete_followup(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        source_bytes = "# navegación\ndef validate_source(value):\n    return value\n".encode("utf-8")
+        prompt = "How does engine.py validate_source?"
+        with tempfile.TemporaryDirectory(prefix="graph-find-named-source-") as raw:
+            root = Path(raw).resolve()
+            source = root / "src" / "engine.py"
+            source.parent.mkdir()
+            source.write_bytes(source_bytes)
+            subprocess.run(["git", "init", "-q", str(root)], check=True, timeout=20)
+            subprocess.run(["git", "-C", str(root), "add", "src/engine.py"], check=True, timeout=20)
+
+            def run_find(*extra: str) -> dict[str, object]:
+                result = subprocess.run(
+                    [sys.executable, "-B", str(script), "--root", str(root),
+                     "--prompt", prompt, "--byte-budget", "4096", *extra],
+                    text=True, capture_output=True, check=False, timeout=20,
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                return json.loads(result.stdout)
+
+            pointers = run_find()
+            handoff = run_find("--deliver")
+            complete = run_find("--deliver", "--follow-up-path", "src/engine.py")
+
+        self.assertNotIn("context", pointers)
+        self.assertNotIn("named_source_recovery", pointers)
+        self.assertEqual(pointers["hits"], handoff["hits"])
+        self.assertEqual(pointers["evidence"], handoff["evidence"])
+        self.assertEqual("defer", handoff["route"])
+        expected_reason = ("named_source_recovery_required" if pointers["route"] == "graph"
+                           else pointers["reason"])
+        self.assertEqual(expected_reason, handoff["reason"])
+        self.assertEqual(pointers["route"], handoff["retrieval_route"])
+        self.assertEqual(pointers["reason"], handoff["retrieval_reason"])
+        self.assertEqual("", handoff["context"])
+        self.assertEqual(pointers["context_bytes"], handoff["ranked_context_bytes_withheld"])
+        self.assertEqual(0, handoff["delivered_context_bytes"])
+        self.assertEqual(0, handoff["context_bytes"])
+        self.assertEqual(0, handoff["delivered_total_bytes"])
+        self.assertEqual(4096, handoff["remaining_byte_budget"])
+        self.assertEqual(4096, handoff["delivery_budget"]["limit_bytes"])
+        self.assertEqual(0, handoff["delivery_budget"]["delivered_content_bytes"])
+        self.assertEqual(4096, handoff["delivery_budget"]["remaining_bytes"])
+        self.assertEqual(len(source_bytes), handoff["acquisition"]["source_bytes_read"])
+        self.assertTrue(handoff["named_source_recovery"]["needs_recovery"])
+        target = handoff["named_source_recovery"]["targets"][0]
+        self.assertEqual(["src/engine.py"], target["candidate_paths"])
+        self.assertEqual("src/engine.py", target["next_build"]["scope"])
+        self.assertEqual(prompt, target["next_build"]["intent"])
+        self.assertEqual(hashlib.sha256(source_bytes).hexdigest(), target["source_sha256"])
+
+        self.assertFalse(complete["named_source_recovery"]["needs_recovery"])
+        self.assertNotIn("ranked_context_bytes_withheld", complete)
+        self.assertEqual(pointers["route"], complete["route"])
+        self.assertEqual(pointers["reason"], complete["reason"])
+        self.assertEqual(pointers["context_bytes"], complete["delivered_context_bytes"])
+        self.assertEqual(len(complete["context"].encode("utf-8")), complete["context_bytes"])
+        document = complete["follow_up"]["payload"]["documents"][0]
+        self.assertEqual(source_bytes, document["content"].encode("utf-8"))
+        self.assertEqual(len(source_bytes), document["byte_count"])
+        self.assertEqual(hashlib.sha256(source_bytes).hexdigest(), document["source_sha256"])
+        self.assertEqual(complete["delivered_context_bytes"] + len(source_bytes),
+                         complete["delivered_total_bytes"])
+        self.assertEqual(4096 - complete["delivered_total_bytes"], complete["remaining_byte_budget"])
+        self.assertEqual(4096, complete["delivery_budget"]["limit_bytes"])
+        self.assertIn("semantic_completeness_not_assessed",
+                      complete["named_source_recovery"]["assessment"])
+
+    def test_graph_find_named_source_compound_hidden_names_resolve_only_exact_admitted_paths(self):
+        adapter = self._named_source_adapter()
+        cases = ['src/config.test.py', 'config/.projection-state.json', '.ignore-rules',
+                 'src/.hidden-dir/config.test.py', '.ci.d/config.prod-01.py']
+        for source_path in cases:
+            with self.subTest(source_path=source_path):
+                p = self._named_source_payload()
+                prompt = 'Explain ' + source_path + '.'
+                adapter._named_source_recovery(p, prompt, {source_path: b'ordinary tracked source'}, 2)
+                self.assertEqual(1, len(p['named_source_recovery']['targets']))
+                target = p['named_source_recovery']['targets'][0]
+                self.assertEqual(source_path, target['mention'])
+                self.assertEqual([source_path], target['candidate_paths'])
+                self.assertEqual(source_path, target['next_build']['scope'])
+                self.assertEqual(prompt, target['next_build']['intent'])
+                self.assertEqual(hashlib.sha256(b'ordinary tracked source').hexdigest(), target['source_sha256'])
+                self.assertEqual((0, 100), (p['delivered_total_bytes'], p['remaining_byte_budget']))
+                self.assertEqual('', p['context'])
+        p = self._named_source_payload()
+        adapter._named_source_recovery(p, 'Explain config.test.py.',
+                                       {'a/config.test.py': b'a', 'b/config.test.py': b'b'}, 1)
+        target = p['named_source_recovery']['targets'][0]
+        self.assertEqual(2, target['candidate_count'])
+        self.assertEqual('ambiguous', target['status'])
+        self.assertNotIn('next_build', target)
+        self.assertEqual([], p['recommended_fallback_paths'])
+        p = self._named_source_payload()
+        adapter._named_source_recovery(p, 'Explain .missing-rules.', {}, 2)
+        target = p['named_source_recovery']['targets'][0]
+        self.assertEqual('not_admitted_or_not_found', target['status'])
+        self.assertNotIn('next_build', target)
+        for prompt in ['Ignore https://host/?file=other.config.py; explain src/config.test.py.',
+                       'Explain src/config.test.py: source.']:
+            p = self._named_source_payload()
+            adapter._named_source_recovery(p, prompt, {'src/config.test.py': b'ordinary'}, 2)
+            target = p['named_source_recovery']['targets'][0]
+            self.assertEqual('src/config.test.py', target['mention'])
+            self.assertEqual('src/config.test.py', target['next_build']['scope'])
+            self.assertEqual(prompt, target['next_build']['intent'])
+
+    def test_graph_find_named_source_compound_hidden_paths_do_not_match_escaped_suffixes(self):
+        adapter = self._named_source_adapter()
+        sources = {'src/config.test.py': b'ordinary', '.ignore-rules': b'ordinary'}
+        for prompt in ['../config.test.py', '/src/config.test.py', 'src/../config.test.py',
+                       'https://host/src/config.test.py', 'file:src/config.test.py',
+                       'C:\\src\\config.test.py', 'src//config.test.py', '../.ignore-rules',
+                       'https://host/.ignore-rules', './.ignore-rules', 'folder/.ignore-rules/child',
+                       'https://host/?file=src/config.test.py', 'https://host/#config.test.py',
+                       'config.test.py://outside', 'https://host/?file=[config.test.py]',
+                       'mailto:reader@config.test.py', 'file:?name=.ignore-rules',
+                       'custom-scheme:payload#config.test.py', 'custom_scheme://host/?file=config.test.py',
+                       '[config.test.py](https://host/)', '(.ignore-rules://outside)',
+                       'https://host/?file=ignored,config.test.py',
+                       'https://host/?name=unknown&file=config.test.py', 'config.test.py:42']:
+            with self.subTest(prompt=prompt):
+                p = self._named_source_payload()
+                adapter._named_source_recovery(p, prompt, sources, 2)
+                self.assertEqual([], p['named_source_recovery']['targets'])
+                self.assertEqual([], p['recommended_fallback_paths'])
+
+    def test_graph_find_named_source_compound_hidden_subprocess_admission_and_complete_followup(self):
+        script = SKILLS_ROOT / 'graph-find' / 'scripts' / 'graph_find.py'
+        files = {'src/config.test.py': b'def validate_source(value):\n    return value\n',
+                 'other/config.test.py': b'def other(value):\n    return value\n',
+                 '.ignore-rules': b'*.generated\ncache/\n',
+                 '.settings/.projection-state.json': b'{"status":"ordinary_tracked_fixture"}\n'}
+        observations = []
+        with tempfile.TemporaryDirectory(prefix='graph-find-compound-hidden-') as raw:
+            root = Path(raw).resolve()
+            for source_path, content in files.items():
+                target = root / source_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+            subprocess.run(['git', 'init', '-q', str(root)], check=True, timeout=20)
+            subprocess.run(['git', '-C', str(root), 'add', *files], check=True, timeout=20)
+            def run_find(name, prompt, *extra):
+                argv = [sys.executable, '-B', str(script), '--root', str(root), '--prompt', prompt,
+                        '--byte-budget', '4096', '--deliver', *extra]
+                result = subprocess.run(argv, text=True, capture_output=True, check=False, timeout=20)
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                output = json.loads(result.stdout)
+                observations.append({'case': name, 'argv': argv, 'process_returncode': result.returncode,
+                                     'stderr': result.stderr, 'payload': output})
+                return output
+            named = {source_path: run_find('unique:' + source_path, 'Explain ' + source_path + ' source validation.')
+                     for source_path in ['src/config.test.py', '.ignore-rules', '.settings/.projection-state.json']}
+            ambiguous = run_find('ambiguous', 'Explain config.test.py source validation.')
+            excluded = {source_path: run_find('excluded:' + source_path, 'Explain ' + source_path + ' source validation.',
+                        '--exclude-path-prefix', prefix)
+                        for source_path, prefix in [('src/config.test.py', 'src'), ('.settings/.projection-state.json', '.settings')]}
+            complete = {source_path: run_find('complete:' + source_path, 'Explain ' + source_path + ' source validation.',
+                                             '--follow-up-path', source_path)
+                        for source_path in ['src/config.test.py', '.ignore-rules']}
+            boundary = run_find('boundary', 'Explain ../config.test.py and https://outside/.ignore-rules.')
+            uri_boundary = run_find('uri-boundary', 'Explain https://host/?file=config.test.py and https://host/#.ignore-rules.')
+            mixed = run_find('mixed-uri-local', 'Ignore https://host/?file=config.test.py; explain .ignore-rules.')
+        # Optional bounded receipt for an explicitly selected task-copy run.
+        if os.environ.get('RETRIEVEL_FILENAME_RECEIPT'):
+            receipt_path = Path(os.environ['RETRIEVEL_FILENAME_RECEIPT']).resolve()
+            self.assertEqual(PROJECT_ROOT.parent, receipt_path.parent)
+            self.assertFalse(receipt_path.exists(), 'previous fixture evidence is preserved')
+            receipt_path.write_text(json.dumps({'synthetic': True, 'admitted_sources': {
+                source_path: {'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(), 'content': raw.decode()}
+                for source_path, raw in files.items()}, 'observations': observations}, indent=2) + '\n')
+        for source_path, output in named.items():
+            self.assertTrue(output['named_source_recovery']['needs_recovery'])
+            self.assertEqual(1, len(output['named_source_recovery']['targets']))
+            target = output['named_source_recovery']['targets'][0]
+            self.assertEqual([source_path], target['candidate_paths'])
+            self.assertEqual(source_path, target['next_build']['scope'])
+            self.assertEqual(hashlib.sha256(files[source_path]).hexdigest(), target['source_sha256'])
+            self.assertEqual(0, output['delivered_total_bytes'])
+            self.assertEqual(4096, output['remaining_byte_budget'])
+            self.assertEqual('', output['context'])
+        target = ambiguous['named_source_recovery']['targets'][0]
+        self.assertEqual(2, target['candidate_count'])
+        self.assertEqual('ambiguous', target['status'])
+        self.assertNotIn('next_build', target)
+        for output in excluded.values():
+            target = output['named_source_recovery']['targets'][0]
+            self.assertEqual(0, target['candidate_count'])
+            self.assertNotIn('next_build', target)
+            self.assertFalse(output['scan']['scan_complete'])
+        for source_path, output in complete.items():
+            self.assertFalse(output['named_source_recovery']['needs_recovery'])
+            document = next(d for d in output['follow_up']['payload']['documents'] if d['source_path'] == source_path)
+            self.assertEqual(files[source_path], document['content'].encode())
+            self.assertEqual(len(files[source_path]), document['byte_count'])
+            self.assertEqual(hashlib.sha256(files[source_path]).hexdigest(), document['source_sha256'])
+            self.assertEqual(output['delivery_budget']['limit_bytes'], output['delivered_total_bytes'] + output['remaining_byte_budget'])
+        self.assertEqual([], boundary['named_source_recovery']['targets'])
+        self.assertEqual([], uri_boundary['named_source_recovery']['targets'])
+        target = mixed['named_source_recovery']['targets'][0]
+        self.assertEqual(1, len(mixed['named_source_recovery']['targets']))
+        self.assertEqual('.ignore-rules', target['mention'])
+        self.assertEqual(['.ignore-rules'], target['candidate_paths'])
+
+    def test_graph_find_named_source_same_request_followup_reuses_only_unemitted_context(self):
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        body = ("def validate_source(value):\n" +
+                "    # Ordinary source commentary retained as part of the complete witness.\n" * 40 +
+                "    return value\n").encode()
+        prompt = "How does validate_source work? Also provide the complete engine.py implementation."
+        observations = []
+        with tempfile.TemporaryDirectory(prefix="graph-find-followup-allocation-") as raw:
+            root = Path(raw).resolve()
+            (root / "src").mkdir()
+            (root / "src/engine.py").write_bytes(body)
+            (root / "other.txt").write_text("Unrelated ordinary source.\n")
+            subprocess.run(["git", "init", "-q", str(root)], check=True, timeout=20)
+            subprocess.run(["git", "-C", str(root), "add", "src/engine.py", "other.txt"], check=True, timeout=20)
+
+            def run_find(label, question=prompt, budget=3600, extra=()):
+                argv = [sys.executable, "-B", str(script), "--root", str(root), "--prompt", question,
+                        "--byte-budget", str(budget), "--deliver", *extra]
+                result = subprocess.run(argv, text=True, capture_output=True, timeout=20)
+                observations.append({"label": label, "argv": argv, "process_returncode": result.returncode,
+                                     "stdout": result.stdout, "stderr": result.stderr})
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                return json.loads(result.stdout)
+
+            handoff = run_find("without-followup")
+            recovered = run_find("starved-same-request", extra=("--follow-up-path", "src/engine.py"))
+            control = run_find("full-budget-projection-control", question="Locate absent Zephyr Obelisk.",
+                               extra=("--follow-up-path", "src/engine.py"))
+            successful = run_find("no-gap-preserves-context", budget=32768,
+                                  extra=("--follow-up-path", "src/engine.py"))
+            unnamed = run_find("no-explicit-name-no-reallocation", question="How does validate_source work?",
+                               extra=("--follow-up-path", "src/engine.py"))
+            nofit = run_find("complete-envelope-still-does-not-fit", budget=1024,
+                            extra=("--follow-up-path", "src/engine.py"))
+            excluded = run_find("excluded-source-is-not-a-budget-retry",
+                               extra=("--follow-up-path", "src/engine.py", "--exclude-path-prefix", "src"))
+        if os.environ.get('RETRIEVEL_FOLLOWUP_RECEIPT'):
+            receipt_path = Path(os.environ['RETRIEVEL_FOLLOWUP_RECEIPT']).resolve()
+            self.assertEqual(PROJECT_ROOT.parent, receipt_path.parent)
+            self.assertFalse(receipt_path.exists(), 'previous fixture evidence is preserved')
+            receipt_path.write_text(json.dumps({'synthetic': True, 'source_path': 'src/engine.py',
+                'source_bytes': len(body), 'source_sha256': hashlib.sha256(body).hexdigest(),
+                'source_content': body.decode(), 'observations': observations}, indent=2) + '\n')
+        self.assertGreater(handoff['ranked_context_bytes_withheld'], 0)
+        self.assertEqual(3600, handoff['remaining_byte_budget'])
+        self.assertEqual(0, control['delivery_budget']['graph_context_bytes'])
+        self.assertEqual(body.decode(), control['follow_up']['payload']['documents'][0]['content'])
+        self.assertLessEqual(control['follow_up']['envelope_bytes'], 3600)
+        self.assertGreater(control['follow_up']['envelope_bytes'], 3600 - handoff['ranked_context_bytes_withheld'])
+        self.assertFalse(recovered['named_source_recovery']['needs_recovery'])
+        self.assertEqual('', recovered['context'])
+        self.assertEqual(handoff['ranked_context_bytes_withheld'], recovered['ranked_context_bytes_withheld'])
+        self.assertEqual(handoff['hits'], recovered['hits'])
+        self.assertEqual(handoff['evidence'], recovered['evidence'])
+        self.assertEqual(handoff['acquisition'], recovered['acquisition'])
+        document = recovered['follow_up']['payload']['documents'][0]
+        self.assertEqual(body.decode(), document['content'])
+        self.assertEqual(hashlib.sha256(body).hexdigest(), document['source_sha256'])
+        self.assertEqual(len(body), document['byte_count'])
+        self.assertEqual(len(body), recovered['delivered_total_bytes'])
+        self.assertEqual(3600 - len(body), recovered['remaining_byte_budget'])
+        self.assertLessEqual(recovered['follow_up']['envelope_bytes'], 3600)
+        self.assertEqual(control['follow_up']['source_snapshot_sha256'], recovered['follow_up']['source_snapshot_sha256'])
+        self.assertEqual(successful['context_bytes'], successful['delivery_budget']['graph_context_bytes'])
+        self.assertGreater(successful['context_bytes'], 0)
+        self.assertNotIn('ranked_context_bytes_withheld', successful)
+        self.assertFalse(successful['named_source_recovery']['needs_recovery'])
+        self.assertEqual(successful['delivered_total_bytes'], len(body) + successful['context_bytes'])
+        self.assertEqual([], unnamed['named_source_recovery']['targets'])
+        self.assertGreater(unnamed['context_bytes'], 0)
+        self.assertNotIn('ranked_context_bytes_withheld', unnamed)
+        self.assertEqual('defer', unnamed['follow_up']['route'])
+        self.assertEqual('defer', nofit['follow_up']['route'])
+        self.assertTrue(nofit['named_source_recovery']['needs_recovery'])
+        self.assertEqual(0, nofit['delivered_total_bytes'])
+        self.assertEqual(1024, nofit['remaining_byte_budget'])
+        self.assertEqual([], (nofit['follow_up']['payload'] or {}).get('documents', []))
+        self.assertEqual('defer', excluded['follow_up']['route'])
+        self.assertEqual('fallback_sources_unavailable', excluded['follow_up']['payload']['reason'])
+        self.assertEqual(0, excluded['named_source_recovery']['targets'][0]['candidate_count'])
+        self.assertEqual(0, excluded['delivered_total_bytes'])
+
     def test_graph_find_is_discoverable_and_documents_defer_boundary(self) -> None:
         command = tomllib.loads((COMMANDS_ROOT / "graph-find.toml").read_text(encoding="utf-8"))
         skill = (SKILLS_ROOT / "graph-find" / "SKILL.md").read_text(encoding="utf-8")
@@ -469,6 +854,185 @@ class PortableSkillTests(unittest.TestCase):
         self.assertFalse(
             fallback["ranked_context"]["selection"]["jev_decision"]["jev_observation_applied"]
         )
+
+    def test_graph_find_delivery_includes_verified_text_and_bounded_follow_up(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        source_text = "def refresh_token(token):\n    return token + '-current'\n"
+        source_bytes = source_text.encode("utf-8")
+        with tempfile.TemporaryDirectory(prefix="graph-find-delivery-") as raw:
+            root = Path(raw)
+            source = root / "src" / "auth.py"
+            source.parent.mkdir()
+            source.write_bytes(source_bytes)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "src/auth.py"], check=True)
+
+            def run_find(*extra: str, prompt: str) -> dict[str, object]:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(script),
+                        "--root",
+                        str(root),
+                        "--prompt",
+                        prompt,
+                        *extra,
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                return json.loads(result.stdout)
+
+            delivered = run_find("--deliver", prompt="find refresh_token")
+            recovered = run_find(
+                "--follow-up-path",
+                "src/auth.py",
+                prompt="Find the nonexistent Zephyr Obelisk florfle cleanup handler.",
+            )
+            combined = run_find(
+                "--deliver",
+                "--follow-up-path",
+                "src/auth.py",
+                "--byte-budget",
+                "4096",
+                prompt="find refresh_token",
+            )
+            exhausted = run_find(
+                "--deliver",
+                "--follow-up-path",
+                "src/auth.py",
+                "--byte-budget",
+                "80",
+                prompt="find refresh_token",
+            )
+
+        self.assertEqual("graph", delivered["route"])
+        self.assertIn("def refresh_token(token):", delivered["context"])
+        self.assertEqual(len(delivered["context"].encode("utf-8")), delivered["delivered_context_bytes"])
+        self.assertEqual(delivered["scan"]["source_bytes_read"], delivered["acquisition"]["source_bytes_read"])
+        self.assertEqual(delivered["scan"]["source_bytes"], delivered["acquisition"]["source_bytes_in_snapshot"])
+        evidence = next(item for item in delivered["evidence"] if item["source_path"] == "src/auth.py")
+        excerpt = source_bytes[evidence["byte_start"] : evidence["byte_end"]]
+        self.assertEqual(hashlib.sha256(source_bytes).hexdigest(), evidence["source_sha256"])
+        self.assertEqual(hashlib.sha256(excerpt).hexdigest(), evidence["excerpt_sha256"])
+        self.assertIn(excerpt.decode("utf-8"), delivered["context"])
+        self.assertEqual("defer", recovered["route"])
+        self.assertEqual("direct", recovered["follow_up"]["route"])
+        document = recovered["follow_up"]["payload"]["documents"][0]
+        self.assertEqual(source_text, document["content"])
+        self.assertEqual(hashlib.sha256(source_bytes).hexdigest(), document["source_sha256"])
+        delivery_budget = combined["delivery_budget"]
+        self.assertEqual(4096, delivery_budget["limit_bytes"])
+        self.assertEqual(combined["delivered_context_bytes"], delivery_budget["graph_context_bytes"])
+        self.assertEqual(document["byte_count"], combined["follow_up"]["source_bytes"])
+        self.assertLessEqual(combined["follow_up"]["envelope_bytes"], 4096 - delivery_budget["graph_context_bytes"])
+        self.assertLessEqual(combined["follow_up"]["source_bytes"], combined["follow_up"]["envelope_bytes"])
+        self.assertEqual(
+            delivery_budget["graph_context_bytes"] + combined["follow_up"]["source_bytes"],
+            combined["delivered_total_bytes"],
+        )
+        self.assertEqual(combined["delivered_total_bytes"], delivery_budget["delivered_content_bytes"])
+        self.assertEqual(4096 - combined["delivered_total_bytes"], combined["remaining_byte_budget"])
+        self.assertLessEqual(combined["delivered_total_bytes"], 4096)
+        self.assertEqual("graph", exhausted["route"])
+        self.assertEqual("shared_delivery_budget_exhausted", exhausted["follow_up"]["reason"])
+        self.assertIsNone(exhausted["follow_up"]["payload"])
+        self.assertEqual(exhausted["delivered_context_bytes"], exhausted["delivered_total_bytes"])
+        self.assertEqual(80 - exhausted["delivered_total_bytes"], exhausted["remaining_byte_budget"])
+
+    def test_graph_find_follow_up_defers_for_excluded_and_over_budget_sources(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        with tempfile.TemporaryDirectory(prefix="graph-find-follow-up-limits-") as raw:
+            root = Path(raw)
+            (root / "public.py").write_text("def public_item():\n    return 1\n", encoding="utf-8")
+            (root / "large.txt").write_text("x" * 40000, encoding="utf-8")
+            (root / ".env").write_text("private_value=must_not_escape\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+
+            def run_follow_up(path: str, *extra: str) -> tuple[dict[str, object], str]:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(script),
+                        "--root",
+                        str(root),
+                        "--prompt",
+                        "find absent Zephyr Obelisk",
+                        "--follow-up-path",
+                        path,
+                        *extra,
+                    ],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                return json.loads(result.stdout), result.stdout
+
+            excluded, excluded_output = run_follow_up(".env")
+            over_budget, over_budget_output = run_follow_up("large.txt")
+
+        self.assertEqual("defer", excluded["follow_up"]["route"])
+        self.assertEqual("fallback_sources_unavailable", excluded["follow_up"]["payload"]["reason"])
+        self.assertNotIn("must_not_escape", excluded_output)
+        self.assertNotIn('"source_path":".env"', excluded_output)
+        self.assertEqual("defer", over_budget["follow_up"]["route"])
+        self.assertEqual("fallback_context_exceeds_byte_budget", over_budget["follow_up"]["payload"]["reason"])
+        self.assertEqual([], over_budget["follow_up"]["payload"]["documents"])
+        self.assertNotIn("x" * 128, over_budget_output)
+
+    def test_graph_find_source_prefix_exclusion_applies_to_delivery_and_follow_up(self) -> None:
+        script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
+        allowed = b"def other_current_item():\n    return 'current'\n"
+        excluded = b"def cache_control_new():\n    return 'historical_answer_must_not_escape'\n"
+        sibling = b"def cache_control_new():\n    return 'allowed sibling'\n"
+        with tempfile.TemporaryDirectory(prefix="graph-find-scope-") as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "benchmarks" / "responses").mkdir(parents=True)
+            (root / "benchmarks" / "responses-old").mkdir()
+            (root / "src" / "cache.py").write_bytes(allowed)
+            (root / "benchmarks" / "responses" / "answer.py").write_bytes(excluded)
+            (root / "benchmarks" / "responses-old" / "current.py").write_bytes(sibling)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(script),
+                    "--root",
+                    str(root),
+                    "--prompt",
+                    "find cache_control_new",
+                    "--deliver",
+                    "--exclude-path-prefix",
+                    "benchmarks/responses",
+                    "--follow-up-path",
+                    "benchmarks/responses/answer.py",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("defer", payload["route"])
+        self.assertEqual("source_scope_excluded", payload["reason"])
+        self.assertEqual("graph", payload["retrieval_route"])
+        self.assertEqual("verified_tag_context_selected", payload["retrieval_reason"])
+        self.assertIn("def cache_control_new():", payload["context"])
+        self.assertTrue(payload["evidence"])
+        self.assertEqual(["benchmarks/responses"], payload["scan"]["excluded_path_prefixes"])
+        self.assertEqual(1, payload["scan"]["path_scope_excluded"])
+        self.assertEqual(len(allowed) + len(sibling), payload["acquisition"]["source_bytes_read"])
+        self.assertEqual(len(allowed) + len(sibling), payload["acquisition"]["source_bytes_in_snapshot"])
+        self.assertNotIn("historical_answer_must_not_escape", result.stdout)
+        self.assertEqual("defer", payload["follow_up"]["route"])
+        self.assertEqual("fallback_sources_unavailable", payload["follow_up"]["payload"]["reason"])
 
     def test_graph_find_rebuilds_from_current_tracked_bytes(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
@@ -883,10 +1447,10 @@ class PortableSkillTests(unittest.TestCase):
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
         with tempfile.TemporaryDirectory(prefix="graph-find-skip-") as raw:
             root = Path(raw)
-            (root / "usable.py").write_text(
-                "def refresh_token():\n    return 'ok'\n", encoding="utf-8"
-            )
-            (root / "binary.bin").write_bytes(b"\xff\xfe\x00")
+            usable_bytes = b"def refresh_token():\n    return 'ok'\n"
+            invalid_bytes = b"\xff\xfe\x00"
+            (root / "usable.py").write_bytes(usable_bytes)
+            (root / "binary.bin").write_bytes(invalid_bytes)
             subprocess.run(["git", "init", "-q", str(root)], check=True)
             subprocess.run(
                 ["git", "-C", str(root), "add", "usable.py", "binary.bin"], check=True
@@ -899,6 +1463,7 @@ class PortableSkillTests(unittest.TestCase):
                     str(root),
                     "--prompt",
                     "find refresh_token",
+                    "--deliver",
                 ],
                 text=True,
                 capture_output=True,
@@ -909,6 +1474,11 @@ class PortableSkillTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual({"invalid_utf8": 1}, payload["scan"]["skip_counts"])
         self.assertEqual("binary.bin", payload["scan"]["files_skipped"][0]["path"])
+        self.assertEqual(
+            len(usable_bytes) + len(invalid_bytes),
+            payload["acquisition"]["source_bytes_read"],
+        )
+        self.assertEqual(len(usable_bytes), payload["acquisition"]["source_bytes_in_snapshot"])
 
     def test_graph_find_subprocess_excludes_sensitive_paths_without_names(self) -> None:
         script = SKILLS_ROOT / "graph-find" / "scripts" / "graph_find.py"
@@ -959,6 +1529,70 @@ class PortableSkillTests(unittest.TestCase):
         self.assertIsNone(payload["ranked_context"]["selection"])
         for name in sensitive_names:
             self.assertNotIn(name, result.stdout)
+        self.assertNotIn("refresh_token=secret", result.stdout)
+
+    def test_graph_find_does_not_claim_evidence_completeness_after_budget_omission(self) -> None:
+        source_path = "src/markers.py"
+        record_id = f"repo:{source_path}"
+        raw = (
+            b"def alpha_marker():\n    return 1\n"
+            + b"# distant source content\n" * 60
+            + b"def omega_marker():\n    return 2\n"
+        )
+        first_start = raw.index(b"alpha_marker")
+        second_start = raw.index(b"omega_marker")
+        tags = (
+            RepositoryTag(
+                TagKind.SYMBOL,
+                "alpha_marker",
+                record_id,
+                source_path,
+                first_start,
+                first_start + len(b"alpha_marker"),
+            ),
+            RepositoryTag(
+                TagKind.SYMBOL,
+                "omega_marker",
+                record_id,
+                source_path,
+                second_start,
+                second_start + len(b"omega_marker"),
+            ),
+        )
+        hit = RetrievalHit(record_id, source_path, 100, ("exact",), ("alpha", "omega"), 0)
+        source_sha256 = hashlib.sha256(raw).hexdigest()
+        first_end = raw.index(b"\n")
+        byte_budget = len(f"[{source_path}:0-{first_end}]\n".encode()) + first_end
+        spans, evidence, context = _verified_spans(
+            (hit,),
+            {record_id: tags},
+            {record_id: {"alpha_marker", "omega_marker"}},
+            {},
+            {},
+            {},
+            {source_path: raw},
+            {source_path: source_sha256},
+            byte_budget,
+        )
+
+        self.assertEqual(1, len(spans))
+        self.assertEqual(1, len(evidence))
+        self.assertIn("alpha_marker", context)
+        self.assertNotIn("omega_marker", context)
+        result = GraphFindResult(
+            route="graph",
+            reason="verified_tag_context_selected",
+            hits=(hit,),
+            evidence=evidence,
+            source_snapshot_sha256=source_sha256,
+            context_bytes=len(context.encode("utf-8")),
+            facet_coverage_percent=100.0,
+            recommended_fallback_paths=(),
+            fail_closed=False,
+            _context=context,
+        ).to_delivery_dict()
+        self.assertEqual("not_assessed", result["omissions"]["completeness_assessment"])
+        self.assertNotIn("complete", result["omissions"])
 
     @property
     def graphctl(self) -> Path:

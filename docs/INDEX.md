@@ -13,6 +13,8 @@ repository.
 | Portable contracts | `../contracts/core/` |
 | Knowledge Compiler adapter | `../adapters/knowledge-compiler/` |
 | Orcastrata umbrella catalog intake | `integrations/ORCASTRATA_UMBRELLA_CATALOG.md` |
+| Bounded source tool loop | `../plugins/graph-engineering/skills/graph-find/references/tool-loop.md` |
+| Source-only RetrieVEL operator | `../scripts/operators/retrievel/OPERATOR_GUIDE.md` |
 | Public commands | `../plugins/graph-engineering/commands/` |
 | User-facing skills | `../plugins/graph-engineering/skills/` |
 | Generated plugin runtime | `../plugins/graph-engineering/runtime/` |

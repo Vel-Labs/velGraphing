@@ -1,0 +1,764 @@
+{
+  "commit": "a381578994d545e44f26afabbd2303746a2dc358",
+  "excludes": [],
+  "includes": [
+    "searches/*.py",
+    "sorts/*.py",
+    "graphs/*.py",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "repository": "git-object-source",
+  "schema_version": "velgraphing-corpus-source-manifest-v1",
+  "skipped": {},
+  "snapshot_sha256": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09",
+  "source_bytes": 551807,
+  "source_count": 149,
+  "sources": [
+    {
+      "byte_length": 1095,
+      "path": "LICENSE.md",
+      "sha256": "4395a1dc4bda1d6054c45b4d1230c709c7398e6d66f1d0aff4b22d95973bea56"
+    },
+    {
+      "byte_length": 2550,
+      "path": "README.md",
+      "sha256": "fe208b1887737f0f067057d33baf66ac4195279c791a26293ddff7f11409d75d"
+    },
+    {
+      "byte_length": 0,
+      "path": "graphs/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "byte_length": 4442,
+      "path": "graphs/a_star.py",
+      "sha256": "9e1415a3aaeb2cd562b0513cbf201b38330da7305f78fe8e16d42752fad9e5ce"
+    },
+    {
+      "byte_length": 8147,
+      "path": "graphs/ant_colony_optimization_algorithms.py",
+      "sha256": "24a37dca5981e5be2749b0d9af762b24dc22fa5908b0f81b82375120d6d5c3be"
+    },
+    {
+      "byte_length": 1354,
+      "path": "graphs/articulation_points.py",
+      "sha256": "7399a4bcfe56d79d6ce104358fbd2e0f4fb57bbb147d13fd8d0a4915595db9b0"
+    },
+    {
+      "byte_length": 10763,
+      "path": "graphs/basic_graphs.py",
+      "sha256": "6331f42ea8a5712a0946504807a321cb0553367a0d8769ae5d63a5f483a10700"
+    },
+    {
+      "byte_length": 2320,
+      "path": "graphs/bellman_ford.py",
+      "sha256": "fb0d9faf24c5d34f0ca7ac6fd1e6f9962708b1dc865f816c894c311e0ba52176"
+    },
+    {
+      "byte_length": 3361,
+      "path": "graphs/bi_directional_dijkstra.py",
+      "sha256": "b981fe4b3bff448a89ad4f664a31d1bb71cba6edc005299d476142cb55a5163b"
+    },
+    {
+      "byte_length": 8212,
+      "path": "graphs/bidirectional_a_star.py",
+      "sha256": "82e0ee6896beb98cf60afdc29862504f7314d3234e2650da1f5b170844652c7e"
+    },
+    {
+      "byte_length": 6069,
+      "path": "graphs/bidirectional_breadth_first_search.py",
+      "sha256": "e1604f6cb0b4cf111a6b76b08d2a91f33dff2632b25e67bc96376e4f71d6c833"
+    },
+    {
+      "byte_length": 5656,
+      "path": "graphs/bidirectional_search.py",
+      "sha256": "b72ac8bb4e9359ae97e4a03a3ad7707f6950ffb4c44e85da84e7587de8d4babf"
+    },
+    {
+      "byte_length": 6411,
+      "path": "graphs/boruvka.py",
+      "sha256": "df435eafc51dc85e38b71a0cfbce840caf06729d3ea9e7c30d50d1045b5f1eab"
+    },
+    {
+      "byte_length": 2390,
+      "path": "graphs/breadth_first_search.py",
+      "sha256": "621e11bd4a320c7437bba42e29715608b05e84a5939562715cde8e32a576a529"
+    },
+    {
+      "byte_length": 2320,
+      "path": "graphs/breadth_first_search_2.py",
+      "sha256": "71441ae9458c659a36a557e378597cd68f875ebcc5b45573ef899866326efc85"
+    },
+    {
+      "byte_length": 3020,
+      "path": "graphs/breadth_first_search_shortest_path.py",
+      "sha256": "7504d6dfbe949269501ab58c4d9d59d0d4d1d6fc08f1d1ce029a7cdc0f11bc36"
+    },
+    {
+      "byte_length": 3599,
+      "path": "graphs/breadth_first_search_shortest_path_2.py",
+      "sha256": "a1d424e2be9a510f07066fa18065b7eeadb59788db1135c9f457b5129dfe6219"
+    },
+    {
+      "byte_length": 4676,
+      "path": "graphs/breadth_first_search_zero_one_shortest_path.py",
+      "sha256": "97df47f87f3fa776196a2b318f91319556dcd275fba4489b6d849554f40af873"
+    },
+    {
+      "byte_length": 5108,
+      "path": "graphs/check_bipatrite.py",
+      "sha256": "a1dd5e0e2252b43a46ef1c83bde8f590ccdcb5546e36a24ef0aa71a8a34c3a29"
+    },
+    {
+      "byte_length": 1538,
+      "path": "graphs/check_cycle.py",
+      "sha256": "b1b9e3959fffecc92fb4be790c4404cd7647f1342a06a07635b89202008d4aa5"
+    },
+    {
+      "byte_length": 1430,
+      "path": "graphs/connected_components.py",
+      "sha256": "95b8ac86c8451bad7c40da072b4d4472cc771767c667c50a7bd55e3e8aee9580"
+    },
+    {
+      "byte_length": 1741,
+      "path": "graphs/deep_clone_graph.py",
+      "sha256": "8f6199e6078a36884c40b87375d3bc5f8a4fe1c077becdbc522e5ea94c652fd3"
+    },
+    {
+      "byte_length": 1392,
+      "path": "graphs/depth_first_search.py",
+      "sha256": "77905093e10b9fa6ed2fc2567424d1333305eca6a5e249cfe901fcfdc00dbc94"
+    },
+    {
+      "byte_length": 3327,
+      "path": "graphs/depth_first_search_2.py",
+      "sha256": "79f5d01ed43763bf0260f07ca4ec52d46b6f8d2116479857c4716ed22c005541"
+    },
+    {
+      "byte_length": 3216,
+      "path": "graphs/dijkstra.py",
+      "sha256": "7d5dfab98a9357bd75fd26d2d113eb620227285fd849588d0bdb7e9cff5f2c63"
+    },
+    {
+      "byte_length": 1566,
+      "path": "graphs/dijkstra_2.py",
+      "sha256": "7c69a2a8e16cca9b099ebba3f842f967d32a6a035eb06043bdc1f3d4b17d13b3"
+    },
+    {
+      "byte_length": 14735,
+      "path": "graphs/dijkstra_algorithm.py",
+      "sha256": "333eb32f64a55531065c0c01fae65a86cdc5ac0b3b0d0d8c225221e7f6d92682"
+    },
+    {
+      "byte_length": 3198,
+      "path": "graphs/dijkstra_alternate.py",
+      "sha256": "f2b7d46b6ce67f4d2666dc869be74ec152183f96356a0ceaf4e70d0ba95783bc"
+    },
+    {
+      "byte_length": 2875,
+      "path": "graphs/dijkstra_binary_grid.py",
+      "sha256": "6ca1420ba7981b2e53d9c52758777290a8133caa588bce7495178aed5a2f17ee"
+    },
+    {
+      "byte_length": 3073,
+      "path": "graphs/dinic.py",
+      "sha256": "3d65a7d28cf5af7bbe82ca65a03a34f121cc70e604f7050fc924d2c651b80afd"
+    },
+    {
+      "byte_length": 15516,
+      "path": "graphs/directed_and_undirected_weighted_graph.py",
+      "sha256": "6f8d82900afa5698bd0451493ea8d4ad428015393a09d767d82a3c5a9ee47c3d"
+    },
+    {
+      "byte_length": 6688,
+      "path": "graphs/edmonds_karp_multiple_source_and_sink.py",
+      "sha256": "e9cc39e4f819bd433fc3b53d3014516c4a7d9a380ef5cb30aec8898da9636b3a"
+    },
+    {
+      "byte_length": 2057,
+      "path": "graphs/eulerian_path_and_circuit_for_undirected_graph.py",
+      "sha256": "748b7455370204b57620accb04031f1b0bf654b2aaa4b61ee16d025e2066cd4f"
+    },
+    {
+      "byte_length": 1343,
+      "path": "graphs/even_tree.py",
+      "sha256": "921962870a1d7326d31964ca1d6f5c3d1fc1afee43273c43710c3a06b923df85"
+    },
+    {
+      "byte_length": 2775,
+      "path": "graphs/finding_bridges.py",
+      "sha256": "b2af0c6709be66933b9c7daf056abaa38cd2bb027d61b34e4a22f950393608e1"
+    },
+    {
+      "byte_length": 7387,
+      "path": "graphs/frequent_pattern_graph_miner.py",
+      "sha256": "5dfb96d33a9e6c23f642bc29b6058654bd058c52454b5f7fb7a6a23dd993ae53"
+    },
+    {
+      "byte_length": 970,
+      "path": "graphs/g_topological_sort.py",
+      "sha256": "8f885c3f490986ab1d25e81a3186f8fb40e47cd3b9e337f4ef41420917caa6d0"
+    },
+    {
+      "byte_length": 1991,
+      "path": "graphs/gale_shapley_bigraph.py",
+      "sha256": "98070bb77f0bcf03c9514995d7f9c22d23cbfb03581cccd1598c882b3ad38322"
+    },
+    {
+      "byte_length": 21680,
+      "path": "graphs/graph_adjacency_list.py",
+      "sha256": "366cabbf034d0c0b8ada76193cc94ece3237d28660363b0431abba233cb8cfc1"
+    },
+    {
+      "byte_length": 22110,
+      "path": "graphs/graph_adjacency_matrix.py",
+      "sha256": "a02d1014006ec09a66dccd9ae02d95709464b06cd9a51dac657ed0012ff776d4"
+    },
+    {
+      "byte_length": 6550,
+      "path": "graphs/graph_list.py",
+      "sha256": "b83c9c1d92af95d3aebf9053837d65c3fd52589d8dc1c1b8046a4283f44e71dd"
+    },
+    {
+      "byte_length": 3738,
+      "path": "graphs/graphs_floyd_warshall.py",
+      "sha256": "1ea14987a25eff07da0762985dce1263141a9dbacc27925182f23b8fb7bc6bc7"
+    },
+    {
+      "byte_length": 5405,
+      "path": "graphs/greedy_best_first.py",
+      "sha256": "8cd2267edfdc6bc87c2ac89bbe09bef7448c308dc4dd4509c0dcfd7a7ab5974a"
+    },
+    {
+      "byte_length": 2332,
+      "path": "graphs/greedy_min_vertex_cover.py",
+      "sha256": "5109154f086a73ff1c2510378bac755f785faacbc1d4bd39c9e92517882dd610"
+    },
+    {
+      "byte_length": 12234,
+      "path": "graphs/hopcroft_karp.py",
+      "sha256": "cba2ce064c47222f3f086d3900ada12da2bd1d7cb92f42a4683340cd9adfbd71"
+    },
+    {
+      "byte_length": 3386,
+      "path": "graphs/johnson.py",
+      "sha256": "968ca17bc28ff0a7feb8ccee0ea80cf66862791aa2ab01e4ef1519c20decfcff"
+    },
+    {
+      "byte_length": 780,
+      "path": "graphs/kahns_algorithm_long.py",
+      "sha256": "ffd1ae8d8cba1aa85d4f029b88a15378edca048c7601c806fa9e79e1fbe726d4"
+    },
+    {
+      "byte_length": 2080,
+      "path": "graphs/kahns_algorithm_topo.py",
+      "sha256": "76fdea22e32a946829839f60bebd68d85db1fa089cb0d683cf815b99ac8ecc9a"
+    },
+    {
+      "byte_length": 2574,
+      "path": "graphs/karger.py",
+      "sha256": "6c82b3511d47c006917c94b7ef7176a846031ea61195d49af77d82e9f3b51b44"
+    },
+    {
+      "byte_length": 7844,
+      "path": "graphs/lanczos_eigenvectors.py",
+      "sha256": "83093912da7679927a99197986ccb2caf8283eb9dd17af5a6b5e9056f5827fe2"
+    },
+    {
+      "byte_length": 2093,
+      "path": "graphs/markov_chain.py",
+      "sha256": "901f9ee823ede253d6b7388e5e8105f70168a6b5ffdb599aaba1f9d4dcc7b48c"
+    },
+    {
+      "byte_length": 2181,
+      "path": "graphs/matching_min_vertex_cover.py",
+      "sha256": "9d21277318da3ffe02153c88c55e7bb276df284d307aa6158d62a1dd24400a4f"
+    },
+    {
+      "byte_length": 1580,
+      "path": "graphs/minimum_path_sum.py",
+      "sha256": "6b488508b135315fe8e7b80471abfb49993c213a9ddd0d1c698701e6980af878"
+    },
+    {
+      "byte_length": 5984,
+      "path": "graphs/minimum_spanning_tree_boruvka.py",
+      "sha256": "acc2bef0fbce9af49fca3079923f3cbdea1a13c3d531e33b477b6918cc57b1af"
+    },
+    {
+      "byte_length": 1353,
+      "path": "graphs/minimum_spanning_tree_kruskal.py",
+      "sha256": "eb027edcd5e2f5293f7a9618f0fba76eade1021aad13ff51be0c296ec45b998b"
+    },
+    {
+      "byte_length": 4059,
+      "path": "graphs/minimum_spanning_tree_kruskal2.py",
+      "sha256": "5ad21b8d3f6d635854f2bec85b55700d6fbb33c92dabce05eb0dd859db0d7bfc"
+    },
+    {
+      "byte_length": 4924,
+      "path": "graphs/minimum_spanning_tree_prims.py",
+      "sha256": "5b5a5b7f4c4c102c76b389bd38abba3e0af5e7ff3bd60d671a86c6793492e24a"
+    },
+    {
+      "byte_length": 8951,
+      "path": "graphs/minimum_spanning_tree_prims2.py",
+      "sha256": "f22a3d85bcbc18a39e430cdfbf16ba31c26a68c6f5c291382b3ebab76849fcf6"
+    },
+    {
+      "byte_length": 8620,
+      "path": "graphs/multi_heuristic_astar.py",
+      "sha256": "e6412729e16f6547ff1a5b8af30de9aaa3c67dd11f491e0384bdbd3f577c20d8"
+    },
+    {
+      "byte_length": 1835,
+      "path": "graphs/page_rank.py",
+      "sha256": "baa1c54504ec13f8b46e73a16fb836b2ad2e575cb6160ddc22611fc0579c0cec"
+    },
+    {
+      "byte_length": 3545,
+      "path": "graphs/prim.py",
+      "sha256": "09251f78b1d638a24f0de6fd075a52f9633032bd27c3d5964da9c44a4c0360eb"
+    },
+    {
+      "byte_length": 2164,
+      "path": "graphs/random_graph_generator.py",
+      "sha256": "4eb93a259161ea67ae43816eb98318e052d028bd447579e03c98e93dd619d9dc"
+    },
+    {
+      "byte_length": 1306,
+      "path": "graphs/scc_kosaraju.py",
+      "sha256": "42b1637f23004232c88c6ded5f16274857a6d6848b2aaf830e69cfbae1bde355"
+    },
+    {
+      "byte_length": 2499,
+      "path": "graphs/strongly_connected_components.py",
+      "sha256": "20c8303666f25b637725b6f706ac1af4f046c912d61ea86fe5c6fe4e2b5c9ebf"
+    },
+    {
+      "byte_length": 3578,
+      "path": "graphs/tarjans_scc.py",
+      "sha256": "9d3f656eeb29a35f698e9938f37f5da54cc67d3325c6d9336eacb284a5cd8299"
+    },
+    {
+      "byte_length": 0,
+      "path": "graphs/tests/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "byte_length": 1044,
+      "path": "graphs/tests/test_graphs_floyd_warshall.py",
+      "sha256": "80f0da36d8a0543d6f648e5c7a43d82f188e22d75fd41ece6ed7c01e87a15f73"
+    },
+    {
+      "byte_length": 525,
+      "path": "graphs/tests/test_johnson.py",
+      "sha256": "5ae83da6ceb36f4e99ba987b45fe7d3ccd1d345c2b7ba5c5c23eb469451289f5"
+    },
+    {
+      "byte_length": 675,
+      "path": "graphs/tests/test_min_spanning_tree_kruskal.py",
+      "sha256": "56dd04f74aac3131cfad46ec19ed929468e6befde550912259f7b3d9f50c7977"
+    },
+    {
+      "byte_length": 1009,
+      "path": "graphs/tests/test_min_spanning_tree_prim.py",
+      "sha256": "c1bf7504f3a68162831a3637e92f6ac5b87c5fd1c7a68e8c11e42b55a3fb3aa2"
+    },
+    {
+      "byte_length": 7894,
+      "path": "graphs/travelling_salesman_problem.py",
+      "sha256": "36e04e9a162c60fb017bc2cd89675d2c63a4f4cb0a325b09c84eab6a1b673722"
+    },
+    {
+      "byte_length": 0,
+      "path": "searches/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "byte_length": 15704,
+      "path": "searches/binary_search.py",
+      "sha256": "1f54368f3f4d7c3e878420445c5b2eb406d0fd50cfb9e370fc9f1fa7ea8343df"
+    },
+    {
+      "byte_length": 9681,
+      "path": "searches/binary_tree_traversal.py",
+      "sha256": "2db06886fb63b7a557d2dff7f2074bb655f723b3e9fcf687a6f633c077c3d6f2"
+    },
+    {
+      "byte_length": 1128,
+      "path": "searches/double_linear_search.py",
+      "sha256": "2e5baf1637fb99471056c069f0308994183997687b4a1e4bbbb4c4c69137c32c"
+    },
+    {
+      "byte_length": 911,
+      "path": "searches/double_linear_search_recursion.py",
+      "sha256": "0d3863d09975bd6ef7a4303ea335978f1626ccf60b2878a5dd9c3c94ae4a56e1"
+    },
+    {
+      "byte_length": 3695,
+      "path": "searches/exponential_search.py",
+      "sha256": "bc06895b8fd242582ea8e46082a68e2a82b1652eeb282b7df723829bb0efa83b"
+    },
+    {
+      "byte_length": 2990,
+      "path": "searches/fibonacci_search.py",
+      "sha256": "1e1fdb800876910fe2d4fba28fcc1cd5a835ed0258b1a8f5e29ebb9daa4b6162"
+    },
+    {
+      "byte_length": 6955,
+      "path": "searches/hill_climbing.py",
+      "sha256": "c606f36d474b4846d62e5fbc1bc7445a3b1aca80891654fb62a365d98e048585"
+    },
+    {
+      "byte_length": 4293,
+      "path": "searches/interpolation_search.py",
+      "sha256": "2255bff1e842d92e18f9d33f302245600af9e1047a6a1a69351c18a19f85b744"
+    },
+    {
+      "byte_length": 1875,
+      "path": "searches/jump_search.py",
+      "sha256": "bb274db1e8952b5e3a924acd66dd2b6880ec49d9b74d354fec97fee4713786b2"
+    },
+    {
+      "byte_length": 2395,
+      "path": "searches/linear_search.py",
+      "sha256": "1336d1906f4a77f0eaf8f8a49d2395bde1517d67deb3e6d94af67c4f9f9405d4"
+    },
+    {
+      "byte_length": 2793,
+      "path": "searches/median_of_medians.py",
+      "sha256": "1e20e473098f1cdd9daf0ad3a203bf90c330fbb243ba03ccbfd66ebbc7f5dcfb"
+    },
+    {
+      "byte_length": 2408,
+      "path": "searches/quick_select.py",
+      "sha256": "80ff115fc79baf68ba77d5c5f84498ca5ea6f8b7c79d0cfedabb1f84dd5a465e"
+    },
+    {
+      "byte_length": 1443,
+      "path": "searches/sentinel_linear_search.py",
+      "sha256": "cf25ad2b5a813cf4ef7dd0a6c680555e75c79b120e46d666c19add4a4bbe1385"
+    },
+    {
+      "byte_length": 1677,
+      "path": "searches/simple_binary_search.py",
+      "sha256": "bf133ae3719eb1ee56f418ef103236228fb871ccb1443d013c67b9f68a414807"
+    },
+    {
+      "byte_length": 5255,
+      "path": "searches/simulated_annealing.py",
+      "sha256": "6a0d61b4c5fcbe5d4aa4c770df4e04781da2ba8d115f44f230375eaf1821981c"
+    },
+    {
+      "byte_length": 10828,
+      "path": "searches/tabu_search.py",
+      "sha256": "f75ba41885d3d9dc611e5c3e0145e7515d41d58ff52989b81c3e136312b4cd20"
+    },
+    {
+      "byte_length": 5370,
+      "path": "searches/ternary_search.py",
+      "sha256": "24ca1e641d1a16496fc73b29f4cb2d7a997e630861af4f04f04fc35b5c018b77"
+    },
+    {
+      "byte_length": 0,
+      "path": "sorts/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "byte_length": 1602,
+      "path": "sorts/adaptive_merge_sort.py",
+      "sha256": "1b30515287402f3e62cb4f95b8527eb5909ef2bf3270b169ba28e90dd6ab8cd1"
+    },
+    {
+      "byte_length": 1290,
+      "path": "sorts/bead_sort.py",
+      "sha256": "4e181e781f1019544b08d335029a18cca177f5b395a4886121bb3759d365c73e"
+    },
+    {
+      "byte_length": 4755,
+      "path": "sorts/benchmark_sorts.py",
+      "sha256": "d8890aa51a2670e76c7197064f0fc026488a879354bf31b5fd9b2bb459e55557"
+    },
+    {
+      "byte_length": 2336,
+      "path": "sorts/binary_insertion_sort.py",
+      "sha256": "539770e856493d93063c2dac7e429ab875fca51c280b4808259eabeb4ccae04d"
+    },
+    {
+      "byte_length": 3005,
+      "path": "sorts/bitonic_sort.py",
+      "sha256": "6e20843581685087bc5c8921ebe6f768be5bd85fc90f4489ef73871063337aa3"
+    },
+    {
+      "byte_length": 1349,
+      "path": "sorts/bogo_sort.py",
+      "sha256": "f2986352d5a1da2991713c1917ee13708bea9e44b33e3379b449fc5934493b99"
+    },
+    {
+      "byte_length": 6861,
+      "path": "sorts/bubble_sort.py",
+      "sha256": "da76f393e88d1621e051a6d410e3358183ff6b47c713bc088ec9f342c0d28faa"
+    },
+    {
+      "byte_length": 799,
+      "path": "sorts/bubble_sort_recursive.py",
+      "sha256": "ccbed752c7111927015fb42645249fcf3baea8beeb397ff76bfbd4bd97687435"
+    },
+    {
+      "byte_length": 3829,
+      "path": "sorts/bucket_sort.py",
+      "sha256": "65834fdc36a0edc39932b967906eec446580f399887c99ed65bc6d4cca892870"
+    },
+    {
+      "byte_length": 2772,
+      "path": "sorts/circle_sort.py",
+      "sha256": "d73d9aa3738846e9a281356901e5f5c0307068f97d8aebdf48619fa320c5cab8"
+    },
+    {
+      "byte_length": 2235,
+      "path": "sorts/cocktail_shaker_sort.py",
+      "sha256": "8290e33901c996127ca489e5e14b75dcea34e43cdfcd996a094b6c13c4706d0e"
+    },
+    {
+      "byte_length": 2507,
+      "path": "sorts/comb_sort.py",
+      "sha256": "864a1687d1486b92b0abbf538c5499761dc12d53b42f879d4caa767df17d076d"
+    },
+    {
+      "byte_length": 2265,
+      "path": "sorts/counting_sort.py",
+      "sha256": "09949678b5bc4a18685db4ef25c6b9a6ec998f6f6aa4babd94002acf9c1dce4e"
+    },
+    {
+      "byte_length": 1244,
+      "path": "sorts/cycle_sort.py",
+      "sha256": "4e1c3dc641a50512b99f229fd9c7c6dfde2581bab6b5121a7e9d4cdca6d4c840"
+    },
+    {
+      "byte_length": 1884,
+      "path": "sorts/cyclic_sort.py",
+      "sha256": "67de3082ba7cd38a54119c6a82ec46bff16268433d999312942f177f5a089737"
+    },
+    {
+      "byte_length": 1845,
+      "path": "sorts/double_sort.py",
+      "sha256": "ad73ba2ceaa55af3e2f2e655249fdb52e36d7e6cf20b2c80222f50579e6fd36d"
+    },
+    {
+      "byte_length": 3663,
+      "path": "sorts/dutch_national_flag_sort.py",
+      "sha256": "22d1b82dcc60883fcefa3a5949eeafc22b31619c16c734f9f6d5c5497a0f8d1d"
+    },
+    {
+      "byte_length": 1290,
+      "path": "sorts/exchange_sort.py",
+      "sha256": "105dd477415b4dfec756703d622c1de33f60819e91eabe0da11919d6314c0623"
+    },
+    {
+      "byte_length": 4318,
+      "path": "sorts/external_sort.py",
+      "sha256": "086881e58e6f1400e6296e4006b1fa9074e454026326deb94a25806c6f2e87fc"
+    },
+    {
+      "byte_length": 4388,
+      "path": "sorts/flash_sort.py",
+      "sha256": "6496cd65278c06063db822abd383b365861c8b7855349d3d3572fa7af08dfa6f"
+    },
+    {
+      "byte_length": 1565,
+      "path": "sorts/gnome_sort.py",
+      "sha256": "bed7d590480882e421ce2e29f9f3482da6f6e9dcc258cb03289eb52e7b55628a"
+    },
+    {
+      "byte_length": 2353,
+      "path": "sorts/heap_sort.py",
+      "sha256": "3ee8373cadc1fc534dde49496a86eb14796a6a355b896d0107758aee907395b4"
+    },
+    {
+      "byte_length": 2599,
+      "path": "sorts/insertion_sort.py",
+      "sha256": "93759b781a94136c700768bdc998215905606f34857ac961bf6897e1f40e58f5"
+    },
+    {
+      "byte_length": 6442,
+      "path": "sorts/intro_sort.py",
+      "sha256": "95008db2237d7c3818c3fe13518f337acea5158864973e9e15ca4a3b7b8729be"
+    },
+    {
+      "byte_length": 2594,
+      "path": "sorts/iterative_merge_sort.py",
+      "sha256": "377376e042f54a96e7619a04c949836d35945bfc35b546dadfa92d592722d3e9"
+    },
+    {
+      "byte_length": 2218,
+      "path": "sorts/kirkpatrick_reisch_sort.py",
+      "sha256": "94f5ba2143b687cbf4c636f5aba9229296199ce8d0e6dc02c600056b12c9b0f5"
+    },
+    {
+      "byte_length": 5680,
+      "path": "sorts/merge_insertion_sort.py",
+      "sha256": "695c268f74d8f0f9b65504b1f43141b4ec4fdad7da8869a0d023a8a3d9589ff3"
+    },
+    {
+      "byte_length": 1882,
+      "path": "sorts/merge_sort.py",
+      "sha256": "c37c47ef9c269dc5024ca579433f7c0cd7e61e3bb35e4885bbcebd9a24e2d9a3"
+    },
+    {
+      "byte_length": 4696,
+      "path": "sorts/msd_radix_sort.py",
+      "sha256": "802a3d50fc3bd7392345c3c46da7020a77e65320d5f2e6f836399e274f2f003f"
+    },
+    {
+      "byte_length": 1207,
+      "path": "sorts/natural_sort.py",
+      "sha256": "a0621b93eea2bbfb69bc2c3abb44aec86c31b752f02651f99e33735a3de64417"
+    },
+    {
+      "byte_length": 1743,
+      "path": "sorts/odd_even_sort.py",
+      "sha256": "d7f622b9f02bc21a5166f2a231293cd7bb16cbdd8d16ad67cff3e0f9db603d22"
+    },
+    {
+      "byte_length": 5898,
+      "path": "sorts/odd_even_transposition_parallel.py",
+      "sha256": "895334d1545572498c29c17adb00931bb4424d5854ac4dc2dc003fe5a5f08c76"
+    },
+    {
+      "byte_length": 888,
+      "path": "sorts/odd_even_transposition_single_threaded.py",
+      "sha256": "cbb776e0ac1b5af1edc7efebba549807a3ddbc6bcd20eb520e1bc6ffb34706ce"
+    },
+    {
+      "byte_length": 1312,
+      "path": "sorts/pancake_sort.py",
+      "sha256": "a7d1641c55ee8c38b423f79b14322959e995f24ca1684852163161eb037252a8"
+    },
+    {
+      "byte_length": 1693,
+      "path": "sorts/patience_sort.py",
+      "sha256": "0b45e88c9b3ee0feefd7802fc1b7bc62033b00dc7782b3fc15fd990f80d8b016"
+    },
+    {
+      "byte_length": 1445,
+      "path": "sorts/pigeon_sort.py",
+      "sha256": "ab4f29bea8c330d0e598f6ae44e6a2a3a81c93577018222a3b4efe6e73ff01af"
+    },
+    {
+      "byte_length": 1225,
+      "path": "sorts/pigeonhole_sort.py",
+      "sha256": "1b6978267f2b17893e9c046194a0b09607f38b448d3525a4c49cc9d524e5d1e2"
+    },
+    {
+      "byte_length": 11823,
+      "path": "sorts/power_sort.py",
+      "sha256": "2e8a2792e089e5a7113dcbbfed9920703be43613079e5ab79fc8fc6fe9f0f00e"
+    },
+    {
+      "byte_length": 1609,
+      "path": "sorts/quick_sort.py",
+      "sha256": "fc46bfc506cc45a3e39a44dddaf099216d60ea64c18a8b01318adfd967edd1d4"
+    },
+    {
+      "byte_length": 3752,
+      "path": "sorts/quick_sort_3_partition.py",
+      "sha256": "d1c722ee15e0a23f3791d0cb3aefcea88bf3de560a4de2c62f6df945124537fa"
+    },
+    {
+      "byte_length": 1539,
+      "path": "sorts/radix_sort.py",
+      "sha256": "6e5220290fa96cef446f8e2504d4f09bb6ce97df40ff3c7b1ff7e4ba858aa51d"
+    },
+    {
+      "byte_length": 1796,
+      "path": "sorts/recursive_insertion_sort.py",
+      "sha256": "4188f82990d0edd3b820e5dd6e647a63ea629962376f85d7d4993f727df0ea8b"
+    },
+    {
+      "byte_length": 2124,
+      "path": "sorts/recursive_mergesort_array.py",
+      "sha256": "0ae913a90cc48f0bb13c41c0e9c11d9945f2fd38cfdc7a516ba16ec1a61d3bf6"
+    },
+    {
+      "byte_length": 485,
+      "path": "sorts/recursive_quick_sort.py",
+      "sha256": "e1815f4da95993a84747e89fbed043b743602eab6b442d20853b1dcf1d5686d6"
+    },
+    {
+      "byte_length": 2271,
+      "path": "sorts/reverse_selection.py",
+      "sha256": "54481a68f70c1b045a63d99a704b62c48993792bc64d4ccbdd8f0a30a0d7c92b"
+    },
+    {
+      "byte_length": 4761,
+      "path": "sorts/reversort.py",
+      "sha256": "dc70f1b7bca9946c20067ea85c41ee65a0e6582cfb56a40055aaff7338da9df3"
+    },
+    {
+      "byte_length": 2099,
+      "path": "sorts/selection_sort.py",
+      "sha256": "9e4308e481d18a6c650135bd7fb536d37b29cd1a79b962818d55d8e46342c42e"
+    },
+    {
+      "byte_length": 1160,
+      "path": "sorts/shell_sort.py",
+      "sha256": "8ad5328d225feec8e1d32bf526b838578c83cde80c966602f25d763ed45a055f"
+    },
+    {
+      "byte_length": 1885,
+      "path": "sorts/shrink_shell_sort.py",
+      "sha256": "b66ca1a4a07bdc99520bb87368ec5c00df1a2a242fc49d9b039e3e3deacf93fc"
+    },
+    {
+      "byte_length": 1806,
+      "path": "sorts/slowsort.py",
+      "sha256": "c6e96850c3a7ee3db301cc9c68f78fa916faf468131a1b235a91acd128943e1d"
+    },
+    {
+      "byte_length": 6966,
+      "path": "sorts/smoothsort.py",
+      "sha256": "c77d797e184e0fcd494bcff3c19e13a4543976e4d1416696aa0aa197fdfe01a9"
+    },
+    {
+      "byte_length": 994,
+      "path": "sorts/stalin_sort.py",
+      "sha256": "03fc1cb017a3972a8265a96dcc28998b5e35d17c2410ed4ebd14c44d56150a31"
+    },
+    {
+      "byte_length": 1026,
+      "path": "sorts/stooge_sort.py",
+      "sha256": "63c1004572525318f9113494ec25a5c566de25d7e9d5bb078e079187edcf3231"
+    },
+    {
+      "byte_length": 1379,
+      "path": "sorts/strand_sort.py",
+      "sha256": "7a8b05cb007a23eb36a945f62b12942b074ab6b36d1c80b5623466e468c3adb0"
+    },
+    {
+      "byte_length": 4435,
+      "path": "sorts/tim_sort.py",
+      "sha256": "72fc6360c3a924e414a08318b0a342dcbb716b60090396fe3d6ebdf46e4b8f74"
+    },
+    {
+      "byte_length": 2254,
+      "path": "sorts/topological_sort.py",
+      "sha256": "e2a6a140f5288ccc23308495e72bfd26011d823b37e79782b51dfcc6f0bfdec2"
+    },
+    {
+      "byte_length": 1687,
+      "path": "sorts/tree_sort.py",
+      "sha256": "b5e7d7cef464f3cc91f845791e4df266a66e8b1dd55e6f0c372fa4182d1ab5d7"
+    },
+    {
+      "byte_length": 1106,
+      "path": "sorts/unknown_sort.py",
+      "sha256": "d16c6fa7649070934dc4e23976c7686fd4f5fd2ebafdf440f868269678bf6bc5"
+    },
+    {
+      "byte_length": 929,
+      "path": "sorts/wiggle_sort.py",
+      "sha256": "c57e842a97891559f2a786130cdafdf48819ef3c86daeeab5f915e2635a6917a"
+    }
+  ]
+}

@@ -41,7 +41,7 @@ def frozen_package_root():
         for relative in {*study.CORPUS_MANIFESTS.values(), *study.IMPLEMENTATION_PATHS.values()}:
             target = root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / relative, target)
+            shutil.copyfile(FROZEN_PACKAGE.parent / "inputs" / relative, target)
         release = root / RELEASE_MANIFEST
         release.parent.mkdir(parents=True)
         shutil.copyfile(FROZEN_PACKAGE, release)

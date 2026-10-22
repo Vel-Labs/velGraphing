@@ -1,0 +1,919 @@
+{
+  "commit": "d177ae2b48b4dfebf8ad0ddae51a345b3e17d99e",
+  "excludes": [
+    "content/hld/part-8-case-studies/32-coding-agent.md",
+    "content/hld/part-8-case-studies/36-semantic-cache.md",
+    "content/hld/part-9-ai-ml-system-design/03-ai-agent-architectures.md",
+    "content/hld/part-9-ai-ml-system-design/06-llmops-prompt-engineering.md",
+    "content/hld/part-9-ai-ml-system-design/08-llm-safety-guardrails.md"
+  ],
+  "includes": [
+    "content/hld/**/*.md",
+    "README.md",
+    "LICENSE",
+    "STYLE_GUIDE.md"
+  ],
+  "repository": "git-object-source",
+  "schema_version": "velgraphing-corpus-source-manifest-v1",
+  "skipped": {},
+  "snapshot_sha256": "594aa47760172eba049e18c5f3a2f602a7b96b73a315756876955d7be81cd402",
+  "source_bytes": 5654081,
+  "source_count": 179,
+  "sources": [
+    {
+      "byte_length": 20138,
+      "path": "LICENSE",
+      "sha256": "28a9529c7d0bb4dc51f4bf5c116a3d16ef247a052f7591466768ddf563fd1cf5"
+    },
+    {
+      "byte_length": 121370,
+      "path": "README.md",
+      "sha256": "e3b237baf801c84d17038520d47bd286279bdb8b8d5ef4c2cb609ffa560df3d3"
+    },
+    {
+      "byte_length": 26242,
+      "path": "STYLE_GUIDE.md",
+      "sha256": "ca1dc692c18bf41c95157e7996db8cffd2853c5834a7a19b49a4ceedc03f5b28"
+    },
+    {
+      "byte_length": 26314,
+      "path": "content/hld/part-0-prerequisites/00-networking-fundamentals.md",
+      "sha256": "fb7d5827e82e09d6dce4106ebd092c973254f6dfc01d56b6fb9d5abf0a3c5639"
+    },
+    {
+      "byte_length": 22649,
+      "path": "content/hld/part-0-prerequisites/01-os-essentials.md",
+      "sha256": "78a2b6a478278b05a619b08cc986472ebcab06e6f6c771db5b7fc72661571489"
+    },
+    {
+      "byte_length": 25800,
+      "path": "content/hld/part-0-prerequisites/02-data-structures-for-systems.md",
+      "sha256": "cb3f9e2471c7c6434a7ed935b0172441828d092a2ea6ee642ad1bbe13b4f9569"
+    },
+    {
+      "byte_length": 28783,
+      "path": "content/hld/part-0-prerequisites/03-database-fundamentals.md",
+      "sha256": "c2067913aa4cf83f69a74a230d9a1107a604fa57b415b137d5f3fbaa5d851182"
+    },
+    {
+      "byte_length": 30958,
+      "path": "content/hld/part-0-prerequisites/04-api-design-basics.md",
+      "sha256": "3805f185e5ac4b6a8991bc3afcdbb25ed2acd96d8b84fb3485a6f94c89bdc359"
+    },
+    {
+      "byte_length": 30023,
+      "path": "content/hld/part-1-core-fundamentals/00-scalability.md",
+      "sha256": "b321ac5ef8c7f90f5b383fef889315bc890d6bddd22e716b7bc2b491dc6d8572"
+    },
+    {
+      "byte_length": 31010,
+      "path": "content/hld/part-1-core-fundamentals/01-latency-and-throughput.md",
+      "sha256": "8c9eb82e3a08eb776c6a6ac6e6c33be13c2b511f40c41e09653f14025775f719"
+    },
+    {
+      "byte_length": 31225,
+      "path": "content/hld/part-1-core-fundamentals/02-availability-and-reliability.md",
+      "sha256": "ca859af2b05bc1b29115d14df78be7645454e578f653b006e870d3a6d626b16f"
+    },
+    {
+      "byte_length": 29749,
+      "path": "content/hld/part-1-core-fundamentals/03-consistency-models.md",
+      "sha256": "146812925150e3502169880a418ba88260d01fbcd7ce83e41257c2f5ebfb4fe0"
+    },
+    {
+      "byte_length": 26341,
+      "path": "content/hld/part-1-core-fundamentals/04-back-of-envelope-estimation.md",
+      "sha256": "a18b7a4921fe25f6ba9fa915e951801a59edfc790f03d38f18cbe22e571479c8"
+    },
+    {
+      "byte_length": 30478,
+      "path": "content/hld/part-1-core-fundamentals/05-how-to-approach-design-questions.md",
+      "sha256": "c52fdba7d42ccdc7c79cf8c3da54f7902e9babb74647c3b91c81559765544365"
+    },
+    {
+      "byte_length": 27918,
+      "path": "content/hld/part-1-core-fundamentals/06-trade-off-thinking.md",
+      "sha256": "feb589f369292af038b791a9492ee37e6a5b40d67f85cf55213bba99050d35e0"
+    },
+    {
+      "byte_length": 26544,
+      "path": "content/hld/part-10-emerging-patterns/00-green-computing.md",
+      "sha256": "f193b04c07a81483955cd0d01a7c4dfc6b5010f218dd5705e2122e4fe4732cbe"
+    },
+    {
+      "byte_length": 29147,
+      "path": "content/hld/part-11-interview-framework/00-frameworks-compared.md",
+      "sha256": "118af3a63ba5eb7ead2a31ddebdb6c27a9aadbfe162be1f95d57ecd31619cee5"
+    },
+    {
+      "byte_length": 32656,
+      "path": "content/hld/part-11-interview-framework/01-requirements-scoping.md",
+      "sha256": "8eb51f721887466d31d665fb7a2397f78b2a45e3840beb4c5a015e0fb682123e"
+    },
+    {
+      "byte_length": 26286,
+      "path": "content/hld/part-11-interview-framework/02-diagramming-skills.md",
+      "sha256": "eddeba800b3bf237cd6fef21429d86618e77b789db6b955fefc510217f7aec05"
+    },
+    {
+      "byte_length": 26441,
+      "path": "content/hld/part-11-interview-framework/03-trade-off-articulation.md",
+      "sha256": "96ab6293fee8a040d844572434d442d7f7b9c65463053eccfde1a042688b0edd"
+    },
+    {
+      "byte_length": 30593,
+      "path": "content/hld/part-11-interview-framework/04-company-specific-flavors.md",
+      "sha256": "73e59e933942f60e681e1c4325f017ebeea9b30fd4a5469d1c59029ad1ca42d6"
+    },
+    {
+      "byte_length": 29449,
+      "path": "content/hld/part-11-interview-framework/05-design-doc-authoring.md",
+      "sha256": "a6f92c000482397a809fc0271774163466152a489a650fed5e77de0775400b86"
+    },
+    {
+      "byte_length": 31466,
+      "path": "content/hld/part-2-building-blocks/00-load-balancers.md",
+      "sha256": "b352529581f4bcef4e096477661cc38178977646a21dc627d9ec362f588086c6"
+    },
+    {
+      "byte_length": 33638,
+      "path": "content/hld/part-2-building-blocks/01-reverse-proxies-api-gateways.md",
+      "sha256": "58f2cab46467fc608ae134244e604f2a371057f5f053df39d01e3154d5413209"
+    },
+    {
+      "byte_length": 34383,
+      "path": "content/hld/part-2-building-blocks/02-cdns.md",
+      "sha256": "e19ccd018fd46f7d18a41dd6e587fafc6a95e5a4df341369324e1005b5ed746d"
+    },
+    {
+      "byte_length": 30807,
+      "path": "content/hld/part-2-building-blocks/03-caching.md",
+      "sha256": "afee02767e5cede8d134f78d463b2553c48bc0b66fc55a0ed0de26a6d4e60d41"
+    },
+    {
+      "byte_length": 32378,
+      "path": "content/hld/part-2-building-blocks/04-sql-databases.md",
+      "sha256": "e0f39818ae82d93f57b77943107b121b61ec65344bd2e31337bebb44c2f9402a"
+    },
+    {
+      "byte_length": 32505,
+      "path": "content/hld/part-2-building-blocks/05-nosql-databases.md",
+      "sha256": "4e683473250fa7058041d5658bcb94b5a757ab3580cb6a6889d3923027c0e91f"
+    },
+    {
+      "byte_length": 31756,
+      "path": "content/hld/part-2-building-blocks/06-database-partitioning-sharding.md",
+      "sha256": "55d56ca7c3fa66e98a133a08c614687e4827858245e6d332291c41c4a3ff76cc"
+    },
+    {
+      "byte_length": 31188,
+      "path": "content/hld/part-2-building-blocks/07-database-replication.md",
+      "sha256": "a836b77a0147720a4c6be5056d230705a20d6b9a431461ee2db7f4b6cf18bf56"
+    },
+    {
+      "byte_length": 30903,
+      "path": "content/hld/part-2-building-blocks/08-message-queues-streaming.md",
+      "sha256": "203d9a018f9fb6403e0afd925644ad8e79b4d36d0d07b9e5ac91b1ff0d840d10"
+    },
+    {
+      "byte_length": 29871,
+      "path": "content/hld/part-2-building-blocks/09-pub-sub.md",
+      "sha256": "353e5dfb987f98b18c37277398a6655db6ac813e337fef439b6419d7f3542326"
+    },
+    {
+      "byte_length": 31496,
+      "path": "content/hld/part-2-building-blocks/10-real-time-communication.md",
+      "sha256": "be9bc893487f0eeb8559703c06d51995a7d11fcb57b9749eb32bed9629d3b8e6"
+    },
+    {
+      "byte_length": 30673,
+      "path": "content/hld/part-2-building-blocks/11-rate-limiting.md",
+      "sha256": "2a0d47360a0c997cf51c9ecb6c838d27d3cd055de27c8fcc7c4a41ba4c236d22"
+    },
+    {
+      "byte_length": 29731,
+      "path": "content/hld/part-2-building-blocks/12-service-discovery-mesh.md",
+      "sha256": "5b725890b7a4bde8a488401a66736726a9cb196e9dd6645aa73ce7e1120c0012"
+    },
+    {
+      "byte_length": 29307,
+      "path": "content/hld/part-2-building-blocks/13-blob-object-storage.md",
+      "sha256": "defe67d9a31761512248ec25cd6ae1cc8e6f7600944a25fab26cf589fb41bfc1"
+    },
+    {
+      "byte_length": 25335,
+      "path": "content/hld/part-2-building-blocks/14-geospatial-indexing.md",
+      "sha256": "a0f9e606eb9a571fc6794fb63d32366b426234de2aa928446fc61d5d79044ac7"
+    },
+    {
+      "byte_length": 28346,
+      "path": "content/hld/part-2-building-blocks/15-edge-computing.md",
+      "sha256": "66d7ae7a3d0ab8f82c74a1789b290f80e1cc69f6c79677c4b732627caad97312"
+    },
+    {
+      "byte_length": 31153,
+      "path": "content/hld/part-3-distributed-systems-theory/00-consensus-protocols.md",
+      "sha256": "4bb9c337c27195dc47be09575519a1a99ef44d81fc6dfa1810181c9b9742217f"
+    },
+    {
+      "byte_length": 33165,
+      "path": "content/hld/part-3-distributed-systems-theory/01-consistency-deep-dive.md",
+      "sha256": "0571e7b01a020323d64fbaeaa74ce45a26a027a9dc0b890b0552d5555f457592"
+    },
+    {
+      "byte_length": 27864,
+      "path": "content/hld/part-3-distributed-systems-theory/02-quorums-and-replication.md",
+      "sha256": "73b67a891ca55fa29bca56288bf8baba4491631013cfd221081e21ffcaec936f"
+    },
+    {
+      "byte_length": 28546,
+      "path": "content/hld/part-3-distributed-systems-theory/03-cap-and-pacelc.md",
+      "sha256": "efe99fbe6ecdad6add83f2f5cbe0ce268db8317d80cc581fea5cc7ebc029f1dd"
+    },
+    {
+      "byte_length": 32974,
+      "path": "content/hld/part-3-distributed-systems-theory/04-clocks-and-ordering.md",
+      "sha256": "91e10dce16542d48f296bc78e78fb050dcb9de570e077896e23029499764623e"
+    },
+    {
+      "byte_length": 28220,
+      "path": "content/hld/part-3-distributed-systems-theory/05-crdts.md",
+      "sha256": "35a3f1ca841abc62f650342c608c1d422c5173a16e0373c08019e2999f982450"
+    },
+    {
+      "byte_length": 35193,
+      "path": "content/hld/part-3-distributed-systems-theory/06-distributed-transactions.md",
+      "sha256": "955fdd9d7c91684444ccf086f2f06d715d8e6c5c4ccf27c3e16f6c414b927dc7"
+    },
+    {
+      "byte_length": 31519,
+      "path": "content/hld/part-3-distributed-systems-theory/07-idempotency-exactly-once.md",
+      "sha256": "8d1d394b89099ccd36cefd1b925234d7bf7e26645e70994bd563b6b1c2ae5c72"
+    },
+    {
+      "byte_length": 31189,
+      "path": "content/hld/part-3-distributed-systems-theory/08-failure-detection.md",
+      "sha256": "9bb25a36d8d9af01c89e40fd20d23c163a1ffe77ac284347135500f47040d827"
+    },
+    {
+      "byte_length": 28563,
+      "path": "content/hld/part-3-distributed-systems-theory/09-consistent-hashing.md",
+      "sha256": "d1e6cb0d8d6f73da712b1d419a78bb2c5d24e65d41224b1f8c016ca25f683e8d"
+    },
+    {
+      "byte_length": 30126,
+      "path": "content/hld/part-3-distributed-systems-theory/10-merkle-trees-anti-entropy.md",
+      "sha256": "fc72d3b42d797e9a68ce51a346c52a2f2ef7496cef03c8bcf352bbe01f063d59"
+    },
+    {
+      "byte_length": 29994,
+      "path": "content/hld/part-4-data-systems/00-storage-engines.md",
+      "sha256": "ccd46eb89c15cffae3e6765eab5e2b9a5f7b0244a8f44896b54b580dc29a5b6e"
+    },
+    {
+      "byte_length": 28634,
+      "path": "content/hld/part-4-data-systems/01-oltp-vs-olap.md",
+      "sha256": "4e2a05526826b8c8b71941a22f930b24d90148bf11b9538bb09bff4eb14a0cdf"
+    },
+    {
+      "byte_length": 31038,
+      "path": "content/hld/part-4-data-systems/02-data-warehouses-lakes.md",
+      "sha256": "eee5a231bb899ea398e56222c4dd2f01348f0fbb72c9f7468da18965f5f534eb"
+    },
+    {
+      "byte_length": 28966,
+      "path": "content/hld/part-4-data-systems/03-stream-vs-batch.md",
+      "sha256": "24f9287efb9da6630ff933e108d0f3d8916c4cbf1d9d05aed2c561d1fb2152f5"
+    },
+    {
+      "byte_length": 29494,
+      "path": "content/hld/part-4-data-systems/04-change-data-capture.md",
+      "sha256": "b05eba5685f3b0f04cce6f01a9ee167f302c3510477761d26dad2305aaa99941"
+    },
+    {
+      "byte_length": 32067,
+      "path": "content/hld/part-4-data-systems/05-search-systems.md",
+      "sha256": "b43dfe7cb5d974d8847ae01085098144e75f25a101849e045c92b339c22cd3f8"
+    },
+    {
+      "byte_length": 28357,
+      "path": "content/hld/part-4-data-systems/06-time-series-databases.md",
+      "sha256": "52d1d79a6973c747e93aff3a8498888b4411714485aa4bcf6ff1787cf17187c8"
+    },
+    {
+      "byte_length": 28972,
+      "path": "content/hld/part-4-data-systems/07-graph-databases.md",
+      "sha256": "bb219c3c3051d7e29bd7c4528f8de63f6aa0aefcbc0e372a7bf4efef7be3ed9d"
+    },
+    {
+      "byte_length": 26963,
+      "path": "content/hld/part-4-data-systems/08-vector-databases.md",
+      "sha256": "3fec1fa0369e0652cdc1f96c24a654c07732a9630f8ecb6751f0c216ad3dfbb5"
+    },
+    {
+      "byte_length": 29269,
+      "path": "content/hld/part-4-data-systems/09-key-value-stores.md",
+      "sha256": "5faad3e3f2f9326c34633986acc38577814ddcc4b931c75c73ccc59ff03b4f46"
+    },
+    {
+      "byte_length": 29595,
+      "path": "content/hld/part-5-architecture-patterns/00-monolith-vs-microservices.md",
+      "sha256": "7ad38a6fefd5e9a81bc2078e934aee69f5114bd30fa015b710a70fe851e9a74e"
+    },
+    {
+      "byte_length": 32480,
+      "path": "content/hld/part-5-architecture-patterns/01-event-driven-architecture.md",
+      "sha256": "78c0a3c3849be48aaa0cad1e026f8d9854b5c934fecef26fa743bd5ecd6b20fd"
+    },
+    {
+      "byte_length": 24138,
+      "path": "content/hld/part-5-architecture-patterns/02-cqrs.md",
+      "sha256": "55285aa6dc0afac97a89bdcbacc4971439115309a6f1b885d538c30750d36572"
+    },
+    {
+      "byte_length": 29092,
+      "path": "content/hld/part-5-architecture-patterns/03-event-sourcing.md",
+      "sha256": "db4eb9e29791f4a8f5ce0504c740515dea78aac8577a325e99c5a86181900617"
+    },
+    {
+      "byte_length": 24741,
+      "path": "content/hld/part-5-architecture-patterns/04-serverless.md",
+      "sha256": "f81e84ee6e398c5f6a851e0c826eb76d599cb6edb34d4da1de7a89756d7a400f"
+    },
+    {
+      "byte_length": 26774,
+      "path": "content/hld/part-5-architecture-patterns/05-backend-for-frontend.md",
+      "sha256": "43ce87ccb5412c2f955b1ea107766bbacc59a0f653a3dc4469d3b34d8864d752"
+    },
+    {
+      "byte_length": 32786,
+      "path": "content/hld/part-5-architecture-patterns/06-strangler-fig.md",
+      "sha256": "7e727de34a4cc893c97704ee1c9c2ec9d306921db40b5113f2499132d379f503"
+    },
+    {
+      "byte_length": 28133,
+      "path": "content/hld/part-5-architecture-patterns/07-hexagonal-clean-architecture.md",
+      "sha256": "2d2959419f982afbba0353218ce7564af9c21e111d472438e2275cecdb26ea00"
+    },
+    {
+      "byte_length": 31161,
+      "path": "content/hld/part-5-architecture-patterns/08-multi-region-architecture.md",
+      "sha256": "0724797b00f817c16d7ff61339b8f3bbb444e92f210e522bcb68d9764e75d5e3"
+    },
+    {
+      "byte_length": 29188,
+      "path": "content/hld/part-5-architecture-patterns/09-multi-tenancy.md",
+      "sha256": "1f3ea6570902a79de3e362f510edaa98a258f1dffdbe21c34b74366b889bdb0d"
+    },
+    {
+      "byte_length": 28401,
+      "path": "content/hld/part-5-architecture-patterns/10-crdt-applications.md",
+      "sha256": "bcb4b3736fe1b4add8fb1ebb59ccf5a443bd4ba95d148b78610048a4c17c2373"
+    },
+    {
+      "byte_length": 29284,
+      "path": "content/hld/part-6-reliability-and-operations/00-observability.md",
+      "sha256": "eee093e7927757217a26bfcccf5d8d251b6ee84e2cdf39670c8283ec131fd786"
+    },
+    {
+      "byte_length": 27439,
+      "path": "content/hld/part-6-reliability-and-operations/01-sli-slo-sla-error-budgets.md",
+      "sha256": "cde002ac2af9e2ffca3bdd6ca35ee2c0295c1187f04b5d1260e65998aac9a62a"
+    },
+    {
+      "byte_length": 30582,
+      "path": "content/hld/part-6-reliability-and-operations/02-resilience-patterns.md",
+      "sha256": "42de7bbd98a995d8df3a08a8021bd002ec4679fe2ea9b52c1bafc27be5319f9b"
+    },
+    {
+      "byte_length": 28575,
+      "path": "content/hld/part-6-reliability-and-operations/03-graceful-degradation.md",
+      "sha256": "79962480dc5dd17368036abaea454e52030853455689bd0a4fbcf7c2071011c8"
+    },
+    {
+      "byte_length": 27128,
+      "path": "content/hld/part-6-reliability-and-operations/04-auto-scaling-capacity.md",
+      "sha256": "c4e33fc7844b49230b9caa8de411e2a24231f043a62ac8715737871f50082d1c"
+    },
+    {
+      "byte_length": 31050,
+      "path": "content/hld/part-6-reliability-and-operations/05-deployment-strategies.md",
+      "sha256": "08395cbefa14ca6f366a09c392c91cd4bab0f6577f32e3e9c7d7ecb21400a96e"
+    },
+    {
+      "byte_length": 32140,
+      "path": "content/hld/part-6-reliability-and-operations/06-chaos-engineering.md",
+      "sha256": "402a165f012dd5f7896cc2234b07f3cf0f3a8343128b7972fae394f86018375f"
+    },
+    {
+      "byte_length": 29604,
+      "path": "content/hld/part-6-reliability-and-operations/07-incident-management.md",
+      "sha256": "1a625de1acc16ae5938445f8d411f6e143a1c39326394de9df8c5ac5c061737e"
+    },
+    {
+      "byte_length": 25764,
+      "path": "content/hld/part-6-reliability-and-operations/08-health-checks-readiness.md",
+      "sha256": "47eeb96eb024958d92e9a289d14a88a4019dfe22ea40c5ebaf0a70b6c3dc0f6d"
+    },
+    {
+      "byte_length": 26679,
+      "path": "content/hld/part-6-reliability-and-operations/09-cost-optimization-finops.md",
+      "sha256": "d0692dbc7db3d3230bdb6d50876a12b3373bd7e2db4297fc1acadc6056610c5d"
+    },
+    {
+      "byte_length": 31677,
+      "path": "content/hld/part-6-reliability-and-operations/10-platform-engineering.md",
+      "sha256": "073acc93da51dcd2675394f447dd038601a21d12447d3b07c27b849e22af0d56"
+    },
+    {
+      "byte_length": 28336,
+      "path": "content/hld/part-7-security-at-scale/00-authn-authz.md",
+      "sha256": "68a03c5931f5fc2664af5d0779d10bdfb66b1d888ed974231ee7a4a1c47473ac"
+    },
+    {
+      "byte_length": 26630,
+      "path": "content/hld/part-7-security-at-scale/01-oauth2-oidc.md",
+      "sha256": "47d4cae5f94f3d713a362704561fd5e741936d68abff5b654acf0080a466724b"
+    },
+    {
+      "byte_length": 29163,
+      "path": "content/hld/part-7-security-at-scale/02-jwt-deep-dive.md",
+      "sha256": "3ababf5eb2bc7fd7388576db6ce68d6497546f53bbd0278dda263b0bee50affb"
+    },
+    {
+      "byte_length": 32163,
+      "path": "content/hld/part-7-security-at-scale/03-mtls-service-auth.md",
+      "sha256": "1cd44ab1702f9ebf29e2e2531852879e9fa55340560073ce01e732a4b5a0f858"
+    },
+    {
+      "byte_length": 28614,
+      "path": "content/hld/part-7-security-at-scale/04-secrets-management.md",
+      "sha256": "e254a781934c450d5831dcb661c44d361b11accf118e5b6db17f84f05e727e9f"
+    },
+    {
+      "byte_length": 30140,
+      "path": "content/hld/part-7-security-at-scale/05-ddos-waf.md",
+      "sha256": "16eebf5f82c7ce5a99ba60c97e6c6d88ae89cbe71cce1a2fe08f8da59040c948"
+    },
+    {
+      "byte_length": 34807,
+      "path": "content/hld/part-7-security-at-scale/06-data-residency-compliance.md",
+      "sha256": "ef5dbdd6fa51f461e72bffa24eca343065f336904a2fb66dfd5aca225c0c770a"
+    },
+    {
+      "byte_length": 32154,
+      "path": "content/hld/part-7-security-at-scale/07-supply-chain-security.md",
+      "sha256": "ffa0a79316ecc077f228f08366215198ea755652bb2965f8a91fbad7a9d7da7c"
+    },
+    {
+      "byte_length": 32625,
+      "path": "content/hld/part-7-security-at-scale/08-privacy-preserving-systems.md",
+      "sha256": "e42f3f06a37a67ef11df86e466543b937b85794e5e06988a86cad8c71baaa611"
+    },
+    {
+      "byte_length": 29703,
+      "path": "content/hld/part-7-security-at-scale/09-post-quantum-crypto.md",
+      "sha256": "6a73ef035202cc04a6dd444d701484a12a812a0dc78c59e78f32bdc4921a6b02"
+    },
+    {
+      "byte_length": 38764,
+      "path": "content/hld/part-8-case-studies/00-url-shortener.md",
+      "sha256": "a5a19e04acc52f2b9c94a4b997e0a87973c987d1cd2985b1b2de6daca328cfc4"
+    },
+    {
+      "byte_length": 34923,
+      "path": "content/hld/part-8-case-studies/01-pastebin.md",
+      "sha256": "5b5e699f00e1b6ddd12e349b77e00bee584539138af391580cff037c3ae64b9f"
+    },
+    {
+      "byte_length": 37896,
+      "path": "content/hld/part-8-case-studies/02-rate-limiter.md",
+      "sha256": "bbfa356dc53d93012c8f1a6943dddf650401db0e821be0cb11176f15a65e7352"
+    },
+    {
+      "byte_length": 37118,
+      "path": "content/hld/part-8-case-studies/03-key-value-store.md",
+      "sha256": "3ca814f0c741ee41825d6047b531d111ee431153d8b8d3fbe998862c57188825"
+    },
+    {
+      "byte_length": 42895,
+      "path": "content/hld/part-8-case-studies/04-notification-system.md",
+      "sha256": "a2dea74d6d6d54bf37f21a4989513f42547633833d3a81dee5b5f584f4ee8fa2"
+    },
+    {
+      "byte_length": 41147,
+      "path": "content/hld/part-8-case-studies/05-chat-system.md",
+      "sha256": "4a872c7e7833b72103c62b57c88a94ca460fdd74105aa22f1d77658d130f33ad"
+    },
+    {
+      "byte_length": 42471,
+      "path": "content/hld/part-8-case-studies/06-social-media-feed.md",
+      "sha256": "4af40eab2e83bc440ad1baa138cb4d426118e6ffc5198418b599d0ae82f00046"
+    },
+    {
+      "byte_length": 38810,
+      "path": "content/hld/part-8-case-studies/07-photo-sharing.md",
+      "sha256": "006e173e7ea79e3a241991ff2a9d4d6106b493c421a181039926377101301180"
+    },
+    {
+      "byte_length": 36973,
+      "path": "content/hld/part-8-case-studies/08-web-crawler.md",
+      "sha256": "c5565fee88ed2fd2e33841e11a046e98d41d461bfbd36916f67c1d7f49299ff8"
+    },
+    {
+      "byte_length": 38964,
+      "path": "content/hld/part-8-case-studies/09-search-autocomplete.md",
+      "sha256": "0ebbb895a4c213c60128810ce9b2005cf196cae1b8bb643a01cb737e8d66d4ff"
+    },
+    {
+      "byte_length": 40466,
+      "path": "content/hld/part-8-case-studies/10-video-streaming.md",
+      "sha256": "67a84de9ab0b3bceea1bf82b48fcd7fddc968db1cfdeac19267346129bf03f95"
+    },
+    {
+      "byte_length": 43659,
+      "path": "content/hld/part-8-case-studies/11-netflix.md",
+      "sha256": "b86e6f6ceab255892f983d9b4f670267eb717b1419de285ab3413b9e79f215ab"
+    },
+    {
+      "byte_length": 42821,
+      "path": "content/hld/part-8-case-studies/12-ride-hailing.md",
+      "sha256": "8355cf7784c7da306615d1867dc4962c40592b8d76934c4336fb98e1fbb9440d"
+    },
+    {
+      "byte_length": 41219,
+      "path": "content/hld/part-8-case-studies/13-google-maps.md",
+      "sha256": "154ddf6bab8f93a5637b1acf6e1c9e1d48e8739c26ddd077a92d3b19d6b11da2"
+    },
+    {
+      "byte_length": 38886,
+      "path": "content/hld/part-8-case-studies/14-file-sync.md",
+      "sha256": "ce3faa0d3941a8f4d33dd0973986b9dc6e90d4bedcac00bab2d4fbd1f9dce751"
+    },
+    {
+      "byte_length": 42618,
+      "path": "content/hld/part-8-case-studies/15-collaborative-editing.md",
+      "sha256": "5d9b9bc8225bf2fa62b8b1016b23c0bc8716ff529c33679139fda085d8b49986"
+    },
+    {
+      "byte_length": 37917,
+      "path": "content/hld/part-8-case-studies/16-distributed-cache.md",
+      "sha256": "95591229730ffc1f5ca5f35ec3bd423194155275d66601ce88a7781a7ef35844"
+    },
+    {
+      "byte_length": 40078,
+      "path": "content/hld/part-8-case-studies/17-recommendation-system.md",
+      "sha256": "a10b21de9376d6e0aade5c7297d5509d77f6398c573a4ca5247c09d7d6d2f235"
+    },
+    {
+      "byte_length": 39852,
+      "path": "content/hld/part-8-case-studies/18-ticketing-system.md",
+      "sha256": "71dc56c3ab7b2ed2de9faac0f9231d0d84b8587928615edf24f58b3a75fce208"
+    },
+    {
+      "byte_length": 37368,
+      "path": "content/hld/part-8-case-studies/19-payment-system.md",
+      "sha256": "c6cd782780984d74212a5e8d2875dcf9065a45d5d6d21d3a79750c510bfaffc0"
+    },
+    {
+      "byte_length": 39530,
+      "path": "content/hld/part-8-case-studies/20-stock-exchange.md",
+      "sha256": "a123cff4cb36f724f088eb6e779a69abf373b2ba91508cde77ca716c14e1d168"
+    },
+    {
+      "byte_length": 39944,
+      "path": "content/hld/part-8-case-studies/21-food-delivery.md",
+      "sha256": "bfeced13d7bda3d241a13fdbcf80d445fb42113acae185354c3258600a4aa6b5"
+    },
+    {
+      "byte_length": 39901,
+      "path": "content/hld/part-8-case-studies/22-metrics-pipeline.md",
+      "sha256": "95c396c42b7f5733c78d790e7c6255723906b887fece788be50f85906069aed8"
+    },
+    {
+      "byte_length": 41853,
+      "path": "content/hld/part-8-case-studies/23-ad-click-aggregation.md",
+      "sha256": "23d0818e6bd21590864ce9a2b4e5dcfb69ff42fd695518454ce320ed6fb0c10c"
+    },
+    {
+      "byte_length": 39136,
+      "path": "content/hld/part-8-case-studies/24-logging-platform.md",
+      "sha256": "936b388dc61eef8308787d70d5d7f47dbb9ceedb7b98198d6b91481af8d977dc"
+    },
+    {
+      "byte_length": 34831,
+      "path": "content/hld/part-8-case-studies/25-proximity-service.md",
+      "sha256": "3fc443dc70e0c71fd8ac04e6b17ce5e329b157631de5ad3667ea9c93c3348936"
+    },
+    {
+      "byte_length": 37396,
+      "path": "content/hld/part-8-case-studies/26-leaderboard.md",
+      "sha256": "abcaab0cf16b0424718e18acbd8c41a6a3ddbcf93f3e4a6fd347c56789e6418a"
+    },
+    {
+      "byte_length": 37309,
+      "path": "content/hld/part-8-case-studies/27-unique-id-generator.md",
+      "sha256": "f1ddc043727b95f2a930191542b09d9daa03b52f1f0709f0ea41467dc20b0158"
+    },
+    {
+      "byte_length": 39094,
+      "path": "content/hld/part-8-case-studies/28-hotel-reservation.md",
+      "sha256": "f382c01059bdabacc53ff385cdae7232dcc025d217b1aa6bd039d79fcebbd92e"
+    },
+    {
+      "byte_length": 41316,
+      "path": "content/hld/part-8-case-studies/29-job-scheduler.md",
+      "sha256": "820a479813e599060762772b336f3545ac59a258d12d20c373ce6644ce8882e5"
+    },
+    {
+      "byte_length": 40704,
+      "path": "content/hld/part-8-case-studies/30-chatgpt-conversational-ai.md",
+      "sha256": "5aacd024df64d51f70cf2989ae7544f5f852f9b81df13978bad4dc47bf969445"
+    },
+    {
+      "byte_length": 39011,
+      "path": "content/hld/part-8-case-studies/31-enterprise-rag.md",
+      "sha256": "ea923887fc0f9c5bfa3fd67ae3bc6213b045b19bb39b238e48aa53a5a7249609"
+    },
+    {
+      "byte_length": 37817,
+      "path": "content/hld/part-8-case-studies/33-perplexity-ai-search.md",
+      "sha256": "043234c70d182d7958e1c9b63783d97f35fbb47ff3b73b475a877d2f8f433028"
+    },
+    {
+      "byte_length": 36198,
+      "path": "content/hld/part-8-case-studies/34-voice-agent.md",
+      "sha256": "5e6af598b809c7b00aed9b8ff91cf6090fe39d3762c7089a6ff70e0bfeed5aa9"
+    },
+    {
+      "byte_length": 40858,
+      "path": "content/hld/part-8-case-studies/35-content-moderation-at-scale.md",
+      "sha256": "1bd37408bbaf3235ee30fc67584995ec659dcba3e8e3d81bdf1533abc0bf2861"
+    },
+    {
+      "byte_length": 36834,
+      "path": "content/hld/part-8-case-studies/37-model-router-gateway.md",
+      "sha256": "bdadd11d02b5e034f1fe4de0cea5ac504cb50ec57206c6b4a62f9bd610126cf1"
+    },
+    {
+      "byte_length": 37617,
+      "path": "content/hld/part-8-case-studies/38-feature-flag-service.md",
+      "sha256": "833c47c882b26e3fd06ba990f574f7acf1aeb457a82048e776c086b1411300fb"
+    },
+    {
+      "byte_length": 37865,
+      "path": "content/hld/part-8-case-studies/39-dns-service.md",
+      "sha256": "4f40f385f1c578b56d8d2cf5d79600595afe5f860fd6066185146d93c0c46a4d"
+    },
+    {
+      "byte_length": 37361,
+      "path": "content/hld/part-8-case-studies/40-dating-app.md",
+      "sha256": "593bde66ca0217703c1424346e5c5e34268091a70a558cda3d592615f0f4329a"
+    },
+    {
+      "byte_length": 37172,
+      "path": "content/hld/part-8-case-studies/41-online-auction.md",
+      "sha256": "784293fb9a11e12491f97fdab917affb85f77e185271f2b3fa0030c60670d74e"
+    },
+    {
+      "byte_length": 37775,
+      "path": "content/hld/part-8-case-studies/42-multi-tenant-saas.md",
+      "sha256": "794e1c6431cec9d3bbc362f9dd5b48081d7d2bb3548e18d7660c4c5d4d1f0592"
+    },
+    {
+      "byte_length": 34613,
+      "path": "content/hld/part-8-case-studies/43-video-conferencing.md",
+      "sha256": "658e8e84687845e313c59992aa64a387177c98788afd644021f130890fe05283"
+    },
+    {
+      "byte_length": 39650,
+      "path": "content/hld/part-8-case-studies/44-gmail-scale-email.md",
+      "sha256": "5f25b3034a705bccf8f1628feeae157394f43d8c6b5afb371637b1b900c17724"
+    },
+    {
+      "byte_length": 38840,
+      "path": "content/hld/part-8-case-studies/45-live-comments.md",
+      "sha256": "50d23b1a27e47c504969f051f1bb6e94f17bcac879c3286e4b1cf55ba39bc429"
+    },
+    {
+      "byte_length": 37430,
+      "path": "content/hld/part-8-case-studies/46-fraud-detection.md",
+      "sha256": "d4fb39426617cb26f3b29027a22ad37ab2009a75426cc4f23e622f5a2e5e0d22"
+    },
+    {
+      "byte_length": 37356,
+      "path": "content/hld/part-8-case-studies/47-strava-fitness.md",
+      "sha256": "9f8dbba6cb81305c2091cbfbe2591d52c1b9db4feb4aa5fef79f3a0bbc90ac32"
+    },
+    {
+      "byte_length": 36125,
+      "path": "content/hld/part-8-case-studies/48-online-judge.md",
+      "sha256": "495fb8b7aec36ea5c1e555fd4c4df2472aed30b6db2d89fe817b07bb4961b724"
+    },
+    {
+      "byte_length": 39230,
+      "path": "content/hld/part-8-case-studies/49-price-tracking.md",
+      "sha256": "8d0bbc6d17b812cb0de4a182cdae857860d610b43a3dd646d5edf7fbc208c3ba"
+    },
+    {
+      "byte_length": 36705,
+      "path": "content/hld/part-8-case-studies/50-api-gateway.md",
+      "sha256": "22b16d63a4bccd83609f6674f7046ef8fe1822fa5bf6f1dee726dec4841bd6f4"
+    },
+    {
+      "byte_length": 36887,
+      "path": "content/hld/part-8-case-studies/51-cicd-platform.md",
+      "sha256": "b80916267f482b4e6071b26656a4c5257657e6ea0f4fdd2c052f5fe19e8212ed"
+    },
+    {
+      "byte_length": 37189,
+      "path": "content/hld/part-8-case-studies/52-observability-platform.md",
+      "sha256": "dd483f21dea29a41dd329e08b322ce6e9d92dc73c66571fecc7ac9c127b911e5"
+    },
+    {
+      "byte_length": 36064,
+      "path": "content/hld/part-8-case-studies/53-search-engine.md",
+      "sha256": "2be0ab8032fec67a008af67f7c3c3d6a4bcc5c1da6fdbc0a771769d87985b263"
+    },
+    {
+      "byte_length": 38563,
+      "path": "content/hld/part-8-case-studies/54-brokerage-trading.md",
+      "sha256": "77ff1f17e810247b085994e42c60de2066b8423e97945b956d53aa365c5713fb"
+    },
+    {
+      "byte_length": 36668,
+      "path": "content/hld/part-8-case-studies/55-channel-scale-chat.md",
+      "sha256": "187a6fa09e1e24dc18bead57234fea6e71c721d4f9047a172f13aa662213d217"
+    },
+    {
+      "byte_length": 28535,
+      "path": "content/hld/part-9-ai-ml-system-design/00-llm-serving-architecture.md",
+      "sha256": "319d1d9d4877054462b48aac47a2bbbe465a04a35a03bb979807f6eb7a764f04"
+    },
+    {
+      "byte_length": 31834,
+      "path": "content/hld/part-9-ai-ml-system-design/01-rag-pipelines.md",
+      "sha256": "18cd88d2eea184bcbdc63e3cd1c97305cefa3cbdad5361d0885abc9b883cf803"
+    },
+    {
+      "byte_length": 27210,
+      "path": "content/hld/part-9-ai-ml-system-design/02-vector-search-at-scale.md",
+      "sha256": "e08ea0217afeabe013b423018968ed5d9315e5a3fd0196e388d7cda18bfb2fc6"
+    },
+    {
+      "byte_length": 31286,
+      "path": "content/hld/part-9-ai-ml-system-design/04-multi-agent-orchestration.md",
+      "sha256": "aede633eaf5d7892fa9238555ae9bbd274c14f5acb0b25a37126531d93112320"
+    },
+    {
+      "byte_length": 31369,
+      "path": "content/hld/part-9-ai-ml-system-design/05-llm-evaluation-observability.md",
+      "sha256": "eaf8d36c319575868bb7b02dbef6998a95a25fb9ed79af19b87f8d1a6df7bdad"
+    },
+    {
+      "byte_length": 32353,
+      "path": "content/hld/part-9-ai-ml-system-design/07-llm-cost-optimization.md",
+      "sha256": "9d606f17d4796fef0e47f5bd4cdf9cafdd456c2fdc0750769769e4d12eec458d"
+    },
+    {
+      "byte_length": 30489,
+      "path": "content/hld/part-9-ai-ml-system-design/09-ml-system-design-fundamentals.md",
+      "sha256": "9a579e94d71762272553a0ffa0b4415d61d8436fce6e796e1fe7ce6e40caab58"
+    },
+    {
+      "byte_length": 33512,
+      "path": "content/hld/part-9-ai-ml-system-design/10-feature-stores-model-serving.md",
+      "sha256": "e5ab321ab05da086e5ee23081ec9972d5f78b6c290fcc4d74b344c456ab8ae39"
+    },
+    {
+      "byte_length": 31162,
+      "path": "content/hld/part-9-ai-ml-system-design/11-recommendation-systems.md",
+      "sha256": "d048381099b827f9ed528b9f0ebd8c15f941ae064055923dfd8509632a73c41c"
+    },
+    {
+      "byte_length": 29176,
+      "path": "content/hld/part-9-ai-ml-system-design/12-realtime-ai-voice-agents.md",
+      "sha256": "56aa36222d2297302907b387bc46555a441d073bc4fbf5f637b14b15abef2f57"
+    },
+    {
+      "byte_length": 32223,
+      "path": "content/hld/part-9-ai-ml-system-design/13-multimodal-ai-systems.md",
+      "sha256": "55c93d28bc6874395052ff1865f6256bb598ba0854158b3016696d8c0b4633b7"
+    },
+    {
+      "byte_length": 33964,
+      "path": "content/hld/part-9-ai-ml-system-design/14-data-infrastructure-for-ai.md",
+      "sha256": "bedb28636c5c4bb126b2b17c2cb0ec844275717adeb423456d26730075c7b959"
+    },
+    {
+      "byte_length": 20059,
+      "path": "content/hld/trade-offs/01-strong-vs-eventual-consistency.md",
+      "sha256": "24209e68c6907ce31746c58160181af3699b2798d432c58caff1df752508e379"
+    },
+    {
+      "byte_length": 19261,
+      "path": "content/hld/trade-offs/02-acid-vs-base.md",
+      "sha256": "f42cfa903c8231323de8b955668ef771422822f3aab1efd30689a599501395a8"
+    },
+    {
+      "byte_length": 18477,
+      "path": "content/hld/trade-offs/03-sql-vs-nosql.md",
+      "sha256": "2d524456e418a403eb1a4cb2c621896843389b3c8059e7d16cab249408148a3e"
+    },
+    {
+      "byte_length": 19328,
+      "path": "content/hld/trade-offs/04-latency-vs-throughput.md",
+      "sha256": "cecdb6bde1f34bc0030106dfbebf3a45ff4ecc84784ae595f67ad61a1ac5979e"
+    },
+    {
+      "byte_length": 18158,
+      "path": "content/hld/trade-offs/05-cap-and-pacelc.md",
+      "sha256": "3c03a3b52e15c73cc3c4ff710ab5afe713468d6d01c01c69a7621b4b6e690a2a"
+    },
+    {
+      "byte_length": 16810,
+      "path": "content/hld/trade-offs/06-cache-strategies.md",
+      "sha256": "b94c91ebc421033660c788afbc8fff5d477e51215338ec29978d4282b28cebf8"
+    },
+    {
+      "byte_length": 17949,
+      "path": "content/hld/trade-offs/07-batch-vs-stream.md",
+      "sha256": "023e503ebd88905bfaad6806673335a179823a3734ff59b24ebeb47ed5938903"
+    },
+    {
+      "byte_length": 17693,
+      "path": "content/hld/trade-offs/08-load-balancer-vs-proxy-vs-gateway.md",
+      "sha256": "ead83d8bf11f3cc6ce006ffa319b2b9ee34bfb5e54b3b47fd1729ade20a9b217"
+    },
+    {
+      "byte_length": 19011,
+      "path": "content/hld/trade-offs/09-rest-vs-grpc-vs-graphql.md",
+      "sha256": "e8c187c9bc25059f0d051f41382ac873e2e7df9b982b10631bfd5a86a907fd59"
+    },
+    {
+      "byte_length": 18308,
+      "path": "content/hld/trade-offs/10-polling-vs-websockets.md",
+      "sha256": "b624d0708bad413901dd97566f1828c3cb01631f566364438f226ab1b777b733"
+    },
+    {
+      "byte_length": 17341,
+      "path": "content/hld/trade-offs/11-rate-limiting-algorithms.md",
+      "sha256": "07c84f5ccb4ff51d31986d40dcb3109f4d10890b7bfa17f5a8390d8ce0e729ba"
+    },
+    {
+      "byte_length": 17756,
+      "path": "content/hld/trade-offs/12-optimistic-vs-pessimistic-locking.md",
+      "sha256": "b9c60de7fc9810b74c2dad09199ba70c9a793f522d80280069a6911cad888a50"
+    },
+    {
+      "byte_length": 21365,
+      "path": "content/hld/trade-offs/13-partitioning-schemes.md",
+      "sha256": "3abbc3ec17e27a49add62b8a4bd1fae99cafe99c3b0357e5a29f9a41b101fed6"
+    },
+    {
+      "byte_length": 19029,
+      "path": "content/hld/trade-offs/14-btree-vs-lsm.md",
+      "sha256": "1cd49c2c7c141512010f157fa58af4bdb055af88d1484c14647ab1da3513b48b"
+    },
+    {
+      "byte_length": 18385,
+      "path": "content/hld/trade-offs/15-monolith-vs-microservices.md",
+      "sha256": "3ca17cc4b133d0edc6eeaaf2876989ee9a72fa2e4a8a6882d579239ecc0e2d7b"
+    },
+    {
+      "byte_length": 20146,
+      "path": "content/hld/trade-offs/16-replication-topologies.md",
+      "sha256": "f0dce8d7fdf43477b6b32b16a57e23d8e1e206040796bc337522c1125f6dfa7a"
+    },
+    {
+      "byte_length": 18569,
+      "path": "content/hld/trade-offs/17-distributed-transactions.md",
+      "sha256": "2e135a8ff7e3ae7a4a7115490bb3ddc7ee91e0bf3a078c6a3ab815dd3c304485"
+    },
+    {
+      "byte_length": 19421,
+      "path": "content/hld/trade-offs/18-push-vs-pull.md",
+      "sha256": "d0a423dd8b50da563dd965264bb7f2ebe95306016eb4f85f77b07be83d35f6ad"
+    },
+    {
+      "byte_length": 18983,
+      "path": "content/hld/trade-offs/19-lambda-vs-kappa.md",
+      "sha256": "17665f83215a0abce56ea3538f523c68a5f568f7532d51632eff899e049a9a4c"
+    },
+    {
+      "byte_length": 18089,
+      "path": "content/hld/trade-offs/20-vertical-vs-horizontal-scaling.md",
+      "sha256": "0e6e3f9cf7fc3242d51ccc854181572354cf4e4ddb7a6aa4b374a7432bb59a45"
+    },
+    {
+      "byte_length": 20739,
+      "path": "content/hld/trade-offs/21-normalization-vs-denormalization.md",
+      "sha256": "b89ea33eb5ba42d101717fc67869136c2686af6bdd1cd1d2800ebb8d97ace6b7"
+    },
+    {
+      "byte_length": 19495,
+      "path": "content/hld/trade-offs/22-single-vs-multi-region.md",
+      "sha256": "f3e92621e8b97d364910585d9c00a02586850963defb6ab13837c72fb3281d9f"
+    }
+  ]
+}
