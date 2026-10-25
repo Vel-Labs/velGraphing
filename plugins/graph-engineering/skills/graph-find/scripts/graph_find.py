@@ -19,14 +19,19 @@ from typing import Callable, Sequence
 sys.dont_write_bytecode = True
 
 
-_source_root = next(
-    (
-        _parent
-        for _parent in Path(__file__).resolve().parents
-        if (_parent / "packages" / "core").is_dir()
-    ),
-    None,
-)
+def _checkout_source_root(script: Path) -> Path | None:
+    resolved = script.resolve()
+    return next(
+        (
+            parent for parent in resolved.parents
+            if (parent / "packages" / "core").is_dir()
+            and resolved == parent / "plugins/graph-engineering/skills/graph-find/scripts/graph_find.py"
+        ),
+        None,
+    )
+
+
+_source_root = _checkout_source_root(Path(__file__))
 if _source_root is not None:
     sys.path.insert(0, str(_source_root))
 else:
@@ -41,7 +46,7 @@ else:
     if _runtime_root is not None:
         sys.path.insert(0, str(_runtime_root))
 
-try:  # noqa: E402
+if _source_root is not None:  # noqa: E402
     from packages.core import (
         Admission,
         Freshness,
@@ -64,8 +69,8 @@ try:  # noqa: E402
         select_ranked_context,
     )
     from packages.core import jev
-    from packages.core.retrieval import _STOPWORDS, _words, ordered_successor_request_from_prompt
-except ModuleNotFoundError:  # packaged plugin runtime
+    from packages.core.retrieval import _STOPWORDS, _source_role_anchors_from_prompt, _words, ordered_successor_request_from_prompt
+else:  # packaged plugin runtime
     from core import (  # type: ignore[no-redef]
         Admission,
         Freshness,
@@ -88,7 +93,7 @@ except ModuleNotFoundError:  # packaged plugin runtime
         select_ranked_context,
     )
     from core import jev  # type: ignore[no-redef]
-    from core.retrieval import _STOPWORDS, _words, ordered_successor_request_from_prompt  # type: ignore[no-redef]
+    from core.retrieval import _STOPWORDS, _source_role_anchors_from_prompt, _words, ordered_successor_request_from_prompt  # type: ignore[no-redef]
 
 
 DEFAULT_MAX_FILE_BYTES = 1024 * 1024
@@ -437,6 +442,7 @@ def _ranked_context(
     graph: Graph,
     task: TaskSpec,
     prompt: str,
+    retrieval_query: str,
     snapshot: SourceSnapshotV4,
     reader: SnapshotReader,
     *,
@@ -455,7 +461,9 @@ def _ranked_context(
     retrieval_started = time.perf_counter_ns()
     reader.operation_stage = "retrieval"
     index = build_repository_tag_index(graph, snapshot, reader)
-    facets = compile_prompt(prompt, index, semantic_candidates=semantic_candidates)
+    facets = compile_prompt(
+        retrieval_query, index, semantic_candidates=semantic_candidates
+    )
 
     def run(expand_one_hop: bool):
         return retrieve(
@@ -471,11 +479,15 @@ def _ranked_context(
         )
 
     direct = run(False)
-    short_prompt = len([word for word in _words(prompt) if word not in _STOPWORDS]) < 3
+    short_prompt = (
+        len([word for word in _words(retrieval_query) if word not in _STOPWORDS]) < 3
+    )
     if direct.reason == "prompt_facets_insufficient" or short_prompt:
-        obligations = compile_proof_obligations(prompt, graph, index, snapshot, reader)
+        obligations = compile_proof_obligations(
+            retrieval_query, graph, index, snapshot, reader
+        )
         facets = compile_prompt(
-            prompt,
+            retrieval_query,
             index,
             semantic_candidates=semantic_candidates,
             proof_obligations=obligations,
@@ -486,7 +498,17 @@ def _ranked_context(
         diagnostics.setdefault("stage_ns", {})["retrieval"] = time.perf_counter_ns() - retrieval_started
     selection_started = time.perf_counter_ns()
     reader.operation_stage = "selection"
+    source_role_anchors = ()
+    source_role_status = "explicit_retrieval_query"
     try:
+        if retrieval_query == prompt:
+            source_role_anchors, source_role_status = _source_role_anchors_from_prompt(
+                prompt, snapshot, reader, jev.MAX_EXCERPT_BYTES,
+            )
+        source_scope = (
+            source_role_anchors[0].source_path.rsplit("/", 1)[0]
+            if source_role_status in {"selected_impact", "selected_lookup", "selected_named"} else None
+        )
         public_task_facets = tuple(sorted({facet.value for facet in facets.facets}))
         direct_candidates = ranked_candidates_from_retrieval(
             graph,
@@ -498,6 +520,8 @@ def _ranked_context(
             maximum_candidate_bytes=jev.MAX_EXCERPTS_BYTES,
             maximum_unit_bytes=jev.MAX_EXCERPT_BYTES,
             ordered_successor=ordered_successor_request_from_prompt(prompt),
+            required_source_anchors=source_role_anchors,
+            source_scope=source_scope,
         )
         graph_candidates = ranked_candidates_from_retrieval(
             graph,
@@ -509,6 +533,9 @@ def _ranked_context(
             maximum_candidate_bytes=jev.MAX_EXCERPTS_BYTES,
             maximum_unit_bytes=jev.MAX_EXCERPT_BYTES,
             ordered_successor=ordered_successor_request_from_prompt(prompt),
+            required_source_anchors=source_role_anchors,
+            source_scope=source_scope,
+            include_anchor_imports=source_role_status == "selected_impact",
         )
         selection_task = (
             replace(task, byte_budget=context_byte_budget)
@@ -526,7 +553,9 @@ def _ranked_context(
             task_facets=public_task_facets,
         )
     except (TypeError, ValueError, jev.JevError) as error:
-        return _ranked_fallback(mode, str(error))
+        fallback = _ranked_fallback(mode, str(error))
+        fallback["source_role_seed"] = {"status": source_role_status}
+        return fallback
     if diagnostics is not None:
         diagnostics.setdefault("stage_ns", {})["selection"] = time.perf_counter_ns() - selection_started
 
@@ -536,6 +565,10 @@ def _ranked_context(
         "mode": mode,
         "network_called": False,
         "plan": plan.to_dict(),
+        "source_role_seed": {
+            "status": source_role_status,
+            "source_paths": [anchor.source_path for anchor in source_role_anchors],
+        },
         "realized_route": plan.realized_route(direct_candidates, plan.baseline),
         "reason": plan.reason,
         "schema_version": "graph-find-ranked-context-v1",
@@ -599,6 +632,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", required=True, help="absolute canonical Git repository root")
     parser.add_argument("--prompt", required=True, help="non-empty repository navigation prompt")
+    parser.add_argument("--retrieval-query", help="optional narrower query for source retrieval")
     parser.add_argument("--semantic-candidate", action="append", default=[], help="optional known vocabulary candidate")
     parser.add_argument("--max-file-bytes", type=lambda value: _positive_bounded(value, "--max-file-bytes", HARD_MAX_FILE_BYTES), default=DEFAULT_MAX_FILE_BYTES)
     parser.add_argument("--max-total-bytes", type=lambda value: _positive_bounded(value, "--max-total-bytes", HARD_MAX_TOTAL_BYTES), default=DEFAULT_MAX_TOTAL_BYTES)
@@ -616,6 +650,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     if not arguments.prompt.strip():
         parser.error("--prompt must be non-empty")
+    if arguments.retrieval_query is not None and not arguments.retrieval_query.strip():
+        parser.error("--retrieval-query must be non-empty")
     if arguments.ranked_context == "replay" and not arguments.jev_response:
         parser.error("--ranked-context replay requires --jev-response")
     if arguments.ranked_context != "replay" and arguments.jev_response:
@@ -626,12 +662,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("network approval controls require --ranked-context evaluate")
     try:
         root = _canonical_root(arguments.root)
+        retrieval_query = arguments.retrieval_query or arguments.prompt
         diagnostics: dict[str, object] = {"source_operations": [], "stage_ns": {}}
         graph, snapshot, reader, scan_metadata = _scan(
             root, arguments.max_file_bytes, arguments.max_total_bytes,
             diagnostics=diagnostics if arguments.diagnostics else None,
         )
-        terms = tuple(sorted(set(token.casefold() for token in _TOKEN.findall(arguments.prompt))))
+        terms = tuple(
+            sorted(set(token.casefold() for token in _TOKEN.findall(retrieval_query)))
+        )
         task = TaskSpec(
             task_id="graph-find",
             query_terms=terms,
@@ -644,7 +683,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = graph_find(
             graph,
             task,
-            arguments.prompt,
+            retrieval_query,
             snapshot,
             reader,
             semantic_candidates=tuple(arguments.semantic_candidate),
@@ -660,6 +699,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = replace(result, route="defer", reason="repository_scan_incomplete")
         payload = result.to_dict()
         payload["scan"] = scan_metadata
+        if arguments.retrieval_query is not None:
+            payload["query_metadata"] = {
+                "prompt": arguments.prompt,
+                "prompt_sha256": hashlib.sha256(
+                    arguments.prompt.encode("utf-8")
+                ).hexdigest(),
+                "retrieval_query": retrieval_query,
+                "retrieval_query_sha256": hashlib.sha256(
+                    retrieval_query.encode("utf-8")
+                ).hexdigest(),
+            }
         if arguments.ranked_context is not None:
             if not scan_metadata["scan_complete"]:
                 payload["ranked_context"] = _ranked_fallback(
@@ -674,6 +724,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     graph,
                     task,
                     arguments.prompt,
+                    retrieval_query,
                     snapshot,
                     reader,
                     semantic_candidates=tuple(arguments.semantic_candidate),

@@ -20,6 +20,7 @@ from packages.core import (
     ProofObligation,
     Provenance,
     RetrievalHit,
+    RetrievalResult,
     Sensitivity,
     SourceCoordinate,
     SourceIdentityV4,
@@ -191,6 +192,26 @@ def obligated_facets(*obligations: ProofObligation, count: int = 8) -> PromptFac
 
 
 class SourceRelationDerivationTests(unittest.TestCase):
+    def test_multiline_signature_unit_keeps_its_body(self) -> None:
+        source = (
+            b"def retrieve_hybrid(\n"
+            b"    graph: Graph,\n"
+            b"    *,\n"
+            b"    fallback_source_paths: tuple[str, ...] = (),\n"
+            b") -> Result:\n"
+            b"    if fallback_source_paths:\n"
+            b"        return Result()\n"
+            b"    return None\n"
+        )
+        anchor = source.index(b"fallback_source_paths")
+        self.assertEqual(
+            (0, len(source), True),
+            retrieval_module._bounded_source_unit_bounds(
+                source, "pkg/retrieval.py", anchor,
+                anchor + len(b"fallback_source_paths"), 4096,
+            ),
+        )
+
     def test_python_declaration_names_are_exact_and_large_body_can_plan_graph(self) -> None:
         sources = {
             "src/z_caller.py": (
@@ -301,6 +322,13 @@ class SourceRelationDerivationTests(unittest.TestCase):
         self.assertEqual(
             [item.to_dict() for item in first.coverage],
             [
+                {
+                    "relation": "calls",
+                    "supported": "python_ast_direct_call_to_uniquely_imported_top_level_function",
+                    "resolved": 0,
+                    "unresolved": 0,
+                    "unsupported": 0,
+                },
                 {
                     "relation": "imports",
                     "supported": "javascript_tree_sitter_static_relative_named_direct_export",
@@ -1270,6 +1298,432 @@ class ObligatedEvidencePackingTests(unittest.TestCase):
         serial = retrieve(graph, task(), index, facets, snapshot, reader, parallel=False)
         parallel = retrieve(graph, task(), index, facets, snapshot, Reader(reader.sources), parallel=True)
         self.assertEqual(serial, parallel)
+
+
+class SourceRoleSeedTests(unittest.TestCase):
+    def test_call_edges_defer_shadowed_and_preimport_names(self) -> None:
+        sources = {
+            "pkg/provider.py": b"def target(value):\n    return value\n",
+            "pkg/good.py": b"from .provider import target\nresult = target(1)\n",
+            "pkg/early.py": b"result = target(1)\nfrom .provider import target\n",
+            "pkg/except.py": (
+                b"from .provider import target\n"
+                b"try:\n    pass\nexcept ValueError as target:\n    target(1)\n"
+            ),
+            "pkg/match.py": (
+                b"from .provider import target\n"
+                b"match 1:\n    case target:\n        target(1)\n"
+            ),
+            "pkg/match_star.py": (
+                b"from .provider import target\n"
+                b"match [1]:\n    case [*target]:\n        target(1)\n"
+            ),
+            "pkg/match_mapping.py": (
+                b"from .provider import target\n"
+                b"match {'k': 1}:\n    case {'k': value, **target}:\n        target(1)\n"
+            ),
+        }
+        plain, snapshot, reader = multi_source_fixture(sources)
+        relations = derive_source_relations(plain, snapshot, reader)
+        call_sources = {
+            edge.source_coordinate.source_path
+            for edge in relations.edges if edge.relation == "calls"
+        }
+        self.assertEqual({"pkg/good.py"}, call_sources)
+
+    def test_impact_expands_import_statement_and_imported_function_call(self) -> None:
+        sources = {
+            "pkg/provider.py": b"def source_snapshot(value):\n    return value\n",
+            "pkg/consumer.py": (
+                b"from .provider import source_snapshot\n"
+                b"def read_source(source_bytes):\n"
+                + b"    marker = 1\n" * 20
+                + b"    result = JavaScriptCoordinateProvider().relations(\n"
+                + b"        source_snapshot(source_bytes)\n"
+                + b"    )\n"
+                + b"    marker = 2\n" * 20
+            ),
+            "tests/test_consumer.py": (
+                b"from pkg.provider import source_snapshot\n"
+                b"def test_read():\n"
+                b"    return source_snapshot(b'fixture')\n"
+            ),
+        }
+        plain, snapshot, reader = multi_source_fixture(sources)
+        graph = Graph(plain.records, derive_source_relations(plain, snapshot, reader).edges)
+        prompt = "If source_snapshot in pkg/provider.py changes, which modules import it?"
+        anchors, status = retrieval_module._source_role_anchors_from_prompt(
+            prompt, snapshot, reader, 128,
+        )
+        self.assertEqual("selected_impact", status)
+        expanded = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader,
+            RetrievalResult("graph", "retrieved", (), (), "", 0, 100.0, (), (), False),
+            maximum_candidates=16, maximum_candidate_bytes=4096,
+            maximum_unit_bytes=128, required_source_anchors=anchors,
+            source_scope="pkg", include_anchor_imports=True,
+        )
+        related = [item for item in expanded if item.relationship_parent_candidate_id]
+        self.assertEqual({"pkg/consumer.py"}, {item.source_path for item in related})
+        snippets = {
+            sources[item.source_path][item.byte_start:item.byte_end]
+            for item in related
+        }
+        self.assertIn(b"from .provider import source_snapshot", snippets)
+        call_statement = (
+            b"result = JavaScriptCoordinateProvider().relations(\n"
+            b"        source_snapshot(source_bytes)\n"
+            b"    )"
+        )
+        call_candidate = next(
+            item for item in related
+            if sources[item.source_path][item.byte_start:item.byte_end] == call_statement
+        )
+        self.assertLessEqual(call_candidate.byte_end - call_candidate.byte_start, 128)
+        self.assertTrue(call_candidate.source_unit_complete)
+
+        bounded = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader,
+            RetrievalResult("graph", "retrieved", (), (), "", 0, 100.0, (), (), False),
+            maximum_candidates=16, maximum_candidate_bytes=4096,
+            maximum_unit_bytes=64, required_source_anchors=anchors,
+            source_scope="pkg", include_anchor_imports=True,
+        )
+        bounded_call = next(
+            item for item in bounded
+            if item.relationship_relation == "calls"
+        )
+        bounded_text = sources[bounded_call.source_path][
+            bounded_call.byte_start:bounded_call.byte_end
+        ]
+        self.assertIn(b"source_snapshot(source_bytes)", bounded_text)
+        self.assertLessEqual(len(bounded_text), 64)
+        self.assertFalse(bounded_call.source_unit_complete)
+
+    def test_lowercase_impact_target_expands_verified_imports(self) -> None:
+        sources = {
+            "pkg/target.py": b"def source_snapshot(value):\n    return value\n",
+            "pkg/consumer.py": b"from .target import source_snapshot\n",
+        }
+        plain, snapshot, reader = multi_source_fixture(sources)
+        graph = Graph(plain.records, derive_source_relations(plain, snapshot, reader).edges)
+        prompt = "If source_snapshot in pkg/target.py changes, which modules import it?"
+        anchors, status = retrieval_module._source_role_anchors_from_prompt(
+            prompt, snapshot, reader, 128,
+        )
+        self.assertEqual("selected_impact", status)
+        self.assertEqual(("pkg/target.py",), tuple(item.source_path for item in anchors))
+        direct = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader,
+            RetrievalResult("direct", "retrieved", (), (), "", 0, 100.0, (), (), False),
+            maximum_candidates=16, maximum_candidate_bytes=4096,
+            maximum_unit_bytes=128, required_source_anchors=anchors, source_scope="pkg",
+        )
+        expanded = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader,
+            RetrievalResult("graph", "retrieved", (), (), "", 0, 100.0, (), (), False),
+            maximum_candidates=16, maximum_candidate_bytes=4096,
+            maximum_unit_bytes=128, required_source_anchors=anchors, source_scope="pkg",
+            include_anchor_imports=True,
+        )
+        self.assertEqual({"pkg/consumer.py"}, {
+            item.source_path for item in expanded
+            if item.relationship_parent_candidate_id is not None
+        })
+        self.assertEqual("graph", plan_ranked_context(
+            graph, task(), snapshot, reader, query=prompt,
+            direct_candidates=direct, graph_candidates=expanded,
+        ).route)
+
+    def test_impact_anchor_expands_imports_missing_from_retrieval_hits(self) -> None:
+        sources = {
+            "pkg/target.py": b"class Target:\n    pass\n",
+            "pkg/a.py": b"from .target import (\n    Target,\n)\n",
+            "pkg/b.py": b"from .target import Target\n",
+        }
+        plain, snapshot, reader = multi_source_fixture(sources)
+        graph = Graph(plain.records, derive_source_relations(plain, snapshot, reader).edges)
+        prompt = "If Target in pkg/target.py changes, which modules import it?"
+        anchors, status = retrieval_module._source_role_anchors_from_prompt(
+            prompt, snapshot, reader, 128,
+        )
+        self.assertEqual("selected_impact", status)
+        retrieval = RetrievalResult("graph", "retrieved", (), (), "", 0, 100.0, (), (), False)
+        options = dict(maximum_candidates=16, maximum_candidate_bytes=4096,
+                       maximum_unit_bytes=128, required_source_anchors=anchors,
+                       source_scope="pkg")
+        direct = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader, retrieval, **options,
+        )
+        expanded = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader, retrieval,
+            include_anchor_imports=True, **options,
+        )
+        self.assertEqual({"pkg/a.py", "pkg/b.py"}, {
+            item.source_path for item in expanded
+            if item.relationship_parent_candidate_id is not None
+        })
+        import_candidate = next(item for item in expanded if item.source_path == "pkg/a.py")
+        self.assertEqual(
+            b"from .target import (\n    Target,\n)",
+            sources["pkg/a.py"][import_candidate.byte_start:import_candidate.byte_end],
+        )
+        plan = plan_ranked_context(
+            graph, task(), snapshot, reader, query=prompt,
+            direct_candidates=direct, graph_candidates=expanded,
+        )
+        self.assertEqual("graph", plan.route)
+        self.assertEqual({item.candidate_id for item in direct}, {
+            item.candidate_id for item in direct
+            if item.candidate_id in plan.baseline.projection.selected_candidate_ids
+        })
+
+    def test_impact_target_scopes_optional_source_without_dropping_anchor(self) -> None:
+        target = b"class RetentionState:\n    ready = True\n"
+        sources = {
+            "pkg/retention.py": target,
+            "pkg/consumer.py": (
+                b"from .retention import RetentionState\n"
+                b"def use(value: RetentionState):\n    return value\n"
+            ),
+            "generated/pkg/retention.py": target,
+            "docs/notes.md": b"# RetentionState\nA summary of RetentionState.\n",
+        }
+        graph, snapshot, reader = multi_source_fixture(sources)
+        anchors, status = retrieval_module._source_role_anchors_from_prompt(
+            "If RetentionState in pkg/retention.py changes, which module imports it?",
+            snapshot, reader, 128,
+        )
+        self.assertEqual("selected_impact", status)
+        self.assertEqual(("pkg/retention.py",), tuple(anchor.source_path for anchor in anchors))
+        self.assertEqual(
+            "selected_impact",
+            retrieval_module._source_role_anchors_from_prompt(
+                "If RetentionState in pkg/retention.py changes, which module imports it? Cite the definition and exact import statement.",
+                snapshot, reader, 128,
+            )[1],
+        )
+        retrieval = RetrievalResult(
+            "direct", "retrieved", tuple(
+                RetrievalHit(f"repo:{path}", path, 1, ("exact",), ("retentionstate",), 0)
+                for path in sources
+            ), (), "", 0, 100.0, (), (), False,
+        )
+        candidates = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader, retrieval,
+            maximum_candidates=16, maximum_candidate_bytes=4096,
+            maximum_unit_bytes=128, required_source_anchors=anchors,
+            source_scope="pkg",
+        )
+        self.assertTrue(any(candidate.required and candidate.source_path == "pkg/retention.py"
+                            for candidate in candidates))
+        optional = [candidate for candidate in candidates if not candidate.required]
+        self.assertTrue(optional)
+        self.assertTrue(all(candidate.source_path.startswith("pkg/") for candidate in optional))
+        self.assertEqual(len(optional), len({candidate.source_path for candidate in optional}))
+        self.assertEqual(
+            "ambiguous_impact_target",
+            retrieval_module._source_role_anchors_from_prompt(
+                "If RetentionState changes, which module imports it?",
+                snapshot, reader, 128,
+            )[1],
+        )
+
+    def test_impact_target_uses_verified_header_when_class_exceeds_excerpt(self) -> None:
+        sources = {
+            "pkg/provider.py": b"class LargeProvider:\n    def run(self):\n        return 'long body' * 20\n",
+            "pkg/consumer.py": b"from .provider import LargeProvider\n",
+        }
+        plain, snapshot, reader = multi_source_fixture(sources)
+        graph = Graph(plain.records, derive_source_relations(plain, snapshot, reader).edges)
+        anchors, status = retrieval_module._source_role_anchors_from_prompt(
+            "If LargeProvider in pkg/provider.py changes, which module imports it?",
+            snapshot, reader, 48,
+        )
+        self.assertEqual("selected_impact", status)
+        self.assertEqual("python_declaration_header", anchors[0].entity_kind)
+        self.assertEqual(
+            b"class LargeProvider:\n",
+            sources["pkg/provider.py"][anchors[0].byte_start:anchors[0].byte_end],
+        )
+        expanded = ranked_candidates_from_retrieval(
+            graph, task(), snapshot, reader,
+            RetrievalResult("graph", "retrieved", (), (), "", 0, 100.0, (), (), False),
+            maximum_candidates=16, maximum_candidate_bytes=4096,
+            maximum_unit_bytes=48, required_source_anchors=anchors,
+            source_scope="pkg", include_anchor_imports=True,
+        )
+        self.assertEqual(
+            {"pkg/consumer.py"},
+            {item.source_path for item in expanded
+             if item.relationship_parent_candidate_id is not None},
+        )
+
+    def test_exact_lookup_keeps_canonical_multiline_signature(self) -> None:
+        header = b"def derive_source_relations(\n    graph: Graph,\n    reader: Reader,\n) -> Result:\n"
+        source = header + b"    pass\n" * 40
+        _, snapshot, reader = multi_source_fixture({
+            "pkg/retrieval.py": source,
+            "generated/pkg/retrieval.py": source,
+        })
+        anchors, status = retrieval_module._source_role_anchors_from_prompt(
+            "Where is derive_source_relations defined in pkg/retrieval.py, and what inputs does it take?",
+            snapshot, reader, 128,
+        )
+        self.assertEqual("selected_lookup", status)
+        self.assertEqual("pkg/retrieval.py", anchors[0].source_path)
+        self.assertEqual("python_declaration_header", anchors[0].entity_kind)
+        self.assertEqual(header, source[anchors[0].byte_start:anchors[0].byte_end])
+
+    def test_named_function_question_seeds_exact_body_or_defers_ambiguity(self) -> None:
+        source = (
+            b"def decide(\n    value: int,\n) -> bool:\n"
+            b"    if value > 0:\n        return True\n"
+            b"    return False\n"
+        )
+        question = "In pkg/policy.py, when does decide return True?"
+        _, snapshot, reader = multi_source_fixture({"pkg/policy.py": source})
+        anchors, status = retrieval_module._source_role_anchors_from_prompt(
+            question, snapshot, reader, 4096,
+        )
+        self.assertEqual("selected_named", status)
+        self.assertEqual(source.rstrip(b"\n"), source[anchors[0].byte_start:anchors[0].byte_end])
+        collision = source + b"\ndef uses() -> bool:\n    return False\n"
+        _, snapshot, reader = multi_source_fixture({"pkg/policy.py": collision})
+        anchors, status = retrieval_module._source_role_anchors_from_prompt(
+            "In pkg/policy.py, when does decide return True and what uses it?",
+            snapshot, reader, 4096,
+        )
+        self.assertEqual("selected_named", status)
+        self.assertEqual("decide", anchors[0].symbol)
+        duplicate = source + b"\ndef decide(value: int) -> bool:\n    return False\n"
+        _, snapshot, reader = multi_source_fixture({"pkg/policy.py": duplicate})
+        self.assertEqual(
+            "ambiguous_named_target",
+            retrieval_module._source_role_anchors_from_prompt(
+                question, snapshot, reader, 4096,
+            )[1],
+        )
+
+    def test_import_question_selects_exact_importer_and_definition(self) -> None:
+        sources = {
+            "pkg/export.py": b"from .models import Graph\n",
+            "pkg/models.py": b"class Graph:\n    pass\n",
+            "pkg/review_packet.py": b"from .instructions import InstructionPlan\n",
+            "pkg/instructions.py": b"class InstructionPlan:\n    pass\n",
+        }
+        snapshot = SourceSnapshotV4(tuple(
+            SourceIdentityV4(path, len(raw), hashlib.sha256(raw).hexdigest())
+            for path, raw in sorted(sources.items())
+        ))
+        for symbol, importer, definition in (
+            ("Graph", "pkg/export.py", "pkg/models.py"),
+            ("InstructionPlan", "pkg/review_packet.py", "pkg/instructions.py"),
+        ):
+            with self.subTest(symbol=symbol):
+                anchors, status = retrieval_module._source_role_anchors_from_prompt(
+                    f"Which module defines {symbol}, and which statement in {importer} imports it?",
+                    snapshot, Reader(sources), 128,
+                )
+                self.assertEqual("selected", status)
+                self.assertEqual((importer, definition), tuple(x.source_path for x in anchors))
+                self.assertIn(symbol, sources[importer][anchors[0].byte_start:anchors[0].byte_end].decode())
+                self.assertIn(symbol, sources[definition][anchors[1].byte_start:anchors[1].byte_end].decode())
+                self.assertEqual(
+                    "selected",
+                    retrieval_module._source_role_anchors_from_prompt(
+                        f"Which module defines {symbol}, and which statement in {importer} imports it after changes?",
+                        snapshot, Reader(sources), 128,
+                    )[1],
+                )
+        self.assertEqual(
+            "ambiguous_import_path",
+            retrieval_module._source_role_anchors_from_prompt(
+                "Which module defines Graph, and which statement imports it?",
+                snapshot, Reader(sources), 128,
+            )[1],
+        )
+
+    def test_type_alias_is_a_definition_anchor(self) -> None:
+        sources = {
+            "pkg/__init__.py": b"from .model import ReviewPacketStatus\n",
+            "pkg/model.py": b"from typing import Literal\nReviewPacketStatus = Literal['ready', 'stale']\n",
+        }
+        snapshot = SourceSnapshotV4(tuple(
+            SourceIdentityV4(path, len(raw), hashlib.sha256(raw).hexdigest())
+            for path, raw in sorted(sources.items())
+        ))
+        anchors, status = retrieval_module._source_role_anchors_from_prompt(
+            "Where is ReviewPacketStatus exported, and where is it defined?",
+            snapshot, Reader(sources), 128,
+        )
+        self.assertEqual("selected", status)
+        self.assertEqual(
+            b"ReviewPacketStatus = Literal['ready', 'stale']",
+            sources[anchors[1].source_path][anchors[1].byte_start:anchors[1].byte_end],
+        )
+
+    def test_exact_export_and_definition_seed_preserves_custody(self) -> None:
+        exported = b"from .model import ExportItem\n"
+        definition = b"class ExportItem:\n" + b"    value = 1\n" * 30
+        sources = {
+            "pkg/__init__.py": exported,
+            "pkg/model.py": definition,
+            "mirror/pkg/__init__.py": exported,
+            "mirror/pkg/model.py": definition,
+        }
+
+        def snapshot_for(values: dict[str, bytes]) -> SourceSnapshotV4:
+            return SourceSnapshotV4(tuple(
+                SourceIdentityV4(path, len(raw), hashlib.sha256(raw).hexdigest())
+                for path, raw in sorted(values.items())
+            ))
+
+        records = tuple(
+            GraphRecord(
+                f"repo:{path}", "source", path, raw.decode(),
+                Provenance(path, hashlib.sha256(raw).hexdigest(), "bytes", True),
+                TrustClass.VERIFIED_SOURCE, Sensitivity.PUBLIC,
+                Freshness.CURRENT, Admission.VERIFIER, True,
+            )
+            for path, raw in sorted(sources.items())
+        )
+        snapshot = snapshot_for(sources)
+        anchors, status = retrieval_module._source_role_anchors_from_prompt(
+            "Where is ExportItem exported, and where is it defined?",
+            snapshot, Reader(sources), 128,
+        )
+        self.assertEqual("selected", status)
+        self.assertEqual(
+            ("pkg/__init__.py", "pkg/model.py"),
+            tuple(anchor.source_path for anchor in anchors),
+        )
+        self.assertEqual("python_declaration_header", anchors[1].entity_kind)
+        task = TaskSpec("seed", ("exportitem",), node_budget=6,
+                        byte_budget=1024, allowed_sensitivities=(Sensitivity.PUBLIC,))
+        retrieval = RetrievalResult("direct", "fixture", (), (), "", 0, 0.0, (), (), False)
+        candidates = ranked_candidates_from_retrieval(
+            Graph(records), task, snapshot, Reader(sources), retrieval,
+            maximum_candidates=6, maximum_candidate_bytes=1024,
+            maximum_unit_bytes=128, required_source_anchors=anchors,
+        )
+        self.assertEqual(2, len(candidates))
+        self.assertTrue(all(candidate.required for candidate in candidates))
+        with self.assertRaisesRegex(ValueError, "source_role_anchor_custody_mismatch"):
+            ranked_candidates_from_retrieval(
+                Graph(records), task, snapshot, Reader(sources), retrieval,
+                maximum_candidates=6, maximum_candidate_bytes=1024,
+                maximum_unit_bytes=128,
+                required_source_anchors=(replace(anchors[0], source_sha256="0" * 64),),
+            )
+        changed = {**sources, "mirror/pkg/model.py": definition + b"    changed = True\n"}
+        self.assertEqual(
+            "ambiguous_source_roles",
+            retrieval_module._source_role_anchors_from_prompt(
+                "Where is ExportItem exported, and where is it defined?",
+                snapshot_for(changed), Reader(changed), 128,
+            )[1],
+        )
 
 
 class TagIndexTests(unittest.TestCase):

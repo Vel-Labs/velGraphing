@@ -39,6 +39,126 @@ CUSTODY = ROOT / study.SUCCESSOR_WITNESS_CUSTODY
 
 
 class FourArmPublicBoundaryTests(unittest.TestCase):
+    def test_graph_find_keeps_answer_prompt_when_retrieval_query_is_overridden(self) -> None:
+        adapter = study.graph_find_adapter
+        prompt = "Where is AuthorityClass exported, and what values does it define?"
+        query = "AuthorityClass"
+        scan = (study.Graph(()), object(), SimpleNamespace(), {
+            "scan_complete": True, "sensitive_paths_excluded": 0,
+        })
+        result = SimpleNamespace(to_dict=lambda: {"route": "graph"})
+        output = StringIO()
+        with (
+            patch.object(adapter, "_canonical_root", return_value=ROOT),
+            patch.object(adapter, "_scan", return_value=scan),
+            patch.object(adapter, "graph_find", return_value=result) as find,
+            patch.object(adapter, "_ranked_context", return_value={"network_called": False}) as ranked,
+            redirect_stdout(output),
+        ):
+            self.assertEqual(0, adapter.main([
+                "--root", str(ROOT), "--prompt", prompt,
+                "--retrieval-query", query, "--ranked-context", "plan",
+            ]))
+            self.assertEqual(query, find.call_args.args[2])
+            self.assertEqual((prompt, query), ranked.call_args.args[3:5])
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(prompt, payload["query_metadata"]["prompt"])
+        self.assertEqual(query, payload["query_metadata"]["retrieval_query"])
+        self.assertEqual(study.digest(prompt.encode()), payload["query_metadata"]["prompt_sha256"])
+        self.assertEqual(study.digest(query.encode()), payload["query_metadata"]["retrieval_query_sha256"])
+
+    def test_direct_discovery_matches_installed_short_prompt_retry_without_git(self) -> None:
+        prompt = "Beta alpha."
+        retrieval_calls = []
+        proof_prompts = []
+        compile_calls = []
+        result = SimpleNamespace(
+            reason="verified_tag_context_selected", fail_closed=False,
+        )
+
+        def compile_prompt(_prompt, _index, **kwargs):
+            compile_calls.append(kwargs)
+            return object()
+
+        def retrieve(_graph, task, _index, _facets, _snapshot, _reader, **kwargs):
+            retrieval_calls.append((task, kwargs))
+            return result
+
+        trial = SimpleNamespace(
+            phase=lambda _name: nullcontext(),
+            not_applicable=lambda *_phases: None,
+            bind=lambda **_values: None,
+            current={},
+        )
+        snapshot = SimpleNamespace(snapshot_sha256="a" * 64)
+        graph = study.Graph(())
+        with (
+            patch.object(
+                study, "_scan_lane",
+                return_value=(graph, snapshot, object(), {"scan_complete": True}),
+            ),
+            patch.object(study, "build_repository_tag_index", return_value=object()),
+            patch.object(study, "compile_prompt", side_effect=compile_prompt),
+            patch.object(
+                study, "compile_proof_obligations",
+                side_effect=lambda prompt, *_args: proof_prompts.append(prompt) or ("proof",),
+            ),
+            patch.object(study, "retrieve", side_effect=retrieve),
+            patch.object(
+                study, "ranked_candidates_from_retrieval",
+                return_value=(object(),),
+            ) as ranked,
+            patch.object(
+                study, "_packet",
+                return_value={"query": prompt, "candidates": [{"id": "candidate1"}]},
+            ),
+        ):
+            discovery = study._discover_direct(trial, "S-01", prompt, Path("."), {})
+
+        self.assertEqual(("alpha", "beta"), retrieval_calls[0][0].query_terms)
+        self.assertEqual("graph-find", discovery["task"].task_id)
+        self.assertEqual([prompt], proof_prompts)
+        self.assertEqual([{}, {"proof_obligations": ("proof",)}], compile_calls)
+        self.assertEqual(2, len(retrieval_calls))
+        self.assertEqual((), ranked.call_args.kwargs["required_source_anchors"])
+        for task, options in retrieval_calls:
+            self.assertEqual("graph-find", task.task_id)
+            self.assertFalse(options["expand_one_hop"])
+            self.assertTrue(options["source_bound_expansion"])
+            self.assertEqual(60.0, options["minimum_coverage_percent"])
+
+    def test_direct_discovery_scopes_explicit_source_roles_like_installed_selector(self) -> None:
+        prompt = "Find the declared function in packages/core/retrieval.py and explain its inputs."
+        result = SimpleNamespace(reason="verified_tag_context_selected", fail_closed=False)
+        anchor = SimpleNamespace(source_path="packages/core/retrieval.py")
+        trial = SimpleNamespace(
+            phase=lambda _name: nullcontext(),
+            not_applicable=lambda *_phases: None,
+            bind=lambda **_values: None,
+            current={},
+        )
+        with (
+            patch.object(study, "_scan_lane", return_value=(
+                study.Graph(()), SimpleNamespace(snapshot_sha256="a" * 64),
+                object(), {"scan_complete": True},
+            )),
+            patch.object(study, "build_repository_tag_index", return_value=object()),
+            patch.object(study, "compile_prompt", return_value=object()),
+            patch.object(study, "retrieve", return_value=result),
+            patch.object(study, "ranked_candidates_from_retrieval", return_value=(object(),)) as ranked,
+            patch.object(study, "_packet", return_value={
+                "query": prompt, "candidates": [{"id": "candidate1"}],
+            }),
+        ):
+            for status in ("selected_impact", "selected_lookup", "selected_named"):
+                with patch.object(
+                    study, "_source_role_anchors_from_prompt",
+                    return_value=((anchor,), status),
+                ):
+                    study._discover_direct(trial, "S-01", prompt, Path("."), {})
+                self.assertEqual("packages/core", ranked.call_args.kwargs["source_scope"])
+
     def test_fresh_comparison_can_disable_oracle_append_without_changing_legacy_mode(self) -> None:
         selection = SimpleNamespace(
             route="ranked",

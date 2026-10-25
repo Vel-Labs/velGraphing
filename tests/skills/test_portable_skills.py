@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import importlib.util
 import os
 import re
 import subprocess
@@ -19,6 +20,16 @@ PUBLIC_COMMANDS = ("graph-find", "graph-start", "graph-update", "graph-audit", "
 
 
 class PortableSkillTests(unittest.TestCase):
+    def test_nested_installed_graph_find_does_not_use_checkout_source(self) -> None:
+        script = SKILLS_ROOT / "graph-find/scripts/graph_find.py"
+        spec = importlib.util.spec_from_file_location("graph_find_path_test", script)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(PROJECT_ROOT, module._checkout_source_root(script))
+        nested = PROJECT_ROOT / ".velgraphing-local/installed/graph-engineering/skills/graph-find/scripts/graph_find.py"
+        self.assertIsNone(module._checkout_source_root(nested))
+
     def test_public_commands_resolve_to_matching_skills(self) -> None:
         for name in PUBLIC_COMMANDS:
             command = tomllib.loads(
@@ -619,11 +630,24 @@ class PortableSkillTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         supports = payload["relationship_supports"]
-        self.assertEqual({item["relation"] for item in supports}, {"imports", "links_to_heading"})
-        self.assertEqual(payload["scan"]["edges_derived"], 3)
+        self.assertEqual({item["relation"] for item in supports}, {"calls", "imports", "links_to_heading"})
+        self.assertEqual(payload["scan"]["edges_derived"], 4)
+        calls = [item for item in supports if item["relation"] == "calls"]
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["source_coordinate"]["source_path"], "src/caller.py")
+        self.assertEqual(calls[0]["target_coordinate"]["source_path"], "src/helper.py")
+        self.assertEqual(calls[0]["source_coordinate"]["symbol"], "helper")
+        self.assertEqual(calls[0]["target_coordinate"]["symbol"], "helper")
         self.assertEqual(
             payload["scan"]["relation_coverage"],
             [
+                {
+                    "relation": "calls",
+                    "supported": "python_ast_direct_call_to_uniquely_imported_top_level_function",
+                    "resolved": 1,
+                    "unresolved": 0,
+                    "unsupported": 0,
+                },
                 {
                     "relation": "imports",
                     "supported": "javascript_tree_sitter_static_relative_named_direct_export",
@@ -734,6 +758,7 @@ class PortableSkillTests(unittest.TestCase):
             [(item["supported"], item["resolved"], item["unresolved"], item["unsupported"])
              for item in payload["scan"]["relation_coverage"]],
             [
+                ("python_ast_direct_call_to_uniquely_imported_top_level_function", 0, 0, 0),
                 ("javascript_tree_sitter_static_relative_named_direct_export", 0, 0, 0),
                 ("python_ast_from_import_named_top_level_declaration", 0, 1, 0),
                 ("markdown_relative_path_fragment_unique_atx_heading", 0, 1, 0),
@@ -781,6 +806,7 @@ class PortableSkillTests(unittest.TestCase):
             [(item["supported"], item["resolved"], item["unresolved"], item["unsupported"])
              for item in payload["scan"]["relation_coverage"]],
             [
+                ("python_ast_direct_call_to_uniquely_imported_top_level_function", 0, 0, 0),
                 ("javascript_tree_sitter_static_relative_named_direct_export", 0, 0, 0),
                 ("python_ast_from_import_named_top_level_declaration", 0, 1, 2),
                 ("markdown_relative_path_fragment_unique_atx_heading", 0, 1, 4),

@@ -49,7 +49,10 @@ from packages.core import (
     select_ranked_context,
 )
 from packages.core import jev
-from packages.core.retrieval import ordered_successor_request_from_prompt
+from packages.core.retrieval import (
+    _STOPWORDS, _source_role_anchors_from_prompt, _words,
+    ordered_successor_request_from_prompt,
+)
 
 
 DEFAULT_ROOT = ROOT / "benchmarks/velgraphing-four-arm-study-v1"
@@ -1005,6 +1008,9 @@ def _pool(
     lane: Path,
     selection_task: TaskSpec,
 ) -> tuple[dict[str, object], dict[str, object]]:
+    source_role_anchors, source_role_status = _source_role_anchors_from_prompt(
+        prompt, snapshot, reader, CANDIDATE_UNIT_BYTE_BUDGET,
+    )
     candidates = ranked_candidates_from_retrieval(
         graph,
         selection_task,
@@ -1015,6 +1021,10 @@ def _pool(
         maximum_candidate_bytes=CANDIDATE_AGGREGATE_BYTE_BUDGET,
         maximum_unit_bytes=CANDIDATE_UNIT_BYTE_BUDGET,
         ordered_successor=ordered_successor_request_from_prompt(prompt),
+        required_source_anchors=source_role_anchors,
+        source_scope=(source_role_anchors[0].source_path.rsplit("/", 1)[0]
+                      if source_role_status == "selected_impact" else None),
+        include_anchor_imports=route == "graph" and source_role_status == "selected_impact",
     )
     if not candidates:
         raise StudyError("candidate_pool_empty")
@@ -3317,29 +3327,31 @@ def _discover_direct(trial: Trial, task_id: str, prompt: str, lane: Path,
             return reader.is_symlink(path)
 
     measured_reader = MeasuredReader()
-    terms = tuple(dict.fromkeys(
+    terms = tuple(sorted(set(
         token.casefold() for token in graph_find_adapter._TOKEN.findall(prompt)
-    ))
+    )))
     retrieval_task = TaskSpec(
-        task_id, terms, node_budget=RETRIEVAL_NODE_LIMIT,
+        "graph-find", terms, node_budget=RETRIEVAL_NODE_LIMIT,
         byte_budget=CANDIDATE_AGGREGATE_BYTE_BUDGET,
         allowed_sensitivities=(Sensitivity.INTERNAL,),
     )
     selection_task = TaskSpec(
-        task_id, terms, node_budget=RETRIEVAL_NODE_LIMIT,
+        "graph-find", terms, node_budget=RETRIEVAL_NODE_LIMIT,
         byte_budget=FINAL_CONTEXT_BYTE_BUDGET,
         allowed_sensitivities=(Sensitivity.INTERNAL,),
     )
     with trial.phase("retrieval"):
         index = build_repository_tag_index(graph, snapshot, measured_reader)
         facets = compile_prompt(prompt, index)
+        short_prompt = len([
+            word for word in _words(prompt) if word not in _STOPWORDS
+        ]) < 3
         retrieval = retrieve(
             graph, retrieval_task, index, facets, snapshot, measured_reader,
-            channels=("exact", "sparse", "wiki"), expand_one_hop=False,
-            source_bound_expansion=False, maximum_results=RETRIEVAL_NODE_LIMIT,
-            minimum_coverage_percent=0.0, parallel=False,
+            expand_one_hop=False, source_bound_expansion=True,
+            maximum_results=RETRIEVAL_NODE_LIMIT, minimum_coverage_percent=60.0,
         )
-        if retrieval.reason == "prompt_facets_insufficient":
+        if retrieval.reason == "prompt_facets_insufficient" or short_prompt:
             facets = compile_prompt(
                 prompt, index,
                 proof_obligations=compile_proof_obligations(
@@ -3348,18 +3360,27 @@ def _discover_direct(trial: Trial, task_id: str, prompt: str, lane: Path,
             )
             retrieval = retrieve(
                 graph, retrieval_task, index, facets, snapshot, measured_reader,
-                channels=("exact", "sparse", "wiki"), expand_one_hop=False,
-                source_bound_expansion=False, maximum_results=RETRIEVAL_NODE_LIMIT,
-                minimum_coverage_percent=0.0, parallel=False,
+                expand_one_hop=False, source_bound_expansion=True,
+                maximum_results=RETRIEVAL_NODE_LIMIT, minimum_coverage_percent=60.0,
             )
         if retrieval.fail_closed:
             raise MeasurementError("direct_retrieval_failed_closed")
+        source_role_anchors, source_role_status = _source_role_anchors_from_prompt(
+            prompt, snapshot, measured_reader, CANDIDATE_UNIT_BYTE_BUDGET,
+        )
         candidates = ranked_candidates_from_retrieval(
             graph, selection_task, snapshot, measured_reader, retrieval,
             maximum_candidates=CANDIDATE_LIMIT,
             maximum_candidate_bytes=CANDIDATE_AGGREGATE_BYTE_BUDGET,
             maximum_unit_bytes=CANDIDATE_UNIT_BYTE_BUDGET,
             ordered_successor=ordered_successor_request_from_prompt(prompt),
+            required_source_anchors=source_role_anchors,
+            source_scope=(
+                source_role_anchors[0].source_path.rsplit("/", 1)[0]
+                if source_role_status in {
+                    "selected_impact", "selected_lookup", "selected_named"
+                } else None
+            ),
         )
         if not candidates:
             raise MeasurementError("candidate_pool_empty")

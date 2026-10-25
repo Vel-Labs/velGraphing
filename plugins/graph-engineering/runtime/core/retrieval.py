@@ -14,6 +14,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 import hashlib
 import io
+from itertools import chain, islice
 import json
 import math
 from pathlib import PurePosixPath
@@ -514,6 +515,256 @@ class RetrievalResult:
     relationship_supports: tuple[RelationshipSupport, ...] = ()
 
 
+def _source_role_anchors_from_prompt(
+    prompt: str,
+    snapshot: SourceSnapshotV4,
+    reader: SourceReaderV4,
+    maximum_unit_bytes: int,
+) -> tuple[tuple[SourceCoordinate, ...], str]:
+    """Find verified Python source roles for narrow location and impact questions."""
+
+    words = set(_words(prompt))
+    wants_values = "enum" in words and bool({"values", "members"} & words)
+    wants_export = bool({"export", "exported"} & words and
+                        (wants_values or {"defined", "definition"} & words))
+    wants_import = bool({"import", "imports"} & words and
+                        {"define", "defines", "defined", "definition"} & words)
+    impact_matches = re.findall(
+        r"\b([A-Za-z_][A-Za-z0-9_]*)\s+in\s+((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.py)\s+changes\b",
+        prompt,
+    )
+    if (not wants_export and (not wants_import or impact_matches)
+            and {"change", "changes", "impact"} & words
+            and {"import", "imports"} & words):
+        paths = set(_ORDERED_SUCCESSOR_PATH.findall(prompt))
+        if len(impact_matches) != 1 or paths != {impact_matches[0][1]}:
+            return (), "ambiguous_impact_target"
+        symbol, path = impact_matches[0]
+        raw = _read_verified_source_bytes(snapshot, reader).get(path)
+        if raw is None:
+            return (), "impact_target_unavailable"
+        try:
+            tree = ast.parse(raw.decode("utf-8"))
+        except (UnicodeDecodeError, SyntaxError):
+            return (), "impact_target_unavailable"
+        declarations = [
+            node for node in tree.body
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == symbol
+        ]
+        if len(declarations) != 1:
+            return (), "impact_target_unavailable"
+        declaration = declarations[0]
+        bounds = _relation_ast_range(raw, declaration)
+        if bounds is None:
+            return (), "source_role_unit_exceeds_limit"
+        complete = bounds[1] - bounds[0] <= maximum_unit_bytes
+        if not complete:
+            kind = "class" if isinstance(declaration, ast.ClassDef) else "def"
+            name_range = _relation_declaration_name_ranges(raw).get(
+                (declaration.lineno, kind, symbol)
+            )
+            if name_range is None:
+                return (), "source_role_unit_exceeds_limit"
+            start = raw.rfind(b"\n", 0, name_range[0]) + 1
+            end = raw.find(b"\n", name_range[1])
+            bounds = (start, len(raw) if end < 0 else end + 1)
+            if bounds[1] - bounds[0] > maximum_unit_bytes:
+                return (), "source_role_unit_exceeds_limit"
+        return (_relation_coordinate(
+            snapshot.snapshot_sha256, path, raw, *bounds,
+            "python_declaration" if complete else "python_declaration_header",
+            "declaration", symbol,
+        ),), "selected_impact"
+    lookup = re.findall(
+        r"\bwhere\s+is\s+([A-Za-z_][A-Za-z0-9_]*)\s+defined\s+in\s+"
+        r"((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.py)\b",
+        prompt, re.IGNORECASE,
+    )
+    if not (wants_export or wants_import):
+        paths = set(_ORDERED_SUCCESSOR_PATH.findall(prompt))
+        if lookup and (len(lookup) != 1 or paths != {lookup[0][1]}):
+            return (), "ambiguous_lookup_target"
+        if lookup or len(paths) == 1:
+            path = lookup[0][1] if lookup else next(iter(paths))
+            raw = _read_verified_source_bytes(snapshot, reader).get(path)
+            if raw is None:
+                return (), "lookup_target_unavailable" if lookup else "not_applicable"
+            try:
+                tree = ast.parse(raw.decode("utf-8"))
+            except (UnicodeDecodeError, SyntaxError):
+                return (), "lookup_target_unavailable" if lookup else "not_applicable"
+            named = set(re.findall(
+                r"(?<![A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_]*(?![A-Za-z0-9_])",
+                prompt.replace(path, " "),
+            ))
+            declarations = [
+                node for node in tree.body
+                if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+                and (node.name == lookup[0][0] if lookup else node.name in named)
+                and (lookup or node.name.casefold() not in _PROOF_COMMON_TAGS)
+            ]
+            if lookup and len(declarations) != 1:
+                return (), "lookup_target_unavailable"
+            if len(declarations) == 1:
+                declaration = declarations[0]
+                bounds = _relation_ast_range(raw, declaration)
+                if bounds is None:
+                    return (), "source_role_unit_exceeds_limit"
+                complete = bounds[1] - bounds[0] <= maximum_unit_bytes
+                if not complete:
+                    starts = [0]
+                    starts.extend(index + 1 for index, value in enumerate(raw) if value == 10)
+                    first_body_line = declaration.body[0].lineno
+                    if first_body_line <= declaration.lineno:
+                        return (), "source_role_unit_exceeds_limit"
+                    bounds = (starts[declaration.lineno - 1], starts[first_body_line - 1])
+                    if bounds[1] - bounds[0] > maximum_unit_bytes:
+                        return (), "source_role_unit_exceeds_limit"
+                return (_relation_coordinate(
+                    snapshot.snapshot_sha256, path, raw, *bounds,
+                    "python_declaration" if complete else "python_declaration_header",
+                    "declaration", declaration.name,
+                ),), "selected_lookup" if lookup else "selected_named"
+            if declarations:
+                return (), "ambiguous_named_target"
+            if lookup:
+                return (), "lookup_target_unavailable"
+    if not (wants_export or wants_import):
+        return (), "not_applicable"
+    importer_path = None
+    if wants_import:
+        paths = set(_ORDERED_SUCCESSOR_PATH.findall(prompt))
+        if len(paths) != 1:
+            return (), "ambiguous_import_path"
+        importer_path = next(iter(paths))
+        symbols = {
+            token for token in re.findall(
+                r"\bdefines\s+([A-Za-z_][A-Za-z0-9_]*)\b", prompt, re.IGNORECASE
+            ) if token[0].isupper()
+        }
+    else:
+        symbols = {
+            token for token in _TOKEN.findall(prompt)
+            if token[0].isupper() and _looks_identifier(token)
+            and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token)
+        }
+    if len(symbols) != 1:
+        return (), "ambiguous_symbol"
+    symbol = next(iter(symbols))
+    source_bytes = _read_verified_source_bytes(snapshot, reader)
+    modules: dict[str, list[str]] = defaultdict(list)
+    for path in source_bytes:
+        module = _relation_module_name(path)
+        if module is not None:
+            modules[module].append(path)
+    pairs: list[tuple[SourceCoordinate, SourceCoordinate]] = []
+    too_large = False
+    for path, raw in source_bytes.items():
+        if (
+            (path != importer_path if importer_path is not None else not path.endswith("/__init__.py"))
+            or symbol.encode("utf-8") not in raw
+        ):
+            continue
+        try:
+            tree = ast.parse(raw.decode("utf-8"))
+        except (UnicodeDecodeError, SyntaxError):
+            continue
+        imports = [
+            node for node in tree.body if isinstance(node, ast.ImportFrom)
+            and any(alias.name == symbol and alias.asname in (None, symbol)
+                    for alias in node.names)
+        ]
+        if len(imports) != 1:
+            continue
+        source_import = imports[0]
+        module = _relation_resolved_module(path, source_import)
+        targets = modules.get(module or "", ())
+        if len(targets) != 1:
+            continue
+        target_path = targets[0]
+        target_raw = source_bytes[target_path]
+        try:
+            target_tree = ast.parse(target_raw.decode("utf-8"))
+            declarations = [
+                node for node in target_tree.body
+                if (
+                    isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+                    and node.name == symbol
+                ) or (
+                    isinstance(node, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == symbol
+                            for target in node.targets)
+                ) or (
+                    isinstance(node, ast.AnnAssign)
+                    and isinstance(node.target, ast.Name) and node.target.id == symbol
+                )
+            ]
+        except (UnicodeDecodeError, SyntaxError):
+            continue
+        if len(declarations) != 1:
+            continue
+        declaration = declarations[0]
+        if wants_values and (
+            not isinstance(declaration, ast.ClassDef)
+            or not any(isinstance(base, ast.Name) and base.id == "Enum"
+                       for base in declaration.bases)
+        ):
+            continue
+        import_bounds = _relation_ast_range(raw, source_import)
+        definition_bounds = _relation_ast_range(target_raw, declaration)
+        if import_bounds is None or definition_bounds is None:
+            continue
+        if import_bounds[1] - import_bounds[0] > maximum_unit_bytes:
+            too_large = True
+            continue
+        complete = definition_bounds[1] - definition_bounds[0] <= maximum_unit_bytes
+        if not complete:
+            if wants_values:
+                too_large = True
+                continue
+            kind = "class" if isinstance(declaration, ast.ClassDef) else "def"
+            name_range = (
+                _relation_declaration_name_ranges(target_raw).get(
+                    (declaration.lineno, kind, symbol)
+                ) if isinstance(declaration, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+                else _relation_ast_range(
+                    target_raw,
+                    declaration.target if isinstance(declaration, ast.AnnAssign)
+                    else next(target for target in declaration.targets
+                              if isinstance(target, ast.Name) and target.id == symbol),
+                )
+            )
+            if name_range is None:
+                continue
+            start = target_raw.rfind(b"\n", 0, name_range[0]) + 1
+            end = target_raw.find(b"\n", name_range[1])
+            definition_bounds = (start, len(target_raw) if end < 0 else end + 1)
+            if definition_bounds[1] - start > maximum_unit_bytes:
+                too_large = True
+                continue
+        pairs.append((
+            _relation_coordinate(
+                snapshot.snapshot_sha256, path, raw, *import_bounds,
+                "python_import_statement", "import", symbol,
+            ),
+            _relation_coordinate(
+                snapshot.snapshot_sha256, target_path, target_raw, *definition_bounds,
+                "python_declaration" if complete else "python_declaration_header",
+                "declaration", symbol,
+            ),
+        ))
+    if not pairs:
+        return (), "source_role_unit_exceeds_limit" if too_large else "source_roles_unavailable"
+    if len({(item[0].source_sha256, item[1].source_sha256) for item in pairs}) != 1:
+        return (), "ambiguous_source_roles"
+    chosen = min(pairs, key=lambda pair: (
+        pair[0].source_path.count("/") + pair[1].source_path.count("/"),
+        pair[0].source_path, pair[1].source_path,
+    ))
+    return chosen, "selected"
+
+
 def ranked_candidates_from_retrieval(
     graph: Graph,
     task: TaskSpec,
@@ -525,6 +776,9 @@ def ranked_candidates_from_retrieval(
     maximum_candidate_bytes: int,
     maximum_unit_bytes: int,
     ordered_successor: tuple[str, str] | None = None,
+    required_source_anchors: tuple[SourceCoordinate, ...] = (),
+    source_scope: str | None = None,
+    include_anchor_imports: bool = False,
 ) -> tuple[RankedContextCandidate, ...]:
     """Build one explicitly capped, Jev-compatible candidate shortlist.
 
@@ -548,6 +802,8 @@ def ranked_candidates_from_retrieval(
             raise ValueError(f"{label}_invalid")
     if retrieval.fail_closed:
         raise ValueError("retrieval_failed_closed")
+    if type(include_anchor_imports) is not bool:
+        raise TypeError("include_anchor_imports must be an exact boolean")
     if ordered_successor is not None and (
         type(ordered_successor) is not tuple
         or len(ordered_successor) != 2
@@ -638,6 +894,30 @@ def ranked_candidates_from_retrieval(
         required_ids.add(candidate.candidate_id)
         required.append(candidate)
 
+    records_by_path = {record.provenance.path: record for record in records.values()}
+    if source_scope is not None and not any(
+        anchor.source_path.startswith(source_scope + "/")
+        for anchor in required_source_anchors
+    ):
+        raise ValueError("source_scope_requires_verified_anchor")
+    for anchor in required_source_anchors:
+        if type(anchor) is not SourceCoordinate or anchor.snapshot_sha256 != snapshot.snapshot_sha256:
+            raise ValueError("source_role_anchor_custody_mismatch")
+        record = records_by_path.get(anchor.source_path)
+        if record is None:
+            raise ValueError("source_role_anchor_custody_mismatch")
+        try:
+            candidate = make_candidate(
+                record.record_id, anchor.source_path, anchor.source_sha256,
+                anchor.byte_start, anchor.byte_end, required=True,
+                source_unit_complete=anchor.entity_kind != "python_declaration_header",
+            )
+        except (JevError, ValueError) as error:
+            raise ValueError("source_role_anchor_custody_mismatch") from error
+        if candidate.candidate_id not in required_ids:
+            required_ids.add(candidate.candidate_id)
+            required.append(candidate)
+
     required_bytes = sum(item.byte_end - item.byte_start for item in required)
     if len(required) > maximum_candidates or required_bytes > maximum_candidate_bytes:
         raise ValueError("required_candidate_budget_exceeded")
@@ -720,6 +1000,18 @@ def ranked_candidates_from_retrieval(
         for record_id in hit_order
         if offset < len(candidates := optional_by_record[record_id])
     ]
+    if source_scope is not None:
+        seen_paths: set[str] = set()
+        scoped_optional = []
+        for candidate in optional:
+            if (
+                candidate.source_path.startswith(source_scope + "/")
+                and candidate.source_path.endswith(".py")
+                and candidate.source_path not in seen_paths
+            ):
+                scoped_optional.append(candidate)
+                seen_paths.add(candidate.source_path)
+        optional = scoped_optional
     primary = [*required, *optional]
 
     # Complete named documentation evidence before final retention. Follow only
@@ -740,7 +1032,8 @@ def ranked_candidates_from_retrieval(
     query_words = set(query_weights)
     admitted_markdown = [
         candidate for candidate in primary
-        if candidate.source_path.lower().endswith((".md", ".markdown"))
+        if source_scope is None
+        and candidate.source_path.lower().endswith((".md", ".markdown"))
     ]
     target_paths: list[str] = []
     target_seen: set[str] = set()
@@ -998,7 +1291,34 @@ def ranked_candidates_from_retrieval(
     supports_by_parent: dict[str, list[RankedContextCandidate]] = defaultdict(list)
     seen_supports: set[RelationshipSupport] = set()
     edges = graph.edge_map()
-    for support in retrieval.relationship_supports:
+    supports = list(retrieval.relationship_supports)
+    if include_anchor_imports:
+        if (source_scope is None or len(required_source_anchors) != 1
+                or required_source_anchors[0].entity_kind not in {
+                    "python_declaration", "python_declaration_header"
+                }):
+            raise ValueError("anchor_imports_requires_verified_impact_target")
+        anchor = required_source_anchors[0]
+        for edge in sorted(graph.edges, key=lambda item: item.edge_id):
+            coordinate = edge.target_coordinate
+            if (
+                edge.relation not in {"imports", "calls"} or coordinate is None
+                or edge.source_coordinate is None
+                or not edge.source_coordinate.source_path.startswith(source_scope + "/")
+                or coordinate.source_path != anchor.source_path
+                or coordinate.source_sha256 != anchor.source_sha256
+                or coordinate.symbol != anchor.symbol
+                or not anchor.byte_start <= coordinate.byte_start
+                or coordinate.byte_end > anchor.byte_end
+            ):
+                continue
+            support = RelationshipSupport(
+                edge.edge_id, edge.relation, edge.target_id, edge.source_id,
+                edge.source_coordinate, coordinate, "incoming", edge.sensitivity,
+            )
+            if support not in supports:
+                supports.append(support)
+    for support in supports:
         if support in seen_supports:
             raise ValueError("duplicate_relationship_support")
         seen_supports.add(support)
@@ -1069,6 +1389,52 @@ def ranked_candidates_from_retrieval(
             raw, coordinate.source_path, coordinate.byte_start,
             coordinate.byte_end, maximum_unit_bytes,
         )
+        if support.relation == "calls" and coordinate.source_path.endswith(".py"):
+            try:
+                tree = ast.parse(raw.decode("utf-8"))
+            except (UnicodeDecodeError, SyntaxError):
+                pass
+            else:
+                statements = [
+                    bounds for node in ast.walk(tree)
+                    if isinstance(node, ast.stmt)
+                    if (bounds := _relation_ast_range(raw, node)) is not None
+                    and bounds[0] <= coordinate.byte_start
+                    and coordinate.byte_end <= bounds[1]
+                ]
+                if statements:
+                    statement = min(statements, key=lambda bounds: bounds[1] - bounds[0])
+                    if statement[1] - statement[0] <= maximum_unit_bytes:
+                        start, end = statement
+                        source_unit_complete = True
+                    else:
+                        source_unit_complete = False
+                else:
+                    source_unit_complete = False
+                calls = [
+                    bounds for node in ast.walk(tree)
+                    if isinstance(node, ast.Call)
+                    if (bounds := _relation_ast_range(raw, node)) is not None
+                    and bounds == (coordinate.byte_start, coordinate.byte_end)
+                ]
+                if len(calls) != 1:
+                    continue
+        elif support.relation == "imports" and coordinate.source_path.endswith(".py"):
+            try:
+                tree = ast.parse(raw.decode("utf-8"))
+            except (UnicodeDecodeError, SyntaxError):
+                pass
+            else:
+                statements = [
+                    bounds for node in tree.body
+                    if isinstance(node, (ast.Import, ast.ImportFrom))
+                    if (bounds := _relation_ast_range(raw, node)) is not None
+                    and bounds[0] <= coordinate.byte_start
+                    and coordinate.byte_end <= bounds[1]
+                ]
+                if len(statements) == 1 and statements[0][1] - statements[0][0] <= maximum_unit_bytes:
+                    start, end = statements[0]
+                    source_unit_complete = True
         if end <= start:
             continue
         try:
@@ -1522,6 +1888,7 @@ def derive_source_relations(
     counts = {
         "javascript_imports": {"resolved": 0, "unresolved": 0, "unsupported": 0},
         "python_imports": {"resolved": 0, "unresolved": 0, "unsupported": 0},
+        "python_calls": {"resolved": 0, "unresolved": 0, "unsupported": 0},
         "links_to_heading": {"resolved": 0, "unresolved": 0, "unsupported": 0},
     }
     for path, data in sorted(source_bytes.items()):
@@ -1663,6 +2030,97 @@ def derive_source_relations(
                 )
                 counts["python_imports"]["resolved"] += 1
 
+    for path, tree in sorted(trees.items()):
+        data = source_bytes[path]
+        imported_functions: dict[str, list[tuple[SourceCoordinate | None, int]]] = defaultdict(list)
+        for statement in tree.body:
+            if not isinstance(statement, ast.ImportFrom):
+                continue
+            module = _relation_resolved_module(path, statement)
+            targets = modules.get(module or "", ())
+            for alias in statement.names:
+                if alias.name == "*":
+                    continue
+                target = targets[0] if len(targets) == 1 else None
+                declarations_for_name = (
+                    declarations.get(target, {}).get(alias.name, ())
+                    if target is not None else ()
+                )
+                target_tree = trees.get(target or "")
+                functions = [
+                    node for node in (target_tree.body if target_tree is not None else ())
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and node.name == alias.name
+                ]
+                coordinate = (
+                    declarations_for_name[0]
+                    if len(declarations_for_name) == 1 and len(functions) == 1
+                    else None
+                )
+                imported_functions[alias.asname or alias.name].append(
+                    (coordinate, statement.end_lineno or statement.lineno)
+                )
+
+        rebound: set[str] = {
+            node.id for node in ast.walk(tree)
+            if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del))
+        }
+        rebound.update(
+            node.arg for node in ast.walk(tree) if isinstance(node, ast.arg)
+        )
+        rebound.update(
+            node.name for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        )
+        rebound.update(
+            node.name for node in ast.walk(tree)
+            if isinstance(node, ast.ExceptHandler) and node.name
+        )
+        rebound.update(
+            node.name for node in ast.walk(tree)
+            if isinstance(node, (ast.MatchAs, ast.MatchStar)) and node.name
+        )
+        rebound.update(
+            node.rest for node in ast.walk(tree)
+            if isinstance(node, ast.MatchMapping) and node.rest
+        )
+        rebound.update(
+            alias.asname or alias.name.split(".", 1)[0]
+            for node in ast.walk(tree) if isinstance(node, ast.Import)
+            for alias in node.names
+        )
+        top_level_imports = {id(node) for node in tree.body if isinstance(node, ast.ImportFrom)}
+        rebound.update(
+            alias.asname or alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and id(node) not in top_level_imports
+            for alias in node.names
+        )
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            bindings = imported_functions.get(node.func.id)
+            if bindings is None:
+                continue
+            bounds = _relation_ast_range(data, node)
+            if (
+                len(bindings) != 1 or bindings[0][0] is None
+                or node.lineno <= bindings[0][1]
+                or node.func.id in rebound or bounds is None
+            ):
+                counts["python_calls"]["unresolved"] += 1
+                continue
+            add(
+                "calls",
+                _relation_coordinate(
+                    snapshot.snapshot_sha256, path, data, *bounds,
+                    "python_call", "call", bindings[0][0].symbol,
+                ),
+                bindings[0][0],
+            )
+            counts["python_calls"]["resolved"] += 1
+
     javascript = JavaScriptCoordinateProvider().relations(source_snapshot(source_bytes))
     if not javascript.supported:
         raise ValueError(javascript.reason or "javascript_relation_index_unavailable")
@@ -1781,6 +2239,11 @@ def derive_source_relations(
     ordered_edges = tuple(sorted(edges, key=lambda edge: edge.edge_id))
     Graph(graph.records, ordered_edges)
     coverage = (
+        SourceRelationCoverage(
+            "calls",
+            "python_ast_direct_call_to_uniquely_imported_top_level_function",
+            **counts["python_calls"],
+        ),
         SourceRelationCoverage(
             "imports",
             "javascript_tree_sitter_static_relative_named_direct_export",
@@ -3457,6 +3920,21 @@ def _complete_unit_bounds_with_status(
         while begin > 0 and re.match(r"^\s*@(\w|[.])+", lines[begin - 1]):
             begin -= 1
         finish = declaration + 1
+        if path.endswith(".py") and not declaration_text.rstrip().endswith(":"):
+            try:
+                header_ended = False
+                tokens = tokenize.generate_tokens(
+                    chain(islice(lines, declaration, None), ("",)).__next__
+                )
+                for token in tokens:
+                    if token.type == tokenize.NEWLINE:
+                        header_ended = True
+                    elif header_ended and token.type not in (tokenize.NL, tokenize.COMMENT):
+                        if token.type == tokenize.INDENT:
+                            finish = declaration + token.start[0] - 1
+                        break
+            except (IndentationError, tokenize.TokenError):
+                pass
         while finish < len(lines):
             candidate = lines[finish]
             if candidate.strip():
