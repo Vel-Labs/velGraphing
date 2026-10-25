@@ -221,14 +221,15 @@ class RankedCandidateTests(unittest.TestCase):
         fixture = Fixture(
             {
                 "src/caller.py": (
-                    b"from src.helper import helper as call_dependency_import\n\n"
-                    b"def call_helper():\n    return call_helper_import()\n"
+                    b"from src.helper import helper as call_dependency_import  # caller\n\n"
+                    b"def call_helper():\n    return call_dependency_import()\n"
                 ),
                 "src/helper.py": b"def helper():\n    return 1\n",
                 "README.md": b"# Index\n[install guide](docs/guide.md#install)\n",
                 "docs/guide.md": b"# Install\nUse call_helper.\n",
             },
-            "find call_dependency_import caller Index README",
+            # Isolate edge expansion from symbol-specific primary reordering.
+            "find caller Index README",
         )
         try:
             artifact, _ = mod.generate(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -21,6 +22,7 @@ SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 LANES = {"preparation", "answer", "grader", "jev-approval"}
 COMPLETION_ATTESTATION = "completion-attestation.json"
 COMPLETION_ATTESTATION_SCHEMA = "velgraphing-lane-completion-attestation-v1"
+RAW_ASSISTANT_RESPONSE = "assistant-response.raw"
 
 
 class HandoffError(ValueError):
@@ -165,7 +167,7 @@ def read_canonical_at(directory: int, name: str) -> tuple[bytes, dict[str, Any]]
     return raw, decode(raw)
 
 
-def normalize_json_object(raw: bytes) -> bytes:
+def parse_json_object(raw: bytes) -> dict[str, Any]:
     if len(raw) > MAX_BYTES:
         raise HandoffError("handoff_file_invalid")
 
@@ -188,12 +190,84 @@ def normalize_json_object(raw: bytes) -> bytes:
         )
         if type(value) is not dict:
             raise ValueError
-        normalized = canonical(value)
+        canonical(value)
     except (UnicodeError, json.JSONDecodeError, RecursionError, TypeError, ValueError):
         raise HandoffError("invalid_json_object") from None
+    return value
+
+
+def normalize_json_object(raw: bytes) -> bytes:
+    normalized = canonical(parse_json_object(raw))
     if len(normalized) > MAX_BYTES:
         raise HandoffError("invalid_json_object")
     return normalized
+
+
+def _matches_json_type(value: Any, expected: str) -> bool:
+    if expected == "number":
+        return type(value) is int or type(value) is float and math.isfinite(value)
+    return {
+        "array": type(value) is list,
+        "boolean": type(value) is bool,
+        "integer": type(value) is int,
+        "null": value is None,
+        "object": type(value) is dict,
+        "string": type(value) is str,
+    }.get(expected, False)
+
+
+def _validate_json_schema(value: Any, schema: Any) -> None:
+    if type(schema) is not dict:
+        raise HandoffError("host_response_contract_invalid")
+    if "const" in schema and (
+        type(value) is not type(schema["const"]) or value != schema["const"]
+    ):
+        raise HandoffError("host_response_contract_invalid")
+    expected = schema.get("type")
+    if expected is not None:
+        expected_types = [expected] if type(expected) is str else expected
+        if (
+            type(expected_types) is not list
+            or not expected_types
+            or not all(type(item) is str for item in expected_types)
+            or not any(_matches_json_type(value, item) for item in expected_types)
+        ):
+            raise HandoffError("host_response_contract_invalid")
+    if type(value) is dict:
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        if (
+            type(properties) is not dict
+            or type(required) is not list
+            or not all(type(item) is str for item in required)
+            or any(item not in value for item in required)
+            or (
+                schema.get("additionalProperties") is False
+                and set(value) - set(properties)
+            )
+        ):
+            raise HandoffError("host_response_contract_invalid")
+        for key, item in value.items():
+            if key in properties:
+                _validate_json_schema(item, properties[key])
+    elif type(value) is list and "items" in schema:
+        for item in value:
+            _validate_json_schema(item, schema["items"])
+    if type(value) in {int, float} and type(value) is not bool:
+        if "minimum" in schema and value < schema["minimum"]:
+            raise HandoffError("host_response_contract_invalid")
+        if "exclusiveMinimum" in schema and value <= schema["exclusiveMinimum"]:
+            raise HandoffError("host_response_contract_invalid")
+
+
+def validate_response_contract(value: dict[str, Any], contract: Any) -> None:
+    if (
+        type(contract) is not dict
+        or contract.get("schema_version") != "velgraphing-response-contract-v1"
+        or contract.get("encoding") != "canonical-json"
+    ):
+        raise HandoffError("host_response_contract_invalid")
+    _validate_json_schema(value, contract.get("json_schema"))
 
 
 def _execution_identity(
@@ -493,6 +567,53 @@ def write_response(root: Path, trial_id: str, attempt: int, lane: str, raw: byte
     _write_lane(root, trial_id, attempt, lane, "response.json", raw)
 
 
+def capture_host_response(
+    root: Path,
+    trial_id: str,
+    attempt: int,
+    lane: str,
+    raw: bytes,
+    *,
+    thread_id: str,
+    model: str,
+    reasoning: str,
+    lane_manifest_sha256: str,
+) -> tuple[Path, str, str]:
+    if not raw:
+        raise HandoffError("host_response_empty")
+    if len(raw) > MAX_BYTES:
+        raise HandoffError("handoff_file_invalid")
+    directory = _open_lane(root, trial_id, attempt, lane, create=False)
+    try:
+        for name in (RAW_ASSISTANT_RESPONSE, "draft.json"):
+            try:
+                os.stat(name, dir_fd=directory, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            else:
+                raise HandoffError("handoff_file_exists")
+        atomic_write_at(directory, RAW_ASSISTANT_RESPONSE, raw)
+        value = parse_json_object(raw)
+        _, request = read_canonical_at(directory, "request.json")
+        validate_response_contract(value, request.get("response_contract"))
+    finally:
+        os.close(directory)
+    expected_identity = bound_lane_identity(
+        root, trial_id, lane, lane_manifest_sha256
+    )
+    supplied_identity = value.get("execution_identity")
+    if (
+        expected_identity
+        != _execution_identity(trial_id, lane, thread_id, model, reasoning)
+        or supplied_identity != expected_identity
+    ):
+        raise HandoffError("host_response_identity_invalid")
+    draft_path = lane_root(root, trial_id, attempt, lane) / "draft.json"
+    draft_raw = canonical(value)
+    _write_lane(root, trial_id, attempt, lane, draft_path.name, draft_raw)
+    return draft_path, digest(raw), digest(draft_raw)
+
+
 def fixture_response(lane: str, trial_id: str, request: dict[str, Any]) -> dict[str, Any]:
     if lane == "preparation":
         packet = request.get("payload", {}).get("fixture_candidate_packet")
@@ -550,7 +671,7 @@ def wait_for_request(root: Path, trial_id: str, attempt: int, lane: str,
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     commands = result.add_subparsers(dest="command", required=True)
-    for name in ("wait", "attest", "respond", "fixture-worker"):
+    for name in ("wait", "capture", "attest", "respond", "fixture-worker"):
         command = commands.add_parser(name)
         command.add_argument("--run-root", required=True)
         command.add_argument("--trial-id", required=True)
@@ -558,6 +679,14 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--lane", choices=sorted(LANES), required=True)
         if name in {"wait", "fixture-worker"}:
             command.add_argument("--wait-seconds", type=float, required=True)
+        elif name == "capture":
+            command.add_argument("--thread-id", required=True)
+            command.add_argument("--model", required=True)
+            command.add_argument("--reasoning", required=True)
+            command.add_argument("--lane-manifest-sha256", required=True)
+            command.add_argument(
+                "--thread-status", choices=["completed"], required=True
+            )
         elif name == "respond":
             command.add_argument("--response-file")
             command.add_argument("--normalize-json", action="store_true")
@@ -589,6 +718,22 @@ def main(argv: list[str] | None = None) -> int:
                 raise HandoffError("handoff_file_invalid")
             sys.stdout.buffer.write(wait_for_response(
                 root, args.trial_id, args.attempt, args.lane, args.wait_seconds, raw))
+        elif args.command == "capture":
+            raw = sys.stdin.buffer.read(MAX_BYTES + 1)
+            if len(raw) > MAX_BYTES:
+                raise HandoffError("handoff_file_invalid")
+            draft_path, raw_sha256, draft_sha256 = capture_host_response(
+                root, args.trial_id, args.attempt, args.lane, raw,
+                thread_id=args.thread_id, model=args.model, reasoning=args.reasoning,
+                lane_manifest_sha256=args.lane_manifest_sha256,
+            )
+            sys.stdout.buffer.write(canonical({
+                "status": "host_response_captured",
+                "raw_path": str(draft_path.parent / RAW_ASSISTANT_RESPONSE),
+                "raw_sha256": raw_sha256,
+                "draft_path": str(draft_path),
+                "draft_sha256": draft_sha256,
+            }))
         elif args.command == "attest":
             expected_identity = bound_lane_identity(
                 root, args.trial_id, args.lane, args.lane_manifest_sha256

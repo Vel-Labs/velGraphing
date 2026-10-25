@@ -216,7 +216,26 @@ class DependencyControllerTests(unittest.TestCase):
             )
 
     def test_completed_plan_is_exact_and_closed(self) -> None:
-        plan = mod.validate_plan(expected_live_authorized=False)
+        fixture = json.loads(
+            (ROOT / "tests/fixtures/dependency-response-contracts.json").read_text()
+        )
+        self.assertEqual(fixture["source_commit"], mod.REPAIRED_CANDIDATE_COMMIT)
+        contracts = fixture["contracts"]
+        self.assertEqual(set(contracts), {"ANSWER_RESPONSE_CONTRACT", "GRADER_RESPONSE_CONTRACT"})
+        for name, expected in (
+            ("ANSWER_RESPONSE_CONTRACT", mod.ANSWER_CONTRACT_SHA256),
+            ("GRADER_RESPONSE_CONTRACT", mod.GRADER_CONTRACT_SHA256),
+        ):
+            self.assertEqual(mod.digest(mod.canonical(contracts[name])), expected)
+        # Validate the sealed plan with its original response contracts, not a newer host.
+        with mock.patch.multiple(mod, **contracts):
+            plan = mod.validate_plan(expected_live_authorized=False)
+            for name in contracts:
+                changed = copy.deepcopy(contracts[name])
+                changed["json_schema"]["additionalProperties"] = True
+                with self.subTest(contract=name), mock.patch.object(mod, name, changed):
+                    with self.assertRaisesRegex(mod.ControllerError, "dependency_plan_mismatch"):
+                        mod.validate_plan(expected_live_authorized=False)
         self.assertFalse(plan["live_authorized"])
         self.assertEqual(plan["provider_calls_executed"], 2)
         self.assertEqual(plan["successor_provider_calls_executed"], 2)

@@ -1,0 +1,124 @@
+{
+  "bindings": {
+    "calibration": {
+      "path": "scripts/benchmarks/time_to_correct_calibration.py",
+      "sha256": "a015b481053dc54cb338db22ef321453f10ca7eff44b8fa93b58de1767217235"
+    },
+    "controller": {
+      "path": "scripts/benchmarks/four_arm_study_v1.py",
+      "sha256": "fbffeec3d75e24f8b30ec02f798933006bc545899c20123a3ebeeddec986fe22"
+    },
+    "host": {
+      "path": "scripts/benchmarks/time_to_correct_host.py",
+      "sha256": "4e89e9283870ca164a9a82fb93d65b60c9027b76d85ef5e99670d278e1fa1393"
+    },
+    "lane_manifest": {
+      "entry_count": 32,
+      "schema_version": "velgraphing-v4-luna-lane-manifest-v1",
+      "sha256": null,
+      "status": "pending_parent_freeze"
+    },
+    "pool_bindings": {
+      "direct:D-01": "d5ff853da5725875aa6fa812569ddc02a70b23352d8c59b27fecb79937609fb6",
+      "direct:L-01": "ea70e8352988940102be3e58459027e99cf301dcc5f35b935baa062608175da2",
+      "direct:M-02": "7f951d76ba2a69cfbd49e890e46554174eec5253b796097edf764c1071b4c498",
+      "direct:S-01": "0c97557b80d65483ab0484a6ef05570d262da49716fb624de777636423704c49",
+      "graph:D-01": "b0e2df0e7bae33ec64b909b1bf1f1f2675ab613c576354770cfe668f47deee5b",
+      "graph:L-01": "8f2851e56b0e15cafa457e428d7d6e77a22d61e3635ce8c79ef07f60de65d93e",
+      "graph:M-02": "924d32fa3097327ac1c3e85b3171a614de04d4a266003c2e9ba6aea1f370a30e",
+      "graph:S-01": "7dc43f5ff265b3b43f1a5c9183bf7cf8d2d4a55fe7dfd8b6b88499db45712b33"
+    },
+    "request_byte_set_sha256": "80b3411f0d30600bc302a59debe36fe66734e4aceca0da6afdae303dc096af94",
+    "source_snapshots": {
+      "engineering-handbook": "594aa47760172eba049e18c5f3a2f602a7b96b73a315756876955d7be81cd402",
+      "openchain-reference-material": "7b06041a211f9365686f934eb7f37a0646f65ac4866d6837e37714ffb1e7679b",
+      "thealgorithms-python": "5bafa4b7f64a981a61abb6be348436f6f18be31e0102c533b88269a9f9359f09"
+    },
+    "successor_grader_response_contract_sha256": "dd517640475fe2219514ebee94a01182bbd74ff17adafeb5aa1348a3e0f6db2c",
+    "successor_rubric": {
+      "path": "successor-rubrics.json",
+      "sha256": "f863147640b47342d9c066f42d245708a58ba47f8ec235d5fa1459de0ccfbd41"
+    }
+  },
+  "classification": {
+    "claim_boundary": {
+      "allowed": [
+        "oracle_assisted_fallback_ttc_under_frozen_contract"
+      ],
+      "prohibited": [
+        "direct_retrieval_performance",
+        "graph_retrieval_performance",
+        "jev_retrieval_performance",
+        "direct_graph_or_jev_comparative_retrieval_performance"
+      ]
+    },
+    "sealed_result": "oracle_assisted_fallback_ttc",
+    "study": "oracle_assisted_fallback_ttc"
+  },
+  "fact_witness_map_sha256": "430aaebf981f370b6a8005168252d2676a3a361c0d705b7faa43479c87a5b5ad",
+  "fallback_allowlist_sha256": "75e4c72c5a3b945a8bd1cfdbb994341cd185060ce33450c23357fe0f8583d122",
+  "remaining_authority": {
+    "absolute_python_executable": null,
+    "answer_thread_ids": 16,
+    "exact_host_argv_arrays": 32,
+    "final_user_reack": [
+      "request_byte_set_sha256",
+      "eight_call_cap",
+      "total_reservation_usd",
+      "lane_manifest_sha256",
+      "absolute_python_executable"
+    ],
+    "grader_thread_ids": 16,
+    "lane_manifest_sha256": null,
+    "live_lanes_created": 0
+  },
+  "result_contract": {
+    "required_fields": [
+      "answer_call_count",
+      "attempt_count",
+      "claim_boundary",
+      "classification",
+      "confirmed_ttc_ns_by_trial",
+      "controller_sha256",
+      "fact_witness_map_sha256",
+      "fallback_allowlist_sha256",
+      "grader_call_count",
+      "host_sha256",
+      "lane_manifest_sha256",
+      "pool_bindings",
+      "request_byte_set_sha256",
+      "source_snapshots",
+      "successor_grader_response_contract_sha256",
+      "successor_rubric_sha256",
+      "successor_ttc_contract_sha256",
+      "usage_missingness",
+      "verified_fallback_invocations",
+      "verifier_policy_sha256",
+      "wall_time_ns_by_trial",
+      "witness_custody_sha256"
+    ],
+    "schema_version": "velgraphing-four-arm-result-v2",
+    "token_policy": "host_reported_only_never_estimate_from_bytes"
+  },
+  "schema_version": "velgraphing-four-arm-successor-ttc-v1",
+  "status": "pending_lane_manifest_and_final_user_reack",
+  "trial_policy": {
+    "answer_calls_per_dispatch": 1,
+    "answer_repairs": 0,
+    "grader_calls_per_dispatch": 1,
+    "jev_retries": 0,
+    "request_delivery": "exact_inline_request_bytes",
+    "response_capture": "parent_retains_raw_validates_contract_then_canonicalizes"
+  },
+  "verifier_policy": {
+    "fact_rule": "all_of_frozen_witness_ids",
+    "fallback": "one_exact_source_append_before_answer",
+    "final_context_byte_limit": 16384,
+    "input": "selected_evidence_identities_only",
+    "scope": "all_arms",
+    "source_authority": "same_frozen_task_snapshot",
+    "unresolved_or_oversize": "refuse_before_answer_dispatch"
+  },
+  "verifier_policy_sha256": "deb8f3f1ec18ec720dc26b0db55c9439d30ac02b1395bea87d719abbd7314c15",
+  "witness_custody_sha256": "e042c9ee45c7fcc9e36a7ad693b7f77106f12dd94f06756b9e8ae19e276be38b"
+}

@@ -1,0 +1,91 @@
+{
+  "source_commit": "dc0fbcd4397e997645de49d831a8c6608f2f3df2",
+  "source_path": "scripts/benchmarks/time_to_correct_host.py",
+  "source_sha256": "a5541616c422b375911f3710562a6816d56843fa88b557851f7229d8f4e7c739",
+  "contracts": {
+    "ANSWER_RESPONSE_CONTRACT": {
+      "schema_version": "velgraphing-response-contract-v1",
+      "encoding": "canonical-json",
+      "json_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "answer_text",
+          "usage",
+          "model_calls_complete",
+          "context_deliveries_complete"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": "velgraphing-answer-output-v1"
+          },
+          "answer_text": {
+            "type": "string"
+          },
+          "usage": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "model_calls_complete": {
+            "type": "boolean"
+          },
+          "context_deliveries_complete": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "GRADER_RESPONSE_CONTRACT": {
+      "schema_version": "velgraphing-response-contract-v1",
+      "encoding": "canonical-json",
+      "json_schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "required_fact_score",
+          "required_fact_maximum",
+          "critical_facts_exact",
+          "unsupported_material_claims",
+          "grader_id",
+          "usage",
+          "model_calls_complete"
+        ],
+        "properties": {
+          "schema_version": {
+            "const": "velgraphing-grader-output-v1"
+          },
+          "required_fact_score": {
+            "type": "number"
+          },
+          "required_fact_maximum": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "critical_facts_exact": {
+            "type": "boolean"
+          },
+          "unsupported_material_claims": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "grader_id": {
+            "type": "string"
+          },
+          "usage": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "model_calls_complete": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

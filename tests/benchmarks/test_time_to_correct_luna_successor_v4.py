@@ -166,7 +166,28 @@ class LunaSuccessorTests(unittest.TestCase):
         self.assertEqual(plan["controller"], mod.CONTROLLER)
         self.assertEqual(plan["telemetry_schema"], mod.TELEMETRY_SCHEMA)
         self.assertEqual(plan["host_transport_contract"], mod.HOST_TRANSPORT_CONTRACT)
-        self.assertTrue(mod.load_plan(expected_live_authorized=True)["live_authorized"])
+        # The historical private manifest is not a portable test fixture.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            manifest = root / mod.LANE_MANIFEST_BINDING["path"]
+            manifest.parent.mkdir(parents=True)
+            raw = mod.canonical({
+                "schema_version": mod.LANE_MANIFEST_SCHEMA,
+                "entries": lane_entries(),
+            })
+            manifest.write_bytes(raw)
+            local_plan = json.loads(json.dumps(plan))
+            local_plan["lane_manifest"]["sha256"] = mod.digest(raw)
+            path = root / "plan.json"
+            path.write_text(json.dumps(local_plan), encoding="utf-8")
+            with mock.patch.object(mod, "ROOT", root):
+                self.assertTrue(mod.load_plan(path, expected_live_authorized=True)["live_authorized"])
+                manifest.write_bytes(raw + b" ")
+                with self.assertRaisesRegex(mod.SuccessorError, "successor_lane_manifest_invalid"):
+                    mod.load_plan(path, expected_live_authorized=True)
+                manifest.unlink()
+                with self.assertRaisesRegex(mod.SuccessorError, "successor_lane_manifest_invalid"):
+                    mod.load_plan(path, expected_live_authorized=True)
         plan["live_authorized"] = False
         plan["status"] = "frozen_lane_manifest_pending_live_authorization"
         plan["lane_manifest"] = dict(mod.LANE_MANIFEST_BINDING)

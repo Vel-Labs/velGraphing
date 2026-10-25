@@ -45,7 +45,7 @@ class Fixture:
         self.sources = {
             "cpython": (
                 "source.py",
-                b"def alpha():\n    return 'cpython evidence'\n" + b"# evidence\n" * 12,
+                b"from related import related\n\ndef alpha():\n    return related()\n" + b"# evidence\n" * 12,
             ),
             "openchain-reference-material": (
                 "source.md",
@@ -53,6 +53,8 @@ class Fixture:
             ),
         }
         self.identities: dict[str, tuple[str, str, int, str]] = {}
+        self.source_rows: dict[str, list[dict]] = {}
+        related_raw = b"def related():\n    return 'cpython evidence'\n"
         manifest_names = {
             "cpython": "cpython.json",
             "openchain-reference-material": "openchain.json",
@@ -63,12 +65,20 @@ class Fixture:
             git(lane, "init", "-q")
             git(lane, "config", "user.email", "test@example.invalid")
             git(lane, "config", "user.name", "VelGraphing Test")
-            (lane / path).write_bytes(raw)
+            corpus_sources = {path: raw}
+            if corpus == "cpython":
+                corpus_sources["related.py"] = related_raw
+            for source_path, source_raw in corpus_sources.items():
+                (lane / source_path).write_bytes(source_raw)
             git(lane, "add", ".")
             git(lane, "commit", "-q", "-m", "fixture")
             commit = git(lane, "rev-parse", "HEAD")
             digest = hashlib.sha256(raw).hexdigest()
-            source_rows = [{"path": path, "byte_length": len(raw), "sha256": digest}]
+            source_rows = [
+                {"path": name, "byte_length": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+                for name, body in sorted(corpus_sources.items())
+            ]
+            self.source_rows[corpus] = source_rows
             manifest = {
                 "schema_version": "velgraphing-corpus-source-manifest-v1",
                 "repository": "git-object-source",
@@ -76,8 +86,8 @@ class Fixture:
                 "includes": ["**"],
                 "excludes": [],
                 "sources": source_rows,
-                "source_count": 1,
-                "source_bytes": len(raw),
+                "source_count": len(source_rows),
+                "source_bytes": sum(row["byte_length"] for row in source_rows),
                 "snapshot_sha256": mod.generator._snapshot_digest(source_rows),
                 "skipped": {},
             }
@@ -112,22 +122,27 @@ class Fixture:
                 "relationship_parent_candidate_id": None,
             }
             candidate["id"] = mod.evaluator.candidate_id(candidate)
-            sources = [{
+            sources = self.source_rows.get(corpus, [{
                 "path": path,
                 "source_sha256": digest,
                 "byte_length": length,
-            }]
+            }])
+            sources = [
+                {"path": row["path"], "source_sha256": row.get("sha256", row.get("source_sha256")),
+                 "byte_length": row["byte_length"]}
+                for row in sources
+            ]
             for route in mod.generator.ROUTES:
                 typed = route.startswith("typed_graph")
                 candidates = [copy.deepcopy(candidate)]
                 if task_id == "C-02" and route == "typed_graph":
                     relationship = {
-                        "path": path,
-                        "source_sha256": digest,
-                        "byte_start": 80,
-                        "byte_end": 100,
+                        "path": "related.py",
+                        "source_sha256": hashlib.sha256(related_raw).hexdigest(),
+                        "byte_start": 0,
+                        "byte_end": len(related_raw),
                         "required": False,
-                        "record_id": f"repo:{path}",
+                        "record_id": "repo:related.py",
                         "relationship_parent_candidate_id": candidate["id"],
                     }
                     relationship["id"] = mod.evaluator.candidate_id(relationship)
@@ -146,8 +161,8 @@ class Fixture:
                         "candidate_limit": 12,
                         "candidate_aggregate_byte_budget": 24_576,
                         "candidate_unit_byte_budget": 4096,
-                        "derived_edge_count": 0,
-                        "active_edge_count": 0,
+                        "derived_edge_count": int(typed and corpus == "cpython"),
+                        "active_edge_count": int(typed and corpus == "cpython" and route != "typed_graph_no_edges"),
                         "source_bound_expansion": typed,
                         "expand_one_hop": route != "typed_graph_no_expansion" if typed else False,
                     },
@@ -193,6 +208,21 @@ class Fixture:
 
 
 class JevPreviewTests(unittest.TestCase):
+    def test_relationship_preview_rejects_unwitnessed_edge(self) -> None:
+        fixture = Fixture()
+        scan = mod.generator.scan_lane
+
+        def without_edges(*args, **kwargs):
+            graph, snapshot, reader, count = scan(*args, **kwargs)
+            return type(graph)(graph.records), snapshot, reader, count
+
+        try:
+            with mock.patch.object(mod.generator, "scan_lane", side_effect=without_edges):
+                with self.assertRaisesRegex(mod.PreviewError, "baseline_selection_invalid"):
+                    fixture.build()
+        finally:
+            fixture.close()
+
     def validate(self, preview, candidate_sha256):
         return mod.validate_preview(
             preview,

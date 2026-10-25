@@ -10,6 +10,8 @@ from time_to_correct import Budget, MeasurementError, Trial, digest
 from time_to_correct_host import (
     ANSWER_RESPONSE_CONTRACT,
     GRADER_RESPONSE_CONTRACT,
+    SUCCESSOR_GRADER_RESPONSE_CONTRACT,
+    _grader_input,
     run_process_trial,
 )
 
@@ -128,6 +130,32 @@ def identified_code(role, identity=None, grader_id=None):
     )
 
 
+def successor_grader_code(decisions, score, maximum=2):
+    result = {
+        "critical_facts_exact": True,
+        "grader_id": "successor-grader",
+        "model_calls_complete": True,
+        "required_fact_decisions": decisions,
+        "required_fact_maximum": maximum,
+        "required_fact_score": score,
+        "schema_version": "velgraphing-grader-output-v2",
+        "unsupported_material_claims": 0,
+        "usage": None,
+    }
+    return (
+        "import json,sys\n"
+        "payload=json.load(sys.stdin)\n"
+        "assert payload['schema_version']=='velgraphing-grader-model-input-v2'\n"
+        "assert payload['evidence_sources']=={'c1':'source.py'}\n"
+        "properties=payload['response_contract']['json_schema']['properties']\n"
+        "assert properties['required_fact_decisions']['minItems']==2\n"
+        "assert properties['required_fact_decisions']['maxItems']==2\n"
+        f"result={result!r}\n"
+        "sys.stdout.write(json.dumps(result,sort_keys=True,separators=(',',':'),"
+        "ensure_ascii=True,allow_nan=False))\n"
+    )
+
+
 class HostBoundaryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -138,7 +166,8 @@ class HostBoundaryTests(unittest.TestCase):
                  answer_timeout_s=2, wall_limit_ns=5_000_000_000,
                  prepared=None, grader_context=None, grader_model=None,
                  answer_execution_identity=None, grader_execution_identity=None,
-                 strict_contracts=False, require_answer_evidence_citation=True):
+                 strict_contracts=False, successor_grader=False,
+                 require_answer_evidence_citation=True):
         trial = Trial(identity(), Budget(0, wall_limit_ns), execution="fixture")
         return run_process_trial(
             trial,
@@ -151,7 +180,10 @@ class HostBoundaryTests(unittest.TestCase):
             grader_context=grader_context,
             grader_model=grader_model,
             answer_response_contract=(ANSWER_RESPONSE_CONTRACT if strict_contracts else None),
-            grader_response_contract=(GRADER_RESPONSE_CONTRACT if strict_contracts else None),
+            grader_response_contract=(
+                SUCCESSOR_GRADER_RESPONSE_CONTRACT if successor_grader
+                else GRADER_RESPONSE_CONTRACT if strict_contracts else None
+            ),
             answer_execution_identity=answer_execution_identity,
             grader_execution_identity=grader_execution_identity,
             require_answer_evidence_citation=require_answer_evidence_citation,
@@ -177,20 +209,18 @@ class HostBoundaryTests(unittest.TestCase):
             '''
 if payload["question"] != "Which implementation is imported immediately after merge_sort, and how does it choose and place its pivot?": raise SystemExit(7)
 if payload["instructions"] != ["Cite supporting evidence IDs as [cN]."]: raise SystemExit(7)
-if payload["evidence"] != [{"id":"d0","path":"sorts/quick_sort.py","excerpt":"pivot = collection.pop(randint(0, len(collection) - 1))","source_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","byte_start":253,"byte_end":1299,"relationship_parent_candidate_id":"parent"}]: raise SystemExit(7)
+if payload["evidence"] != [{"id":"c1","path":"sorts/quick_sort.py","excerpt":"pivot = collection.pop(randint(0, len(collection) - 1))","source_sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","byte_start":253,"byte_end":1299,"relationship_parent_candidate_id":"parent"}]: raise SystemExit(7)
 if "response_contract" in payload:''').replace(
-                "observed subprocess answer", "observed subprocess answer [d0]"
-            ).replace("d0", evidence_id)
+                "observed subprocess answer", "observed subprocess answer [c1]"
+            )
         grader_code = GRADER_CODE.replace(
             'if "response_contract" in payload:',
             '''
-if payload["answer_text"] != "observed subprocess answer [d0]": raise SystemExit(7)
+if payload["answer_text"] != "observed subprocess answer [c1]": raise SystemExit(7)
 if payload["rubric"] != {"required_facts":["Names the imported implementation."],"critical_facts":["Explains pivot selection and placement."],"acceptable_spans":["sorts/quick_sort.py"]}: raise SystemExit(7)
 if "response_contract" in payload:''').replace(
             '"required_fact_maximum": 10,', '"required_fact_maximum": 1,'
-        ).replace('"required_fact_score": 9,', '"required_fact_score": 1,').replace(
-            "d0", evidence_id
-        )
+        ).replace('"required_fact_score": 9,', '"required_fact_score": 1,')
         prohibited = {
             "run_id": "run", "trial_id": "trial", "arm": "D", "route": "typed_graph",
             "jev_status": "reranked", "treatment": "on", "request_sha256": "a" * 64,
@@ -225,6 +255,71 @@ if "response_contract" in payload:''').replace(
             grader_context=grader_context,
         )
         self.assertEqual(result["terminal_reason"], "passed")
+
+    def test_successor_grader_receives_evidence_mapping_and_fact_decisions(self):
+        prepared = {
+            "schema_version": "velgraphing-answer-evidence-v3",
+            "question": "frozen question",
+            "citation_instruction": "Cite supporting evidence IDs as [cN].",
+            "evidence": [{"id": "a" * 64, "path": "source.py", "excerpt": "evidence"}],
+        }
+        answer_code = ANSWER_CODE.replace(
+            "observed subprocess answer", "observed subprocess answer [c1]",
+        )
+        result = self.run_host(
+            answer_code,
+            grader_code=successor_grader_code([True, True], 2),
+            prepared=prepared,
+            grader_context={
+                "required_facts": ["one", "two"],
+                "critical_facts": [],
+                "acceptable_spans": ["source.py"],
+            },
+            successor_grader=True,
+        )
+        self.assertEqual(result["terminal_reason"], "passed")
+        self.assertEqual(
+            result["attempts"][0]["grader_boundary"]["required_fact_decisions"],
+            [True, True],
+        )
+
+    def test_successor_grader_mapping_and_fact_counts_fail_closed(self):
+        for mapping in ({"bad": "source.py"}, {"c0": ""}, {"c0": 1}):
+            with self.subTest(mapping=mapping), self.assertRaisesRegex(
+                MeasurementError, "invalid_grader_evidence_sources",
+            ):
+                _grader_input("answer", {}, mapping)
+
+        prepared = {
+            "schema_version": "velgraphing-answer-evidence-v3",
+            "question": "frozen question",
+            "citation_instruction": "Cite supporting evidence IDs as [cN].",
+            "evidence": [{"id": "a" * 64, "path": "source.py", "excerpt": "evidence"}],
+        }
+        answer_code = ANSWER_CODE.replace(
+            "observed subprocess answer", "observed subprocess answer [c1]",
+        )
+        for label, decisions, score in (
+            ("count", [True], 1),
+            ("satisfied", [True, False], 2),
+        ):
+            with self.subTest(label=label):
+                result = self.run_host(
+                    answer_code,
+                    grader_code=successor_grader_code(decisions, score),
+                    prepared=prepared,
+                    grader_context={
+                        "required_facts": ["one", "two"],
+                        "critical_facts": [],
+                        "acceptable_spans": ["source.py"],
+                    },
+                    successor_grader=True,
+                )
+                self.assertEqual(result["terminal_reason"], "measurement_error")
+                self.assertEqual(
+                    result["attempts"][0]["failure_reason"],
+                    "grader_required_fact_decisions_mismatch",
+                )
 
     def test_process_timeout_is_callback_timeout_not_wall_deadline(self):
         result = self.run_host("import time; time.sleep(1)", answer_timeout_s=0.01)
@@ -440,7 +535,6 @@ if "response_contract" in payload:''').replace(
 
     def test_v3_answer_requires_known_evidence_citation(self):
         evidence_id = "a" * 64
-        unknown_id = "b" * 64
         prepared = {
             "schema_version": "velgraphing-answer-evidence-v3",
             "question": "frozen question",
@@ -451,20 +545,19 @@ if "response_contract" in payload:''').replace(
         self.assertEqual(missing["attempts"][0]["failure_reason"],
                          "answer_evidence_citation_missing")
         invalid = self.run_host(
-            ANSWER_CODE.replace("observed subprocess answer", f"unsupported [{unknown_id}]"),
+            ANSWER_CODE.replace("observed subprocess answer", "unsupported [c2]"),
             prepared=prepared)
         self.assertEqual(invalid["attempts"][0]["failure_reason"],
                          "answer_evidence_citation_invalid")
         valid = self.run_host(
             ANSWER_CODE.replace(
-                "observed subprocess answer", f"supported [{evidence_id}] with [pivot]"
+                "observed subprocess answer", "supported [c1] with [pivot]"
             ),
             prepared=prepared)
         self.assertEqual(valid["terminal_reason"], "passed")
 
     def test_missing_citation_can_reach_grader_but_invalid_id_still_fails(self):
         evidence_id = "a" * 64
-        unknown_id = "b" * 64
         prepared = {
             "schema_version": "velgraphing-answer-evidence-v3",
             "question": "frozen question",
@@ -478,7 +571,7 @@ if "response_contract" in payload:''').replace(
         )
         self.assertEqual(missing["terminal_reason"], "passed")
         invalid = self.run_host(
-            ANSWER_CODE.replace("observed subprocess answer", f"unsupported [{unknown_id}]"),
+            ANSWER_CODE.replace("observed subprocess answer", "unsupported [c2]"),
             prepared=prepared,
             require_answer_evidence_citation=False,
         )

@@ -356,8 +356,18 @@ def graph_argv(packet: Mapping[str, Any], repo: Path, corpus_root: Path) -> list
     return resolved[resolved.index("--root"):]
 
 
-def handoff_argv(run_root: Path, trial_id: str, lane: str, wait_seconds: float) -> list[str]:
-    return [sys.executable, str(HANDOFF_PATH), "wait", "--run-root", str(run_root),
+def _python_executable(value: str | Path | None) -> str:
+    if value is None:
+        return sys.executable
+    path = Path(value)
+    if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+        raise MeasurementError("python_executable_invalid")
+    return str(path)
+
+
+def handoff_argv(run_root: Path, trial_id: str, lane: str, wait_seconds: float,
+                 python_executable: str | Path | None = None) -> list[str]:
+    return [_python_executable(python_executable), str(HANDOFF_PATH), "wait", "--run-root", str(run_root),
             "--trial-id", trial_id, "--attempt", "0", "--lane", lane,
             "--wait-seconds", str(wait_seconds)]
 
@@ -437,6 +447,22 @@ def _usage(attempts: list[Mapping[str, Any]], kind: str,
             sum(row["output_tokens"] for row in rows))
 
 
+def _usage_missingness(attempts: list[Mapping[str, Any]], kind: str,
+                       complete: bool) -> str | None:
+    rows = [row for attempt in attempts for row in attempt.get("model_calls", [])
+            if row.get("kind") == kind]
+    if not complete:
+        return "model_call_incomplete"
+    if not rows:
+        return "model_call_missing"
+    if any(row.get("provenance") == "unavailable" for row in rows):
+        return "host_usage_unavailable"
+    if any(row.get("input_tokens") is None or row.get("output_tokens") is None
+           for row in rows):
+        return "host_token_fields_missing"
+    return None
+
+
 def _v3_trial_measurement(registration: Mapping[str, Any],
                           result: Mapping[str, Any] | None) -> dict[str, Any]:
     row: dict[str, Any] = {
@@ -462,6 +488,15 @@ def _v3_trial_measurement(registration: Mapping[str, Any],
             "jev_rubric_version": None,
             "answer_usage_complete": False,
             "grader_usage_complete": False,
+            "attempt_count": 0,
+            "answer_call_count": 0,
+            "grader_call_count": 0,
+            "verified_fallback": None,
+            "usage_missingness": {
+                "answer": "model_call_missing",
+                "grader": "model_call_missing",
+                "provider": "model_call_missing",
+            },
             "jev_score_observation": None,
             "shared_state_tokens": None,
             "question_suffix_tokens": None,
@@ -541,6 +576,26 @@ def _v3_trial_measurement(registration: Mapping[str, Any],
         "grader_input_tokens": grader_input,
         "grader_output_tokens": grader_output,
         "grader_usage_complete": grader_complete,
+        "attempt_count": len(attempts),
+        "answer_call_count": sum(
+            1 for attempt in attempts for call in attempt.get("model_calls", [])
+            if call.get("kind") == "answer"
+        ),
+        "grader_call_count": sum(
+            1 for attempt in attempts for call in attempt.get("model_calls", [])
+            if call.get("kind") == "grader"
+        ),
+        "verified_fallback": (
+            attempts[0].get("verified_fallback") if len(attempts) == 1 else None
+        ),
+        "usage_missingness": {
+            "answer": _usage_missingness(attempts, "answer", answer_complete),
+            "grader": _usage_missingness(attempts, "grader", grader_complete),
+            "provider": (
+                "not_applicable" if provider_status["status"] == "not_applicable"
+                else _usage_missingness(attempts, "jev", provider_complete)
+            ),
+        },
         "source_operation_count": len(source_operations) if source_complete else None,
         "source_range_bytes": (sum(operation["byte_end"] - operation["byte_start"]
                                    for operation in source_operations)
@@ -1100,12 +1155,14 @@ def run_calibration(args: argparse.Namespace) -> dict[str, Any]:
     return summarize_calibration(config, completed, controller)
 
 
-def start_fixture_worker(root: Path, trial_id: str, lane: str, wait: float = 5) -> subprocess.Popen[bytes]:
+def start_fixture_worker(root: Path, trial_id: str, lane: str, wait: float = 5,
+                         python_executable: str | Path | None = None) -> subprocess.Popen[bytes]:
     return subprocess.Popen(
-        [sys.executable, str(HANDOFF_PATH), "fixture-worker", "--run-root", str(root),
+        [_python_executable(python_executable), str(HANDOFF_PATH), "fixture-worker", "--run-root", str(root),
          "--trial-id", trial_id, "--attempt", "0", "--lane", lane,
          "--wait-seconds", str(wait)],
-        cwd=str(REPO_ROOT), env={}, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        cwd=str(REPO_ROOT), env={"PATH": os.defpath, "PYTHONIOENCODING": "utf-8"},
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
 
 
