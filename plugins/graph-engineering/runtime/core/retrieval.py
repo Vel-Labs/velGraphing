@@ -14,6 +14,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 import hashlib
 import io
+from itertools import chain, islice
 import json
 import math
 from pathlib import PurePosixPath
@@ -3315,6 +3316,21 @@ def _complete_unit_bounds_with_status(
         while begin > 0 and re.match(r"^\s*@(\w|[.])+", lines[begin - 1]):
             begin -= 1
         finish = declaration + 1
+        if path.endswith(".py") and not declaration_text.rstrip().endswith(":"):
+            try:
+                header_ended = False
+                tokens = tokenize.generate_tokens(
+                    chain(islice(lines, declaration, None), ("",)).__next__
+                )
+                for token in tokens:
+                    if token.type == tokenize.NEWLINE:
+                        header_ended = True
+                    elif header_ended and token.type not in (tokenize.NL, tokenize.COMMENT):
+                        if token.type == tokenize.INDENT:
+                            finish = declaration + token.start[0] - 1
+                        break
+            except (IndentationError, tokenize.TokenError):
+                pass
         while finish < len(lines):
             candidate = lines[finish]
             if candidate.strip():

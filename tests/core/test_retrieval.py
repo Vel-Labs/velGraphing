@@ -2283,6 +2283,60 @@ class GraphFindTests(unittest.TestCase):
 
 
 class BoundedCorrectnessRegressionTests(unittest.TestCase):
+    def test_multiline_signature_unit_keeps_its_body(self) -> None:
+        source = (
+            b"def retrieve_hybrid(\n"
+            b"    graph: Graph,\n"
+            b"    *,\n"
+            b"    fallback_source_paths: tuple[str, ...] = (),\n"
+            b") -> Result:\n"
+            b"    if fallback_source_paths:\n"
+            b"        return Result()\n"
+            b"    return None\n"
+        )
+        anchor = source.index(b"fallback_source_paths")
+        self.assertEqual(
+            (0, len(source), True),
+            retrieval_module._bounded_source_unit_bounds(
+                source, "pkg/retrieval.py", anchor,
+                anchor + len(b"fallback_source_paths"), 4096,
+            ),
+        )
+
+    def test_complete_declaration_boundaries_preserve_body_and_next_unit(self) -> None:
+        cases = (
+            ("async", b"async def compute(\n    value,\n):\n    return value\n"),
+            ("class", b"class Example(\n    Base,\n):\n    value = 1\n"),
+            ("decorated", b"@tracked\ndef compute(\n    value,\n):\n    return value\n"),
+            ("utf8", 'def compute(\n    value,\n):\n    return "café"\n'.encode()),
+            ("crlf", b"def compute(\r\n    value,\r\n):\r\n    return value\r\n"),
+            ("no_final_newline", b"def compute(\n    value,\n):\n    return value"),
+            ("single_line", b"def compute(value):\n    return value\n"),
+        )
+        for name, unit in cases:
+            with self.subTest(case=name):
+                suffix = b"def unrelated():\n    return 0\n" if unit.endswith(b"\n") else b""
+                source = unit + suffix
+                needle = b"Base" if name == "class" else b"value"
+                anchor = source.index(needle)
+                self.assertEqual(
+                    (0, len(unit), True),
+                    retrieval_module._bounded_source_unit_bounds(
+                        source, "pkg/example.py", anchor, anchor + len(needle), 4096,
+                    ),
+                )
+
+    def test_oversized_multiline_declaration_remains_incomplete(self) -> None:
+        source = b"def compute(\n    value,\n):\n    return value + " + b"1 + " * 80 + b"0\n"
+        anchor = source.index(b"value")
+        start, end, complete = retrieval_module._bounded_source_unit_bounds(
+            source, "pkg/example.py", anchor, anchor + len(b"value"), 80,
+        )
+        self.assertFalse(complete)
+        self.assertLessEqual(end - start, 80)
+        self.assertLessEqual(start, anchor)
+        self.assertGreaterEqual(end, anchor + len(b"value"))
+
     def test_graph_find_delivers_every_credited_configuration_anchor(self) -> None:
         cases = (
             ("settings.json", b'{"note": "}", "special_anchor": true}\n'),
